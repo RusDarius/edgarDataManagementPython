@@ -1,0 +1,18 @@
+{
+    "sqltools.connections": [
+        {
+            "mysqlOptions": {
+                "authProtocol": "default",
+                "enableSsl": "Disabled"
+            },
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 3306,
+            "driver": "MySQL",
+            "name": "financeManagerV1",
+            "database": "finance_manager_iteration_1",
+            "username": "root",
+            "password": "!@#4QWEr"
+        }
+    ]
+}
