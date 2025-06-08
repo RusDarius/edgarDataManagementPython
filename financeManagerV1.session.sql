@@ -7,54 +7,41 @@
 -- -- @block
 -- ALTER TABLE sec_cik_tickers_mapping
 -- ADD INDEX idx_ticker (Ticker);
--- -- @block
--- SELECT *
--- FROM sec_cik_tickers_mapping
--- WHERE Cik = 1046179;
--- -- @block
--- DROP TABLE sec_cik_tickers_mapping
+-- @block
+SELECT *
+FROM sec_cik_tickers_mapping
+WHERE Ticker = "MU";
+-- @block
+DROP TABLE edgar_financial_data_concepts;
 -- @block
 CREATE TABLE edgar_financial_data_concepts (
     Id INT AUTO_INCREMENT PRIMARY KEY,
     Cik INT NOT NULL,
     Ticker VARCHAR(16) NOT NULL,
     FilingType VARCHAR(8) NOT NULL,
-    -- '10-K', '10-Q', etc.
     FiscalPeriod VARCHAR(16) NOT NULL,
-    -- e.g., 'Q1', 'FY'
     FiscalYear INT NOT NULL,
-    -- e.g., 2025
-    Concept VARCHAR(128) NOT NULL,
-    -- e.g., 'Revenues'
+    Concept VARCHAR(256) NOT NULL,
     Value DECIMAL(24, 4),
-    -- Numeric value (NULL if not monetary)
     ValueString VARCHAR(255),
-    -- String value (NULL if not string)
     Unit VARCHAR(32),
-    -- e.g., 'USD', 'shares'
     DataType VARCHAR(32),
-    -- 'monetary', 'shares', 'string', etc.
     Adsh VARCHAR(32) NOT NULL,
-    -- Filing accession number
     PeriodEnd DATE,
-    -- Period end date
-    UNIQUE KEY unique_concept (
-        Cik,
-        FilingType,
-        FiscalPeriod,
-        FiscalYear,
-        Concept,
-        Adsh
-    )
+    Ddate DATE,
+    -- <--- Add this: actual date for the value (from num.txt)
+    Segment VARCHAR(128),
+    -- <--- Add this: segment/context info if available
+    INDEX idx_cik (Cik),
+    INDEX idx_ticker (Ticker),
+    INDEX idx_concept (Concept) -- No unique constraint on concept/adsh/period
 );
+-- @block
 -- @block
 SELECT *
 FROM edgar_financial_data_concepts
-WHERE Ticker = 'MU'
-    AND FilingType = '10-Q'
-    AND FiscalPeriod = 'Q1'
-    AND FiscalYear = 2025
+WHERE Concept = 'RevenueFromContractWithCustomerExcludingAssessedTax'
     AND (
-        Concept LIKE '%Revenue%'
-        OR Concept LIKE '%Sales%'
+        Ticker = 'MU'
+        OR Cik = 723125
     );

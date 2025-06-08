@@ -58,15 +58,9 @@ def insert_financial_data(conn, data):
     cursor = conn.cursor()
     insert_sql = """
         INSERT INTO edgar_financial_data_concepts
-        (Cik, Ticker, FilingType, FiscalPeriod, FiscalYear, Concept, Value, ValueString, Unit, DataType, Explanation, Adsh, PeriodEnd)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE
-            Value=VALUES(Value),
-            ValueString=VALUES(ValueString),
-            Unit=VALUES(Unit),
-            DataType=VALUES(DataType),
-            Explanation=VALUES(Explanation),
-            PeriodEnd=VALUES(PeriodEnd)
+        (Cik, Ticker, FilingType, FiscalPeriod, FiscalYear, 
+        Concept, Value, ValueString, Unit, DataType, Adsh, PeriodEnd, Ddate, Segment)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     cursor.executemany(insert_sql, data)
     conn.commit()
@@ -106,6 +100,8 @@ def run_financial_data_loader():
             tag = fact["tag"]
             value = fact.get("value")
             uom = fact.get("uom")
+            ddate = fact.get("ddate")  # <-- add this
+            segment = fact.get("segment", "")  # <-- if available
             # Try to convert value to float, else store as string
             try:
                 value_num = float(value)
@@ -115,7 +111,6 @@ def run_financial_data_loader():
                 value_str = value
             tag_meta = tag_info.get(tag, {})
             datatype = tag_meta.get("datatype", "")
-            explanation = tag_meta.get("doc", "")
             data_to_insert.append(
                 (
                     cik,
@@ -128,9 +123,10 @@ def run_financial_data_loader():
                     value_str,
                     uom,
                     datatype,
-                    explanation,
                     adsh,
                     period_end,
+                    ddate,
+                    segment,
                 )
             )
 
