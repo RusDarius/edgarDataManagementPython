@@ -1,6 +1,7 @@
 import requests
 
 
+# Fetch the SEC CIK-ticker mapping JSON from the SEC website.
 def fetch_sec_cik_tickers(user_agent):
     url = "https://www.sec.gov/files/company_tickers.json"
     headers = {"User-Agent": user_agent}
@@ -9,6 +10,7 @@ def fetch_sec_cik_tickers(user_agent):
     return response.json()
 
 
+# Insert or update CIK-ticker mappings in the sec_cik_tickers_mapping table.
 def insert_mappings_to_db(mappings, conn):
     cursor = conn.cursor()
     insert_sql = """

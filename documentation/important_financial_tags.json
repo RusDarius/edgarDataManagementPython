@@ -1,0 +1,63 @@
+{
+    "important_financial_tags": {
+        "description": "A curated list of the most important, standardized (non-custom) financial XBRL tags used in EDGAR filings. These tags are highly relevant across most industries and are widely used for financial analysis, screening, and comparison. Tags are part of the US GAAP taxonomy unless otherwise noted.",
+        "core_income_statement_tags": [
+            "RevenueFromContractWithCustomerExcludingAssessedTax",
+            "CostOfRevenue",
+            "GrossProfit",
+            "OperatingExpenses",
+            "SellingGeneralAndAdministrativeExpense",
+            "ResearchAndDevelopmentExpense",
+            "OperatingIncomeLoss",
+            "InterestExpense",
+            "InterestIncome",
+            "OtherNonoperatingIncomeExpense",
+            "IncomeTaxExpenseBenefit",
+            "NetIncomeLoss",
+            "EarningsPerShareBasic",
+            "EarningsPerShareDiluted",
+            "WeightedAverageNumberOfSharesOutstandingBasic",
+            "WeightedAverageNumberOfDilutedSharesOutstanding"
+        ],
+        "balance_sheet_tags": [
+            "Assets",
+            "CurrentAssets",
+            "CashAndCashEquivalentsAtCarryingValue",
+            "AccountsReceivableNetCurrent",
+            "InventoryNet",
+            "NoncurrentAssets",
+            "PropertyPlantAndEquipmentNet",
+            "Goodwill",
+            "Liabilities",
+            "CurrentLiabilities",
+            "AccountsPayableCurrent",
+            "LongTermDebtNoncurrent",
+            "CommitmentsAndContingencies",
+            "StockholdersEquity",
+            "RetainedEarningsAccumulatedDeficit",
+            "CommonStockValue"
+        ],
+        "cash_flow_statement_tags": [
+            "NetCashProvidedByUsedInOperatingActivities",
+            "NetCashProvidedByUsedInInvestingActivities",
+            "NetCashProvidedByUsedInFinancingActivities",
+            "PaymentsToAcquirePropertyPlantAndEquipment",
+            "ProceedsFromIssuanceOfCommonStock",
+            "PaymentsOfDividends"
+        ],
+        "other_relevant_tags": [
+            "DividendsCommonStockCash",
+            "CommonStockSharesOutstanding",
+            "MarketableSecuritiesCurrent",
+            "DeferredIncomeTaxAssetsNet",
+            "DeferredIncomeTaxLiabilitiesNet",
+            "AccumulatedOtherComprehensiveIncomeLossNetOfTax"
+        ],
+        "common_custom_or_industry_tags": [
+            "EBITDA",
+            "AdjustedEarnings",
+            "NonGAAPNetIncome"
+        ],
+        "notes": "Tags listed are not custom unless noted. For international companies (IFRS), similar tags exist but may have slightly different names. For best results, cross-reference these tags in tag.txt by filtering for custom = 0 and abstract = 0."
+    }
+}

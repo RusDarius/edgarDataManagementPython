@@ -38,15 +38,16 @@
     "aciks": "List of CIKs in the submission."
   },
   "num.txt": {
-    "adsh": "Accession number (links to sub.txt).",
-    "tag": "Tag identifying the XBRL concept.",
-    "version": "Taxonomy version.",
-    "coreg": "Co-registrant CIK (if any).",
-    "ddate": "Date for the data value (YYYYMMDD).",
-    "qtrs": "Fiscal quarter (0 = YTD, 1 = Q1, etc.).",
-    "uom": "Unit of measure (e.g., USD).",
-    "value": "Numeric value.",
-    "footnote": "Footnote reference (if any)."
+    "adsh": "Accession number (links to sub.txt). Filing identifier, used to join with other files (e.g., sub.txt).",
+    "tag": "Tag identifying the XBRL concept. The specific financial concept reported (e.g., revenue, expense, asset).",
+    "version": "Taxonomy version (e.g., us-gaap/2024). The taxonomy version for the tag.",
+    "coreg": "Co-registrant CIK (if any, usually blank). If present, indicates a co-registrant.",
+    "ddate": "Date for the data value (YYYYMMDD), usually period end date. The date the value applies to (e.g., end of quarter or year).",
+    "qtrs": "Number of quarters the value covers (1 = current quarter, 2 = half-year, 4 = full year, 0 = point-in-time/beginning balance). How many quarters the value covers: 1 = single quarter, 4 = full year, 0 = point-in-time (e.g., balance sheet item).",
+    "uom": "Unit of measure (e.g., USD, shares, perShare). The unit of measure (e.g., USD for dollars).",
+    "segments": "Segment or dimensional context for the value (e.g., business segment, geographic area). If present, specifies the business/geographic segment or other dimension; blank means consolidated.",
+    "value": "Numeric value for the concept. The reported number.",
+    "footnote": "Footnote reference (if any, usually blank). Reference to a footnote (if any, usually blank)."
   },
   "pre.txt": {
     "adsh": "Accession number (links to sub.txt).",

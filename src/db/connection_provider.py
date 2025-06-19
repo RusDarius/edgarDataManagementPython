@@ -1,6 +1,7 @@
 import mysql.connector
 
 
+# Create and return a MySQL database connection.
 def get_mysql_connection(
     host="localhost", port=3306, user="root", password="", database=None
 ):
