@@ -126,13 +126,7 @@ def insert_financial_data(conn, data):
 
 # Main workflow: loads, processes, and inserts financial data for a given batch.
 def run_financial_data_loader(bulk_data_dir, batch_data_tag):
-    conn = get_mysql_connection(
-        host="localhost",
-        port=3306,
-        user="root",
-        password="!@#4QWEr",
-        database="finance_manager_iteration_1",
-    )
+    conn = get_mysql_connection(**BASE_DB_CONFIG)
     cik_ticker_map = load_cik_ticker_map(conn)
     tag_info = load_tag_info(bulk_data_dir)
     filings = parse_sub_txt(os.path.join(bulk_data_dir, "sub.txt"))
@@ -206,13 +200,7 @@ def run_financial_data_loader(bulk_data_dir, batch_data_tag):
 
 def run_load_tag_data_into_db(bulk_data_dir):
     """Load tag metadata from tag.txt into the edgar_tag_info table."""
-    conn = get_mysql_connection(
-        host="localhost",
-        port=3306,
-        user="root",
-        password="!@#4QWEr",
-        database="finance_manager_iteration_1",
-    )
+    conn = get_mysql_connection(**BASE_DB_CONFIG)
     insert_tag_info_to_db(conn, os.path.join(bulk_data_dir, "tag.txt"))
 
 

@@ -5,6 +5,7 @@ from data_loaders.sec_cik_ticker_mapping import (
     fetch_sec_cik_tickers,
     insert_mappings_to_db,
 )
+from db.connection_credentials import BASE_DB_CONFIG
 from db.connection_provider import get_mysql_connection
 
 USER_AGENT = "Barnnabass daniOO7XbX@gmail.com"
@@ -24,13 +25,7 @@ def run_sec_cik_ticker_mapping_workflow():
     mappings = fetch_sec_cik_tickers(USER_AGENT)
 
     # Use the generic connection provider for the DB connection
-    with get_mysql_connection(
-        host="localhost",
-        port=3306,
-        user="root",
-        password="!@#4QWEr",
-        database="finance_manager_iteration_1",
-    ) as conn:
+    with get_mysql_connection(**BASE_DB_CONFIG) as conn:
         insert_mappings_to_db(mappings, conn)
 
     print("SEC CIK-ticker mappings loaded into database.")
