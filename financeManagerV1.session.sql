@@ -254,7 +254,7 @@ SELECT FiscalYear,
     COUNT(DISTINCT Concept) AS UniqueConcepts,
     COUNT(DISTINCT Adsh) AS UniqueFilings
 FROM edgar_financial_data_concepts
-WHERE Ticker = 'AAPL' -- Replace with your desired ticker
+WHERE Ticker = 'FDX' -- Replace with your desired ticker
 GROUP BY FiscalYear,
     FiscalPeriod,
     FilingType
@@ -285,7 +285,7 @@ WITH LatestEntries AS (
                 BatchTag DESC
         ) as rn
     FROM edgar_financial_data_concepts
-    WHERE Ticker = 'MU' -- Replace with your desired ticker
+    WHERE Ticker = 'FDX' -- Replace with your desired ticker
 )
 SELECT FiscalYear,
     FiscalPeriod,

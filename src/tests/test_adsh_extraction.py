@@ -14,13 +14,10 @@ Example ADSH values from FDX missing filings report:
 - 0001564590-21-048468 (Q1 2022)
 """
 
-import sys
-import os
 
-# Add the src directory to the path so we can import our modules
-sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
-
-from data_loaders.sec_api_loader import fetch_and_parse_submission_by_adsh
+from data_loaders.sec_api_loaders.fetch_and_parse_submission_for_financial_concept_by_cik_and_adsh import (
+    fetch_and_parse_submission_for_financial_concept_by_cik_and_adsh,
+)
 
 
 def test_fdx_filing():
@@ -56,7 +53,7 @@ def test_fdx_filing():
         print("-" * 40)
 
         try:
-            result = fetch_and_parse_submission_by_adsh(
+            result = fetch_and_parse_submission_for_financial_concept_by_cik_and_adsh(
                 cik=cik, adsh=adsh, fact_tag=concept, primary_document=primary_document
             )
 
@@ -168,7 +165,7 @@ def test_multiple_filings():
         print(f"📅 {case['year']} - ADSH: {case['adsh']}")
 
         try:
-            result = fetch_and_parse_submission_by_adsh(
+            result = fetch_and_parse_submission_for_financial_concept_by_cik_and_adsh(
                 cik=cik,
                 adsh=case["adsh"],
                 fact_tag=concept,

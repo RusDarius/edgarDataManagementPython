@@ -1,124 +1,6 @@
-from data_loaders.api_client import ApiClient
-from data_loaders.edgar_financial_loader import (
-    run_financial_data_loader,
-    run_load_edgar_submissions,
-    run_load_tag_data_into_db,
+from data_loaders.sec_api_loaders.fetch_and_parse_submission_enhanced_by_cik_and_adsh import (
+    fetch_and_parse_submission_enhanced_by_cik_and_adsh,
 )
-from data_loaders.edgar_workflow import (
-    run_edgar_workflow,
-    run_guidance_extraction_workflow,
-    run_sec_cik_ticker_mapping_workflow,
-)
-from data_loaders.nyu_data_loader import load_nyu_industry_grouping
-import os
-import time
-
-from financial_execution_flows.sec_api_flows import fetch_concepts_for_cik_from_sec
-from financial_execution_flows.missing_filings_handler import (
-    process_missing_filings_for_ticker,
-)
-
-
-# Batch process and load SEC financial data for multiple batch tags.
-def batchLoadSecData():
-    batch_tags = [
-        "2017q4",
-        "2017q3",
-        "2017q2",
-        "2017q1",
-        # Add more as needed
-    ]
-    base_data_dir = r"D:\Projects\StocksDataEDGAR"
-
-    for batch_tag in batch_tags:
-        bulk_data_dir = os.path.join(base_data_dir, batch_tag)
-        print(f"Processing batch: {batch_tag} in {bulk_data_dir}", flush=True)
-        start_time = time.time()
-        run_financial_data_loader(bulk_data_dir, batch_tag)
-        elapsed = time.time() - start_time
-        print(f"Finished batch: {batch_tag} in {elapsed:.2f} seconds", flush=True)
-
-
-# Process missing filings for a specific ticker to fill gaps in the database.
-def process_missing_filings():
-    """
-    Identify and fetch missing SEC filings for a ticker to fill database gaps.
-    This function demonstrates the complete workflow for missing filings handling.
-    """
-    # Example configuration - modify as needed
-    ticker = "FDX"  # Micron Technology
-    cik = "1048911"
-
-    # Common revenue concept tags to extract
-    concept_tags = [
-        "RevenueFromContractWithCustomerExcludingAssessedTax",
-        "Revenues",
-        "Revenue",
-        "SalesRevenueNet",
-        "TotalRevenues",
-    ]
-
-    print(f"Starting missing filings processing for {ticker} (CIK: {cik})")
-    print("=" * 60)
-
-    # Process up to 5 missing filings (DRY RUN MODE - no database inserts)
-    results = process_missing_filings_for_ticker(
-        ticker=ticker,
-        cik=cik,
-        concept_tags=concept_tags,
-        max_filings=5,
-        form_types=["10-K", "10-Q"],
-        dry_run=True,  # Set to False to actually insert data into database
-    )
-
-    # === AI ENHANCED CODE START (Claude) - 2025-06-29 ===
-    # Enhanced: Added detailed output formatting with ASCII-safe status markers
-    print("\n" + "=" * 60)
-    print("PROCESSING RESULTS:")
-    print(
-        f"Mode: {'DRY RUN (no database inserts)' if results.get('dry_run') else 'LIVE MODE (database inserts enabled)'}"
-    )
-    print(f"Missing filings found: {results['missing_filings_found']}")
-    print(f"Filings processed: {results['filings_processed']}")
-    print(f"Concepts extracted: {results['concepts_extracted']}")
-
-    # Show extracted data in dry run mode
-    if results.get("dry_run") and results.get("extracted_data"):
-        print(f"\nEXTRACTED REVENUE CONCEPTS:")
-        print("-" * 40)
-        for i, extracted in enumerate(results["extracted_data"][:3]):  # Show first 3
-            filing = extracted["filing_info"]
-            concepts = extracted["concept_data"]
-            print(
-                f"\n{i+1}. {filing['form']} {filing['fiscal_period']} {filing['fiscal_year']} - {filing['accession_number']}"
-            )
-            for concept_tag, concept_info in concepts.items():
-                if concept_info.get("actual_value") is not None:
-                    period_status = (
-                        "[OK]" if concept_info.get("period_validated") else "[!]"
-                    )
-                    period_end = concept_info.get("period_end", "N/A")
-                    print(
-                        f"   {period_status} {concept_tag}: {concept_info['actual_value']:,.0f} {concept_info.get('unit', 'N/A')} (period: {period_end})"
-                    )
-                elif concept_info.get("error"):
-                    print(
-                        f"   {period_status} {concept_tag}: ERROR - {concept_info['error']}"
-                    )
-
-        if len(results["extracted_data"]) > 3:
-            print(f"\n... and {len(results['extracted_data']) - 3} more filings")
-
-    if results.get("errors"):
-        print(f"\nErrors encountered: {len(results['errors'])}")
-        for error in results["errors"][:3]:  # Show first 3 errors
-            print(f"  - {error}")
-
-    if results.get("report_path"):
-        print(f"Detailed report saved to: {results['report_path']}")
-    # === AI ENHANCED CODE END ===
-
-    return results
 
 
 # === AI GENERATED FUNCTION (Claude) - 2025-06-29 ===
@@ -131,7 +13,6 @@ def test_enhanced_period_validation():
     This function shows how the new extraction method validates that extracted
     concepts correspond to the correct reporting period.
     """
-    from data_loaders.sec_api_loader import fetch_and_parse_submission_enhanced
 
     print("TESTING ENHANCED PERIOD VALIDATION")
     print("=" * 60)
@@ -166,7 +47,7 @@ def test_enhanced_period_validation():
         print("-" * 40)
 
         try:
-            result = fetch_and_parse_submission_enhanced(
+            result = fetch_and_parse_submission_enhanced_by_cik_and_adsh(
                 test_case["cik"],
                 test_case["form"],
                 test_case["period"],
@@ -224,123 +105,6 @@ def test_enhanced_period_validation():
 # === AI GENERATED FUNCTION END ===
 
 
-# === AI GENERATED FUNCTION (Claude) - 2025-06-29 ===
-# Test the new ADSH-based extraction function
-def test_adsh_extraction():
-    """
-    AI Generated Function: Test ADSH-based extraction functionality
-    Generated by Claude on 2025-06-29 to test the fetch_and_parse_submission_by_adsh function
-
-    Test the fetch_and_parse_submission_by_adsh function using a known ADSH.
-    This function extracts all instances of a concept from a specific filing.
-    """
-    from data_loaders.sec_api_loader import fetch_and_parse_submission_by_adsh
-
-    print("TESTING ADSH-BASED CONCEPT EXTRACTION")
-    print("=" * 60)
-
-    # Test case: FDX Q1 2025 filing from the missing filings report
-    cik = "1048911"  # FDX
-    adsh = "0000950170-24-108107"  # From the missing filings report
-    concept_tag = "RevenueFromContractWithCustomerExcludingAssessedTax"  # Try a common revenue concept
-
-    print(f"Testing extraction from ADSH: {adsh}")
-    print(f"CIK: {cik}")
-    print(f"Concept: {concept_tag}")
-    print("-" * 40)
-
-    try:
-        result = fetch_and_parse_submission_by_adsh(
-            cik=cik, adsh=adsh, fact_tag=concept_tag
-        )
-
-        if result.get("error"):
-            print(f"Error: {result['error']}")
-            print(f"Document URL attempted: {result.get('document_url', 'N/A')}")
-        else:
-            print(f"Document URL: {result['document_url']}")
-            print(
-                f"Found {len(result.get('all_facts', []))} total facts for '{concept_tag}'"
-            )
-
-            # Show all facts found
-            for i, fact in enumerate(result.get("all_facts", []), 1):
-                print(f"\nFact {i}:")
-                print(f"  Value: {fact.get('value', 'N/A')}")
-                print(f"  Numeric Value: {fact.get('numeric_value', 'N/A')}")
-                print(f"  Actual Value: {fact.get('actual_value', 'N/A')}")
-                print(f"  Unit: {fact.get('unit_ref', 'N/A')}")
-                print(f"  Context: {fact.get('context_ref', 'N/A')}")
-                print(f"  Period Start: {fact.get('period_start', 'N/A')}")
-                print(f"  Period End: {fact.get('period_end', 'N/A')}")
-                print(f"  Period Type: {fact.get('period_type', 'N/A')}")
-                print(f"  Decimals: {fact.get('decimals', 'N/A')}")
-                print(f"  Extraction Method: {fact.get('extraction_method', 'N/A')}")
-
-            # Show the best fact
-            best_fact = result.get("best_fact")
-            if best_fact:
-                print(f"\nBEST FACT (Most Recent):")
-                print(
-                    f"  Value: {best_fact.get('actual_value', best_fact.get('numeric_value', best_fact.get('value', 'N/A')))}"
-                )
-                print(f"  Unit: {best_fact.get('unit_ref', 'N/A')}")
-                print(
-                    f"  Period: {best_fact.get('period_start', 'N/A')} to {best_fact.get('period_end', 'N/A')}"
-                )
-                print(f"  Context: {best_fact.get('context_ref', 'N/A')}")
-
-        # Try with additional concept tags
-        additional_concepts = [
-            "RevenueFromContractWithCustomerExcludingAssessedTax",
-            "TotalRevenues",
-            "Revenue",
-        ]
-
-        for concept in additional_concepts:
-            print(f"\n" + "=" * 40)
-            print(f"Testing concept: {concept}")
-            try:
-                result = fetch_and_parse_submission_by_adsh(
-                    cik=cik,
-                    adsh=adsh,
-                    fact_tag=concept,
-                )
-
-                if result.get("all_facts"):
-                    best_fact = result.get("best_fact")
-                    if best_fact:
-                        value = best_fact.get(
-                            "actual_value",
-                            best_fact.get(
-                                "numeric_value", best_fact.get("value", "N/A")
-                            ),
-                        )
-                        print(
-                            f"[OK] Found: {value} {best_fact.get('unit_ref', '')} (Period: {best_fact.get('period_end', 'N/A')})"
-                        )
-                    else:
-                        print(
-                            f"Found {len(result['all_facts'])} facts but no best fact selected"
-                        )
-                else:
-                    print(f"[X] No facts found for {concept}")
-
-            except Exception as e:
-                print(f"[X] Error extracting {concept}: {e}")
-
-    except Exception as e:
-        print(f"Error during test: {e}")
-        import traceback
-
-        print(traceback.format_exc())
-
-    print("\n" + "=" * 60)
-
-
-# === AI GENERATED FUNCTION END ===
-
-
 # Main entry point for running workflows and data loaders.
 def main():
     # Uncomment the function you want to run:
@@ -351,14 +115,11 @@ def main():
     # Test individual SEC submission fetching
     # fetch_concepts_for_cik_from_sec()
 
-    # Process missing filings to fill database gaps
-    # process_missing_filings()
-
     # Batch load SEC data from files
     # batchLoadSecData()
 
     # Test ADSH-based extraction - NEW FUNCTION!
-    test_adsh_extraction()
+    # perform_adsh_extraction()
 
     pass
 

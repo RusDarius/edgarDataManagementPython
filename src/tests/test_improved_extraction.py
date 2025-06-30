@@ -3,13 +3,10 @@
 Test script for the improved date extraction functionality
 """
 
-import sys
-import os
 
-# Add the src directory to the path
-sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
-
-from data_loaders.sec_api_loader import fetch_and_parse_submission_by_adsh
+from data_loaders.sec_api_loaders.fetch_and_parse_submission_for_financial_concept_by_cik_and_adsh import (
+    fetch_and_parse_submission_for_financial_concept_by_cik_and_adsh,
+)
 
 
 def test_improved_date_extraction():
@@ -29,7 +26,7 @@ def test_improved_date_extraction():
     print()
 
     try:
-        result = fetch_and_parse_submission_by_adsh(
+        result = fetch_and_parse_submission_for_financial_concept_by_cik_and_adsh(
             cik=cik, adsh=adsh, fact_tag=concept
         )
 
