@@ -3,6 +3,301 @@ from data_loaders.api_client import ApiClient
 from data_loaders.fetch_and_parse_all_financial_facts_from_submission_by_cik import (
     fetch_and_parse_all_financial_facts_from_submission_by_cik,
 )
+from data_loaders.fetch_known_adsh import fetch_known_adsh_with_metadata_for_ticker
+
+
+def infer_fiscal_metadata_from_chronological_order(
+    all_filings: List[Dict[str, Any]],
+    known_adsh_metadata: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Infer FilingType, FiscalPeriod, and FiscalYear for missing filings based on
+    chronological order of ADSH codes and known filing metadata.
+
+    Args:
+        all_filings: List of all filings (missing + known) with basic metadata
+        known_adsh_metadata: List of known filings with complete fiscal metadata
+
+    Returns:
+        List of all filings with inferred fiscal metadata
+    """
+    # Create a mapping of known ADSH to their fiscal metadata
+    known_metadata_map = {item["Adsh"]: item for item in known_adsh_metadata}
+
+    # Sort all filings by date chronologically (oldest first for easier inference)
+    all_filings_sorted = sorted(all_filings, key=lambda x: x.get("Ddate", ""))
+
+    # Standard fiscal quarter progression for most companies
+    QUARTER_PROGRESSION = {
+        "FY": "Q1",  # After FY comes Q1 of next fiscal year
+        "Q1": "Q2",
+        "Q2": "Q3",
+        "Q3": "FY",
+    }
+
+    # Infer metadata for each filing
+    enriched_filings = []
+
+    for i, filing in enumerate(all_filings_sorted):
+        adsh = filing.get("Adsh")
+
+        # If this is a known filing, use its metadata directly
+        if adsh in known_metadata_map:
+            known_data = known_metadata_map[adsh]
+            enriched_filing = filing.copy()
+            enriched_filing.update(
+                {
+                    "FilingType": known_data.get(
+                        "FilingType", filing.get("FilingType", "")
+                    ),
+                    "FiscalPeriod": known_data.get(
+                        "FiscalPeriod", filing.get("FiscalPeriod", "")
+                    ),
+                    "FiscalYear": known_data.get(
+                        "FiscalYear", filing.get("FiscalYear", 0)
+                    ),
+                    "IsKnown": True,
+                }
+            )
+            enriched_filings.append(enriched_filing)
+        else:
+            # This is a missing filing - infer metadata
+            enriched_filing = filing.copy()
+            enriched_filing["IsKnown"] = False
+
+            # Find the closest known filing before this one
+            prev_known_filing = None
+            for j in range(i - 1, -1, -1):  # Look backwards
+                prev_adsh = all_filings_sorted[j].get("Adsh")
+                if prev_adsh in known_metadata_map:
+                    prev_known_filing = known_metadata_map[prev_adsh]
+                    break
+
+            # Also find the immediate previous filing (could be inferred)
+            prev_filing = None
+            if i > 0 and len(enriched_filings) > 0:
+                # Use the most recently processed filing
+                prev_filing = enriched_filings[-1]
+            elif prev_known_filing:
+                # If no inferred filing, use the known filing
+                prev_filing = prev_known_filing
+
+            # Find the closest known filing after this one
+            next_known_filing = None
+            for j in range(i + 1, len(all_filings_sorted)):  # Look forwards
+                next_adsh = all_filings_sorted[j].get("Adsh")
+                if next_adsh in known_metadata_map:
+                    next_known_filing = known_metadata_map[next_adsh]
+                    break
+
+            # Infer based on immediate previous filing (known or inferred)
+            if prev_filing:
+                prev_period = prev_filing.get("FiscalPeriod", "")
+                prev_year = prev_filing.get("FiscalYear", 0)
+                prev_filing_type = prev_filing.get("FilingType", "")
+
+                # Determine next expected period and year
+                if prev_period in QUARTER_PROGRESSION:
+                    next_period = QUARTER_PROGRESSION[prev_period]
+
+                    # If transitioning from FY to Q1, increment year
+                    if prev_period == "FY" and next_period == "Q1":
+                        next_year = prev_year + 1
+                    else:
+                        next_year = prev_year
+
+                    # Determine filing type based on period
+                    if next_period == "FY":
+                        next_filing_type = "10-K"
+                    else:
+                        next_filing_type = "10-Q"
+
+                    enriched_filing.update(
+                        {
+                            "FilingType": next_filing_type,
+                            "FiscalPeriod": next_period,
+                            "FiscalYear": next_year,
+                            "InferredFrom": f"Previous: {prev_filing.get('Adsh')} ({prev_period} {prev_year})",
+                        }
+                    )
+
+                else:
+                    # Fallback: use original data if available
+                    enriched_filing.update(
+                        {
+                            "FilingType": filing.get("FilingType", "10-Q"),
+                            "FiscalPeriod": filing.get("FiscalPeriod", "Q1"),
+                            "FiscalYear": filing.get("FiscalYear", prev_year),
+                            "InferredFrom": "Fallback from original data",
+                        }
+                    )
+
+            elif next_known_filing:
+                # If no previous known filing, try to infer from next one
+                next_period = next_known_filing.get("FiscalPeriod", "")
+                next_year = next_known_filing.get("FiscalYear", 0)
+
+                # Work backwards from next known filing
+                reverse_progression = {v: k for k, v in QUARTER_PROGRESSION.items()}
+
+                if next_period in reverse_progression:
+                    prev_period = reverse_progression[next_period]
+
+                    # If transitioning from Q1 to FY, decrement year
+                    if next_period == "Q1" and prev_period == "FY":
+                        prev_year = next_year - 1
+                    else:
+                        prev_year = next_year
+
+                    # Determine filing type
+                    if prev_period == "FY":
+                        prev_filing_type = "10-K"
+                    else:
+                        prev_filing_type = "10-Q"
+
+                    enriched_filing.update(
+                        {
+                            "FilingType": prev_filing_type,
+                            "FiscalPeriod": prev_period,
+                            "FiscalYear": prev_year,
+                            "InferredFrom": f"Next: {next_known_filing.get('Adsh')} ({next_period} {next_year})",
+                        }
+                    )
+                else:
+                    # Final fallback
+                    enriched_filing.update(
+                        {
+                            "FilingType": filing.get("FilingType", "10-Q"),
+                            "FiscalPeriod": filing.get("FiscalPeriod", "Q1"),
+                            "FiscalYear": filing.get("FiscalYear", next_year),
+                            "InferredFrom": "Fallback from next filing year",
+                        }
+                    )
+            else:
+                # No known filings found - use original data
+                enriched_filing.update(
+                    {
+                        "FilingType": filing.get("FilingType", "10-Q"),
+                        "FiscalPeriod": filing.get("FiscalPeriod", "Q1"),
+                        "FiscalYear": filing.get("FiscalYear", 2024),
+                        "InferredFrom": "No reference filings found",
+                    }
+                )
+
+            enriched_filings.append(enriched_filing)
+
+    # Sort back to original order (latest first)
+    enriched_filings.sort(key=lambda x: x.get("Ddate", ""), reverse=True)
+    return enriched_filings
+
+
+def get_missing_sec_filings_with_inferred_metadata(
+    cik: str,
+    ticker: str,
+    min_year: int = 2017,
+    verbose: bool = False,
+) -> Dict[str, Any]:
+    """
+    Enhanced version of get_missing_sec_filings that infers fiscal metadata
+    based on chronological order and known filings.
+    """
+    # Get known ADSH metadata from database
+    known_adsh_metadata = fetch_known_adsh_with_metadata_for_ticker(ticker)
+    known_adsh_list = [item["Adsh"] for item in known_adsh_metadata]
+
+    if verbose:
+        print(
+            f"Found {len(known_adsh_metadata)} known filings with metadata for {ticker}"
+        )
+
+    # Get all filings from SEC API
+    client = ApiClient(user_agent="Barnnabass daniOO7XbX@gmail.com")
+    cik_str = str(cik).zfill(10)
+    submissions_data = client.fetch_company_submissions(cik_str)
+    filings = submissions_data["filings"]["recent"]
+
+    # Build list of all filings (missing + known) - ONLY 10-Q and 10-K filings
+    all_filings = []
+    missing_filings = []
+
+    for i in range(len(filings["accessionNumber"])):
+        adsh = filings["accessionNumber"][i]
+        filing_type = filings["form"][i]
+        filing_date = filings["filingDate"][i]
+        fiscal_year = filings.get(
+            "fiscalYear", [None] * len(filings["accessionNumber"])
+        )[i]
+        fiscal_period = filings.get(
+            "periodOfReport", [None] * len(filings["accessionNumber"])
+        )[i]
+        batch_tag = filings.get(
+            "primaryDocument", [None] * len(filings["accessionNumber"])
+        )[i]
+
+        # ONLY consider 10-Q and 10-K filings
+        if filing_type.upper() not in ["10-Q", "10-K"]:
+            continue
+
+        # Only consider filings since min_year
+        year = None
+        try:
+            year = int(filing_date[:4])
+        except Exception:
+            pass
+        if year is not None and year < min_year:
+            continue
+
+        filing_info = {
+            "Cik": cik,
+            "Ticker": ticker,
+            "FilingType": filing_type,
+            "FiscalPeriod": fiscal_period or "",
+            "FiscalYear": fiscal_year or year,
+            "Adsh": adsh,
+            "Ddate": filing_date,
+            "BatchTag": batch_tag,
+        }
+
+        all_filings.append(filing_info)
+
+        # Track missing filings
+        if adsh not in known_adsh_list:
+            missing_filings.append(filing_info)
+
+    # Infer fiscal metadata for all filings
+    enriched_filings = infer_fiscal_metadata_from_chronological_order(
+        all_filings, known_adsh_metadata
+    )
+
+    # Separate missing filings with enriched metadata
+    enriched_missing = [f for f in enriched_filings if not f.get("IsKnown", True)]
+    missing_10q = [
+        f for f in enriched_missing if f.get("FilingType", "").upper() == "10-Q"
+    ]
+    missing_10k = [
+        f for f in enriched_missing if f.get("FilingType", "").upper() == "10-K"
+    ]
+
+    if verbose:
+        print(
+            f"Found {len(enriched_missing)} missing filings since {min_year} for CIK {cik}"
+        )
+        print(f"Missing 10-Qs: {len(missing_10q)} | Missing 10-Ks: {len(missing_10k)}")
+
+        # Show inference details
+        for filing in enriched_missing[:3]:  # Show first 3 as example
+            adsh = filing.get("Adsh", "")
+            inferred_from = filing.get("InferredFrom", "Unknown")
+            print(
+                f"  {adsh}: {filing.get('FilingType')} {filing.get('FiscalPeriod')} {filing.get('FiscalYear')} (from: {inferred_from})"
+            )
+
+    return {
+        "all_missing": enriched_missing,
+        "missing_10q": missing_10q,
+        "missing_10k": missing_10k,
+        "all_filings_with_metadata": enriched_filings,  # Includes both missing and known
+    }
 
 
 def get_missing_sec_filings(
@@ -36,6 +331,11 @@ def get_missing_sec_filings(
         batch_tag = filings.get(
             "primaryDocument", [None] * len(filings["accessionNumber"])
         )[i]
+
+        # ONLY consider 10-Q and 10-K filings
+        if filing_type.upper() not in ["10-Q", "10-K"]:
+            continue
+
         # Only consider filings since min_year
         year = None
         try:
@@ -110,7 +410,7 @@ def format_concept_for_insert(
         "Ddate": fact.get("ddate", None),
         "Segment": fact.get("segment", None),
         "Qtrs": fact.get("qtrs", None),
-        "BatchTag": batch_tag or fact.get("batch_tag", ""),
+        "BatchTag": f"missingInsertTag-{cik}",
     }
 
 
@@ -230,21 +530,39 @@ def extract_financial_facts_from_missing_filing(
                 f"Determined main fiscal period: {main_fiscal_period} (period end: {main_period_end})"
             )
 
-        # Use the determined fiscal period, fallback to original if not found
-        effective_fiscal_period = main_fiscal_period or fiscal_period
+        # PRIORITY: Use the inferred fiscal metadata from ADSH chronological order logic
+        # Only fallback to document-determined metadata if inferred data is missing
+        effective_filing_type = (
+            filing_type if filing_type else "10-Q"
+        )  # From inferred metadata
+        effective_fiscal_year = (
+            fiscal_year if fiscal_year else 0
+        )  # From inferred metadata
+        effective_fiscal_period = (
+            fiscal_period if fiscal_period else main_fiscal_period
+        )  # Prioritize inferred
+
+        if verbose and fiscal_period:
+            print(
+                f"Using INFERRED fiscal metadata: {effective_filing_type} {effective_fiscal_period} {effective_fiscal_year}"
+            )
+        elif verbose and main_fiscal_period:
+            print(
+                f"Using DOCUMENT-DETERMINED fiscal metadata: {effective_filing_type} {main_fiscal_period} {effective_fiscal_year}"
+            )
 
         # Format each fact for database insertion
         formatted_facts = []
         for fact in all_facts:
-            # Enhance fact with filing metadata
+            # Enhance fact with filing metadata - PRIORITIZE INFERRED METADATA
             enhanced_fact = fact.copy()
             enhanced_fact.update(
                 {
                     "cik": cik,
                     "ticker": ticker,
-                    "filing_type": filing_type,
-                    "fiscal_year": fiscal_year,
-                    "fiscal_period": effective_fiscal_period
+                    "filing_type": effective_filing_type,  # Use inferred filing type
+                    "fiscal_year": effective_fiscal_year,  # Use inferred fiscal year
+                    "fiscal_period": effective_fiscal_period  # Use inferred fiscal period
                     or fact.get("fiscal_period", ""),
                     "adsh": adsh,
                     "ddate": ddate,

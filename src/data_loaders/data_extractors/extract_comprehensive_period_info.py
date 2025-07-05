@@ -77,6 +77,28 @@ def extract_comprehensive_period_info(
 
         return None
 
+    def validate_date_components(year_str: str, month_str: str, day_str: str) -> bool:
+        """Validate that year, month, day components make sense before parsing."""
+        try:
+            year = int(year_str)
+            month = int(month_str)
+            day = int(day_str)
+
+            # Basic range checks for SEC filings
+            if year < 1990 or year > 2030:  # Reasonable range for SEC filings
+                return False
+            if month < 1 or month > 12:
+                return False
+            if day < 1 or day > 31:
+                return False
+
+            # Try to create the actual date to validate
+            datetime(year, month, day)
+            return True
+
+        except (ValueError, TypeError):
+            return False
+
     def calculate_period_match_score(period_end: str, expected_date: str) -> int:
         """Calculate how well the extracted period matches the expected date (0-100)."""
         if not period_end or not expected_date:
@@ -124,55 +146,94 @@ def extract_comprehensive_period_info(
         match = re.search(date_pattern, context_ref)
         if match:
             start_str, end_str = match.groups()
-            try:
-                start_date = f"{start_str[:4]}-{start_str[4:6]}-{start_str[6:8]}"
-                end_date = f"{end_str[:4]}-{end_str[4:6]}-{end_str[6:8]}"
 
-                # Validate dates
-                datetime.strptime(start_date, "%Y-%m-%d")
-                datetime.strptime(end_date, "%Y-%m-%d")
+            # Extract and validate date components before parsing
+            start_year = start_str[:4]
+            start_month = start_str[4:6]
+            start_day = start_str[6:8]
 
-                result["period_start"] = start_date
-                result["period_end"] = end_date
-                result["period_type"] = "duration"
-                result["extraction_method"] = "context_id_pattern_duration"
-                vvprint(f"[OK] Strategy 1 success: {start_date} to {end_date}")
+            end_year = end_str[:4]
+            end_month = end_str[4:6]
+            end_day = end_str[6:8]
 
-                if expected_period_date:
-                    result["period_match_score"] = calculate_period_match_score(
-                        end_date, expected_period_date
-                    )
+            # Validate that both sequences actually represent valid dates
+            start_valid = validate_date_components(start_year, start_month, start_day)
+            end_valid = validate_date_components(end_year, end_month, end_day)
 
-                return result
+            if start_valid and end_valid:
+                try:
+                    start_date = f"{start_year}-{start_month}-{start_day}"
+                    end_date = f"{end_year}-{end_month}-{end_day}"
 
-            except ValueError as e:
-                eprint(f"Invalid date format in context pattern: {e}")
+                    # Double-check with datetime parsing
+                    datetime.strptime(start_date, "%Y-%m-%d")
+                    datetime.strptime(end_date, "%Y-%m-%d")
 
-        # Pattern 2: Single date (instant) - various formats
+                    result["period_start"] = start_date
+                    result["period_end"] = end_date
+                    result["period_type"] = "duration"
+                    result["extraction_method"] = "context_id_pattern_duration"
+                    vvprint(f"[OK] Strategy 1 success: {start_date} to {end_date}")
+
+                    if expected_period_date:
+                        result["period_match_score"] = calculate_period_match_score(
+                            end_date, expected_period_date
+                        )
+
+                    return result
+
+                except ValueError as e:
+                    vvprint(f"Date parsing failed after validation: {e}")
+            else:
+                vvprint(
+                    f"Date components validation failed - start_valid: {start_valid}, end_valid: {end_valid}"
+                )
+                vvprint(
+                    f"Rejected: {start_str} -> {start_year}-{start_month}-{start_day}, {end_str} -> {end_year}-{end_month}-{end_day}"
+                )
+
+        # Pattern 2: Single date (instant) - various formats with validation
         single_date_patterns = [
-            r"(\d{8})",  # YYYYMMDD
             r"(\d{4}-\d{2}-\d{2})",  # YYYY-MM-DD
             r"(\d{4}/\d{2}/\d{2})",  # YYYY/MM/DD
+            r"(\d{8})",  # YYYYMMDD (last to avoid false positives)
         ]
 
         for pattern in single_date_patterns:
             matches = re.findall(pattern, context_ref)
             if matches:
-                # Use the last date found (most recent)
-                date_str = matches[-1]
-                parsed_date = safe_parse_date(date_str)
-                if parsed_date:
-                    result["period_end"] = parsed_date
-                    result["period_type"] = "instant"
-                    result["extraction_method"] = "context_id_pattern_instant"
-                    vvprint(f"[OK] Strategy 1 success (instant): {parsed_date}")
+                # Try from the last match (most recent) to first
+                for date_str in reversed(matches):
+                    parsed_date = None
 
-                    if expected_period_date:
-                        result["period_match_score"] = calculate_period_match_score(
-                            parsed_date, expected_period_date
-                        )
+                    if pattern == r"(\d{8})":  # YYYYMMDD format - needs validation
+                        if len(date_str) == 8:
+                            year = date_str[:4]
+                            month = date_str[4:6]
+                            day = date_str[6:8]
+                            if validate_date_components(year, month, day):
+                                formatted_date = f"{year}-{month}-{day}"
+                                try:
+                                    datetime.strptime(formatted_date, "%Y-%m-%d")
+                                    parsed_date = formatted_date
+                                except ValueError:
+                                    continue
+                    else:
+                        # For already formatted dates, just validate with safe_parse_date
+                        parsed_date = safe_parse_date(date_str)
 
-                    return result
+                    if parsed_date:
+                        result["period_end"] = parsed_date
+                        result["period_type"] = "instant"
+                        result["extraction_method"] = "context_id_pattern_instant"
+                        vvprint(f"[OK] Strategy 1 success (instant): {parsed_date}")
+
+                        if expected_period_date:
+                            result["period_match_score"] = calculate_period_match_score(
+                                parsed_date, expected_period_date
+                            )
+
+                        return result
 
     # Strategy 2: Parse XBRL context elements from document
     vvprint("Trying Strategy 2: XBRL context element parsing")
