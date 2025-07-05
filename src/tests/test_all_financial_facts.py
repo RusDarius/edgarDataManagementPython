@@ -51,7 +51,6 @@ def test_all_financial_facts_from_filling(VERBOSITY: int = 1, VERBOSE_OUTPUT=Non
     # Filing details from the missing filings report
     cik = "1048911"  # FDX CIK
     adsh = "0000950123-17-006152"  # Q1 2025 filing
-    # adsh = "0000950170-25-042672"  # Q1 2025 filing
 
     vprint(f"CIK: {cik}")
     vprint(f"ADSH: {adsh}")

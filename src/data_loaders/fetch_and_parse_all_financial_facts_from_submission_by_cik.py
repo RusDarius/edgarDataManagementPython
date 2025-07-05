@@ -308,7 +308,6 @@ def fetch_and_parse_all_financial_facts_from_submission_by_cik(
 
         vprint(f"Fetching document from: {url}")
         import requests
-        from bs4 import BeautifulSoup
 
         resp = requests.get(url, headers={"User-Agent": "TestUser test@example.com"})
 
@@ -327,28 +326,11 @@ def fetch_and_parse_all_financial_facts_from_submission_by_cik(
                 "<ix:",
                 "xmlns:ix=",
                 "inline xbrl",
+                "<html",
                 "ixbrlmember",
                 "ixbrl-member",
             ]
         )
-
-        # Additional check: if it's HTML but has no inline XBRL facts, treat as separate XBRL
-        has_html = "<html" in document_text.lower()
-        has_inline_facts = False
-
-        if is_ixbrl and has_html:
-            # Quick check for actual inline XBRL facts
-            soup_sample = BeautifulSoup(
-                document_text[:50000], "html.parser"
-            )  # Check first 50k chars
-            inline_fact_tags = ["ix:nonfraction", "ix:nonnumeric", "ix:fraction"]
-            for tag_name in inline_fact_tags:
-                if soup_sample.find_all(tag_name.replace(":", ":")):
-                    has_inline_facts = True
-                    break
-
-        # Only treat as iXBRL if we actually find inline facts
-        is_ixbrl = is_ixbrl and has_inline_facts
 
         if is_ixbrl:
             vprint("Detected inline XBRL (iXBRL) document")
@@ -472,274 +454,13 @@ def fetch_and_parse_all_financial_facts_from_submission_by_cik(
                                 all_financial_facts.append(fact_data)
 
         else:
-            # Try to find separate XBRL instance document
-            vprint(
-                "Document is not inline XBRL, looking for separate XBRL instance document..."
+            eprint(
+                "[X] Document is not inline XBRL format - cannot extract financial facts"
             )
-
-            # Try to construct XBRL instance document URL based on known patterns
-            xbrl_instance_url = None
-
-            # Method 1: Try to find XBRL file references in the document
-            if "EX-101 INSTANCE DOCUMENT" in document_text or ".xml" in document_text:
-                # Look for XML file patterns that might be XBRL instance documents
-                import re
-
-                # Pattern to find XBRL instance files
-                xml_patterns = [
-                    r'href=["\']([^"\']*\.xml)["\']',
-                    r"([a-zA-Z0-9_-]+)\.xml",
-                ]
-
-                for pattern in xml_patterns:
-                    matches = re.findall(pattern, document_text, re.IGNORECASE)
-                    for match in matches:
-                        # Skip obvious non-instance files
-                        if any(
-                            suffix in match.lower()
-                            for suffix in ["_cal", "_def", "_lab", "_pre", ".xsd"]
-                        ):
-                            continue
-
-                        # Try to construct full URL
-                        base_url = url.rsplit("/", 1)[0]
-                        potential_xbrl_url = f"{base_url}/{match}"
-
-                        vvprint(f"Found potential XBRL instance: {potential_xbrl_url}")
-
-                        # Test if this URL exists
-                        try:
-                            test_resp = requests.head(
-                                potential_xbrl_url,
-                                headers={"User-Agent": "TestUser test@example.com"},
-                                allow_redirects=True,
-                            )
-                            if test_resp.status_code == 200:
-                                xbrl_instance_url = potential_xbrl_url
-                                vprint(
-                                    f"Found XBRL instance document: {xbrl_instance_url}"
-                                )
-                                break
-                        except:
-                            continue
-
-                    if xbrl_instance_url:
-                        break
-
-            # Method 2: Use naming convention based on primary document
-            if not xbrl_instance_url:
-                # Extract base filename from primary document
-                if primary_document and ".htm" in primary_document:
-                    base_name = primary_document.replace(".htm", "")
-                    # Common XBRL naming patterns
-                    xbrl_patterns = [
-                        f"{base_name}.xml",
-                        f"{base_name}_instance.xml",
-                        f"{cik_str}-{adsh.replace('-', '')}.xml",
-                    ]
-
-                    # Also try date-based patterns (YYYYMMDD)
-                    if "_" in base_name:
-                        parts = base_name.split("_")
-                        if (
-                            len(parts) >= 2
-                            and len(parts[-1]) == 8
-                            and parts[-1].isdigit()
-                        ):
-                            date_part = parts[-1]
-                            company_part = "_".join(parts[:-1])
-                            xbrl_patterns.extend(
-                                [
-                                    f"{company_part}-{date_part}.xml",
-                                    f"{company_part}_{date_part}.xml",
-                                ]
-                            )
-
-                    base_url = url.rsplit("/", 1)[0]
-                    for pattern in xbrl_patterns:
-                        potential_url = f"{base_url}/{pattern}"
-                        vvprint(f"Trying XBRL pattern: {potential_url}")
-
-                        try:
-                            test_resp = requests.head(
-                                potential_url,
-                                headers={"User-Agent": "TestUser test@example.com"},
-                                allow_redirects=True,
-                            )
-                            if test_resp.status_code == 200:
-                                xbrl_instance_url = potential_url
-                                vprint(
-                                    f"Found XBRL instance via pattern: {xbrl_instance_url}"
-                                )
-                                break
-                        except:
-                            continue
-
-                        if xbrl_instance_url:
-                            break
-
-            # Method 3: Try directory listing approach for known filings
-            if not xbrl_instance_url:
-                # For this specific case, we know the structure
-                base_url = url.rsplit("/", 1)[0]
-
-                # Use the non-zero-padded CIK from the actual URL structure
-                actual_cik = url.split("/data/")[1].split("/")[
-                    0
-                ]  # Extract CIK from URL
-                vvprint(f"Extracted actual CIK from URL: {actual_cik}")
-
-                known_patterns = [
-                    f"fdx-20170531.xml",  # Specific to this filing
-                    f"{actual_cik}-{adsh.replace('-', '')}.xml",
-                ]
-
-                for pattern in known_patterns:
-                    potential_url = f"{base_url}/{pattern}"
-                    vvprint(f"Trying known pattern: {potential_url}")
-
-                    try:
-                        test_resp = requests.head(
-                            potential_url,
-                            headers={"User-Agent": "TestUser test@example.com"},
-                            allow_redirects=True,
-                        )
-                        vvprint(f"Response status: {test_resp.status_code}")
-                        if test_resp.status_code == 200:
-                            xbrl_instance_url = potential_url
-                            vprint(
-                                f"Found XBRL instance via known pattern: {xbrl_instance_url}"
-                            )
-                            break
-                    except Exception as e:
-                        vvprint(f"Exception trying {potential_url}: {e}")
-                        continue
-
-            if xbrl_instance_url:
-                vprint(f"Fetching XBRL instance document from: {xbrl_instance_url}")
-                try:
-                    xbrl_resp = requests.get(
-                        xbrl_instance_url,
-                        headers={"User-Agent": "TestUser test@example.com"},
-                    )
-                    if xbrl_resp.status_code == 200:
-                        xbrl_content = xbrl_resp.text
-                        vprint("Successfully fetched XBRL instance document")
-
-                        # Parse the XBRL instance document
-                        xbrl_soup = BeautifulSoup(xbrl_content, "xml")
-
-                        # First, extract all contexts from XBRL
-                        vprint("Extracting XBRL contexts...")
-                        contexts_info = {}
-
-                        # Find all context elements in XBRL namespace
-                        for ctx in xbrl_soup.find_all(["context", "xbrli:context"]):
-                            ctx_id = safe_get_attr(ctx, "id")
-                            if ctx_id:
-                                period_info = parse_context_period(ctx)
-                                contexts_info[ctx_id] = period_info
-                                vvprint(f"XBRL Context {ctx_id}: {period_info}")
-
-                        result["all_contexts_found"] = list(contexts_info.keys())
-                        vprint(f"Total XBRL contexts found: {len(contexts_info)}")
-
-                        # Extract financial facts from XBRL
-                        vprint(
-                            "Extracting financial facts from XBRL instance document..."
-                        )
-                        all_financial_facts = []
-
-                        # Find all elements that look like financial facts
-                        all_elements_count = 0
-                        financial_tags_found = []
-
-                        for element in xbrl_soup.find_all():
-                            element_name = getattr(element, "name", None)
-
-                            # Process elements that have a name and contextRef (potential facts)
-                            # Note: FDX 2017 XBRL uses unprefixed elements (no namespace colons)
-                            if element_name and safe_get_attr(element, "contextRef"):
-                                all_elements_count += 1
-
-                                # Log first 50 element names for debugging
-                                if all_elements_count <= 50:
-                                    vvprint(
-                                        f"XBRL element {all_elements_count}: {element_name}"
-                                    )
-
-                                # Check if this is a financial fact
-                                is_financial, category = is_financial_fact(
-                                    str(element_name)
-                                )
-
-                                if is_financial:
-                                    financial_tags_found.append(str(element_name))
-
-                                value = safe_get_text(element)
-                                context_ref = safe_get_attr(element, "contextRef")
-
-                                if value and context_ref:
-                                    # Get period information using comprehensive extraction
-                                    period_info = extract_comprehensive_period_info(
-                                        element,
-                                        str(context_ref) if context_ref else None,
-                                        xbrl_soup,
-                                        None,
-                                        VERBOSITY=VERBOSITY,
-                                        VERBOSE_OUTPUT=VERBOSE_OUTPUT,
-                                    )
-
-                                    fact_data = {
-                                        "value": value,
-                                        "context_ref": context_ref,
-                                        "unit_ref": safe_get_attr(element, "unitRef"),
-                                        "decimals": safe_get_attr(element, "decimals"),
-                                        "scale": safe_get_attr(element, "scale"),
-                                        "period_start": period_info.get("period_start"),
-                                        "period_end": period_info.get("period_end"),
-                                        "period_type": period_info.get("period_type"),
-                                        "extraction_method": period_info.get(
-                                            "extraction_method",
-                                            "separate_xbrl_instance",
-                                        ),
-                                        "tag_name": str(element_name),
-                                        "category": category,
-                                    }
-
-                                    all_financial_facts.append(fact_data)
-                                    vvprint(
-                                        f"Found XBRL fact: {element_name} = {value}"
-                                    )
-
-                        vprint(f"Total XBRL elements processed: {all_elements_count}")
-                        vprint(f"Financial tags found: {len(financial_tags_found)}")
-                        if financial_tags_found:
-                            vprint(
-                                f"Sample financial tags: {financial_tags_found[:10]}"
-                            )
-
-                        vprint(
-                            f"Extracted {len(all_financial_facts)} facts from XBRL instance document"
-                        )
-
-                    else:
-                        eprint(
-                            f"[X] Failed to fetch XBRL instance document, status code: {xbrl_resp.status_code}"
-                        )
-                        result["error"] = (
-                            f"Failed to fetch XBRL instance document from {xbrl_instance_url}"
-                        )
-                        return result
-
-                except Exception as e:
-                    eprint(f"[X] Error processing XBRL instance document: {e}")
-                    result["error"] = f"Error processing XBRL instance document: {e}"
-                    return result
-            else:
-                eprint("[X] Could not locate XBRL instance document")
-                result["error"] = "Could not locate XBRL instance document"
-                return result
+            result["error"] = (
+                "Document is not inline XBRL format - cannot extract financial facts"
+            )
+            return result
 
         # Convert string values to numbers where possible
         for fact in all_financial_facts:

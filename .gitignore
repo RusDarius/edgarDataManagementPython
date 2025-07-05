@@ -1,7 +1,6 @@
 documentation/edgarBulkDataSample/
 documentation/nyuData/
 savedData
-
 # Python cache directories
 __pycache__/
 *.py[cod]

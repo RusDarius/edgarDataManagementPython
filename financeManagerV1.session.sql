@@ -127,7 +127,7 @@ WHERE Ticker LIKE 'MU';
 -- @block
 SELECT *
 FROM edgar_financial_data_concepts
-WHERE Cik = '27673';
+WHERE Ticker LIKE 'MU';
 -- @block
 SELECT Id,
     Cik,
