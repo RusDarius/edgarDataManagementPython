@@ -394,13 +394,18 @@ def format_concept_for_insert(
     """
     Map a fact dict from fetch_and_parse_all_financial_facts_from_submission_by_cik to the edgar_financial_data_concepts table format.
     """
+
+    tag_name = fact.get("tag_name", "")
+    if ":" in tag_name:
+        tag_name = tag_name.split(":", 1)[1]
+
     return {
         "Cik": int(cik),
         "Ticker": ticker,
         "FilingType": fact.get("filing_type", ""),
         "FiscalPeriod": fact.get("fiscal_period", ""),
         "FiscalYear": fact.get("fiscal_year", 0),
-        "Concept": fact.get("tag_name", ""),
+        "Concept": tag_name,
         "Value": fact.get("actual_value"),
         "ValueString": str(fact.get("value", "")),
         "Unit": fact.get("unit_ref", ""),
@@ -409,7 +414,9 @@ def format_concept_for_insert(
         "PeriodEnd": fact.get("period_end", None),
         "Ddate": fact.get("ddate", None),
         "Segment": fact.get("segment", None),
-        "Qtrs": fact.get("qtrs", None),
+        "Qtrs": fact.get(
+            "qtrs", None
+        ),  # Now mapped from the qtrs field calculated from period dates
         "BatchTag": f"missingInsertTag-{cik}",
     }
 

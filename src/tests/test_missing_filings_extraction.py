@@ -420,13 +420,101 @@ def test_process_multiple_missing_filings_with_adsh_inference():
                     print(f"  {key}: {value}")
 
                 # Show all records
-                print(f"\nFIRST 3 DATABASE-READY RECORDS:")
+                print(f"\nDATABASE-READY RECORDS ANALYSIS:")
                 print("-" * 50)
-                print(len(all_facts_for_db))
-                for i, record in enumerate(all_facts_for_db[:3], 1):
-                    print(f"\nRecord {i}:")
+                print(f"Total records: {len(all_facts_for_db)}")
+
+                # Analyze quarters distribution
+                qtrs_distribution = {}
+                for fact in all_facts_for_db:
+                    qtrs = fact.get("Qtrs")
+                    qtrs_distribution[qtrs] = qtrs_distribution.get(qtrs, 0) + 1
+
+                print(f"\nQuarters distribution:")
+                for qtrs in sorted(
+                    qtrs_distribution.keys(), key=lambda x: (x is None, x)
+                ):
+                    count = qtrs_distribution[qtrs]
+                    print(f"  Qtrs {qtrs}: {count} facts")
+
+                # Show mix of different record types
+                print(f"\nREPRESENTATIVE DATABASE RECORDS (with quarters data):")
+                print("-" * 60)
+
+                # Find revenue facts (should have Qtrs=1)
+                revenue_facts = [
+                    f for f in all_facts_for_db if "Revenue" in f.get("Concept", "")
+                ]
+                # Find balance sheet facts (should have Qtrs=0)
+                cash_facts = [
+                    f for f in all_facts_for_db if "Cash" in f.get("Concept", "")
+                ]
+                # Find income facts (should have Qtrs=1)
+                income_facts = [
+                    f for f in all_facts_for_db if "Income" in f.get("Concept", "")
+                ]
+
+                sample_records = []
+                if revenue_facts:
+                    sample_records.append(("Revenue (duration)", revenue_facts[0]))
+                if cash_facts:
+                    sample_records.append(("Cash (instant)", cash_facts[0]))
+                if income_facts:
+                    sample_records.append(("Income (duration)", income_facts[0]))
+
+                # If we don't have enough variety, add first few records
+                if len(sample_records) < 3:
+                    for i, record in enumerate(all_facts_for_db[:3]):
+                        if len(sample_records) >= 3:
+                            break
+                        concept_type = (
+                            "Balance Sheet"
+                            if record.get("Qtrs") == 0
+                            else (
+                                "Income/Expense" if record.get("Qtrs") == 1 else "Other"
+                            )
+                        )
+                        sample_records.append(
+                            (f"Record {i+1} ({concept_type})", record)
+                        )
+
+                for i, (description, record) in enumerate(sample_records[:3], 1):
+                    print(f"\n{i}. {description}:")
                     for key, value in record.items():
-                        print(f"  {key}: {value}")
+                        if key == "Qtrs":
+                            print(f"  {key}: {value} ← QUARTERS FIELD")
+                        else:
+                            print(f"  {key}: {value}")
+
+                # Verify quarters for popular concepts
+                print(f"\nPOPULAR CONCEPTS QUARTERS VERIFICATION:")
+                print("-" * 50)
+
+                concept_checks = [
+                    (
+                        "RevenueFromContractWithCustomerExcludingAssessedTax",
+                        "should be 1 for quarterly",
+                    ),
+                    (
+                        "CashAndCashEquivalentsAtCarryingValue",
+                        "should be 0 for instant",
+                    ),
+                    ("NetIncomeLoss", "should be 1 for quarterly"),
+                    ("Assets", "should be 0 for instant"),
+                ]
+
+                for concept_name, expected_desc in concept_checks:
+                    matching_facts = [
+                        f
+                        for f in all_facts_for_db
+                        if concept_name in f.get("Concept", "")
+                    ]
+                    if matching_facts:
+                        fact = matching_facts[0]
+                        qtrs_value = fact.get("Qtrs")
+                        print(f"✓ {concept_name}: Qtrs={qtrs_value} ({expected_desc})")
+                    else:
+                        print(f"- {concept_name}: Not found in this filing")
 
             # Show individual filing details for comparison
             print(f"\nINDIVIDUAL FILING ANALYSIS:")

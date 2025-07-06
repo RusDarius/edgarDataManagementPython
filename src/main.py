@@ -1,6 +1,9 @@
 from data_loaders.sec_api_loaders.fetch_and_parse_submission_enhanced_by_cik_and_adsh import (
     fetch_and_parse_submission_enhanced_by_cik_and_adsh,
 )
+from data_loaders.sec_api_loaders.process_multiple_missing_filings import (
+    process_multiple_missing_filings,
+)
 
 
 # === AI GENERATED FUNCTION (Claude) - 2025-06-29 ===
@@ -120,6 +123,16 @@ def main():
 
     # Test ADSH-based extraction - NEW FUNCTION!
     # perform_adsh_extraction()
+    ticker = "FDX"
+    cik = "1048911"
+
+    result = process_multiple_missing_filings(
+        ticker=ticker,
+        cik=cik,
+        min_year=2023,  # Recent years for testing
+        verbose=True,
+    )
+    print(f"\nProcess completed: {result}")
 
     pass
 

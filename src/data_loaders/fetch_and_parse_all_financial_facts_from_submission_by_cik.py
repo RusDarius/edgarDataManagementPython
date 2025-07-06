@@ -4,6 +4,57 @@ from data_loaders.data_extractors.extract_comprehensive_period_info import (
 import datetime
 
 
+def calculate_quarters_from_period(period_start, period_end, period_type=None):
+    """
+    Calculate the number of quarters covered by a period based on start and end dates.
+
+    Args:
+        period_start: Start date string in YYYY-MM-DD format
+        period_end: End date string in YYYY-MM-DD format
+        period_type: "instant" or "duration" - instant facts get 0 quarters
+
+    Returns:
+        int: Number of quarters (0, 1, 2, 3, 4) or None if cannot calculate
+    """
+    # For instant facts (balance sheet items), quarters should be 0
+    if period_type == "instant":
+        return 0
+
+    if not period_start or not period_end:
+        return None
+
+    try:
+        start_date = datetime.datetime.strptime(period_start, "%Y-%m-%d")
+        end_date = datetime.datetime.strptime(period_end, "%Y-%m-%d")
+
+        # Calculate difference in days and convert to approximate months
+        delta_days = (end_date - start_date).days
+
+        # Handle negative periods (end before start)
+        if delta_days < 0:
+            return None
+
+        # Convert days to approximate months (30.44 days per month on average)
+        total_months = delta_days / 30.44
+
+        # Round to nearest quarter based on month ranges
+        if 2.5 <= total_months <= 3.5:
+            return 1  # 1 quarter (~3 months)
+        elif 5.5 <= total_months <= 6.5:
+            return 2  # 2 quarters (~6 months)
+        elif 8.5 <= total_months <= 9.5:
+            return 3  # 3 quarters (~9 months)
+        elif 11.5 <= total_months <= 12.5:
+            return 4  # 4 quarters (~12 months / full year)
+        else:
+            # For other periods, try to estimate based on months
+            quarters = round(total_months / 3.0)
+            return max(1, min(4, quarters)) if quarters > 0 else None
+
+    except (ValueError, TypeError):
+        return None
+
+
 def fetch_and_parse_all_financial_facts_from_submission_by_cik(
     cik,
     adsh,
@@ -404,6 +455,13 @@ def fetch_and_parse_all_financial_facts_from_submission_by_cik(
                             f"Fact: {fact_name}, Value: {fact_value}, Context: {context_ref}, Period: {period_info}"
                         )
 
+                        # Calculate quarters from period information
+                        qtrs = calculate_quarters_from_period(
+                            period_info.get("period_start"),
+                            period_info.get("period_end"),
+                            period_info.get("period_type"),
+                        )
+
                         fact_data = {
                             "value": fact_value,
                             "context_ref": context_ref,
@@ -413,6 +471,7 @@ def fetch_and_parse_all_financial_facts_from_submission_by_cik(
                             "period_start": period_info.get("period_start"),
                             "period_end": period_info.get("period_end"),
                             "period_type": period_info.get("period_type"),
+                            "qtrs": qtrs,
                             "extraction_method": period_info.get(
                                 "extraction_method", "inline_xbrl_tag"
                             ),
@@ -455,6 +514,13 @@ def fetch_and_parse_all_financial_facts_from_submission_by_cik(
                                     VERBOSITY=VERBOSITY,
                                 )
 
+                                # Calculate quarters from period information
+                                qtrs = calculate_quarters_from_period(
+                                    period_info.get("period_start"),
+                                    period_info.get("period_end"),
+                                    period_info.get("period_type"),
+                                )
+
                                 fact_data = {
                                     "value": value,
                                     "context_ref": context_ref,
@@ -464,6 +530,7 @@ def fetch_and_parse_all_financial_facts_from_submission_by_cik(
                                     "period_start": period_info.get("period_start"),
                                     "period_end": period_info.get("period_end"),
                                     "period_type": period_info.get("period_type"),
+                                    "qtrs": qtrs,
                                     "extraction_method": "standard_xbrl",
                                     "tag_name": str(element_name),
                                     "category": category,
@@ -690,6 +757,13 @@ def fetch_and_parse_all_financial_facts_from_submission_by_cik(
                                         VERBOSE_OUTPUT=VERBOSE_OUTPUT,
                                     )
 
+                                    # Calculate quarters from period information
+                                    qtrs = calculate_quarters_from_period(
+                                        period_info.get("period_start"),
+                                        period_info.get("period_end"),
+                                        period_info.get("period_type"),
+                                    )
+
                                     fact_data = {
                                         "value": value,
                                         "context_ref": context_ref,
@@ -699,6 +773,7 @@ def fetch_and_parse_all_financial_facts_from_submission_by_cik(
                                         "period_start": period_info.get("period_start"),
                                         "period_end": period_info.get("period_end"),
                                         "period_type": period_info.get("period_type"),
+                                        "qtrs": qtrs,
                                         "extraction_method": period_info.get(
                                             "extraction_method",
                                             "separate_xbrl_instance",

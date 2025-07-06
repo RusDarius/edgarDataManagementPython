@@ -136,6 +136,17 @@ FROM edgar_financial_data_concepts
 WHERE BatchTag = '2024q1'
 LIMIT 100;
 -- @block
+SELECT *
+FROM edgar_financial_data_concepts
+WHERE (BatchTag LIKE 'missingInsertTag-1048911')
+    AND (
+        Concept LIKE '%RevenueFromContractWithCustomerExcludingAssessedTax%'
+    )
+    AND (FiscalYear = 2025);
+-- -- @block
+-- DELETE FROM edgar_financial_data_concepts
+-- WHERE (BatchTag LIKE 'missingInsertTag-1048911');
+-- @block
 SELECT DISTINCT BatchTag
 FROM edgar_financial_data_concepts;
 -- @block

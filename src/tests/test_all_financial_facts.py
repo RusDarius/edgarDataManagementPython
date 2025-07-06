@@ -50,7 +50,8 @@ def test_all_financial_facts_from_filling(VERBOSITY: int = 1, VERBOSE_OUTPUT=Non
 
     # Filing details from the missing filings report
     cik = "1048911"  # FDX CIK
-    adsh = "0000950123-17-006152"  # 2017 filing
+    # adsh = "0000950123-17-006152"  # 2017 filing
+    adsh = "0000950170-24-083577"  # 2017 filing
     # adsh = "0000950170-25-042672"  # Q1 2025 filing
 
     vprint(f"CIK: {cik}")
@@ -137,7 +138,8 @@ def test_all_financial_facts_from_filling(VERBOSITY: int = 1, VERBOSE_OUTPUT=Non
                 value = fact.get("actual_value") or fact.get("value", "N/A")
                 period_end = fact.get("period_end", "N/A")
                 unit = fact.get("unit_ref", "")
-                vvprint(f"  Value: {value} {unit} (Period: {period_end})")
+                qs = fact.get("qtrs")
+                vvprint(f"  Value: {value} {unit} {qs} (Period: {period_end})")
 
         vprint(
             f"\n[OK] Successfully extracted {result['total_facts_found']} financial facts from the filing"
