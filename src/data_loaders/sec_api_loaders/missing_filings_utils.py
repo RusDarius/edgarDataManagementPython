@@ -1,3 +1,4 @@
+import re
 from typing import List, Dict, Any, Optional
 from data_loaders.api_client import ApiClient
 from data_loaders.fetch_and_parse_all_financial_facts_from_submission_by_cik import (
@@ -636,3 +637,292 @@ def process_missing_filings_for_database_insertion(
         print(f"\nTotal facts ready for database insertion: {len(all_facts_for_db)}")
 
     return all_facts_for_db
+
+
+def build_sec_edgar_urls(filing_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Build SEC EDGAR URLs for downloading iXBRL files and related schema/linkbase files.
+
+    Handles multiple batch tag formats with smart fallback URL generation:
+
+    1. Standard format: "fdx-20230831.htm"
+       - Primary: fdx-20230831.xml
+       - Fallback: fdx-20230831_htm.xml
+
+    2. Filing type format: "fdx-10q_20210831.htm"
+       - Primary: fdx-20210831.xml (extracted date)
+       - Fallback: fdx-10q_20210831_htm.xml (original with _htm suffix)
+
+    Args:
+        filing_data: Dictionary containing filing information with keys:
+            - Cik: Company CIK
+            - Adsh: Accession number (e.g., "0000950170-23-048994")
+            - BatchTag: Primary document filename (e.g., "fdx-20230831.htm" or "fdx-10q_20210831.htm")
+
+    Returns:
+        Dictionary with URLs for the main filing and related files:
+        {
+            "base_url": "https://www.sec.gov/Archives/edgar/data/1048911/000095017023048994/",
+            "ixbrl_url": "https://www.sec.gov/Archives/edgar/data/1048911/000095017023048994/fdx-20230831.xml",
+            "ixbrl_url_fallback": "https://www.sec.gov/Archives/edgar/data/1048911/000095017023048994/fdx-20230831_htm.xml",
+            "schema_urls": {
+                "xsd": "https://www.sec.gov/Archives/edgar/data/1048911/000095017023048994/fdx-20230831.xsd",
+                "def_xml": "https://www.sec.gov/Archives/edgar/data/1048911/000095017023048994/fdx-20230831_def.xml",
+                "pre_xml": "https://www.sec.gov/Archives/edgar/data/1048911/000095017023048994/fdx-20230831_pre.xml",
+                "cal_xml": "https://www.sec.gov/Archives/edgar/data/1048911/000095017023048994/fdx-20230831_cal.xml",
+                "lab_xml": "https://www.sec.gov/Archives/edgar/data/1048911/000095017023048994/fdx-20230831_lab.xml"
+            }
+        }
+    """
+    cik = str(filing_data.get("Cik", "")).strip()
+    adsh = str(filing_data.get("Adsh", "")).strip()
+    batch_tag = str(filing_data.get("BatchTag", "")).strip()
+
+    if not cik or not adsh or not batch_tag:
+        raise ValueError(
+            f"Missing required fields: Cik={cik}, Adsh={adsh}, BatchTag={batch_tag}"
+        )
+
+    # Parse ADSH to get accession number without dashes
+    # ADSH format: "0000950170-23-048994" -> accession: "000095017023048994"
+    try:
+        adsh_parts = adsh.split("-")
+        if len(adsh_parts) != 3:
+            raise ValueError(f"Invalid ADSH format: {adsh}")
+
+        # Remove leading zeros from CIK for directory structure
+        cik_clean = str(int(cik))
+
+        # Construct accession number without dashes
+        accession_no = "".join(adsh_parts)
+
+    except Exception as e:
+        raise ValueError(f"Error parsing ADSH {adsh}: {e}")
+
+    # Build base URL
+    base_url = f"https://www.sec.gov/Archives/edgar/data/{cik_clean}/{accession_no}/"
+
+    # Extract base filename from batch_tag for schema files
+    # Handle different batch tag patterns:
+    # 1. Standard: "fdx-20230831.htm" -> "fdx-20230831"
+    # 2. With filing type: "fdx-10q_20210831.htm" -> "fdx-20210831" (primary), "fdx-10q_20210831_htm" (fallback)
+
+    batch_tag_base = batch_tag
+    if batch_tag_base.endswith(".htm"):
+        batch_tag_base = batch_tag_base[:-4]  # Remove .htm extension
+
+    # Check if this is the "10q/10k" format pattern
+    is_filing_type_format = re.search(
+        r"-(10[qk])_(\d{8})", batch_tag_base, re.IGNORECASE
+    )
+
+    if is_filing_type_format:
+        # Pattern: "fdx-10q_20210831" -> extract date for primary URL
+        filing_type = is_filing_type_format.group(1).lower()  # "10q" or "10k"
+        date_part = is_filing_type_format.group(2)  # "20210831"
+        company_prefix = batch_tag_base.split("-")[0]  # "fdx"
+
+        # Primary URL: fdx-20210831.xml (simple date format)
+        batch_tag_v2_primary = f"{company_prefix}-{date_part}"
+
+        # Fallback URL: fdx-10q_20210831_htm.xml (original format with _htm)
+        batch_tag_v2_fallback = f"{batch_tag_base}_htm"
+
+    else:
+        # Standard pattern: "fdx-20230831"
+        # Clean by removing any "-(10q|10k)_" pattern for legacy compatibility
+        batch_tag_v2_primary = re.sub(
+            r"-(10q|10k)_", "-", batch_tag_base, flags=re.IGNORECASE
+        )
+        batch_tag_v2_fallback = f"{batch_tag_v2_primary}_htm"
+
+    # Build iXBRL URLs with enhanced fallback logic
+    ixbrl_url_simple = f"{base_url}{batch_tag_v2_primary}.xml"
+    ixbrl_url_htm = f"{base_url}{batch_tag_v2_fallback}.xml"
+
+    # Build schema/linkbase URLs using primary format
+    schema_urls = {
+        "xsd": f"{base_url}{batch_tag_v2_primary}.xsd",
+        "def_xml": f"{base_url}{batch_tag_v2_primary}_def.xml",
+        "pre_xml": f"{base_url}{batch_tag_v2_primary}_pre.xml",
+        "cal_xml": f"{base_url}{batch_tag_v2_primary}_cal.xml",
+        "lab_xml": f"{base_url}{batch_tag_v2_primary}_lab.xml",
+    }
+
+    return {
+        "base_url": base_url,
+        "ixbrl_url": ixbrl_url_simple,  # Primary URL (older format)
+        "ixbrl_url_fallback": ixbrl_url_htm,  # Fallback URL (newer format)
+        "schema_urls": schema_urls,
+    }
+
+
+def download_ixbrl_with_fallback(
+    filing_data: Dict[str, Any], download_dir: str, verbose: bool = False
+) -> Dict[str, Any]:
+    """
+    Download iXBRL file with automatic fallback for different naming formats.
+
+    For newer filings (2019+), tries both:
+    1. Simple format: fdx-20240831.xml
+    2. HTM format: fdx-20240831_htm.xml
+
+    Args:
+        filing_data: Dictionary containing filing information
+        download_dir: Directory to save downloaded files
+        verbose: Whether to print progress information
+
+    Returns:
+        Dictionary with success status and actual URL used:
+        {
+            "success": True/False,
+            "ixbrl_url": "actual_url_that_worked",
+            "local_path": "path_to_downloaded_file",
+            "error": "error_message_if_failed"
+        }
+    """
+    import requests
+    import os
+
+    try:
+        urls_info = build_sec_edgar_urls(filing_data)
+
+        # Try primary URL first (simple format)
+        primary_url = urls_info["ixbrl_url"]
+        fallback_url = urls_info["ixbrl_url_fallback"]
+
+        headers = {"User-Agent": "YourName Contact@Email.com"}
+
+        # Extract filename for local storage
+        adsh = filing_data.get("Adsh", "")
+        batch_tag = filing_data.get("BatchTag", "")
+
+        urls_to_try = [(primary_url, "simple format"), (fallback_url, "htm format")]
+
+        for url, format_desc in urls_to_try:
+            try:
+                if verbose:
+                    print(f"🔄 Trying {format_desc}: {os.path.basename(url)}")
+
+                response = requests.get(url, headers=headers, timeout=30)
+
+                if response.status_code == 200:
+                    # Success! Save the file
+                    filename = os.path.basename(url)
+                    local_path = os.path.join(download_dir, filename)
+
+                    with open(local_path, "wb") as f:
+                        f.write(response.content)
+
+                    if verbose:
+                        print(f"✅ Downloaded iXBRL file ({format_desc}): {filename}")
+
+                    return {
+                        "success": True,
+                        "ixbrl_url": url,
+                        "local_path": local_path,
+                        "format_used": format_desc,
+                        "error": None,
+                    }
+
+                elif verbose:
+                    print(f"❌ {format_desc} failed: HTTP {response.status_code}")
+
+            except Exception as e:
+                if verbose:
+                    print(f"❌ {format_desc} failed: {e}")
+                continue
+
+        # If we get here, both formats failed
+        error_msg = f"Both iXBRL formats failed for ADSH {adsh}"
+        if verbose:
+            print(f"❌ {error_msg}")
+
+        return {
+            "success": False,
+            "ixbrl_url": None,
+            "local_path": None,
+            "format_used": None,
+            "error": error_msg,
+        }
+
+    except Exception as e:
+        error_msg = f"Error in download_ixbrl_with_fallback: {e}"
+        if verbose:
+            print(f"❌ {error_msg}")
+
+        return {
+            "success": False,
+            "ixbrl_url": None,
+            "local_path": None,
+            "format_used": None,
+            "error": error_msg,
+        }
+
+
+def get_all_filing_urls(filing_data: Dict[str, Any]) -> List[str]:
+    """
+    Get a list of all URLs (iXBRL + schema files) for a filing.
+    Includes both iXBRL format options for compatibility.
+
+    Args:
+        filing_data: Dictionary containing filing information
+
+    Returns:
+        List of all URLs to download for complete filing extraction
+    """
+    urls_info = build_sec_edgar_urls(filing_data)
+
+    all_urls = [
+        urls_info["ixbrl_url"],  # Primary iXBRL format
+        urls_info["ixbrl_url_fallback"],  # Fallback iXBRL format
+    ]
+    all_urls.extend(urls_info["schema_urls"].values())
+
+    return all_urls
+
+
+def get_primary_ixbrl_urls(filing_data: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Get both primary and fallback iXBRL URLs for a filing.
+
+    Args:
+        filing_data: Dictionary containing filing information
+
+    Returns:
+        Dictionary with primary and fallback URLs:
+        {
+            "primary": "fdx-20240831.xml",
+            "fallback": "fdx-20240831_htm.xml"
+        }
+    """
+    urls_info = build_sec_edgar_urls(filing_data)
+
+    return {
+        "primary": urls_info["ixbrl_url"],
+        "fallback": urls_info["ixbrl_url_fallback"],
+    }
+
+
+def validate_filing_data_for_url_building(filing_data: Dict[str, Any]) -> bool:
+    """
+    Validate that filing data contains the required fields for URL building.
+
+    Args:
+        filing_data: Dictionary containing filing information
+
+    Returns:
+        True if valid, False otherwise
+    """
+    required_fields = ["Cik", "Adsh", "BatchTag"]
+
+    for field in required_fields:
+        if not filing_data.get(field):
+            return False
+
+    # Validate ADSH format
+    adsh = str(filing_data.get("Adsh", ""))
+    if len(adsh.split("-")) != 3:
+        return False
+
+    return True

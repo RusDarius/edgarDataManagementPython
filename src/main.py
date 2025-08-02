@@ -123,16 +123,17 @@ def main():
 
     # Test ADSH-based extraction - NEW FUNCTION!
     # perform_adsh_extraction()
-    ticker = "FDX"
-    cik = "1048911"
 
-    result = process_multiple_missing_filings(
-        ticker=ticker,
-        cik=cik,
-        min_year=2023,  # Recent years for testing
-        verbose=True,
-    )
-    print(f"\nProcess completed: {result}")
+    # ticker = "FDX"
+    # cik = "1048911"
+
+    # result = process_multiple_missing_filings(
+    #     ticker=ticker,
+    #     cik=cik,
+    #     min_year=2023,  # Recent years for testing
+    #     verbose=True,
+    # )
+    # print(f"\nProcess completed: {result}")
 
     pass
 

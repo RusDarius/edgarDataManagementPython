@@ -127,7 +127,7 @@ WHERE Ticker LIKE 'MU';
 -- @block
 SELECT *
 FROM edgar_financial_data_concepts
-WHERE Ticker LIKE 'MU';
+WHERE Ticker LIKE 'FDX';
 -- @block
 SELECT Id,
     Cik,
@@ -233,13 +233,12 @@ WHERE (
         -- OR Concept LIKE '%Sales%'
     )
     AND (
-        Ticker = 'MU'
+        Ticker = 'FDX'
         OR Cik = 0
-    )
-    AND (
-        Segment IS NULL
-        OR Segment = ''
-    )
+    ) -- AND (
+    --     Segment IS NULL
+    --     OR Segment = ''
+    -- )
 ORDER BY FiscalYear DESC,
     -- Give FY highest priority, then others in descending lex order
     CASE

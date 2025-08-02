@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from data_loaders.sec_api_loaders.missing_filings_utils import (
     get_missing_sec_filings,
+    get_missing_sec_filings_with_inferred_metadata,
 )
 
 
@@ -33,6 +34,15 @@ def test_missing_filings_and_format():
         print(json.dumps(entry, ensure_ascii=False))
     # Print each missing 10-K as a JSON object, one per line
     for entry in missing_10k:
+        print(json.dumps(entry, ensure_ascii=False))
+    print("============================")
+    result_with_inffered_data = get_missing_sec_filings_with_inferred_metadata(
+        cik=cik, ticker=ticker, min_year=2017, verbose=False
+    )
+    for entry in result_with_inffered_data.get("missing_10q", []):
+        print(json.dumps(entry, ensure_ascii=False))
+    # Print each missing 10-K as a JSON object, one per line
+    for entry in result_with_inffered_data.get("missing_10k", []):
         print(json.dumps(entry, ensure_ascii=False))
 
 

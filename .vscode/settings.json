@@ -14,5 +14,9 @@
             "username": "root",
             "password": "!@#4QWEr"
         }
+    ],
+    "python.analysis.extraPaths": [
+        "./src/generic_utils",
+        "./src"
     ]
 }
