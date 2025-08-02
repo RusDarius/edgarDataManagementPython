@@ -6,12 +6,11 @@ def extract_quarters_covered(context):
     Infers the number of quarters (qtrs) a fact covers based on its context period.
     Returns an integer (1, 2, 3, 4) or None if not inferrable.
     """
-    if not context:
+    if context is None:
         return None
     # Try to get start and end dates from context
     start = None
     end = None
-    # Try common Arelle context attributes
     if hasattr(context, "startDatetime") and context.startDatetime:
         start = context.startDatetime
     elif hasattr(context, "startDate") and context.startDate:
@@ -20,27 +19,28 @@ def extract_quarters_covered(context):
         end = context.endDate
     elif hasattr(context, "instantDate") and context.instantDate:
         end = context.instantDate
+
     # If both dates are available, calculate quarters
     if start and end:
         try:
-            # Convert to datetime if needed
+            from datetime import datetime
+
             if not isinstance(start, datetime):
                 start = datetime.fromisoformat(str(start)[:10])
             if not isinstance(end, datetime):
                 end = datetime.fromisoformat(str(end)[:10])
-            # Calculate difference in months
             months = (end.year - start.year) * 12 + (end.month - start.month)
-            # If the period is less than 1 month, treat as 1 quarter (instant fact)
             if months < 1:
                 return 1
-            # Quarters = months / 3, round to nearest int (max 4)
             qtrs = max(1, min(4, round(months / 3)))
-            # If period is exactly 12 months, it's a year (4 quarters)
             if months >= 11:
                 return 4
             return qtrs
         except Exception:
             return None
+    # If only end/instant is available, treat as instant fact (1 quarter)
+    if (not start) and end:
+        return 1
     return None
 
 
@@ -48,7 +48,7 @@ def extract_unit_string(unit_obj):
     """
     Extracts the readable unit string (e.g., 'USD', 'EUR', 'shares', 'pure') from an Arelle ModelUnit object.
     """
-    if not unit_obj:
+    if unit_obj is None:
         return None
     # Most common case: measures[0] is a list of numerators (e.g., [iso4217:USD])
     if hasattr(unit_obj, "measures") and unit_obj.measures:
@@ -68,7 +68,7 @@ def extract_segment_string(context):
     Extracts a readable segment/dimension string from an Arelle context object.
     Example output: "BusinessSegments:Express, GeographicAreas:US"
     """
-    if not context:
+    if context is None:
         return None
 
     # For dimensional XBRL, use qnameDims
@@ -103,7 +103,7 @@ def extract_datatype_string(fact_or_concept):
     """
     # Get the concept object
     concept = getattr(fact_or_concept, "concept", fact_or_concept)
-    if not concept:
+    if concept is None:
         return None
     # Try the most common properties in order
     try:

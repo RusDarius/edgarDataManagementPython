@@ -30,11 +30,16 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
+from data_loaders.edgar_financial_loader import insert_financial_data
+from db.connection_credentials import BASE_DB_CONFIG
+from db.connection_provider import get_mysql_connection
+
 
 # Add src to sys.path to allow imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from data_loaders.data_extractors.arelle_extractors.arelle_uitls_data_extractors import (
+    extract_quarters_covered,
     extract_segment_string,
     extract_unit_string,
     extract_datatype_string,
@@ -307,6 +312,7 @@ def extract_all_facts_with_arelle(
 
                         # Get segment info
                         segment = extract_segment_string(fact.context)
+                        qtrs = extract_quarters_covered(fact.context)
                     except Exception:
                         pass
 
@@ -391,7 +397,7 @@ def analyze_revenue_facts(facts: List[Any]) -> None:
 
     if revenue_facts:
         print(f"\n🎯 Revenue Facts Detail:")
-        for idx, fact in enumerate(revenue_facts, 1):
+        for idx, fact in enumerate(revenue_facts[:3], 1):
             print(f"\n--- Revenue Fact #{idx} ---")
             for label, value in zip(fact_labels, fact):
                 print(f"{label}: {value}")
@@ -498,7 +504,7 @@ def get_filing_parameters() -> Dict[str, Any]:
     return FILING_PARAMETERS
 
 
-def execute_extraction_for_filling(filing_data):
+def execute_extraction_for_filling(filing_data, insert_to_db=False):
     """Main execution function."""
     print("🚀 Enhanced XBRL Data Extraction (v2)")
     print("=" * 60)
@@ -531,6 +537,13 @@ def execute_extraction_for_filling(filing_data):
         if not facts:
             print("❌ No facts extracted")
             return
+
+        if insert_to_db:
+            # if we have fact do insertion in batches
+            conn = get_mysql_connection(**BASE_DB_CONFIG)
+            batch_size = 1000
+            for i in range(0, len(facts), batch_size):
+                insert_financial_data(conn, facts[i : i + batch_size])
 
         # Analyze results
         print(f"\n3️⃣ Analysis Results")
@@ -570,7 +583,6 @@ def main():
 
     ticker = "FDX"
     cik = "1048911"
-    known_adsh = fetch_known_adsh_for_ticker("FDX")
     missing_fillings_with_inffered_data = (
         get_missing_sec_filings_with_inferred_metadata(
             cik=cik, ticker=ticker, min_year=2017, verbose=False
@@ -580,7 +592,26 @@ def main():
     missing_10q = missing_fillings_with_inffered_data.get("missing_10q", [])
     missing_10k = missing_fillings_with_inffered_data.get("missing_10k", [])
     # Print each missing 10-Q as a JSON object, one per line - limited to 1 !!!
-    for entry in missing_10q[:1]:
+    print(f"10-Q missing entries: {len(missing_10q)}")
+    for entry in missing_10q:
+        print(f"BATCHTAG USED: {entry.get("BatchTag")}")
+        print(json.dumps(entry, ensure_ascii=False))
+        execute_extraction_for_filling(
+            {
+                "Cik": entry.get("Cik"),
+                "BatchTag": entry.get("BatchTag"),
+                "ticker": ticker,
+                "filing_type": "10-Q",
+                "fiscal_period": entry.get("FiscalPeriod"),
+                "fiscal_year": entry.get("FiscalYear"),
+                "ddate": entry.get("Ddate"),
+                "Adsh": entry.get("Adsh"),
+            }
+        )
+    # Print each missing 10-K as a JSON object, one per line - limited to 1 !!!
+    print(f"10-K missing entries: {len(missing_10k)}")
+    for entry in missing_10k:
+        print(f"BATCHTAG USED: {entry.get("BatchTag")}")
         print(json.dumps(entry, ensure_ascii=False))
         execute_extraction_for_filling(
             {
@@ -594,16 +625,6 @@ def main():
                 "Adsh": entry.get("Adsh"),
             }
         )
-    # # Print each missing 10-K as a JSON object, one per line - limited to 1 !!!
-    # for entry in missing_10k[:1]:
-    #     print(json.dumps(entry, ensure_ascii=False))
-    #     execute_extraction_for_filling(
-    #         {
-    #             "Cik": entry.get("Cik"),
-    #             "Adsh": entry.get("Adsh"),
-    #             "BatchTag": entry.get("BatchTag"),
-    #         }
-    #     )
 
 
 if __name__ == "__main__":
