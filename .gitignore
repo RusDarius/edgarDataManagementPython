@@ -1,6 +1,7 @@
 documentation/edgarBulkDataSample/
 documentation/nyuData/
 savedData
+venv39
 
 # Python cache directories
 __pycache__/
