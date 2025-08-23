@@ -1,9 +1,43 @@
+import os
 from data_loaders.sec_api_loaders.fetch_and_parse_submission_enhanced_by_cik_and_adsh import (
     fetch_and_parse_submission_enhanced_by_cik_and_adsh,
 )
 from data_loaders.sec_api_loaders.process_multiple_missing_filings import (
     process_multiple_missing_filings,
 )
+from financial_execution_flows.sec_data_processing_flows import (
+    batchLoadMissingSecDataUsingArelle,
+    batchLoadSecData,
+    batchLoadSecDataParallel,
+)
+
+
+# === Simple utility to add 'processed' field to all_cik_ticker_pairs_with_financial_concepts_data_v2.json ===
+def add_processed_field_to_cik_ticker_json(json_path=None):
+    """
+    Adds a 'processed' field (0) to each entry in the JSON file for tracking.
+    """
+    if json_path is None:
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        json_path = os.path.join(
+            project_root,
+            "savedData",
+            "all_cik_ticker_pairs_with_financial_concepts_data_v2.json",
+        )
+    import json
+
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    changed = False
+    for entry in data:
+        entry["processed"] = 0
+        changed = True
+    if changed:
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        print(f"Updated {json_path} with 'processed' field.")
+    else:
+        print(f"No changes needed, all entries already have 'processed' field.")
 
 
 # === AI GENERATED FUNCTION (Claude) - 2025-06-29 ===
@@ -120,6 +154,8 @@ def main():
 
     # Batch load SEC data from files
     # batchLoadSecData()
+    # Batch load SEC data from files in parallel mode for performance
+    # batchLoadSecDataParallel()
 
     # Test ADSH-based extraction - NEW FUNCTION!
     # perform_adsh_extraction()
@@ -134,6 +170,8 @@ def main():
     #     verbose=True,
     # )
     # print(f"\nProcess completed: {result}")
+    # batchLoadMissingSecDataUsingArelle()
+    # add_processed_field_to_cik_ticker_json()
 
     pass
 

@@ -15,8 +15,10 @@ def test_missing_filings_and_format():
     # Fetch known filings (ADSH) from the database for ticker FDX
     from data_loaders.fetch_known_adsh import fetch_known_adsh_for_ticker
 
-    ticker = "FDX"
-    cik = "1048911"
+    # ticker = "FDX"
+    # cik = "1048911"
+    ticker = "AIR"
+    cik = "1750"
     known_adsh = fetch_known_adsh_for_ticker(ticker)
     # Print each known ADSH, one per line
     print("KNOWN ADSH ENTRIES:")
@@ -25,7 +27,7 @@ def test_missing_filings_and_format():
     print("END OF KNOWN ADSH\n")
     # Get missing filings since 2017
     missing_result = get_missing_sec_filings(
-        cik, known_adsh, min_year=2017, ticker=ticker, verbose=False
+        cik, known_adsh, min_year=2015, ticker=ticker, verbose=False
     )
     missing_10q = missing_result.get("missing_10q", [])
     missing_10k = missing_result.get("missing_10k", [])
@@ -36,8 +38,9 @@ def test_missing_filings_and_format():
     for entry in missing_10k:
         print(json.dumps(entry, ensure_ascii=False))
     print("============================")
+    print("result_with_inffered_data")
     result_with_inffered_data = get_missing_sec_filings_with_inferred_metadata(
-        cik=cik, ticker=ticker, min_year=2017, verbose=False
+        cik=cik, ticker=ticker, min_year=2015, verbose=False
     )
     for entry in result_with_inffered_data.get("missing_10q", []):
         print(json.dumps(entry, ensure_ascii=False))

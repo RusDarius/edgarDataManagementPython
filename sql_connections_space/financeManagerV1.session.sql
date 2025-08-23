@@ -3,6 +3,7 @@
 --     Cik INT PRIMARY KEY,
 --     Ticker VARCHAR(16) NOT NULL,
 --     Title VARCHAR(255) NOT NULL
+--     SecondaryTickers [] NOT NULL -- array type of string values as alternatives for a ticker
 -- );
 -- -- @block
 -- ALTER TABLE sec_cik_tickers_mapping
@@ -147,9 +148,6 @@ WHERE (BatchTag LIKE 'missingInsertTag-1048911')
 -- DELETE FROM edgar_financial_data_concepts
 -- WHERE (BatchTag LIKE 'missingInsertTag-1048911');
 -- @block
-SELECT DISTINCT BatchTag
-FROM edgar_financial_data_concepts;
--- @block
 DELETE FROM edgar_financial_data_concepts
 WHERE BatchTag = '2024q1'
 LIMIT 300000;
@@ -195,36 +193,6 @@ SELECT *
 FROM edgar_financial_data_concepts
 WHERE Cik = 1329099
     AND BatchTag = '2024q4';
--- get all entries for a cik/ticker for a concept sorted by Ddate and getting the first q1 or fy statement per fp
--- @block
-WITH RankedData AS (
-    SELECT *,
-        ROW_NUMBER() OVER (
-            PARTITION BY BatchTag
-            ORDER BY FiscalYear DESC,
-                CASE
-                    WHEN FiscalPeriod = 'FY' THEN 1
-                    ELSE 0
-                END DESC,
-                FiscalPeriod DESC,
-                Ddate DESC
-        ) AS row_num
-    FROM edgar_financial_data_concepts
-    WHERE Concept LIKE '%RevenueFromContractWithCustomerExcludingAssessedTax%'
-        AND (
-            Ticker = 'FDX'
-            OR Cik = 0
-        )
-        AND (
-            Segment IS NULL
-            OR Segment = ''
-        )
-        AND Qtrs != 2
-)
-SELECT *
-FROM RankedData
-WHERE row_num = 1
-ORDER BY BatchTag DESC;
 -- @block
 SELECT *
 FROM edgar_financial_data_concepts

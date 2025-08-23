@@ -6,6 +6,8 @@ from data_loaders.fetch_and_parse_all_financial_facts_from_submission_by_cik imp
 )
 from data_loaders.fetch_known_adsh import fetch_known_adsh_with_metadata_for_ticker
 
+client = ApiClient(user_agent="Barnnabass daniOO7XbX@gmail.com")
+
 
 def infer_fiscal_metadata_from_chronological_order(
     all_filings: List[Dict[str, Any]],
@@ -212,7 +214,6 @@ def get_missing_sec_filings_with_inferred_metadata(
         )
 
     # Get all filings from SEC API
-    client = ApiClient(user_agent="Barnnabass daniOO7XbX@gmail.com")
     cik_str = str(cik).zfill(10)
     submissions_data = client.fetch_company_submissions(cik_str)
     filings = submissions_data["filings"]["recent"]
@@ -312,7 +313,6 @@ def get_missing_sec_filings(
     Fetch all SEC filings (ADSH) for a CIK since min_year, compare to known_adsh_list, and return missing filings.
     Returns a dict with all missing filings and arrays for missing 10-Qs and 10-Ks.
     """
-    client = ApiClient(user_agent="Barnnabass daniOO7XbX@gmail.com")
     cik_str = str(cik).zfill(10)
     submissions_data = client.fetch_company_submissions(cik_str)
     filings = submissions_data["filings"]["recent"]
@@ -718,7 +718,6 @@ def build_sec_edgar_urls(filing_data: Dict[str, Any]) -> Dict[str, Any]:
 
     if is_filing_type_format:
         # Pattern: "fdx-10q_20210831" -> extract date for primary URL
-        filing_type = is_filing_type_format.group(1).lower()  # "10q" or "10k"
         date_part = is_filing_type_format.group(2)  # "20210831"
         company_prefix = batch_tag_base.split("-")[0]  # "fdx"
 
@@ -736,17 +735,31 @@ def build_sec_edgar_urls(filing_data: Dict[str, Any]) -> Dict[str, Any]:
         )
         batch_tag_v2_fallback = f"{batch_tag_v2_primary}_htm"
 
+    schema_urls_raw = client.check_xbrl_schemas_for_filing(
+        cik_clean, accession_no, filing_data.get("Cik", "")
+    ).get("schema_urls", {})
+
     # Build iXBRL URLs with enhanced fallback logic
-    ixbrl_url_simple = f"{base_url}{batch_tag_v2_primary}.xml"
+    ixbrl_url_simple = schema_urls_raw.get(
+        "ixbrl_xml", f"{base_url}{batch_tag_v2_primary}.xml"
+    )
     ixbrl_url_htm = f"{base_url}{batch_tag_v2_fallback}.xml"
 
     # Build schema/linkbase URLs using primary format
     schema_urls = {
-        "xsd": f"{base_url}{batch_tag_v2_primary}.xsd",
-        "def_xml": f"{base_url}{batch_tag_v2_primary}_def.xml",
-        "pre_xml": f"{base_url}{batch_tag_v2_primary}_pre.xml",
-        "cal_xml": f"{base_url}{batch_tag_v2_primary}_cal.xml",
-        "lab_xml": f"{base_url}{batch_tag_v2_primary}_lab.xml",
+        "xsd": schema_urls_raw.get("xsd", f"{base_url}{batch_tag_v2_primary}.xsd"),
+        "def_xml": schema_urls_raw.get(
+            "def_xml", f"{base_url}{batch_tag_v2_primary}_def.xml"
+        ),
+        "pre_xml": schema_urls_raw.get(
+            "pre_xml", f"{base_url}{batch_tag_v2_primary}_pre.xml"
+        ),
+        "cal_xml": schema_urls_raw.get(
+            "cal_xml", f"{base_url}{batch_tag_v2_primary}_cal.xml"
+        ),
+        "lab_xml": schema_urls_raw.get(
+            "lab_xml", f"{base_url}{batch_tag_v2_primary}_lab.xml"
+        ),
     }
 
     return {

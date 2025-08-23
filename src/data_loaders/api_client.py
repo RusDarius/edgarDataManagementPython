@@ -1,3 +1,4 @@
+from bs4 import BeautifulSoup
 import requests
 
 
@@ -20,6 +21,73 @@ class ApiClient:
         response = requests.get(url, headers=self.headers)
         response.raise_for_status()
         return response.json()
+
+    def check_xbrl_schemas_for_filing(self, cik: str, adsh: str, ticker: str) -> dict:
+        """
+        For a given CIK and accession number (ADSH), fetch the directory listing,
+        select files matching required suffixes, and download their content.
+        Returns a dict with file type as key and either the content (if found) or error message.
+        """
+        base_url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{adsh}/"
+        url_prefix = f"https://www.sec.gov/"
+        suffixes = {
+            "xsd": ".xsd",
+            "def_xml": "_def.xml",
+            "pre_xml": "_pre.xml",
+            "cal_xml": "_cal.xml",
+            "lab_xml": "_lab.xml",
+            "ixbrl_xml": ".xml",
+        }
+        schema_urls = {}
+
+        # Fetch the directory listing
+        try:
+            resp = requests.get(base_url, headers=self.headers, timeout=10)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "html.parser")
+            files = [a.get("href") for a in soup.find_all("a") if a.get("href")]
+        except Exception as e:
+            return {
+                "schema_urls": {
+                    key: f"❌ Failed to fetch directory listing: {e}"
+                    for key in suffixes
+                }
+            }
+        # Find and collect URLs for each required file by suffix only
+        for key, suffix in suffixes.items():
+            if key == "ixbrl_xml" and ticker:
+                # Case-insensitive match: file ends with .xml and starts with ticker
+                # Exclude files that match other XML suffixes
+                excluded_suffixes = ["_def.xml", "_pre.xml", "_cal.xml", "_lab.xml"]
+
+                # First filter candidates
+                candidates = [
+                    f
+                    for f in files
+                    if f.lower().endswith(".xml")
+                    and f.lower().startswith(ticker.lower())
+                ]
+
+                # Then exclude the linkbase files
+                match = next(
+                    (
+                        f
+                        for f in candidates
+                        if not any(
+                            f.lower().endswith(exc.lower()) for exc in excluded_suffixes
+                        )
+                    ),
+                    None,
+                )
+            else:
+                match = next((f for f in files if f.endswith(suffix)), None)
+            if match:
+                file_url = url_prefix + match
+                schema_urls[key] = file_url
+            else:
+                schema_urls[key] = f"❌ No file found for {key} with suffix {suffix}"
+
+        return {"schema_urls": schema_urls}
 
     def fetch_8k_document(self, cik, accession, primary_doc):
         """Fetch the primary document for a specific 8-K filing."""

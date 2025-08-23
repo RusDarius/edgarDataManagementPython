@@ -1,4 +1,87 @@
-from datetime import datetime
+import decimal
+
+try:
+    from arelle.ModelValue import (
+        gMonthDay,
+        IsoDuration,
+        gYear,
+        gYearMonth,
+        DateTime,
+    )
+except ImportError:
+    # If arelle is not installed, define dummy types for type checking
+    gMonthDay = IsoDuration = gYear = gYearMonth = DateTime = type(None)
+
+
+def extract_numeric_value_from_fact(fact):
+    """
+    Extracts a numeric value from an Arelle fact's xValue, if possible.
+    Returns float if numeric, else None.
+    """
+    raw_value = getattr(fact, "xValue", None)
+    # Handle None and bool (treat bool as not numeric for financial data)
+    if raw_value is None or isinstance(raw_value, bool):
+        return None
+    # Handle int, float, decimal.Decimal
+    if isinstance(raw_value, (int, float, decimal.Decimal)):
+        try:
+            return float(raw_value)
+        except Exception:
+            return None
+    # Handle string that can be parsed as float
+    if isinstance(raw_value, str):
+        try:
+            return float(raw_value)
+        except Exception:
+            return None
+    # Handle Arelle date/duration types, lists, or other custom types as not numeric
+    return None
+
+
+def extract_datatype_value_from_fact(fact):
+    """
+    Determines the type of xValue for a fact and returns it as a string.
+    Known possible types for xValue (as of 2024-2025):
+        - bool
+        - NoneType
+        - decimal.Decimal
+        - int
+        - float
+        - str
+        - list
+        - arelle.ModelValue.gMonthDay
+        - arelle.ModelValue.IsoDuration
+        - arelle.ModelValue.gYear
+        - arelle.ModelValue.gYearMonth
+        - arelle.ModelValue.DateTime
+    """
+    raw_value = getattr(fact, "xValue", None)
+    if raw_value is None:
+        return "NoneType"
+    if isinstance(raw_value, bool):
+        return "bool"
+    if isinstance(raw_value, int):
+        return "int"
+    if isinstance(raw_value, float):
+        return "float"
+    if isinstance(raw_value, decimal.Decimal):
+        return "decimal.Decimal"
+    if isinstance(raw_value, str):
+        return "str"
+    if isinstance(raw_value, list):
+        return "list"
+    if isinstance(raw_value, gMonthDay):
+        return "arelle.ModelValue.gMonthDay"
+    if isinstance(raw_value, IsoDuration):
+        return "arelle.ModelValue.IsoDuration"
+    if isinstance(raw_value, gYear):
+        return "arelle.ModelValue.gYear"
+    if isinstance(raw_value, gYearMonth):
+        return "arelle.ModelValue.gYearMonth"
+    if isinstance(raw_value, DateTime):
+        return "arelle.ModelValue.DateTime"
+    # Fallback for unknown types
+    return type(raw_value).__name__
 
 
 def extract_quarters_covered(context):
@@ -141,3 +224,83 @@ def extract_datatype_string(fact_or_concept):
         return type_name
     except Exception:
         return None
+
+
+def get_fact_string_value(fact):
+    """
+    Get the string value from an XBRL fact using multiple approaches.
+
+    Args:
+        fact: Arelle fact object
+
+    Returns:
+        Clean string value or None
+    """
+    # Try multiple approaches to get the fact value
+    approaches = [
+        lambda f: getattr(f, "value", None),  # Standard value
+        lambda f: getattr(f, "textValue", None),  # Text value
+        lambda f: getattr(f, "stringValue", None),  # String value
+        lambda f: getattr(f, "effectiveValue", None),  # Effective value
+    ]
+
+    for approach in approaches:
+        try:
+            raw_value = approach(fact)
+            if raw_value is not None:
+                clean_value = extract_clean_text_from_value(raw_value)
+                if clean_value:
+                    if len(clean_value) > 200:
+                        clean_value = "Text too long, keep fact only"
+                    return clean_value
+        except Exception:
+            continue
+
+    return None
+
+
+# === UTILITY FUNCTIONS ===
+def extract_clean_text_from_value(value):
+    """
+    Extract clean text from a fact value, handling HTML content and various data types.
+
+    Args:
+        value: The raw value from an XBRL fact
+
+    Returns:
+        Clean string representation of the value
+    """
+    if value is None:
+        return None
+
+    # Convert to string first
+    str_value = str(value).strip()
+
+    if not str_value:
+        return None
+
+    # Check if it contains HTML tags
+    if "<" in str_value and ">" in str_value:
+        try:
+            # Use BeautifulSoup to extract text from HTML
+            from bs4 import BeautifulSoup
+
+            soup = BeautifulSoup(str_value, "html.parser")
+            clean_text = soup.get_text(separator=" ", strip=True)
+
+            # Clean up extra whitespace
+            import re
+
+            clean_text = re.sub(r"\s+", " ", clean_text).strip()
+
+            return clean_text if clean_text else None
+        except Exception:
+            # Fallback: simple regex-based HTML tag removal
+            import re
+
+            clean_text = re.sub(r"<[^>]+>", "", str_value).strip()
+            # Clean up extra whitespace
+            clean_text = re.sub(r"\s+", " ", clean_text)
+            return clean_text if clean_text else None
+
+    return str_value

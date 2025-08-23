@@ -29,7 +29,6 @@ def load_tag_info(bulk_data_dir):
 # Parse sub.txt and return a list of filing dictionaries (one per unique CIK).
 def parse_sub_txt(sub_path):
     filings = []
-    seen_ciks = set()
     with open(sub_path, encoding="utf-8") as f:
         reader = csv.DictReader(f, delimiter="\t")
         for row in reader:
@@ -37,9 +36,6 @@ def parse_sub_txt(sub_path):
             if not cik or not cik.isdigit():
                 continue
             cik_int = int(cik)
-            if cik_int in seen_ciks:
-                continue  # skip duplicates
-            seen_ciks.add(cik_int)
             filings.append(
                 {
                     "cik": cik_int,
@@ -188,7 +184,7 @@ def run_financial_data_loader(bulk_data_dir, batch_data_tag):
                 )
             )
 
-    batch_size = 1000
+    batch_size = 10000
     for i in range(0, len(data_to_insert), batch_size):
         insert_financial_data(conn, data_to_insert[i : i + batch_size])
 
