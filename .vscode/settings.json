@@ -5,11 +5,12 @@
                 "authProtocol": "default",
                 "enableSsl": "Disabled"
             },
+            "ssh": "Disabled",
             "previewLimit": 50,
             "server": "localhost",
             "port": 3306,
             "driver": "MySQL",
-            "name": "financeManagerV1",
+            "name": "finance_manager_iteration_1",
             "database": "finance_manager_iteration_1",
             "username": "root",
             "password": "!@#4QWEr"

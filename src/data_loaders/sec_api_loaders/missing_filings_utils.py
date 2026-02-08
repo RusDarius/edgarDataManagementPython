@@ -236,8 +236,8 @@ def get_missing_sec_filings_with_inferred_metadata(
             "primaryDocument", [None] * len(filings["accessionNumber"])
         )[i]
 
-        # ONLY consider 10-Q and 10-K filings
-        if filing_type.upper() not in ["10-Q", "10-K"]:
+        # ONLY consider 10-Q, 10-K, 20-F, and 40-F filings
+        if filing_type.upper() not in ["10-Q", "10-K", "20-F", "40-F"]:
             continue
 
         # Only consider filings since min_year

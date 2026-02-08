@@ -1,5 +1,6 @@
+-- place for operations relating to sec_cik_tickers_mapping or SEC CIK Tickers 
 -- @block
--- Get all values from cik_ticker_checked table
+-- Get all values from cik_ticker_checked table 
 SELECT *
 FROM cik_ticker_checked;
 -- -- @block
@@ -13,3 +14,7 @@ FROM cik_ticker_checked;
 -- -- @block
 -- -- Add index for Cik for fast lookup
 -- CREATE INDEX idx_cik ON cik_ticker_checked (Cik);
+-- @block
+SELECT *
+FROM sec_cik_tickers_mapping
+WHERE JSON_CONTAINS(SecondaryTickers, '"BIDU"');

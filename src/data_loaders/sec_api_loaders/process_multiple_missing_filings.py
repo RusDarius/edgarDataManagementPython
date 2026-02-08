@@ -220,7 +220,7 @@ def insert_facts_into_database(facts: list, verbose: bool = True) -> int:
 
         if verbose:
             print(
-                f"✓ Successfully inserted {total_inserted} facts with batch tag: {fact.get("BatchTag")}"  # type: ignore
+                f"✓ Successfully inserted {total_inserted} facts with batch tag: {fact.get('BatchTag')}"  # type: ignore
             )
 
         return total_inserted

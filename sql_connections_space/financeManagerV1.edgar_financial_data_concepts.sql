@@ -17,6 +17,13 @@ WHERE BatchTag = '2018q1'
 GROUP BY Concept
 ORDER BY FactCount DESC;
 -- @block
+-- Get all distinct Concepts ranked by total occurrences (most to least frequent)
+SELECT Concept,
+    COUNT(*) AS FactCount
+FROM edgar_financial_data_concepts
+GROUP BY Concept
+ORDER BY FactCount DESC;
+-- @block
 -- Delete all records from edgar_financial_data_concepts where BatchTag starts with "fdx-"
 DELETE FROM edgar_financial_data_concepts
 WHERE BatchTag LIKE 'fdx-%';
@@ -34,12 +41,12 @@ ORDER BY FactCount DESC;
 -- Check count of records to be deleted
 SELECT COUNT(*) as records_to_delete
 FROM edgar_financial_data_concepts
-WHERE BatchTag = 'acm-20250630.htm_868857';
+WHERE BatchTag = '2025q3';
 -- @block
 -- Delete records with BatchTag "fdx-20240831.htm" (limited to 1000 records per execution)
 DELETE FROM edgar_financial_data_concepts
-WHERE BatchTag = 'rusha20250630_10q.htm_1012019'
-LIMIT 500000;
+WHERE BatchTag = '2025q3'
+LIMIT 2000000;
 -- get all distinct BatchTag values
 -- @block
 SELECT DISTINCT BatchTag
@@ -49,14 +56,11 @@ FROM edgar_financial_data_concepts;
 WITH RankedData AS (
     SELECT *,
         ROW_NUMBER() OVER (
-            PARTITION BY BatchTag
+            PARTITION BY FiscalYear,
+                FiscalPeriod
             ORDER BY FiscalYear DESC,
-                CASE
-                    WHEN FiscalPeriod = 'FY' THEN 1
-                    ELSE 0
-                END DESC,
-                FiscalPeriod DESC,
-                Ddate DESC
+                Ddate DESC,
+                BatchTag DESC
         ) AS row_num
     FROM edgar_financial_data_concepts
     WHERE (
@@ -66,7 +70,7 @@ WITH RankedData AS (
             OR Concept LIKE 'Revenue'
         )
         AND (
-            Ticker = 'FDX' -- Cik = 1750
+            Ticker = 'MU' -- Cik = 1750
         )
         AND (
             Segment IS NULL
@@ -115,3 +119,13 @@ SELECT DISTINCT Cik,
     Ticker
 FROM edgar_financial_data_concepts
 WHERE Ddate IS NOT NULL;
+-- @block
+SELECT DISTINCT Adsh, FilingType, PeriodEnd, FiscalPeriod
+FROM edgar_financial_data_concepts
+WHERE Ticker = 'AMD'
+ORDER BY PeriodEnd DESC;
+-- @block
+SELECT *
+FROM edgar_financial_data_concepts
+WHERE Adsh = 'YOUR_ADSH'
+  AND Concept = 'RevenueFromContractWithCustomerExcludingAssessedTax';

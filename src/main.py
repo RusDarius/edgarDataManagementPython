@@ -1,4 +1,5 @@
 import os
+from data_loaders.edgar_workflow import run_sec_cik_ticker_mapping_workflow
 from data_loaders.sec_api_loaders.fetch_and_parse_submission_enhanced_by_cik_and_adsh import (
     fetch_and_parse_submission_enhanced_by_cik_and_adsh,
 )
@@ -9,6 +10,7 @@ from financial_execution_flows.sec_data_processing_flows import (
     batchLoadMissingSecDataUsingArelle,
     batchLoadSecData,
     batchLoadSecDataParallel,
+    batchLoadSecTagDataParallel,
 )
 
 
@@ -144,6 +146,9 @@ def test_enhanced_period_validation():
 
 # Main entry point for running workflows and data loaders.
 def main():
+    base_data_dir = r"D:\FinanceProjects\edgarFinancialStatements"
+
+    # run_sec_cik_ticker_mapping_workflow()
     # Uncomment the function you want to run:
 
     # Test enhanced period validation functionality
@@ -156,6 +161,9 @@ def main():
     # batchLoadSecData()
     # Batch load SEC data from files in parallel mode for performance
     # batchLoadSecDataParallel()
+
+    # Run tag data loading into edgar_tag_info, giving info about Concept fields present in edgar_financial_data_concepts
+    batchLoadSecTagDataParallel()
 
     # Test ADSH-based extraction - NEW FUNCTION!
     # perform_adsh_extraction()

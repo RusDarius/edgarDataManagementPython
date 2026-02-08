@@ -1,9 +1,10 @@
+
 -- -- @block
 -- CREATE TABLE sec_cik_tickers_mapping (
 --     Cik INT PRIMARY KEY,
 --     Ticker VARCHAR(16) NOT NULL,
---     Title VARCHAR(255) NOT NULL
---     SecondaryTickers [] NOT NULL -- array type of string values as alternatives for a ticker
+--     Title VARCHAR(255) NOT NULL,
+--     SecondaryTickers JSON NOT NULL -- array type of string values as alternatives for a ticker
 -- );
 -- -- @block
 -- ALTER TABLE sec_cik_tickers_mapping
@@ -203,7 +204,8 @@ WHERE (
     AND (
         Ticker = 'FDX'
         OR Cik = 0
-    ) -- AND (
+    ) 
+    -- AND (
     --     Segment IS NULL
     --     OR Segment = ''
     -- )
@@ -263,7 +265,7 @@ WITH LatestEntries AS (
                 BatchTag DESC
         ) as rn
     FROM edgar_financial_data_concepts
-    WHERE Ticker = 'FDX' -- Replace with your desired ticker
+    WHERE Ticker = 'MU' -- Replace with your desired ticker
 )
 SELECT FiscalYear,
     FiscalPeriod,

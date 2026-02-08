@@ -167,7 +167,7 @@ def extract_all_facts_with_arelle(
             )
         adsh = filing_data.get("Adsh")
         cik = filing_data.get("Cik")
-        batch_tag = f"{filing_data.get("BatchTag")}_{cik}"
+        batch_tag = f"{filing_data.get('BatchTag')}_{cik}"
         ticker = filing_data.get("ticker")
         filing_type = filing_data.get("filing_type")
         fiscal_period = filing_data.get("fiscal_period")
@@ -328,8 +328,8 @@ def execute_extraction_for_filling(filing_data, insert_to_db=False, verbosity=Tr
 def arelle_missing_fillings_processing_ticker(ticker, cik, verbosity=False):
     missing_fillings_with_inffered_data = (
         get_missing_sec_filings_with_inferred_metadata(
-            cik=cik, ticker=ticker, min_year=2010, verbose=False
-        )
+            cik=cik, ticker=ticker, min_year=2018, verbose=False
+        ) # min_year can be changed as needed to cover more historical data
     )
     missing_10q = missing_fillings_with_inffered_data.get("missing_10q", [])
     missing_10k = missing_fillings_with_inffered_data.get("missing_10k", [])
