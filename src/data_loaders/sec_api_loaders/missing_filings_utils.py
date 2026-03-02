@@ -237,7 +237,7 @@ def get_missing_sec_filings_with_inferred_metadata(
         )[i]
 
         # ONLY consider 10-Q, 10-K, 20-F, and 40-F filings
-        if filing_type.upper() not in ["10-Q", "10-K", "20-F", "40-F"]:
+        if filing_type.upper() not in ["10-Q", "10-K", "20-F", "40-F", "20-F/A"]:
             continue
 
         # Only consider filings since min_year
@@ -735,8 +735,9 @@ def build_sec_edgar_urls(filing_data: Dict[str, Any]) -> Dict[str, Any]:
         )
         batch_tag_v2_fallback = f"{batch_tag_v2_primary}_htm"
 
+    ticker = filing_data.get("ticker") or filing_data.get("Ticker") or ""
     schema_urls_raw = client.check_xbrl_schemas_for_filing(
-        cik_clean, accession_no, filing_data.get("Cik", "")
+        cik_clean, accession_no, ticker
     ).get("schema_urls", {})
 
     # Build iXBRL URLs with enhanced fallback logic

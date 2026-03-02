@@ -5,6 +5,8 @@ import shutil
 import tempfile
 import warnings
 import logging
+import time
+import hashlib
 from typing import Dict, List, Any, Optional
 
 # Third-party imports
@@ -45,6 +47,25 @@ except ImportError:
 
 # Target revenue tags for extraction
 USER_AGENT = "EdgarDataExtractor contact@yourcompany.com"
+MAX_BATCH_TAG_LENGTH = 32
+MAX_UOM_LENGTH = 31
+
+
+def build_safe_batch_tag(batch_tag: Any, cik: Any, max_length: int = MAX_BATCH_TAG_LENGTH) -> str:
+    """
+    Build a deterministic BatchTag that always fits in DB varchar length.
+
+    If the full tag exceeds max_length, preserve a readable prefix and append
+    a hash suffix derived from the full original value to keep uniqueness.
+    """
+    raw_tag = f"{str(batch_tag or '').strip()}_{str(cik or '').strip()}"
+    if len(raw_tag) <= max_length:
+        return raw_tag
+
+    hash_suffix = hashlib.sha1(raw_tag.encode("utf-8")).hexdigest()[:12]
+    reserved_suffix = f"_{hash_suffix}"
+    prefix_length = max(0, max_length - len(reserved_suffix))
+    return f"{raw_tag[:prefix_length]}{reserved_suffix}"
 
 
 def suppress_arelle_warnings():
@@ -167,7 +188,7 @@ def extract_all_facts_with_arelle(
             )
         adsh = filing_data.get("Adsh")
         cik = filing_data.get("Cik")
-        batch_tag = f"{filing_data.get('BatchTag')}_{cik}"
+        batch_tag = build_safe_batch_tag(filing_data.get("BatchTag"), cik)
         ticker = filing_data.get("ticker")
         filing_type = filing_data.get("filing_type")
         fiscal_period = filing_data.get("fiscal_period")
@@ -183,7 +204,6 @@ def extract_all_facts_with_arelle(
             qtrs = None
             value_string = None
             value = None
-            period_start = None
             period_end = None
             instant_date = None
             try:
@@ -203,6 +223,14 @@ def extract_all_facts_with_arelle(
                 value = extract_numeric_value_from_fact(fact)
                 datatype = extract_datatype_value_from_fact(fact)
                 uom = extract_unit_string(getattr(fact, "unit", None))
+                if uom is not None:
+                    try:
+                        uom = str(uom)
+                        if len(uom) > MAX_UOM_LENGTH:
+                            uom = uom[:MAX_UOM_LENGTH]
+                    except Exception:
+                        # If conversion fails, leave uom as-is or None
+                        pass
                 if hasattr(fact, "context") and fact.context is not None:
                     try:
                         if (
@@ -222,6 +250,14 @@ def extract_all_facts_with_arelle(
                 final_period_date = (
                     period_end if period_end is not None else instant_date
                 )
+                if segment is not None:
+                    try:
+                        segment = str(segment)
+                        if len(segment) > MAX_UOM_LENGTH:
+                            segment = segment[:MAX_UOM_LENGTH]
+                    except Exception:
+                        # If conversion fails, leave segment as-is or None
+                        pass
                 facts.append(
                     (
                         cik,
@@ -265,6 +301,16 @@ def extract_all_facts_with_arelle(
 
 def execute_extraction_for_filling(filing_data, insert_to_db=False, verbosity=True):
     """Main execution function with verbosity control."""
+    cik = filing_data.get("Cik")
+    adsh = filing_data.get("Adsh")
+
+    def failure_response(reason):
+        return {
+            "cik": cik,
+            "adsh": adsh,
+            "text": str(reason),
+        }
+
     if verbosity:
         print("🚀 Enhanced XBRL Data Extraction (v2)")
         print("=" * 60)
@@ -281,7 +327,7 @@ def execute_extraction_for_filling(filing_data, insert_to_db=False, verbosity=Tr
         if not downloaded_files:
             if verbosity:
                 print("❌ Failed to download required files")
-            return
+            return failure_response("Failed to download required files")
         if verbosity:
             print(f"\n2️⃣ Extracting Facts with Arelle")
             print("-" * 40)
@@ -289,14 +335,14 @@ def execute_extraction_for_filling(filing_data, insert_to_db=False, verbosity=Tr
         if not ixbrl_path:
             if verbosity:
                 print("❌ iXBRL file not available")
-            return
+            return failure_response("iXBRL file not available")
         facts = extract_all_facts_with_arelle(
             ixbrl_path, filing_data, verbosity=verbosity
         )
         if not facts:
             if verbosity:
                 print("❌ No facts extracted")
-            return
+            return failure_response("No facts extracted")
         if insert_to_db:
             conn = get_mysql_connection(**BASE_DB_CONFIG)
             batch_size = 1000
@@ -314,8 +360,10 @@ def execute_extraction_for_filling(filing_data, insert_to_db=False, verbosity=Tr
             os.makedirs(saved_data_dir, exist_ok=True)
             print(f"\n✅ Extraction Complete!")
             print(f"   📊 Total facts: {len(facts)}")
+        return None
     except Exception as e:
         print(f"💥 Extraction failed: {e}")
+        return failure_response(f"Extraction failed: {e}")
     finally:
         try:
             shutil.rmtree(temp_dir)
@@ -325,10 +373,11 @@ def execute_extraction_for_filling(filing_data, insert_to_db=False, verbosity=Tr
             print(f"⚠️ Could not clean up temporary directory: {e}")
 
 
-def arelle_missing_fillings_processing_ticker(ticker, cik, verbosity=False):
+def arelle_missing_fillings_processing_ticker(ticker, cik, verbosity=False, insert_to_db=False, min_year=2018):
+    failed_extractions = []
     missing_fillings_with_inffered_data = (
         get_missing_sec_filings_with_inferred_metadata(
-            cik=cik, ticker=ticker, min_year=2018, verbose=False
+            cik=cik, ticker=ticker, min_year=min_year, verbose=False
         ) # min_year can be changed as needed to cover more historical data
     )
     missing_10q = missing_fillings_with_inffered_data.get("missing_10q", [])
@@ -341,7 +390,7 @@ def arelle_missing_fillings_processing_ticker(ticker, cik, verbosity=False):
         #     continue
         print(f"BATCHTAG USED: {entry.get('BatchTag')}")
         print(json.dumps(entry, ensure_ascii=False))
-        execute_extraction_for_filling(
+        extraction_result = execute_extraction_for_filling(
             {
                 "Cik": entry.get("Cik"),
                 "BatchTag": entry.get("BatchTag"),
@@ -352,9 +401,12 @@ def arelle_missing_fillings_processing_ticker(ticker, cik, verbosity=False):
                 "ddate": entry.get("Ddate"),
                 "Adsh": entry.get("Adsh"),
             },
-            False,
             verbosity=verbosity,
+            insert_to_db=insert_to_db,
         )
+        time.sleep(0.5)
+        if extraction_result:
+            failed_extractions.append(extraction_result)
 
     print(f"10-K missing entries: {len(missing_10k)}")
     for entry in missing_10k:
@@ -363,7 +415,7 @@ def arelle_missing_fillings_processing_ticker(ticker, cik, verbosity=False):
         #     continue
         print(f"BATCHTAG USED: {entry.get('BatchTag')}")
         print(json.dumps(entry, ensure_ascii=False))
-        execute_extraction_for_filling(
+        extraction_result = execute_extraction_for_filling(
             {
                 "Cik": entry.get("Cik"),
                 "BatchTag": entry.get("BatchTag"),
@@ -374,6 +426,11 @@ def arelle_missing_fillings_processing_ticker(ticker, cik, verbosity=False):
                 "ddate": entry.get("Ddate"),
                 "Adsh": entry.get("Adsh"),
             },
-            False,
             verbosity=verbosity,
+            insert_to_db=insert_to_db,
         )
+        time.sleep(0.5)
+        if extraction_result:
+            failed_extractions.append(extraction_result)
+
+    return failed_extractions

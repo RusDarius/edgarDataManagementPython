@@ -56,26 +56,36 @@ class ApiClient:
         # Find and collect URLs for each required file by suffix only
         for key, suffix in suffixes.items():
             if key == "ixbrl_xml" and ticker:
-                # Case-insensitive match: file ends with .xml and starts with ticker
-                # Exclude files that match other XML suffixes
                 excluded_suffixes = ["_def.xml", "_pre.xml", "_cal.xml", "_lab.xml"]
+                excluded_filenames = {"filingsummary.xml"}
 
-                # First filter candidates
-                candidates = [
+                xml_candidates = [f for f in files if f.lower().endswith(".xml")]
+                valid_xml_candidates = [
                     f
-                    for f in files
-                    if f.lower().endswith(".xml")
-                    and f.lower().startswith(ticker.lower())
+                    for f in xml_candidates
+                    if not any(f.lower().endswith(exc) for exc in excluded_suffixes)
+                    and f.split("/")[-1].lower() not in excluded_filenames
                 ]
 
-                # Then exclude the linkbase files
+                ticker_candidates = [
+                    f
+                    for f in valid_xml_candidates
+                    if f.split("/")[-1].lower().startswith(ticker.lower())
+                ]
+
+                match = ticker_candidates[0] if ticker_candidates else (
+                    valid_xml_candidates[0] if valid_xml_candidates else None
+                )
+            elif key == "ixbrl_xml":
+                excluded_suffixes = ["_def.xml", "_pre.xml", "_cal.xml", "_lab.xml"]
+                excluded_filenames = {"filingsummary.xml"}
                 match = next(
                     (
                         f
-                        for f in candidates
-                        if not any(
-                            f.lower().endswith(exc.lower()) for exc in excluded_suffixes
-                        )
+                        for f in files
+                        if f.lower().endswith(".xml")
+                        and not any(f.lower().endswith(exc) for exc in excluded_suffixes)
+                        and f.split("/")[-1].lower() not in excluded_filenames
                     ),
                     None,
                 )

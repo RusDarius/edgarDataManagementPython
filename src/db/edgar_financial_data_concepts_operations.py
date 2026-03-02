@@ -42,3 +42,66 @@ def batch_tag_exists(batch_tag):
     finally:
         conn.close()
     return exists
+
+
+def get_edgar_financial_data_concepts_adshs_sorted_periodend(cik, ticker):
+    try:
+        conn = get_mysql_connection(**BASE_DB_CONFIG)
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                WITH ranked AS (
+                    SELECT
+                        Adsh,
+                        FilingType,
+                        PeriodEnd,
+                        FiscalPeriod,
+                        BatchTag,
+                        FiscalYear,
+                    ROW_NUMBER() OVER (
+                    PARTITION BY Adsh
+                    ORDER BY COALESCE(PeriodEnd, '1900-01-01') DESC
+                    ) AS rn
+                    FROM edgar_financial_data_concepts
+                    WHERE Cik = %s AND Ticker = %s
+                    AND FilingType IN ('10-Q', '10-K', '20-F', '20-F/A', '40-F', '40-F/A')
+                )
+                SELECT Adsh, FilingType, PeriodEnd, FiscalPeriod, BatchTag, FiscalYear
+                FROM ranked
+                WHERE rn = 1
+                ORDER BY PeriodEnd DESC;
+                """,
+                (cik, ticker),
+            )
+            rows = cursor.fetchall()
+    finally:
+        conn.close()
+    return rows
+
+
+def update_fiscal_period_for_entries(cik, ticker, adsh, new_fiscal_period):
+    """
+    Update FiscalPeriod for all entries matching cik, ticker, and adsh.
+    Args:
+        cik (int or str): CIK value
+        ticker (str): Ticker value
+        adsh (str): Adsh value
+        new_fiscal_period (str): New FiscalPeriod to set
+    Returns:
+        int: Number of rows updated
+    """
+    conn = get_mysql_connection(**BASE_DB_CONFIG)
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE edgar_financial_data_concepts
+                SET FiscalPeriod = %s
+                WHERE Cik = %s AND Ticker = %s AND Adsh = %s
+                """,
+                (new_fiscal_period, cik, ticker, adsh),
+            )
+            conn.commit()
+            return cursor.rowcount
+    finally:
+        conn.close()

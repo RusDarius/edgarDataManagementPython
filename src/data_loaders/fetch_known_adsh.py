@@ -63,31 +63,16 @@ def fetch_known_adsh_with_metadata_for_ticker(ticker: str) -> List[Dict[str, Any
     cursor = conn.cursor(dictionary=True)
 
     query = """
-        WITH LatestEntries AS (
-            SELECT FiscalYear,
-                   FiscalPeriod,
-                   FilingType,
-                   Ddate,
-                   PeriodEnd,
-                   BatchTag,
-                   Adsh,
-                   ROW_NUMBER() OVER (
-                       PARTITION BY FiscalYear, FiscalPeriod, FilingType
-                       ORDER BY Ddate DESC, BatchTag DESC
-                   ) as rn
-            FROM edgar_financial_data_concepts
-            WHERE Ticker = %s
-        )
-        SELECT FiscalYear,
-               FiscalPeriod, 
-               FilingType,
-               Ddate,
-               PeriodEnd,
-               BatchTag,
-               Adsh
-        FROM LatestEntries
-        WHERE rn = 1
-        ORDER BY Ddate DESC;  -- Order by actual date for chronological sorting
+        SELECT DISTINCT Adsh,
+            FiscalYear,
+            FilingType,
+            PeriodEnd,
+            FiscalPeriod,
+            BatchTag,
+            FiscalYear
+        FROM edgar_financial_data_concepts
+        WHERE Ticker = %s
+        ORDER BY PeriodEnd DESC;
     """
 
     cursor.execute(query, (ticker,))

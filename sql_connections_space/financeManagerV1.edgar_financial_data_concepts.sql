@@ -1,8 +1,7 @@
 -- @block
--- Get all DISTINCT Cik-Ticker pairs in the edgar_financial_data_concepts table
-SELECT DISTINCT Cik,
-    Ticker
-FROM edgar_financial_data_concepts;
+ALTER TABLE edgar_financial_data_concepts
+MODIFY COLUMN BatchTag VARCHAR(128),
+    ALGORITHM = INSTANT;
 -- @block
 -- Get the count of all distinct Cik values in the edgar_financial_data_concepts table
 SELECT COUNT(DISTINCT Cik) AS distinct_cik_count
@@ -24,10 +23,6 @@ FROM edgar_financial_data_concepts
 GROUP BY Concept
 ORDER BY FactCount DESC;
 -- @block
--- Delete all records from edgar_financial_data_concepts where BatchTag starts with "fdx-"
-DELETE FROM edgar_financial_data_concepts
-WHERE BatchTag LIKE 'fdx-%';
--- @block
 -- This query returns all revenue-related facts (Concepts) for a specific BatchTag,
 -- using a case-insensitive match for 'revenue' in the Concept name.
 SELECT Concept,
@@ -45,7 +40,7 @@ WHERE BatchTag = '2025q3';
 -- @block
 -- Delete records with BatchTag "fdx-20240831.htm" (limited to 1000 records per execution)
 DELETE FROM edgar_financial_data_concepts
-WHERE BatchTag = '2025q3'
+WHERE BatchTag = 'aee-20230930.htm_18654'
 LIMIT 2000000;
 -- get all distinct BatchTag values
 -- @block
@@ -57,7 +52,7 @@ WITH RankedData AS (
     SELECT *,
         ROW_NUMBER() OVER (
             PARTITION BY FiscalYear,
-                FiscalPeriod
+            FiscalPeriod
             ORDER BY FiscalYear DESC,
                 Ddate DESC,
                 BatchTag DESC
@@ -96,23 +91,18 @@ WHERE (Concept LIKE 'NetIncomeLoss')
         Cik = 1750
     );
 -- @block
--- Delete all records with BatchTag "fdx-20230831.htm_1048911"
-DELETE FROM edgar_financial_data_concepts
-WHERE BatchTag = 'fdx-20250531.htm_1048911';
--- @block
-SELECT *
-FROM edgar_financial_data_concepts
-WHERE Adsh = '0001193125-15-098477';
--- @block
 -- Get all distinct FilingType values for ticker FDX and BatchTag 2015q1
 SELECT DISTINCT FilingType
 FROM edgar_financial_data_concepts
 WHERE Ticker = 'FDX';
 -- @block
-TRUNCATE TABLE edgar_financial_data_concepts;
--- @block
 SHOW INDEX
 FROM edgar_financial_data_concepts;
+-- @block
+SELECT COUNT(*) AS row_count
+FROM edgar_financial_data_concepts;
+-- @block
+SHOW TABLE STATUS LIKE 'edgar_financial_data_concepts';
 -- @block
 -- Get all DISTINCT Cik-Ticker pairs that have a non-null Ddate in edgar_financial_data_concepts
 SELECT DISTINCT Cik,
@@ -120,12 +110,55 @@ SELECT DISTINCT Cik,
 FROM edgar_financial_data_concepts
 WHERE Ddate IS NOT NULL;
 -- @block
-SELECT DISTINCT Adsh, FilingType, PeriodEnd, FiscalPeriod
+SELECT DISTINCT Adsh,
+    FilingType,
+    PeriodEnd,
+    FiscalPeriod,
+    BatchTag,
+    FiscalYear
 FROM edgar_financial_data_concepts
-WHERE Ticker = 'AMD'
+WHERE Cik = 1750
 ORDER BY PeriodEnd DESC;
 -- @block
 SELECT *
 FROM edgar_financial_data_concepts
-WHERE Adsh = 'YOUR_ADSH'
-  AND Concept = 'RevenueFromContractWithCustomerExcludingAssessedTax';
+WHERE Cik = 1002910
+    AND Adsh = '0001002910-25-000129';
+-- @block
+WITH ranked AS (
+    SELECT Adsh,
+        FilingType,
+        PeriodEnd,
+        FiscalPeriod,
+        BatchTag,
+        FiscalYear,
+        ROW_NUMBER() OVER (
+            PARTITION BY Adsh
+            ORDER BY COALESCE(PeriodEnd, '1900-01-01') DESC
+        ) AS rn
+    FROM edgar_financial_data_concepts
+    WHERE Cik = 1046102
+        AND Ticker = 'RBA'
+        AND FilingType IN (
+            '10-Q',
+            '10-K',
+            '20-F',
+            '20-F/A',
+            '40-F',
+            '40-F/A'
+        )
+)
+SELECT Adsh,
+    FilingType,
+    PeriodEnd,
+    FiscalPeriod,
+    BatchTag,
+    FiscalYear
+FROM ranked
+WHERE rn = 1
+ORDER BY PeriodEnd DESC;
+-- @block
+SELECT *
+FROM edgar_financial_data_concepts
+WHERE Adsh = '0000002488-25-000166'
+    AND Concept = 'RevenueFromContractWithCustomerExcludingAssessedTax';

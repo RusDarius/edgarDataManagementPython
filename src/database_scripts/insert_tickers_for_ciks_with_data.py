@@ -10,6 +10,26 @@ JSON_PATH = os.path.join(
 )
 
 TABLE_NAME = "cik_ticker_checked"
+SOURCE_TABLE = "sec_cik_tickers_mapping"
+
+
+def insert_all_cik_ticker_checked_from_mapping(default_checked=False):
+    """
+    Insert all CIK/ticker pairs from sec_cik_tickers_mapping with Checked default.
+    """
+    conn = get_mysql_connection(**BASE_DB_CONFIG)
+    try:
+        with conn.cursor() as cursor:
+            sql = f"""
+            INSERT IGNORE INTO {TABLE_NAME} (Cik, Ticker, Checked)
+            SELECT Cik, Ticker, %s
+            FROM {SOURCE_TABLE}
+            """
+            cursor.execute(sql, (default_checked,))
+        conn.commit()
+        print(f"Inserted rows from {SOURCE_TABLE} into {TABLE_NAME}.")
+    finally:
+        conn.close()
 
 
 def main():

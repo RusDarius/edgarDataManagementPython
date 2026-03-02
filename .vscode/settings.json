@@ -19,5 +19,10 @@
     "python.analysis.extraPaths": [
         "./src/generic_utils",
         "./src"
-    ]
+    ],
+    "editor.formatOnSave": true,
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.formatOnSave": true
+    }
 }
