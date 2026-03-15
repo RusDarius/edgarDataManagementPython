@@ -1,0 +1,21 @@
+-- -- @block
+-- CREATE TABLE nyu_ev_ebitda_multiples_positives (
+--     IndustryName VARCHAR(128) NOT NULL,
+--     NumberOfFirms INT NULL,
+--     EV_EBITDARnD FLOAT NULL,
+--     EV_EBITDA FLOAT NULL,
+--     EV_EBIT FLOAT NULL,
+--     EV_EBIT_1t FLOAT NULL
+-- );
+-- -- @block
+-- CREATE TABLE nyu_ev_ebitda_multiples_negatives (
+--     IndustryName VARCHAR(128) NOT NULL,
+--     NumberOfFirms INT NULL,
+--     EV_EBITDARnD FLOAT NULL,
+--     EV_EBITDA FLOAT NULL,
+--     EV_EBIT FLOAT NULL,
+--     EV_EBIT_1t FLOAT NULL
+-- );
+-- @block
+SELECT IndustryName
+FROM nyu_ev_ebitda_multiples_negatives;

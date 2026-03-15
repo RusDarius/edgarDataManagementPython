@@ -60,3 +60,7 @@ batchLoadMissingSecDataUsingArelle(batch_size=500, min_year=2012)
 - `batchLoadSecDataParallel` and `batchLoadSecTagDataParallel` now accept `batch_tags` as input.
 - `insert_all_cik_ticker_checked_from_mapping()` populates `cik_ticker_checked` from `sec_cik_tickers_mapping` (required before running `batchLoadMissingSecDataUsingArelle` if `cik_ticker_checked` is empty).
 - `process_submission_files_by_cik()` is currently called in `main.py`, but it is not part of the core initial table-population flow above. It is used to correct wrong periods for edgar_financial_data_concepts
+
+- `process_submission_files_by_cik_get_JSON`()  # Process SEC submission JSON files and print results
+- this augments the data from the sec_cik_tickers_mapping table with SIC and Exchanges values extracted from the filings, using the new batch update function with chunking for efficiency
+- `get_distinct_exchanges_from_csv`()  # Get distinct exchanges from indname.csv and print them

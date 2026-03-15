@@ -7,6 +7,78 @@ from db.edgar_financial_data_concepts_operations import (
     update_fiscal_period_for_entries,
 )
 from db.sec_cik_tickers_mapping_operations import read_sec_cik_ticker_for_cik
+from db.sec_cik_tickers_mapping_operations import (
+    batch_update_sec_cik_mapping_sic_and_exchanges,
+)
+
+
+def process_submission_files_by_cik_get_JSON(
+    submissions_dir: Optional[Path] = None,
+    cik_filter: Optional[set[str]] = None,
+):
+    """
+    Iterate SEC submission JSON files from `savedData/submissions_by_cik`
+    and run a custom processor for each file.
+    json file name format: CIK0000004962.json (CIK zero-padded to 10 digits)
+
+    Args:
+        submissions_dir: Optional override path. Defaults to project
+            `savedData/submissions_by_cik`.
+        cik_filter: Optional set of CIK strings (with or without `CIK` prefix)
+            to restrict processed files.
+
+    """
+    project_root = Path(__file__).resolve().parents[3]
+    target_dir = submissions_dir or (project_root / "savedData" / "submissions_by_cik")
+
+    if not target_dir.exists() or not target_dir.is_dir():
+        raise FileNotFoundError(f"submissions_by_cik directory not found: {target_dir}")
+
+    normalized_filter: Optional[set[str]] = None
+    if cik_filter:
+        normalized_filter = {
+            str(cik).replace("CIK", "").zfill(10) for cik in cik_filter
+        }
+
+    if normalized_filter:
+        files_to_process = [
+            target_dir / f"CIK{cik_10}.json"
+            for cik_10 in sorted(normalized_filter)
+            if (target_dir / f"CIK{cik_10}.json").exists()
+        ]
+    else:
+        files_to_process = sorted(target_dir.glob("CIK*.json"))
+
+    connection = get_mysql_connection()
+    updates_batch = []
+
+    try:
+        for file_path in files_to_process:
+            cik = file_path.stem.replace("CIK", "").lstrip("0")
+            print(f"Found data for CIK {cik} files to process in {target_dir}")
+
+            with file_path.open("r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+
+            sic_code = payload.get("sic")
+            exchanges = payload.get("exchanges")
+            payload_cik = payload.get("cik") or cik
+
+            updates_batch.append((payload_cik, sic_code, exchanges))
+
+        updated_rows = batch_update_sec_cik_mapping_sic_and_exchanges(
+            connection,
+            updates_batch,
+            batch_size=500,
+        )
+
+        connection.commit()
+    finally:
+        connection.close()
+
+    print(
+        f"Updated {updated_rows} sec_cik_tickers_mapping row(s) with SIC/Exchanges data."
+    )
 
 
 def process_submission_files_by_cik(

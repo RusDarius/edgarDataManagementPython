@@ -1,39 +1,12 @@
 import os
-from data_loaders.arelle_data_loaders.arelle_missing_fillings_processor import (
-    arelle_missing_fillings_processing_ticker,
-)
-from data_loaders.data_extractors.extract_data_from_sec_submission_files import (
-    process_submission_files_by_cik,
-)
-from data_loaders.edgar_workflow import run_sec_cik_ticker_mapping_workflow
-from data_loaders.fetch_known_adsh import fetch_known_adsh_with_metadata_for_ticker
 from data_loaders.sec_api_loaders.fetch_and_parse_submission_enhanced_by_cik_and_adsh import (
     fetch_and_parse_submission_enhanced_by_cik_and_adsh,
 )
-from data_loaders.sec_api_loaders.missing_filings_utils import (
-    get_missing_sec_filings_with_inferred_metadata,
+from scrape_processing_scripts.scrape_process_tradingview_webpages import (
+    extract_companies_from_tradingview_screener_html,
 )
-from data_loaders.sec_api_loaders.process_multiple_missing_filings import (
-    process_multiple_missing_filings,
-)
-from data_loaders.sec_api_loaders.sec_download_cik_fillings_info import (
-    download_all_company_submissions,
-)
-from database_scripts.database_validation_scripts import (
-    export_all_cik_filings,
-    export_ciks_missing_filing_patterns,
-)
-from database_scripts.insert_tickers_for_ciks_with_data import (
-    insert_all_cik_ticker_checked_from_mapping,
-)
-from db.edgar_financial_data_concepts_operations import (
-    get_edgar_financial_data_concepts_adshs_sorted_periodend,
-)
-from financial_execution_flows.sec_data_processing_flows import (
-    batchLoadMissingSecDataUsingArelle,
-    batchLoadSecData,
-    batchLoadSecDataParallel,
-    batchLoadSecTagDataParallel,
+from data_analysis_scripts.analisys_by_industry import (
+    process_revenues_for_tickers,
 )
 
 
@@ -171,32 +144,14 @@ def test_enhanced_period_validation():
 def main():
     base_data_dir = r"D:\FinanceProjects\edgarFinancialStatements"
 
-    # run_sec_cik_ticker_mapping_workflow()
+    tickers = []
 
-    # Batch load SEC data from files in parallel mode for performance
-    # Example usage: provide a list of batch tags
-    # batch_tags = [
-    #     "2012q1", "2012q2", "2012q3", "2012q4",
-    #     "2011q1", "2011q2", "2011q3", "2011q4",
-    #     "2010q1", "2010q2", "2010q3", "2010q4"
-    # ]
-    # batchLoadSecDataParallel(batch_tags)
+    for el in extract_companies_from_tradingview_screener_html():
+        ticker = el.get("ticker")
+        if ticker:
+            tickers.append(ticker)
 
-    # Run tag data loading into edgar_tag_info, giving info about Concept fields present in edgar_financial_data_concepts
-    # batchLoadSecTagDataParallel(batch_tags)
-
-    # export_all_cik_filings(
-    #     r"d:\FinanceProjects\edgarDataManagementPython\savedData\all_cik_filings.json"
-    # )
-
-    # export_ciks_missing_filing_patterns(
-    #     r"d:\FinanceProjects\edgarDataManagementPython\savedData\all_cik_filings.json",
-    #     r"d:\FinanceProjects\edgarDataManagementPython\savedData\ciks_with_gaps.json",
-    # )
-
-    # batchLoadMissingSecDataUsingArelle(batch_size=500, min_year=2012)
-
-    print(process_submission_files_by_cik())
+    process_revenues_for_tickers(tickers, start_year=2015)
 
     pass
 

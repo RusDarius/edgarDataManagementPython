@@ -1,11 +1,20 @@
+-- place for demo queries  
 -- @block
-ALTER TABLE edgar_financial_data_concepts
-MODIFY COLUMN BatchTag VARCHAR(128),
-    ALGORITHM = INSTANT;
+SELECT Concept,
+    COUNT(*) AS fact_count
+FROM edgar_financial_data_concepts
+GROUP BY Concept
+ORDER BY fact_count DESC,
+    Concept;
 -- @block
--- Get the count of all distinct Cik values in the edgar_financial_data_concepts table
-SELECT COUNT(DISTINCT Cik) AS distinct_cik_count
-FROM edgar_financial_data_concepts;
+SELECT Concept,
+    COUNT(*) AS fact_count
+FROM edgar_financial_data_concepts
+WHERE Ticker = 'ACHR'
+    AND FiscalYear = 2025
+GROUP BY Concept
+ORDER BY fact_count DESC,
+    Concept;
 -- @block
 -- This query returns all facts (Concepts) present for a specific BatchTag,
 -- along with the frequency (FactCount) of each Concept, ordered from most to least frequent.
@@ -160,5 +169,5 @@ ORDER BY PeriodEnd DESC;
 -- @block
 SELECT *
 FROM edgar_financial_data_concepts
-WHERE Adsh = '0000002488-25-000166'
-    AND Concept = 'RevenueFromContractWithCustomerExcludingAssessedTax';
+WHERE Cik = 1048911
+    AND Ticker = 'FDX';
