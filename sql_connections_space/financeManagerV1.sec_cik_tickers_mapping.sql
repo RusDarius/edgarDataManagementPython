@@ -24,8 +24,14 @@ WHERE Cik = 1046102;
 -- @block
 SELECT *
 FROM sec_cik_tickers_mapping
-WHERE Ticker = 'FLY';
+WHERE Ticker LIKE 'FRO%';
 -- @block
 SELECT *
 FROM sec_cik_tickers_mapping
 WHERE JSON_CONTAINS(SecondaryTickers, '"BIDU"');
+-- @block
+-- Read all entries for a given IndustryTradingView (exact match)
+SELECT *
+FROM sec_cik_tickers_mapping
+WHERE IndustryTradingView = 'Semiconductors'
+ORDER BY Ticker;

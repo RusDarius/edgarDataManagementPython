@@ -1,3 +1,34 @@
+-- pass
+-- @block
+-- All entries for a given Adsh + Cik + Ticker combination
+SELECT *
+FROM edgar_financial_data_concepts
+WHERE Adsh = '0000913290-24-000002' -- replace with target Adsh
+    AND Cik = 913290 -- replace with target CIK
+    AND Ticker = 'FRO' -- replace with target ticker
+ORDER BY PeriodEnd DESC,
+    Ddate DESC,
+    Concept;
+-- @block
+SELECT DISTINCT Segment
+FROM edgar_financial_data_concepts
+WHERE Cik = 1048911
+    AND Ticker = 'FDX'
+    AND FilingType IN ('10-K', '20-F', '40-F')
+    AND Adsh = '0001048911-25-000011'
+ORDER BY Segment;
+-- @block
+-- All annual filing rows (10-K / 20-F / 40-F) for a given CIK + ticker
+SELECT *
+FROM edgar_financial_data_concepts
+WHERE Cik = 1048911 -- replace with target CIK
+    AND Ticker = 'FDX' -- replace with target ticker
+    AND FilingType IN ('10-K', '20-F', '40-F')
+    AND Adsh = '0001048911-25-000011'
+ORDER BY FiscalYear DESC,
+    PeriodEnd DESC,
+    Ddate DESC,
+    BatchTag DESC;
 -- @block
 -- Simplified: 2024 revenue for a CIK + ticker (latest row per period/concept)
 WITH ranked AS (
@@ -36,46 +67,98 @@ FROM ranked
 WHERE rn = 1
 ORDER BY PeriodEnd;
 -- @block
+-- QID = 1
 -- Annual revenue trend from 2020 to last completed fiscal year (one row per year, full-year only)
-WITH ranked AS (
+-- This version targets USD-equivalent values by:
+-- 1) preferring Unit='USD',
+-- 2) normalizing common scaled-USD units (thousands/millions/billions),
+-- 3) falling back to the original value/unit when deterministic USD conversion is not available.
+WITH normalized AS (
     SELECT FiscalYear,
+        FiscalPeriod,
         Concept,
         Value,
+        Unit,
         PeriodEnd,
-        ROW_NUMBER() OVER (
-            PARTITION BY FiscalYear
-            ORDER BY CASE
-                    WHEN Concept = 'RevenueFromContractWithCustomerExcludingAssessedTax' THEN 1
-                    WHEN Concept = 'SalesRevenueNet' THEN 2
-                    WHEN Concept = 'Revenues' THEN 3
-                    WHEN Concept = 'Revenue' THEN 4
-                    ELSE 5
-                END,
-                Ddate DESC,
-                BatchTag DESC
-        ) rn
+        Ddate,
+        BatchTag,
+        CASE
+            WHEN UPPER(Unit) = 'USD' THEN Value
+            WHEN UPPER(REPLACE(Unit, ' ', '')) IN ('USDK', 'USDTH', 'USDTHOUSANDS') THEN Value * 1000
+            WHEN UPPER(REPLACE(Unit, ' ', '')) IN ('USDM', 'USDMN', 'USDMILLIONS') THEN Value * 1000000
+            WHEN UPPER(REPLACE(Unit, ' ', '')) IN ('USDB', 'USDBN', 'USDBILLIONS') THEN Value * 1000000000
+            ELSE NULL
+        END AS ValueUSD,
+        CASE
+            WHEN UPPER(Unit) = 'USD' THEN 1
+            WHEN UPPER(REPLACE(Unit, ' ', '')) IN ('USDK', 'USDTH', 'USDTHOUSANDS') THEN 2
+            WHEN UPPER(REPLACE(Unit, ' ', '')) IN ('USDM', 'USDMN', 'USDMILLIONS') THEN 2
+            WHEN UPPER(REPLACE(Unit, ' ', '')) IN ('USDB', 'USDBN', 'USDBILLIONS') THEN 2
+            ELSE 9
+        END AS UnitPriority
     FROM edgar_financial_data_concepts
-    WHERE Cik = 1860160 -- or %(cik)s
-        AND Ticker = 'FLY' -- or %(ticker)s
-        AND FiscalYear >= 2020 -- or %(start_year)s
+    WHERE Cik = 913290 -- or %(cik)s
+        AND Ticker = 'FRO' -- or %(ticker)s
+        AND FiscalYear >= 2015 -- or %(start_year)s
         AND FiscalYear < YEAR(CURDATE())
-        AND FiscalPeriod = 'FY'
         AND Qtrs = 4
         AND FilingType IN ('10-K', '20-F', '40-F')
         AND Concept IN (
             'RevenueFromContractWithCustomerExcludingAssessedTax',
             'SalesRevenueNet',
             'Revenues',
-            'Revenue'
+            'Revenue',
+            'RevenueFromContractWithCustomerIncludingAssessedTax',
+            'RevenueFromRenderingOfServices'
         )
         AND (
             Segment IS NULL
             OR Segment = ''
         )
+),
+ranked AS (
+    SELECT FiscalYear,
+        FiscalPeriod,
+        Concept,
+        Value AS AnnualRevenueRaw,
+        Unit,
+        ValueUSD,
+        PeriodEnd,
+        ROW_NUMBER() OVER (
+            PARTITION BY FiscalYear
+            ORDER BY CASE
+                    WHEN FiscalPeriod = 'FY' THEN 1
+                    WHEN FiscalPeriod = 'Q4' THEN 2
+                    WHEN FiscalPeriod = 'Q3' THEN 3
+                    WHEN FiscalPeriod = 'Q2' THEN 4
+                    WHEN FiscalPeriod = 'Q1' THEN 5
+                    ELSE 6
+                END,
+                CASE
+                    WHEN Concept = 'RevenueFromContractWithCustomerExcludingAssessedTax' THEN 1
+                    WHEN Concept = 'SalesRevenueNet' THEN 2
+                    WHEN Concept = 'Revenues' THEN 3
+                    WHEN Concept = 'Revenue' THEN 4
+                    WHEN Concept = 'RevenueFromContractWithCustomerIncludingAssessedTax' THEN 5
+                    WHEN Concept = 'RevenueFromRenderingOfServices' THEN 6
+                    ELSE 7
+                END,
+                UnitPriority,
+                Ddate DESC,
+                BatchTag DESC
+        ) rn
+    FROM normalized
 )
 SELECT FiscalYear,
+    FiscalPeriod,
     Concept,
-    Value AS AnnualRevenue,
+    ValueUSD AS AnnualRevenueUSD,
+    AnnualRevenueRaw,
+    Unit AS SourceUnit,
+    CASE
+        WHEN ValueUSD IS NOT NULL THEN 1
+        ELSE 0
+    END AS IsUSDEquivalent,
     PeriodEnd
 FROM ranked
 WHERE rn = 1
@@ -97,14 +180,16 @@ WITH base AS (
                     WHEN Concept = 'SalesRevenueNet' THEN 2
                     WHEN Concept = 'Revenues' THEN 3
                     WHEN Concept = 'Revenue' THEN 4
-                    ELSE 5
+                    WHEN Concept = 'RevenueFromContractWithCustomerIncludingAssessedTax' THEN 5
+                    WHEN Concept = 'RevenueFromRenderingOfServices' THEN 6
+                    ELSE 7
                 END,
                 Ddate DESC,
                 BatchTag DESC
         ) rn
     FROM edgar_financial_data_concepts
-    WHERE Cik = 1860160 -- or %(cik)s
-        AND Ticker = 'FLY' -- or %(ticker)s
+    WHERE Cik = 913290 -- or %(cik)s
+        AND Ticker = 'FRO' -- or %(ticker)s
         AND FiscalYear >= 2020
         AND FiscalPeriod IN ('Q1', 'Q2', 'Q3', 'Q4', 'FY')
         AND Qtrs IN (1, 4)
@@ -113,7 +198,9 @@ WITH base AS (
             'RevenueFromContractWithCustomerExcludingAssessedTax',
             'SalesRevenueNet',
             'Revenues',
-            'Revenue'
+            'Revenue',
+            'RevenueFromContractWithCustomerIncludingAssessedTax',
+            'RevenueFromRenderingOfServices'
         )
         AND (
             Segment IS NULL

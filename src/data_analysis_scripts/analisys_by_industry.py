@@ -2,50 +2,99 @@ from db.connection_credentials import BASE_DB_CONFIG
 from db.connection_provider import get_mysql_connection
 from generic_utils.log_to_files_util import log_to_file
 
-
+# -- Annual revenue trend from 2020 to last completed fiscal year (one row per year, annual filings only)
+# -- This version targets USD-equivalent values by:
+# -- 1) preferring Unit='USD',
+# -- 2) normalizing common scaled-USD units (thousands/millions/billions),
+# -- 3) falling back to the original value/unit when deterministic USD conversion is not available.
 ANNUAL_REVENUE_TREND_QUERY = """
-WITH ranked AS (
+WITH normalized AS (
     SELECT FiscalYear,
+        FiscalPeriod,
         Concept,
         Value,
+        Unit,
         PeriodEnd,
-        ROW_NUMBER() OVER (
-            PARTITION BY FiscalYear
-            ORDER BY CASE
-                    WHEN Concept = 'RevenueFromContractWithCustomerExcludingAssessedTax' THEN 1
-                    WHEN Concept = 'Revenues' THEN 2
-                    WHEN Concept = 'RevenueFromContractWithCustomerIncludingAssessedTax' THEN 3
-                    WHEN Concept = 'SalesRevenueNet' THEN 4
-                    WHEN Concept = 'Revenue' THEN 5
-                    ELSE 6
-                END,
-                Ddate DESC,
-                BatchTag DESC
-        ) rn
+        Ddate,
+        BatchTag,
+        CASE
+            WHEN UPPER(Unit) = 'USD' THEN Value
+            WHEN UPPER(REPLACE(Unit, ' ', '')) IN ('USDK', 'USDTH', 'USDTHOUSANDS') THEN Value * 1000
+            WHEN UPPER(REPLACE(Unit, ' ', '')) IN ('USDM', 'USDMN', 'USDMILLIONS') THEN Value * 1000000
+            WHEN UPPER(REPLACE(Unit, ' ', '')) IN ('USDB', 'USDBN', 'USDBILLIONS') THEN Value * 1000000000
+            ELSE NULL
+        END AS ValueUSD,
+        CASE
+            WHEN UPPER(Unit) = 'USD' THEN 1
+            WHEN UPPER(REPLACE(Unit, ' ', '')) IN ('USDK', 'USDTH', 'USDTHOUSANDS') THEN 2
+            WHEN UPPER(REPLACE(Unit, ' ', '')) IN ('USDM', 'USDMN', 'USDMILLIONS') THEN 2
+            WHEN UPPER(REPLACE(Unit, ' ', '')) IN ('USDB', 'USDBN', 'USDBILLIONS') THEN 2
+            ELSE 9
+        END AS UnitPriority
     FROM edgar_financial_data_concepts
-    WHERE Cik = %s
-        AND Ticker = %s
-        AND FiscalYear >= %s
+    WHERE Cik = %s -- or %(cik)s
+        AND Ticker = %s -- or %(ticker)s
+        AND FiscalYear >= %s -- or %(start_year)s
         AND FiscalYear < YEAR(CURDATE())
-        AND FiscalPeriod = 'FY'
         AND Qtrs = 4
         AND FilingType IN ('10-K', '20-F', '40-F')
         AND Concept IN (
             'RevenueFromContractWithCustomerExcludingAssessedTax',
-            'Revenues',
-            'RevenueFromContractWithCustomerIncludingAssessedTax',
             'SalesRevenueNet',
-            'Revenue'
+            'Revenues',
+            'Revenue',
+            'RevenueFromContractWithCustomerIncludingAssessedTax',
+            'RevenueFromRenderingOfServices'
         )
         AND (
             Segment IS NULL
             OR Segment = ''
         )
+),
+ranked AS (
+    SELECT FiscalYear,
+        FiscalPeriod,
+        Concept,
+        Value AS AnnualRevenueRaw,
+        Unit,
+        ValueUSD,
+        PeriodEnd,
+        ROW_NUMBER() OVER (
+            PARTITION BY FiscalYear
+            ORDER BY CASE
+                    WHEN FiscalPeriod = 'FY' THEN 1
+                    WHEN FiscalPeriod = 'Q4' THEN 2
+                    WHEN FiscalPeriod = 'Q3' THEN 3
+                    WHEN FiscalPeriod = 'Q2' THEN 4
+                    WHEN FiscalPeriod = 'Q1' THEN 5
+                    ELSE 6
+                END,
+                CASE
+                    WHEN Concept = 'RevenueFromContractWithCustomerExcludingAssessedTax' THEN 1
+                    WHEN Concept = 'SalesRevenueNet' THEN 2
+                    WHEN Concept = 'Revenues' THEN 3
+                    WHEN Concept = 'Revenue' THEN 4
+                    WHEN Concept = 'RevenueFromContractWithCustomerIncludingAssessedTax' THEN 5
+                    WHEN Concept = 'RevenueFromRenderingOfServices' THEN 6
+                    ELSE 7
+                END,
+                UnitPriority,
+                Ddate DESC,
+                BatchTag DESC
+        ) rn
+    FROM normalized
 )
 SELECT FiscalYear,
+    FiscalPeriod,
     Concept,
-    Value AS AnnualRevenue,
-    PeriodEnd
+    ValueUSD AS AnnualRevenueUSD,
+    AnnualRevenueRaw,
+    PeriodEnd,
+    Unit AS SourceUnit,
+    CASE
+        WHEN ValueUSD IS NOT NULL THEN 1
+        ELSE 0
+    END AS IsUSDEquivalent
 FROM ranked
 WHERE rn = 1
 ORDER BY FiscalYear;
@@ -76,7 +125,6 @@ WHERE Cik = %s
     AND Ticker = %s
     AND FiscalYear >= %s
     AND FiscalYear < YEAR(CURDATE())
-    AND FiscalPeriod = 'FY'
     AND Qtrs = 4
     AND FilingType IN ('10-K', '20-F', '40-F')
     AND (Segment IS NULL OR Segment = '')
@@ -90,15 +138,15 @@ WHERE Cik = %s
     AND Ticker = %s
     AND FiscalYear >= %s
     AND FiscalYear < YEAR(CURDATE())
-    AND FiscalPeriod = 'FY'
     AND Qtrs = 4
     AND FilingType IN ('10-K', '20-F', '40-F')
     AND Concept IN (
         'RevenueFromContractWithCustomerExcludingAssessedTax',
         'Revenues',
-        'RevenueFromContractWithCustomerIncludingAssessedTax',
+        'Revenue',
         'SalesRevenueNet',
-        'Revenue'
+        'RevenueFromContractWithCustomerIncludingAssessedTax',
+        'RevenueFromRenderingOfServices'
     )
     AND (Segment IS NULL OR Segment = '')
 LIMIT 1
@@ -201,7 +249,7 @@ def process_revenues_for_tickers(tickers: list[str], start_year: int = 2020):
 
         for row in result["rows"]:
             year = row["FiscalYear"]
-            annual_revenue = row["AnnualRevenue"]
+            annual_revenue = row["AnnualRevenueUSD"]
             if annual_revenue is None:
                 continue
 
@@ -234,5 +282,5 @@ def log_revenues_for_tickers(ticker: str, result: dict, log_file: str):
         for row in result["rows"]:
             log_to_file(
                 log_file,
-                f"  Year: {row['FiscalYear']}, Concept: {row['Concept']}, Revenue: {row['AnnualRevenue']}, PeriodEnd: {row['PeriodEnd']}",
+                f"  Year: {row['FiscalYear']}, Concept: {row['Concept']}, Revenue: {row['AnnualRevenueUSD']}, PeriodEnd: {row['PeriodEnd']}",
             )

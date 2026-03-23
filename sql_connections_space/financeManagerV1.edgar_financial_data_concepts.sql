@@ -16,19 +16,17 @@ GROUP BY Concept
 ORDER BY fact_count DESC,
     Concept;
 -- @block
--- This query returns all facts (Concepts) present for a specific BatchTag,
--- along with the frequency (FactCount) of each Concept, ordered from most to least frequent.
-SELECT Concept,
-    COUNT(*) AS FactCount
+-- Get all distinct Unit values in edgar_financial_data_concepts
+SELECT DISTINCT Unit
 FROM edgar_financial_data_concepts
-WHERE BatchTag = '2018q1'
-GROUP BY Concept
-ORDER BY FactCount DESC;
+ORDER BY Unit;
 -- @block
 -- Get all distinct Concepts ranked by total occurrences (most to least frequent)
 SELECT Concept,
     COUNT(*) AS FactCount
 FROM edgar_financial_data_concepts
+WHERE Cik = 1823652
+    AND Ticker = 'EVEX'
 GROUP BY Concept
 ORDER BY FactCount DESC;
 -- @block
@@ -146,8 +144,8 @@ WITH ranked AS (
             ORDER BY COALESCE(PeriodEnd, '1900-01-01') DESC
         ) AS rn
     FROM edgar_financial_data_concepts
-    WHERE Cik = 1046102
-        AND Ticker = 'RBA'
+    WHERE Cik = 913290
+        AND Ticker = 'FRO'
         AND FilingType IN (
             '10-Q',
             '10-K',
@@ -171,3 +169,6 @@ SELECT *
 FROM edgar_financial_data_concepts
 WHERE Cik = 1048911
     AND Ticker = 'FDX';
+-- @block
+-- Show all current MySQL sessions and commands
+SHOW FULL PROCESSLIST;

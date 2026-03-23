@@ -17,6 +17,23 @@ def read_all_sec_cik_ticker_map(conn):
     return {row["Cik"]: row["Ticker"] for row in cursor.fetchall()}
 
 
+def read_sec_cik_mapping_by_industry_tradingview(conn, industry_tradingview: str):
+    """
+    Read all sec_cik_tickers_mapping rows for an IndustryTradingView value.
+    """
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        """
+        SELECT *
+        FROM sec_cik_tickers_mapping
+        WHERE IndustryTradingView = %s
+        ORDER BY Ticker
+        """,
+        (industry_tradingview,),
+    )
+    return cursor.fetchall()
+
+
 def _normalize_cik(cik) -> str:
     return str(cik).replace("CIK", "").lstrip("0") or "0"
 
