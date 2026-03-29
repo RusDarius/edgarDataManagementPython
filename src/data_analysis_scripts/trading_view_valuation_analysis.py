@@ -7,7 +7,6 @@ from generic_utils.log_to_files_util import log_to_file
 LOG_DIR = Path(
     r"D:\FinanceProjects\edgarDataManagementPython\logs\tradingview_analysis"
 )
-LOG_FILE = LOG_DIR / "tradingview_ev_ebitda_deviation.log"
 INDUSTRY_ANALYSIS_LOG_FILE = LOG_DIR / "tradingview_global_industry_performance.log"
 
 EV_EBITDA_FIELD = "enterprise_value_ebitda_ttm"
@@ -267,13 +266,39 @@ def _group_rows_by_industry(rows: list[dict]) -> dict[str, list[dict]]:
     return grouped_rows
 
 
+def _slugify(value: str) -> str:
+    slug = "".join(char.lower() if char.isalnum() else "_" for char in str(value))
+    return "_".join(part for part in slug.split("_") if part)
+
+
 def _build_industry_log_file(industry_name: str) -> str:
-    slug = "".join(
-        char.lower() if char.isalnum() else "_" for char in str(industry_name)
-    )
-    normalized_slug = "_".join(part for part in slug.split("_") if part)
+    normalized_slug = _slugify(industry_name)
     log_dir = Path(INDUSTRY_ANALYSIS_LOG_FILE).resolve().parent
     return str(log_dir / f"tradingview_industry_multiples_{normalized_slug}.log")
+
+
+def _build_ev_ebitda_log_file(industries: list[str] | None = None) -> Path:
+    industry_segment = "all_industries"
+    if industries:
+        normalized_industries = [str(industry).strip() for industry in industries]
+        normalized_industries = [
+            industry for industry in normalized_industries if industry
+        ]
+        if normalized_industries:
+            industry_segment = "__".join(
+                _slugify(industry) for industry in normalized_industries
+            )
+
+    return LOG_DIR / f"tradingview_ev_ebitda_deviation__{industry_segment}.log"
+
+
+def _format_industries_for_log(industries: list[str] | None = None) -> str:
+    if not industries:
+        return "all"
+
+    normalized_industries = [str(industry).strip() for industry in industries]
+    normalized_industries = [industry for industry in normalized_industries if industry]
+    return ", ".join(normalized_industries) if normalized_industries else "all"
 
 
 def _get_company_description(row: dict) -> str:
@@ -672,7 +697,10 @@ def analyze_industry_multiples(
         )
 
 
-def analyze_ev_ebitda_deviation(scan_data: list[dict]) -> None:
+def analyze_ev_ebitda_deviation(
+    scan_data: list[dict],
+    industries: list[str] | None = None,
+) -> None:
     """
     Run valuation analysis across all valuation multiple fields in the received selection.
 
@@ -683,35 +711,39 @@ def analyze_ev_ebitda_deviation(scan_data: list[dict]) -> None:
     - track elements that can distort interpretation
     """
 
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    LOG_FILE.write_text("", encoding="utf-8")
+    log_file = _build_ev_ebitda_log_file(industries)
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    log_file.write_text("", encoding="utf-8")
 
     if not scan_data:
-        log_to_file(LOG_FILE, "No scan data received for valuation analysis.")
+        log_to_file(log_file, "No scan data received for valuation analysis.")
         return
 
-    log_to_file(LOG_FILE, "Valuation Multiples Analysis")
-    log_to_file(LOG_FILE, "=" * 120)
-    log_to_file(LOG_FILE, f"Input companies: {len(scan_data)}")
+    log_to_file(log_file, "Valuation Multiples Analysis")
+    log_to_file(log_file, "=" * 120)
     log_to_file(
-        LOG_FILE,
+        log_file,
+        f"Rows returned: {len(scan_data)} | industries={_format_industries_for_log(industries)}",
+    )
+    log_to_file(
+        log_file,
         "Method: analyze each valuation multiple independently with metric-specific exclusions.",
     )
     log_to_file(
-        LOG_FILE,
+        log_file,
         "Company rows in each metric section are sorted by market_cap_basic descending.",
     )
-    log_to_file(LOG_FILE, "")
+    log_to_file(log_file, "")
 
     for field_name in INDUSTRY_MULTIPLE_FIELDS:
         metric_label = FIELD_LABELS.get(field_name, field_name)
         metric_rows, excluded_rows = _filter_rows_for_metric(scan_data, field_name)
         metric_stats = _build_field_stats(metric_rows, field_name)
 
-        log_to_file(LOG_FILE, f"Metric: {metric_label} ({field_name})")
-        log_to_file(LOG_FILE, "-" * 120)
+        log_to_file(log_file, f"Metric: {metric_label} ({field_name})")
+        log_to_file(log_file, "-" * 120)
         log_to_file(
-            LOG_FILE,
+            log_file,
             (
                 f"Usable rows: {metric_stats['count']} | Excluded rows: {len(excluded_rows)} | "
                 f"Mean: {_format_multiple_value(field_name, metric_stats['mean'])} | "
@@ -720,18 +752,18 @@ def analyze_ev_ebitda_deviation(scan_data: list[dict]) -> None:
         )
 
         if metric_stats["count"] == 0:
-            log_to_file(LOG_FILE, "No valid rows for this metric after exclusions.")
+            log_to_file(log_file, "No valid rows for this metric after exclusions.")
             reason_counts = {}
             for excluded in excluded_rows:
                 for reason in excluded["reasons"]:
                     reason_counts[reason] = reason_counts.get(reason, 0) + 1
             if reason_counts:
-                log_to_file(LOG_FILE, "Distortion tracking")
+                log_to_file(log_file, "Distortion tracking")
                 for reason, count in sorted(
                     reason_counts.items(), key=lambda item: item[1], reverse=True
                 ):
-                    log_to_file(LOG_FILE, f"  - {reason}: {count}")
-            log_to_file(LOG_FILE, "")
+                    log_to_file(log_file, f"  - {reason}: {count}")
+            log_to_file(log_file, "")
             continue
 
         sorted_rows = sorted(
@@ -741,13 +773,13 @@ def analyze_ev_ebitda_deviation(scan_data: list[dict]) -> None:
         )
 
         log_to_file(
-            LOG_FILE,
+            log_file,
             (
                 f"{'Ticker':<20} {'Company':<35} {'MCap':>10} {'Perf1Y':>10} "
                 f"{'Value':>12} {'DevMean':>10} {'DevMedian':>10}"
             ),
         )
-        log_to_file(LOG_FILE, "-" * 120)
+        log_to_file(log_file, "-" * 120)
         for row in sorted_rows:
             symbol = row.get("symbol", "N/A")
             description = _get_company_description(row)[:35]
@@ -759,7 +791,7 @@ def analyze_ev_ebitda_deviation(scan_data: list[dict]) -> None:
             perf_1y_text = f"{perf_1y:+.2f}%" if perf_1y is not None else "N/A"
             metric_value = _coerce_numeric(row.get(field_name))
             log_to_file(
-                LOG_FILE,
+                log_file,
                 (
                     f"{symbol:<20} {description:<35} {market_cap_text:>10} {perf_1y_text:>10} "
                     f"{_format_multiple_value(field_name, metric_value):>12} "
@@ -809,31 +841,31 @@ def analyze_ev_ebitda_deviation(scan_data: list[dict]) -> None:
             ),
         )
 
-        log_to_file(LOG_FILE, "")
-        log_to_file(LOG_FILE, "STANDOUTS")
+        log_to_file(log_file, "")
+        log_to_file(log_file, "STANDOUTS")
         log_to_file(
-            LOG_FILE,
+            log_file,
             (
                 f"- Cheapest on {metric_label}: {cheapest_row.get('symbol', 'N/A')} "
                 f"at {_format_multiple_value(field_name, _coerce_numeric(cheapest_row.get(field_name)))}"
             ),
         )
         log_to_file(
-            LOG_FILE,
+            log_file,
             (
                 f"- Richest on {metric_label}: {richest_row.get('symbol', 'N/A')} "
                 f"at {_format_multiple_value(field_name, _coerce_numeric(richest_row.get(field_name)))}"
             ),
         )
         log_to_file(
-            LOG_FILE,
+            log_file,
             (
                 f"- Most discounted vs median: {most_discounted_row.get('symbol', 'N/A')} "
                 f"({_format_signed_deviation_pct(_coerce_numeric(most_discounted_row.get(field_name)), metric_stats['median'])})"
             ),
         )
         log_to_file(
-            LOG_FILE,
+            log_file,
             (
                 f"- Most premium vs median: {most_premium_row.get('symbol', 'N/A')} "
                 f"({_format_signed_deviation_pct(_coerce_numeric(most_premium_row.get(field_name)), metric_stats['median'])})"
@@ -871,28 +903,28 @@ def analyze_ev_ebitda_deviation(scan_data: list[dict]) -> None:
             (largest_mcap / total_metric_mcap) * 100 if total_metric_mcap > 0 else None
         )
 
-        log_to_file(LOG_FILE, "")
-        log_to_file(LOG_FILE, "DISTORTION TRACKING")
+        log_to_file(log_file, "")
+        log_to_file(log_file, "DISTORTION TRACKING")
         if reason_counts:
             for reason, count in sorted(
                 reason_counts.items(), key=lambda item: item[1], reverse=True
             ):
-                log_to_file(LOG_FILE, f"- Excluded ({reason}): {count}")
+                log_to_file(log_file, f"- Excluded ({reason}): {count}")
         else:
-            log_to_file(LOG_FILE, "- Excluded rows: none")
+            log_to_file(log_file, "- Excluded rows: none")
 
         log_to_file(
-            LOG_FILE,
+            log_file,
             (
                 f"- Extreme-value outliers (>3x median or <1/3 median): {len(outlier_rows)}"
             ),
         )
         if largest_mcap_share is not None:
             log_to_file(
-                LOG_FILE,
+                log_file,
                 (
                     f"- Largest market-cap concentration in usable set: {largest_metric_row.get('symbol', 'N/A')} "
                     f"at {largest_mcap_share:.2f}% of usable metric market cap"
                 ),
             )
-        log_to_file(LOG_FILE, "")
+        log_to_file(log_file, "")

@@ -4,7 +4,7 @@ from typing import Any
 
 import requests
 
-from constants.trading_view_constants import TRADING_VIEW_ALL_MARKETS
+from constants.trading_view_constants import TRADING_VIEW_ALL_MARKETS_ARRAY
 
 
 TRADINGVIEW_AMERICA_SCAN_URL = (
@@ -477,6 +477,7 @@ USA_GLOBAL_MARKET_PRICEPERF_METRICS_PAYLOAD = {
     "columns": [
         "name",
         "ticker-view",
+        "change",
         "market_cap_basic",
         "type",
         "typespecs",
@@ -491,6 +492,7 @@ USA_GLOBAL_MARKET_PRICEPERF_METRICS_PAYLOAD = {
         "Perf.10Y",
         "Perf.3Y",
         "Perf.5D",
+        "market",
     ],
     "filter": [{"left": "is_primary", "operation": "equal", "right": True}],
     "ignore_unknown_fields": False,
@@ -498,7 +500,7 @@ USA_GLOBAL_MARKET_PRICEPERF_METRICS_PAYLOAD = {
     "price_conversion": {"to_currency": "usd"},
     "sort": {"sortBy": "market_cap_basic", "sortOrder": "desc"},
     "symbols": {},
-    "markets": TRADING_VIEW_ALL_MARKETS,
+    "markets": TRADING_VIEW_ALL_MARKETS_ARRAY,
     "filter2": {
         "operator": "and",
         "operands": [
@@ -658,13 +660,14 @@ GLOBAL_MARKET_ACTIVITY_FLOAT_ATTENTION_BASE_PAYLOAD = {
         "EMA200",
         "earnings_release_date",
         "earnings_release_next_date",
+        "market",
     ],
     "sort": {"sortBy": "relative_volume_10d_calc", "sortOrder": "desc"},
     "filter": [{"left": "is_primary", "operation": "equal", "right": True}],
     "ignore_unknown_fields": False,
     "options": {"lang": "en"},
     "symbols": {},
-    "markets": TRADING_VIEW_ALL_MARKETS,
+    "markets": TRADING_VIEW_ALL_MARKETS_ARRAY,
     "filter2": {
         "operator": "and",
         "operands": [
@@ -828,7 +831,205 @@ GLOBAL_MARKET_SAFETY_CORE_BASE_PAYLOAD = {
     "price_conversion": {"to_currency": "usd"},
     "sort": {"sortBy": "market_cap_basic", "sortOrder": "desc"},
     "symbols": {},
-    "markets": TRADING_VIEW_ALL_MARKETS,
+    "markets": TRADING_VIEW_ALL_MARKETS_ARRAY,
+    "filter2": {
+        "operator": "and",
+        "operands": [
+            {
+                "operation": {
+                    "operator": "or",
+                    "operands": [
+                        {
+                            "operation": {
+                                "operator": "and",
+                                "operands": [
+                                    {
+                                        "expression": {
+                                            "left": "type",
+                                            "operation": "equal",
+                                            "right": "stock",
+                                        }
+                                    },
+                                    {
+                                        "expression": {
+                                            "left": "typespecs",
+                                            "operation": "has",
+                                            "right": ["common"],
+                                        }
+                                    },
+                                ],
+                            }
+                        },
+                        {
+                            "operation": {
+                                "operator": "and",
+                                "operands": [
+                                    {
+                                        "expression": {
+                                            "left": "type",
+                                            "operation": "equal",
+                                            "right": "stock",
+                                        }
+                                    },
+                                    {
+                                        "expression": {
+                                            "left": "typespecs",
+                                            "operation": "has",
+                                            "right": ["preferred"],
+                                        }
+                                    },
+                                ],
+                            }
+                        },
+                        {
+                            "operation": {
+                                "operator": "and",
+                                "operands": [
+                                    {
+                                        "expression": {
+                                            "left": "type",
+                                            "operation": "equal",
+                                            "right": "dr",
+                                        }
+                                    }
+                                ],
+                            }
+                        },
+                        {
+                            "operation": {
+                                "operator": "and",
+                                "operands": [
+                                    {
+                                        "expression": {
+                                            "left": "type",
+                                            "operation": "equal",
+                                            "right": "fund",
+                                        }
+                                    },
+                                    {
+                                        "expression": {
+                                            "left": "typespecs",
+                                            "operation": "has_none_of",
+                                            "right": ["etf"],
+                                        }
+                                    },
+                                ],
+                            }
+                        },
+                    ],
+                }
+            },
+            {
+                "expression": {
+                    "left": "typespecs",
+                    "operation": "has_none_of",
+                    "right": ["pre-ipo"],
+                }
+            },
+        ],
+    },
+}
+
+GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD = {
+    "columns": [
+        "name",
+        "ticker-view",
+        "close",
+        "exchange",
+        "country",
+        "sector",
+        "industry",
+        "market",
+        "market_cap_basic",
+        "float_shares_outstanding",
+        "float_shares_percent_current",
+        "volume",
+        "average_volume_10d_calc",
+        "relative_volume_10d_calc",
+        "Value.Traded",
+        "AvgValue.Traded_10d",
+        "ADR",
+        "ATR",
+        "ATRP",
+        "Volatility.D",
+        "Volatility.W",
+        "Volatility.M",
+        "beta_1_year",
+        "change",
+        "gap",
+        "premarket_gap",
+        "premarket_change",
+        "premarket_volume",
+        "postmarket_change",
+        "postmarket_volume",
+        "Perf.5D",
+        "Perf.W",
+        "Perf.1M",
+        "Perf.3M",
+        "Perf.6M",
+        "Perf.YTD",
+        "Perf.Y",
+        "Perf.5Y",
+        "RSI",
+        "RSI7",
+        "MACD.macd",
+        "MACD.signal",
+        "Mom",
+        "ROC",
+        "Recommend.All",
+        "Recommend.MA",
+        "Recommend.Other",
+        "VWAP",
+        "VWMA",
+        "SMA50",
+        "SMA200",
+        "EMA50",
+        "EMA200",
+        "earnings_release_date",
+        "earnings_release_next_date",
+        "current_ratio",
+        "quick_ratio",
+        "cash_ratio",
+        "cash_n_short_term_invest_fy",
+        "cash_n_short_term_invest_fq",
+        "short_term_debt_fy",
+        "short_term_debt_fq",
+        "total_debt",
+        "net_debt",
+        "debt_to_equity",
+        "debt_to_revenue_ttm",
+        "altman_z_score_ttm",
+        "gross_margin",
+        "operating_margin",
+        "after_tax_margin",
+        "return_on_assets",
+        "return_on_equity",
+        "return_on_invested_capital",
+        "total_revenue_yoy_growth_ttm",
+        "total_revenue_qoq_growth_fq",
+        "ebitda_yoy_growth_ttm",
+        "ebitda_qoq_growth_fq",
+        "net_income_yoy_growth_ttm",
+        "net_income_qoq_growth_fq",
+        "free_cash_flow_yoy_growth_ttm",
+        "free_cash_flow_qoq_growth_fq",
+        "price_earnings_ttm",
+        "price_earnings_growth_ttm",
+        "price_sales_current",
+        "price_book_fq",
+        "price_free_cash_flow_ttm",
+        "price_to_cash_f_operating_activities_ttm",
+        "enterprise_value_to_revenue_ttm",
+        "enterprise_value_to_ebit_ttm",
+        "enterprise_value_ebitda_ttm",
+    ],
+    "sort": {"sortBy": "relative_volume_10d_calc", "sortOrder": "desc"},
+    "filter": [{"left": "is_primary", "operation": "equal", "right": True}],
+    "ignore_unknown_fields": False,
+    "options": {"lang": "en"},
+    "price_conversion": {"to_currency": "usd"},
+    "symbols": {},
+    "markets": TRADING_VIEW_ALL_MARKETS_ARRAY,
     "filter2": {
         "operator": "and",
         "operands": [
@@ -964,9 +1165,17 @@ class ApiTradingViewClient:
         response_payload["rows"] = mapped_rows
         return response_payload
 
+    @staticmethod
+    def _apply_markets_override(
+        request_payload: dict[str, Any], markets: list[str] | None
+    ) -> None:
+        if markets is not None:
+            request_payload["markets"] = list(markets)
+
     def scan_main_america_market(
         self,
         timeout: int = 30,
+        markets: list[str] | None = None,
         include_mapped_rows: bool = True,
     ) -> dict[str, Any]:
         """
@@ -975,7 +1184,8 @@ class ApiTradingViewClient:
         By default this uses the built-in payload for the stock screener. Pass a
         custom payload when you need a different column set, filter, or range.
         """
-        request_payload = USA_MAIN_LISTING_FOR_INDUSTRIES_PARSE_PAYLOAD
+        request_payload = deepcopy(USA_MAIN_LISTING_FOR_INDUSTRIES_PARSE_PAYLOAD)
+        self._apply_markets_override(request_payload, markets)
         response = requests.post(
             TRADINGVIEW_AMERICA_SCAN_URL,
             headers=self.headers,
@@ -994,7 +1204,8 @@ class ApiTradingViewClient:
     def scan_world_market_all_priceperf_metrics(
         self,
         timeout: int = 30,
-        industries: list[str] = None,
+        industries: list[str] | None = None,
+        markets: list[str] | None = None,
         include_mapped_rows: bool = True,
     ) -> dict[str, Any]:
         """
@@ -1003,7 +1214,8 @@ class ApiTradingViewClient:
         By default this uses the built-in payload for the stock screener. Pass a
         custom payload when you need a different column set, filter, or range.
         """
-        request_payload = USA_GLOBAL_MARKET_PRICEPERF_METRICS_PAYLOAD
+        request_payload = deepcopy(USA_GLOBAL_MARKET_PRICEPERF_METRICS_PAYLOAD)
+        self._apply_markets_override(request_payload, markets)
 
         # Add industry filter
         if industries:
@@ -1030,6 +1242,7 @@ class ApiTradingViewClient:
         self,
         timeout: int = 30,
         industries: list[str] | None = None,
+        markets: list[str] | None = None,
         min_market_cap_usd: float | None = None,
         max_market_cap_usd: float | None = None,
         include_mapped_rows: bool = True,
@@ -1040,6 +1253,7 @@ class ApiTradingViewClient:
         Args:
             timeout: Request timeout in seconds
             industries: Optional list of industries to filter by
+            markets: Optional list of markets to override the payload markets list
             min_market_cap_usd: Optional inclusive minimum market capitalization
             max_market_cap_usd: Optional inclusive maximum market capitalization
             include_mapped_rows: Whether to map raw scan rows to a friendlier format
@@ -1048,6 +1262,7 @@ class ApiTradingViewClient:
             Response payload with optional mapped rows
         """
         request_payload = deepcopy(GLOBAL_MARKET_ACTIVITY_FLOAT_ATTENTION_BASE_PAYLOAD)
+        self._apply_markets_override(request_payload, markets)
 
         if min_market_cap_usd is not None:
             request_payload["filter"].append(
@@ -1090,6 +1305,7 @@ class ApiTradingViewClient:
     def scan_listed_america_market(
         self,
         timeout: int = 30,
+        markets: list[str] | None = None,
         include_mapped_rows: bool = True,
     ) -> dict[str, Any]:
         """
@@ -1098,7 +1314,8 @@ class ApiTradingViewClient:
         By default this uses the built-in payload for the stock screener. Pass a
         custom payload when you need a different column set, filter, or range.
         """
-        request_payload = USA_ALL_LISTING_FOR_INDUSTRIES_PARSE_PAYLOAD
+        request_payload = deepcopy(USA_ALL_LISTING_FOR_INDUSTRIES_PARSE_PAYLOAD)
+        self._apply_markets_override(request_payload, markets)
         response = requests.post(
             TRADINGVIEW_AMERICA_SCAN_URL,
             headers=self.headers,
@@ -1118,6 +1335,7 @@ class ApiTradingViewClient:
         self,
         timeout: int = 30,
         industries: list[str] | None = None,
+        markets: list[str] | None = None,
         min_market_cap_usd: float | None = None,
         max_market_cap_usd: float | None = None,
         ticker_filter: str | None = None,
@@ -1129,6 +1347,7 @@ class ApiTradingViewClient:
         Args:
             timeout: Request timeout in seconds
             industries: Optional list of industry names to filter by
+            markets: Optional list of markets to override the payload markets list
             min_market_cap_usd: Optional inclusive minimum market capitalization
             max_market_cap_usd: Optional inclusive maximum market capitalization
             include_mapped_rows: Whether to map raw scan rows to a friendlier format
@@ -1137,6 +1356,75 @@ class ApiTradingViewClient:
             Response payload with optional mapped rows
         """
         request_payload = deepcopy(GLOBAL_MARKET_SAFETY_CORE_BASE_PAYLOAD)
+        self._apply_markets_override(request_payload, markets)
+
+        if min_market_cap_usd is not None:
+            request_payload["filter"].append(
+                {
+                    "left": "market_cap_basic",
+                    "operation": "egreater",
+                    "right": min_market_cap_usd,
+                }
+            )
+
+        if max_market_cap_usd is not None:
+            request_payload["filter"].append(
+                {
+                    "left": "market_cap_basic",
+                    "operation": "eless",
+                    "right": max_market_cap_usd,
+                }
+            )
+
+        if industries:
+            request_payload["filter"].append(
+                {"left": "industry", "operation": "in_range", "right": industries}
+            )
+
+        if ticker_filter:
+            request_payload["filter"].append(
+                {
+                    "left": "ticker-view-filter",
+                    "operation": "match",
+                    "right": ticker_filter,
+                }
+            )
+            request_payload["range"] = [0, 5]
+
+        response = requests.post(
+            TRADINGVIEW_GLOBAL_SCAN_URL,
+            headers=self.headers,
+            data=json.dumps(request_payload),
+            timeout=timeout,
+        )
+        response.raise_for_status()
+
+        response_payload = response.json()
+        if not include_mapped_rows:
+            return response_payload
+
+        columns = request_payload.get("columns", [])
+        return self._attach_mapped_rows(response_payload, columns)
+
+    def scan_global_market_move_prediction(
+        self,
+        timeout: int = 30,
+        industries: list[str] | None = None,
+        markets: list[str] | None = None,
+        min_market_cap_usd: float | None = None,
+        max_market_cap_usd: float | None = None,
+        ticker_filter: str | None = None,
+        include_mapped_rows: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Execute a TradingView global screener scan for the move-prediction feature set.
+
+        This payload combines the strongest fields from activity, price-performance,
+        valuation, and safety-style scans so one response can power multi-horizon
+        directional analysis.
+        """
+        request_payload = deepcopy(GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD)
+        self._apply_markets_override(request_payload, markets)
 
         if min_market_cap_usd is not None:
             request_payload["filter"].append(
@@ -1188,7 +1476,8 @@ class ApiTradingViewClient:
 
     def scan_global_market_by_industry(
         self,
-        industries: list[str] = None,
+        industries: list[str] | None = None,
+        markets: list[str] | None = None,
         min_market_cap_usd: float | None = None,
         max_market_cap_usd: float | None = None,
         timeout: int = 30,
@@ -1199,6 +1488,7 @@ class ApiTradingViewClient:
 
         Args:
             industries: List of industry names to filter by (e.g., ["Oil & Gas Pipelines"])
+            markets: Optional list of markets to override the payload markets list
             timeout: Request timeout in seconds
             include_mapped_rows: Whether to map raw scan rows to a friendlier format
 
@@ -1206,6 +1496,7 @@ class ApiTradingViewClient:
             Response payload with optional mapped rows
         """
         request_payload = deepcopy(GLOBAL_MARKET_INDUSTRIES_VALUATION_PAYLOAD)
+        self._apply_markets_override(request_payload, markets)
 
         if min_market_cap_usd is not None:
             request_payload["filter"].append(

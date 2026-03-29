@@ -132,7 +132,78 @@ class TRADING_VIEW_INDUSTRIES:
     WIRELESS_TELECOMMUNICATIONS = "Wireless Telecommunications"
 
 
-TRADING_VIEW_ALL_MARKETS = [
+class TRADING_VIEW_ALL_MARKETS:
+    AMERICA = "america"
+    ARGENTINA = "argentina"
+    AUSTRALIA = "australia"
+    AUSTRIA = "austria"
+    BAHRAIN = "bahrain"
+    BANGLADESH = "bangladesh"
+    BELGIUM = "belgium"
+    BRAZIL = "brazil"
+    CANADA = "canada"
+    CHILE = "chile"
+    CHINA = "china"
+    COLOMBIA = "colombia"
+    CYPRUS = "cyprus"
+    CZECH = "czech"
+    DENMARK = "denmark"
+    EGYPT = "egypt"
+    ESTONIA = "estonia"
+    FINLAND = "finland"
+    FRANCE = "france"
+    GERMANY = "germany"
+    GREECE = "greece"
+    HONGKONG = "hongkong"
+    HUNGARY = "hungary"
+    ICELAND = "iceland"
+    INDIA = "india"
+    INDONESIA = "indonesia"
+    IRELAND = "ireland"
+    ISRAEL = "israel"
+    ITALY = "italy"
+    JAPAN = "japan"
+    KENYA = "kenya"
+    KUWAIT = "kuwait"
+    LATVIA = "latvia"
+    LITHUANIA = "lithuania"
+    LUXEMBOURG = "luxembourg"
+    MALAYSIA = "malaysia"
+    MEXICO = "mexico"
+    MOROCCO = "morocco"
+    NETHERLANDS = "netherlands"
+    NEWZEALAND = "newzealand"
+    NIGERIA = "nigeria"
+    NORWAY = "norway"
+    PAKISTAN = "pakistan"
+    PERU = "peru"
+    PHILIPPINES = "philippines"
+    POLAND = "poland"
+    PORTUGAL = "portugal"
+    QATAR = "qatar"
+    ROMANIA = "romania"
+    RUSSIA = "russia"
+    KSA = "ksa"
+    SERBIA = "serbia"
+    SINGAPORE = "singapore"
+    SLOVAKIA = "slovakia"
+    RSA = "rsa"
+    KOREA = "korea"
+    SPAIN = "spain"
+    SRILANKA = "srilanka"
+    SWEDEN = "sweden"
+    SWITZERLAND = "switzerland"
+    TAIWAN = "taiwan"
+    THAILAND = "thailand"
+    TUNISIA = "tunisia"
+    TURKEY = "turkey"
+    UAE = "uae"
+    UK = "uk"
+    VENEZUELA = "venezuela"
+    VIETNAM = "vietnam"
+
+
+TRADING_VIEW_ALL_MARKETS_ARRAY = [
     "america",
     "argentina",
     "australia",
@@ -201,4 +272,46 @@ TRADING_VIEW_ALL_MARKETS = [
     "uk",
     "venezuela",
     "vietnam",
+]
+
+# Preferred markets: NA + EU (excluding Russia & Serbia) + China + Japan + Australia
+PREFERRED_MARKETS = [
+    # North America
+    TRADING_VIEW_ALL_MARKETS.AMERICA,
+    TRADING_VIEW_ALL_MARKETS.CANADA,
+    TRADING_VIEW_ALL_MARKETS.MEXICO,
+    # Europe (excluding Russia and Serbia)
+    TRADING_VIEW_ALL_MARKETS.AUSTRIA,
+    TRADING_VIEW_ALL_MARKETS.BELGIUM,
+    TRADING_VIEW_ALL_MARKETS.CYPRUS,
+    TRADING_VIEW_ALL_MARKETS.CZECH,
+    TRADING_VIEW_ALL_MARKETS.DENMARK,
+    TRADING_VIEW_ALL_MARKETS.ESTONIA,
+    TRADING_VIEW_ALL_MARKETS.FINLAND,
+    TRADING_VIEW_ALL_MARKETS.FRANCE,
+    TRADING_VIEW_ALL_MARKETS.GERMANY,
+    TRADING_VIEW_ALL_MARKETS.GREECE,
+    TRADING_VIEW_ALL_MARKETS.HUNGARY,
+    TRADING_VIEW_ALL_MARKETS.ICELAND,
+    TRADING_VIEW_ALL_MARKETS.IRELAND,
+    TRADING_VIEW_ALL_MARKETS.ITALY,
+    TRADING_VIEW_ALL_MARKETS.LATVIA,
+    TRADING_VIEW_ALL_MARKETS.LITHUANIA,
+    TRADING_VIEW_ALL_MARKETS.LUXEMBOURG,
+    TRADING_VIEW_ALL_MARKETS.NETHERLANDS,
+    TRADING_VIEW_ALL_MARKETS.NORWAY,
+    TRADING_VIEW_ALL_MARKETS.POLAND,
+    TRADING_VIEW_ALL_MARKETS.PORTUGAL,
+    TRADING_VIEW_ALL_MARKETS.ROMANIA,
+    TRADING_VIEW_ALL_MARKETS.SLOVAKIA,
+    TRADING_VIEW_ALL_MARKETS.SPAIN,
+    TRADING_VIEW_ALL_MARKETS.SWEDEN,
+    TRADING_VIEW_ALL_MARKETS.SWITZERLAND,
+    # TRADING_VIEW_ALL_MARKETS.TURKEY,
+    TRADING_VIEW_ALL_MARKETS.UK,
+    # # Asia-Pacific
+    # TRADING_VIEW_ALL_MARKETS.CHINA,
+    # TRADING_VIEW_ALL_MARKETS.JAPAN,
+    # # Oceania
+    # TRADING_VIEW_ALL_MARKETS.AUSTRALIA,
 ]

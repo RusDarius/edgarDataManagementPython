@@ -1,3 +1,5 @@
+from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 from statistics import median
 from typing import Any
@@ -85,6 +87,24 @@ ENTRY_METADATA_FIELDS = [
 ]
 
 TOP_SECTION_ROWS = 12
+REPORT_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+SUM_AGGREGATED_FIELDS = {
+    "market_cap_basic",
+    "float_shares_outstanding",
+    "volume",
+    "average_volume_10d_calc",
+    "average_volume_30d_calc",
+    "average_volume_60d_calc",
+    "average_volume_90d_calc",
+    "Value.Traded",
+    "AvgValue.Traded_10d",
+    "AvgValue.Traded_30d",
+    "AvgValue.Traded_60d",
+    "AvgValue.Traded_90d",
+    "premarket_volume",
+    "postmarket_volume",
+}
 
 
 def _coerce_numeric(value: Any) -> float | None:
@@ -100,7 +120,8 @@ def _slugify(value: str) -> str:
     return "_".join(part for part in slug.split("_") if part)
 
 
-def _build_log_file_name(
+def _build_report_file_name(
+    report_slug: str,
     industries: list[str] | None,
     min_market_cap_usd: float | None,
     max_market_cap_usd: float | None,
@@ -120,8 +141,20 @@ def _build_log_file_name(
         else "max_none"
     )
     return (
-        LOG_DIR
-        / f"tradingview_activity_float_attention__{industry_segment}__{min_segment}__{max_segment}.log"
+        LOG_DIR / f"{report_slug}__{industry_segment}__{min_segment}__{max_segment}.log"
+    )
+
+
+def _build_log_file_name(
+    industries: list[str] | None,
+    min_market_cap_usd: float | None,
+    max_market_cap_usd: float | None,
+) -> Path:
+    return _build_report_file_name(
+        report_slug="tradingview_activity_float_attention",
+        industries=industries,
+        min_market_cap_usd=min_market_cap_usd,
+        max_market_cap_usd=max_market_cap_usd,
     )
 
 
@@ -131,6 +164,31 @@ def _build_csv_file_name(
     max_market_cap_usd: float | None,
 ) -> Path:
     return _build_log_file_name(
+        industries=industries,
+        min_market_cap_usd=min_market_cap_usd,
+        max_market_cap_usd=max_market_cap_usd,
+    ).with_suffix(".csv")
+
+
+def _build_grouped_industries_log_file_name(
+    industries: list[str] | None,
+    min_market_cap_usd: float | None,
+    max_market_cap_usd: float | None,
+) -> Path:
+    return _build_report_file_name(
+        report_slug="tradingview_activity_float_attention_grouped_industries",
+        industries=industries,
+        min_market_cap_usd=min_market_cap_usd,
+        max_market_cap_usd=max_market_cap_usd,
+    )
+
+
+def _build_grouped_industries_csv_file_name(
+    industries: list[str] | None,
+    min_market_cap_usd: float | None,
+    max_market_cap_usd: float | None,
+) -> Path:
+    return _build_grouped_industries_log_file_name(
         industries=industries,
         min_market_cap_usd=min_market_cap_usd,
         max_market_cap_usd=max_market_cap_usd,
@@ -171,6 +229,11 @@ def _format_raw_value(value: Any) -> str:
 def _reset_log_file(log_file: Path) -> None:
     log_file.parent.mkdir(parents=True, exist_ok=True)
     log_file.write_text("", encoding="utf-8")
+
+
+def _build_report_title(report_name: str) -> str:
+    timestamp = datetime.now().strftime(REPORT_TIMESTAMP_FORMAT)
+    return f"{report_name} | generated {timestamp}"
 
 
 def _safe_ratio(numerator: float | None, denominator: float | None) -> float | None:
@@ -230,10 +293,15 @@ def _build_metric_profiles(
 
 
 def _build_all_columns_table_headers() -> list[str]:
-    headers = list(ENTRY_METADATA_FIELDS) + list(ACTIVITY_FIELDS)
+    headers = list(ENTRY_METADATA_FIELDS)
     for field_name in ACTIVITY_FIELDS:
-        headers.append(f"{field_name}__dev_mean")
-        headers.append(f"{field_name}__dev_median")
+        headers.extend(
+            [
+                field_name,
+                f"{field_name}__dev_mean",
+                f"{field_name}__dev_median",
+            ]
+        )
     return headers
 
 
@@ -247,9 +315,7 @@ def _build_all_columns_table_row(
         row_values.append(_format_raw_value(row.get(field_name)))
 
     for field_name in ACTIVITY_FIELDS:
-        row_values.append(_format_raw_value(row.get(field_name)))
-
-    for field_name in ACTIVITY_FIELDS:
+        raw_value = row.get(field_name)
         numeric_value = _coerce_numeric(row.get(field_name))
         profile = profiles.get(field_name, {})
         mean_value = profile.get("mean")
@@ -266,8 +332,13 @@ def _build_all_columns_table_row(
             else numeric_value - float(median_value)
         )
 
-        row_values.append(_format_raw_value(dev_mean))
-        row_values.append(_format_raw_value(dev_median))
+        row_values.extend(
+            [
+                _format_raw_value(raw_value),
+                _format_raw_value(dev_mean),
+                _format_raw_value(dev_median),
+            ]
+        )
 
     return row_values
 
@@ -288,6 +359,41 @@ def _get_company_description(row: dict[str, Any]) -> str:
         if description:
             return str(description)
     return ""
+
+
+# === AI MODIFIED CODE START (GitHub Copilot) ===
+# Modified on: 2026-03-24
+# Model: GPT-5.4
+# Changes: Added grouped-industry detection and compact formatting helpers so industry aggregate logs remain column-aligned and readable.
+def _is_grouped_industry_row(row: dict[str, Any]) -> bool:
+    symbol = str(row.get("symbol") or "")
+    return symbol.startswith("industry::")
+
+
+def _is_grouped_industry_scan(scan_data: list[dict[str, Any]]) -> bool:
+    return bool(scan_data) and all(_is_grouped_industry_row(row) for row in scan_data)
+
+
+def _format_entry_count(row: dict[str, Any]) -> str:
+    entry_count = row.get("entry_count")
+    if isinstance(entry_count, int):
+        return str(entry_count)
+    numeric_entry_count = _coerce_numeric(entry_count)
+    if numeric_entry_count is None:
+        return "N/A"
+    return str(int(numeric_entry_count))
+
+
+def _truncate_label(value: Any, width: int) -> str:
+    text = str(value or "N/A")
+    if len(text) <= width:
+        return text
+    if width <= 3:
+        return text[:width]
+    return f"{text[: width - 3]}..."
+
+
+# === AI MODIFIED CODE END ===
 
 
 def _build_participation_metrics(row: dict[str, Any]) -> dict[str, float | None]:
@@ -360,6 +466,10 @@ def _build_trend_metrics(row: dict[str, Any]) -> dict[str, float | None | str]:
 
 
 def _row_label(row: dict[str, Any]) -> str:
+    if _is_grouped_industry_row(row):
+        industry_name = str(row.get("name") or row.get("industry") or "N/A")
+        return f"{industry_name} ({_format_entry_count(row)} entries)"
+
     ticker = _get_symbol_name(row)
     company = _get_company_description(row)
     if company:
@@ -373,6 +483,107 @@ def _log_section_intro(log_file: Path, title: str, description: str) -> None:
     log_to_file(log_file, "")
 
 
+def _normalize_industry_name(industry: Any) -> str:
+    normalized = str(industry or "").strip()
+    return normalized or "Unknown Industry"
+
+
+def _mean_numeric_field(rows: list[dict[str, Any]], field_name: str) -> float | None:
+    numeric_values = [
+        value
+        for value in (_coerce_numeric(row.get(field_name)) for row in rows)
+        if value is not None
+    ]
+    if not numeric_values:
+        return None
+    return sum(numeric_values) / len(numeric_values)
+
+
+def _sum_numeric_field(rows: list[dict[str, Any]], field_name: str) -> float | None:
+    numeric_values = [
+        value
+        for value in (_coerce_numeric(row.get(field_name)) for row in rows)
+        if value is not None
+    ]
+    if not numeric_values:
+        return None
+    return sum(numeric_values)
+
+
+def _summarize_group_label(rows: list[dict[str, Any]], field_name: str) -> str:
+    values = sorted(
+        {
+            str(value).strip()
+            for row in rows
+            if (value := row.get(field_name)) not in (None, "")
+        }
+    )
+    if not values:
+        return "N/A"
+    if len(values) == 1:
+        return values[0]
+    if len(values) <= 3:
+        return ", ".join(values)
+    return f"multiple({len(values)})"
+
+
+def _build_industry_aggregate_row(
+    industry_name: str,
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    aggregate_row: dict[str, Any] = {
+        "symbol": f"industry::{_slugify(industry_name)}",
+        "name": industry_name,
+        "exchange": _summarize_group_label(rows, "exchange"),
+        "country": _summarize_group_label(rows, "country"),
+        "sector": _summarize_group_label(rows, "sector"),
+        "industry": industry_name,
+        "market": _summarize_group_label(rows, "market"),
+        "earnings_release_date": None,
+        "earnings_release_next_date": None,
+        "ticker-view": {
+            "name": industry_name,
+            "description": f"Industry aggregate | entries={len(rows)}",
+        },
+        "entry_count": len(rows),
+    }
+
+    for field_name in ACTIVITY_FIELDS:
+        if field_name == "relative_volume_10d_calc":
+            continue
+
+        if field_name in SUM_AGGREGATED_FIELDS:
+            aggregate_row[field_name] = _sum_numeric_field(rows, field_name)
+        else:
+            aggregate_row[field_name] = _mean_numeric_field(rows, field_name)
+
+    aggregate_row["relative_volume_10d_calc"] = _safe_ratio(
+        _coerce_numeric(aggregate_row.get("volume")),
+        _coerce_numeric(aggregate_row.get("average_volume_10d_calc")),
+    )
+    return aggregate_row
+
+
+def _group_scan_data_by_industry(
+    scan_data: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    grouped_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in scan_data:
+        grouped_rows[_normalize_industry_name(row.get("industry"))].append(row)
+
+    industry_rows = [
+        _build_industry_aggregate_row(industry_name, rows)
+        for industry_name, rows in grouped_rows.items()
+    ]
+    return sorted(
+        industry_rows,
+        key=lambda row: _sort_key_desc(
+            _coerce_numeric(row.get("relative_volume_10d_calc"))
+        ),
+        reverse=True,
+    )
+
+
 def _export_all_columns_per_ticker_csv(
     csv_file: Path,
     scan_data: list[dict[str, Any]],
@@ -383,7 +594,11 @@ def _export_all_columns_per_ticker_csv(
     log_rows_to_csv(csv_file, headers, rows)
 
 
-def _log_participation_section(log_file: Path, scan_data: list[dict[str, Any]]) -> None:
+def _log_participation_section(
+    log_file: Path,
+    scan_data: list[dict[str, Any]],
+    is_grouped_industry_report: bool = False,
+) -> None:
     _log_section_intro(
         log_file,
         "Section 1: Participation and Turnover",
@@ -392,77 +607,91 @@ def _log_participation_section(log_file: Path, scan_data: list[dict[str, Any]]) 
             "float turnover, and dollar-turnover intensity. Higher readings suggest stronger market attention and cleaner price discovery."
         ),
     )
-    ranked_rows = sorted(
-        scan_data,
-        key=lambda row: _sort_key_desc(
-            _build_participation_metrics(row)["relative_volume"]
-        ),
+    ranked_rows_with_metrics = sorted(
+        ((row, _build_participation_metrics(row)) for row in scan_data),
+        key=lambda item: _sort_key_desc(item[1]["relative_volume"]),
         reverse=True,
     )
-    log_to_file(
-        log_file,
-        (
-            f"{'Ticker':<12} {'Name':<10} {'Industry':<28} {'RelVol':>10} {'FloatTurn':>12} {'DollarTurn10D':>14} {'MCap':>10}"
-        ),
-    )
-    log_to_file(log_file, "-" * 180)
-    for row in ranked_rows[:TOP_SECTION_ROWS]:
-        metrics = _build_participation_metrics(row)
+    if is_grouped_industry_report:
         log_to_file(
             log_file,
             (
-                f"{_get_symbol_name(row):<12} {str(row.get('name') or 'N/A')[:10]:<10} {str(row.get('industry') or '')[:28]:<28} "
-                f"{_format_number(metrics['relative_volume']):>10} {_format_number(metrics['float_turnover']):>12} "
-                f"{_format_number(metrics['dollar_turnover_intensity']):>14} {_format_market_cap(_coerce_numeric(row.get('market_cap_basic'))):>10}"
+                f"{'Industry':<32} {'Entries':>7} {'Market':<18} {'RelVol':>10} {'FloatTurn':>12} {'DollarTurn10D':>14} {'MCap':>10}"
             ),
         )
+    else:
+        log_to_file(
+            log_file,
+            (
+                f"{'Ticker':<12} {'Name':<10} {'Industry':<28} {'RelVol':>10} {'FloatTurn':>12} {'DollarTurn10D':>14} {'MCap':>10}"
+            ),
+        )
+    log_to_file(log_file, "-" * 180)
+    for row, metrics in ranked_rows_with_metrics[:TOP_SECTION_ROWS]:
+        if is_grouped_industry_report:
+            log_to_file(
+                log_file,
+                (
+                    f"{_truncate_label(row.get('name') or row.get('industry'), 32):<32} {_format_entry_count(row):>7} "
+                    f"{_truncate_label(row.get('market'), 18):<18} {_format_number(metrics['relative_volume']):>10} "
+                    f"{_format_number(metrics['float_turnover']):>12} {_format_number(metrics['dollar_turnover_intensity']):>14} "
+                    f"{_format_market_cap(_coerce_numeric(row.get('market_cap_basic'))):>10}"
+                ),
+            )
+        else:
+            log_to_file(
+                log_file,
+                (
+                    f"{_get_symbol_name(row):<12} {str(row.get('name') or 'N/A')[:10]:<10} {str(row.get('industry') or '')[:28]:<28} "
+                    f"{_format_number(metrics['relative_volume']):>10} {_format_number(metrics['float_turnover']):>12} "
+                    f"{_format_number(metrics['dollar_turnover_intensity']):>14} {_format_market_cap(_coerce_numeric(row.get('market_cap_basic'))):>10}"
+                ),
+            )
     log_to_file(log_file, "")
 
-    highest_relvol = max(
-        scan_data,
-        key=lambda row: _sort_key_desc(
-            _build_participation_metrics(row)["relative_volume"]
-        ),
+    highest_relvol_row, highest_relvol_metrics = max(
+        ranked_rows_with_metrics,
+        key=lambda item: _sort_key_desc(item[1]["relative_volume"]),
     )
-    highest_float_turnover = max(
-        scan_data,
-        key=lambda row: _sort_key_desc(
-            _build_participation_metrics(row)["float_turnover"]
-        ),
+    highest_float_turnover_row, highest_float_turnover_metrics = max(
+        ranked_rows_with_metrics,
+        key=lambda item: _sort_key_desc(item[1]["float_turnover"]),
     )
-    highest_dollar_turnover = max(
-        scan_data,
-        key=lambda row: _sort_key_desc(
-            _build_participation_metrics(row)["dollar_turnover_intensity"]
-        ),
+    highest_dollar_turnover_row, highest_dollar_turnover_metrics = max(
+        ranked_rows_with_metrics,
+        key=lambda item: _sort_key_desc(item[1]["dollar_turnover_intensity"]),
     )
 
     log_to_file(log_file, "STANDOUTS")
     log_to_file(
         log_file,
         (
-            f"- Highest relative volume: {_row_label(highest_relvol)} | relvol={_format_number(_build_participation_metrics(highest_relvol)['relative_volume'])}. "
+            f"- Highest relative volume: {_row_label(highest_relvol_row)} | relvol={_format_number(highest_relvol_metrics['relative_volume'])}. "
             "This stands out because current trading participation is most elevated versus its recent normal volume baseline."
         ),
     )
     log_to_file(
         log_file,
         (
-            f"- Highest float turnover proxy: {_row_label(highest_float_turnover)} | volume/float={_format_number(_build_participation_metrics(highest_float_turnover)['float_turnover'])}. "
+            f"- Highest float turnover proxy: {_row_label(highest_float_turnover_row)} | volume/float={_format_number(highest_float_turnover_metrics['float_turnover'])}. "
             "This stands out because a larger share of the tradable float appears to be changing hands."
         ),
     )
     log_to_file(
         log_file,
         (
-            f"- Highest 10D dollar-turnover intensity: {_row_label(highest_dollar_turnover)} | AvgValue.Traded_10d / market_cap={_format_number(_build_participation_metrics(highest_dollar_turnover)['dollar_turnover_intensity'])}. "
+            f"- Highest 10D dollar-turnover intensity: {_row_label(highest_dollar_turnover_row)} | AvgValue.Traded_10d / market_cap={_format_number(highest_dollar_turnover_metrics['dollar_turnover_intensity'])}. "
             "This stands out because trading value is large relative to company size."
         ),
     )
     log_to_file(log_file, "")
 
 
-def _log_event_section(log_file: Path, scan_data: list[dict[str, Any]]) -> None:
+def _log_event_section(
+    log_file: Path,
+    scan_data: list[dict[str, Any]],
+    is_grouped_industry_report: bool = False,
+) -> None:
     _log_section_intro(
         log_file,
         "Section 2: Event and Repricing Pressure",
@@ -470,74 +699,93 @@ def _log_event_section(log_file: Path, scan_data: list[dict[str, Any]]) -> None:
             "Purpose: identify names where gap size, premarket activity, and after-hours movement suggest active repricing around information or sentiment shifts."
         ),
     )
-    ranked_rows = sorted(
-        scan_data,
-        key=lambda row: max(
+    rows_with_metrics = [(row, _build_event_metrics(row)) for row in scan_data]
+    ranked_rows_with_metrics = sorted(
+        rows_with_metrics,
+        key=lambda item: max(
             _sort_key_desc(
-                abs(_build_event_metrics(row)["premarket_gap"])
-                if _build_event_metrics(row)["premarket_gap"] is not None
+                abs(item[1]["premarket_gap"])
+                if item[1]["premarket_gap"] is not None
                 else None
             ),
             _sort_key_desc(
-                abs(_build_event_metrics(row)["gap_severity"])
-                if _build_event_metrics(row)["gap_severity"] is not None
+                abs(item[1]["gap_severity"])
+                if item[1]["gap_severity"] is not None
                 else None
             ),
-            _sort_key_desc(_build_event_metrics(row)["event_intensity"]),
+            _sort_key_desc(item[1]["event_intensity"]),
             _sort_key_desc(
-                abs(_build_event_metrics(row)["postmarket_change"])
-                if _build_event_metrics(row)["postmarket_change"] is not None
+                abs(item[1]["postmarket_change"])
+                if item[1]["postmarket_change"] is not None
                 else None
             ),
         ),
         reverse=True,
     )
-    log_to_file(
-        log_file,
-        (
-            f"{'Ticker':<12} {'Name':<10} {'Industry':<28} {'PreGap':>10} {'PreChg':>10} {'PreVol':>12} {'Gap/ATRP':>10} {'PostChg':>10}"
-        ),
-    )
-    log_to_file(log_file, "-" * 180)
-    for row in ranked_rows[:TOP_SECTION_ROWS]:
-        metrics = _build_event_metrics(row)
+    if is_grouped_industry_report:
         log_to_file(
             log_file,
             (
-                f"{_get_symbol_name(row):<12} {str(row.get('name') or 'N/A')[:10]:<10} {str(row.get('industry') or '')[:28]:<28} "
-                f"{_format_percent(metrics['premarket_gap']):>10} {_format_percent(_coerce_numeric(row.get('premarket_change'))):>10} "
-                f"{_format_number(_coerce_numeric(row.get('premarket_volume'))):>12} {_format_number(metrics['gap_severity']):>10} "
-                f"{_format_percent(metrics['postmarket_change']):>10}"
+                f"{'Industry':<32} {'Entries':>7} {'Market':<18} {'PreGap':>10} {'PreChg':>10} {'PreVol':>12} {'Gap/ATRP':>10} {'PostChg':>10}"
             ),
         )
+    else:
+        log_to_file(
+            log_file,
+            (
+                f"{'Ticker':<12} {'Name':<10} {'Industry':<28} {'PreGap':>10} {'PreChg':>10} {'PreVol':>12} {'Gap/ATRP':>10} {'PostChg':>10}"
+            ),
+        )
+    log_to_file(log_file, "-" * 180)
+    for row, metrics in ranked_rows_with_metrics[:TOP_SECTION_ROWS]:
+        if is_grouped_industry_report:
+            log_to_file(
+                log_file,
+                (
+                    f"{_truncate_label(row.get('name') or row.get('industry'), 32):<32} {_format_entry_count(row):>7} "
+                    f"{_truncate_label(row.get('market'), 18):<18} {_format_percent(metrics['premarket_gap']):>10} "
+                    f"{_format_percent(_coerce_numeric(row.get('premarket_change'))):>10} {_format_number(_coerce_numeric(row.get('premarket_volume'))):>12} "
+                    f"{_format_number(metrics['gap_severity']):>10} {_format_percent(metrics['postmarket_change']):>10}"
+                ),
+            )
+        else:
+            log_to_file(
+                log_file,
+                (
+                    f"{_get_symbol_name(row):<12} {str(row.get('name') or 'N/A')[:10]:<10} {str(row.get('industry') or '')[:28]:<28} "
+                    f"{_format_percent(metrics['premarket_gap']):>10} {_format_percent(_coerce_numeric(row.get('premarket_change'))):>10} "
+                    f"{_format_number(_coerce_numeric(row.get('premarket_volume'))):>12} {_format_number(metrics['gap_severity']):>10} "
+                    f"{_format_percent(metrics['postmarket_change']):>10}"
+                ),
+            )
     log_to_file(log_file, "")
 
     premarket_gap_rows = [
-        row
-        for row in scan_data
-        if _build_event_metrics(row)["premarket_gap"] is not None
+        (row, metrics)
+        for row, metrics in rows_with_metrics
+        if metrics["premarket_gap"] is not None
     ]
     event_intensity_rows = [
-        row
-        for row in scan_data
-        if _build_event_metrics(row)["event_intensity"] is not None
+        (row, metrics)
+        for row, metrics in rows_with_metrics
+        if metrics["event_intensity"] is not None
     ]
     gap_severity_rows = [
-        row
-        for row in scan_data
-        if _build_event_metrics(row)["gap_severity"] is not None
+        (row, metrics)
+        for row, metrics in rows_with_metrics
+        if metrics["gap_severity"] is not None
     ]
 
     log_to_file(log_file, "STANDOUTS")
     if premarket_gap_rows:
-        highest_abs_premarket_gap = max(
+        highest_abs_premarket_gap_row, highest_abs_premarket_gap_metrics = max(
             premarket_gap_rows,
-            key=lambda row: abs(_build_event_metrics(row)["premarket_gap"]),
+            key=lambda item: abs(item[1]["premarket_gap"]),
         )
         log_to_file(
             log_file,
             (
-                f"- Largest absolute premarket gap: {_row_label(highest_abs_premarket_gap)} | premarket_gap={_format_percent(_build_event_metrics(highest_abs_premarket_gap)['premarket_gap'])}. "
+                f"- Largest absolute premarket gap: {_row_label(highest_abs_premarket_gap_row)} | premarket_gap={_format_percent(highest_abs_premarket_gap_metrics['premarket_gap'])}. "
                 "This stands out because the off-session price reset is the strongest in the group."
             ),
         )
@@ -548,14 +796,14 @@ def _log_event_section(log_file: Path, scan_data: list[dict[str, Any]]) -> None:
         )
 
     if event_intensity_rows:
-        highest_event_intensity = max(
+        highest_event_intensity_row, highest_event_intensity_metrics = max(
             event_intensity_rows,
-            key=lambda row: _build_event_metrics(row)["event_intensity"],
+            key=lambda item: item[1]["event_intensity"],
         )
         log_to_file(
             log_file,
             (
-                f"- Highest event intensity: {_row_label(highest_event_intensity)} | premarket_volume / average_volume_10d={_format_number(_build_event_metrics(highest_event_intensity)['event_intensity'])}. "
+                f"- Highest event intensity: {_row_label(highest_event_intensity_row)} | premarket_volume / average_volume_10d={_format_number(highest_event_intensity_metrics['event_intensity'])}. "
                 "This stands out because premarket participation is most elevated versus normal trading activity."
             ),
         )
@@ -566,14 +814,14 @@ def _log_event_section(log_file: Path, scan_data: list[dict[str, Any]]) -> None:
         )
 
     if gap_severity_rows:
-        highest_gap_severity = max(
+        highest_gap_severity_row, highest_gap_severity_metrics = max(
             gap_severity_rows,
-            key=lambda row: abs(_build_event_metrics(row)["gap_severity"]),
+            key=lambda item: abs(item[1]["gap_severity"]),
         )
         log_to_file(
             log_file,
             (
-                f"- Highest gap severity: {_row_label(highest_gap_severity)} | gap / ATRP={_format_number(_build_event_metrics(highest_gap_severity)['gap_severity'])}. "
+                f"- Highest gap severity: {_row_label(highest_gap_severity_row)} | gap / ATRP={_format_number(highest_gap_severity_metrics['gap_severity'])}. "
                 "This stands out because the opening move is largest relative to the name's recent trading range."
             ),
         )
@@ -585,7 +833,11 @@ def _log_event_section(log_file: Path, scan_data: list[dict[str, Any]]) -> None:
     log_to_file(log_file, "")
 
 
-def _log_momentum_section(log_file: Path, scan_data: list[dict[str, Any]]) -> None:
+def _log_momentum_section(
+    log_file: Path,
+    scan_data: list[dict[str, Any]],
+    is_grouped_industry_report: bool = False,
+) -> None:
     _log_section_intro(
         log_file,
         "Section 3: Momentum with Participation",
@@ -593,42 +845,58 @@ def _log_momentum_section(log_file: Path, scan_data: list[dict[str, Any]]) -> No
             "Purpose: combine recent performance with elevated relative volume to identify names where price movement is being confirmed by actual market participation."
         ),
     )
-    ranked_rows = sorted(
-        scan_data,
-        key=lambda row: _sort_key_desc(
-            _build_momentum_metrics(row)["momentum_participation_score"]
-        ),
+    rows_with_metrics = [(row, _build_momentum_metrics(row)) for row in scan_data]
+    ranked_rows_with_metrics = sorted(
+        rows_with_metrics,
+        key=lambda item: _sort_key_desc(item[1]["momentum_participation_score"]),
         reverse=True,
     )
-    log_to_file(
-        log_file,
-        (
-            f"{'Ticker':<12} {'Name':<10} {'Industry':<28} {'Perf5D':>10} {'Perf1M':>10} {'PerfYTD':>10} {'PerfY':>10} {'RelVol':>10} {'Score':>12}"
-        ),
-    )
-    log_to_file(log_file, "-" * 180)
-    for row in ranked_rows[:TOP_SECTION_ROWS]:
-        metrics = _build_momentum_metrics(row)
+    if is_grouped_industry_report:
         log_to_file(
             log_file,
             (
-                f"{_get_symbol_name(row):<12} {str(row.get('name') or 'N/A')[:10]:<10} {str(row.get('industry') or '')[:28]:<28} "
-                f"{_format_percent(_coerce_numeric(row.get('Perf.5D'))):>10} {_format_percent(metrics['perf_1m']):>10} "
-                f"{_format_percent(_coerce_numeric(row.get('Perf.YTD'))):>10} {_format_percent(_coerce_numeric(row.get('Perf.Y'))):>10} "
-                f"{_format_number(metrics['relative_volume']):>10} {_format_number(metrics['momentum_participation_score']):>12}"
+                f"{'Industry':<32} {'Entries':>7} {'Market':<18} {'Perf5D':>10} {'Perf1M':>10} {'PerfYTD':>10} {'PerfY':>10} {'RelVol':>10} {'Score':>12}"
             ),
         )
+    else:
+        log_to_file(
+            log_file,
+            (
+                f"{'Ticker':<12} {'Name':<10} {'Industry':<28} {'Perf5D':>10} {'Perf1M':>10} {'PerfYTD':>10} {'PerfY':>10} {'RelVol':>10} {'Score':>12}"
+            ),
+        )
+    log_to_file(log_file, "-" * 180)
+    for row, metrics in ranked_rows_with_metrics[:TOP_SECTION_ROWS]:
+        if is_grouped_industry_report:
+            log_to_file(
+                log_file,
+                (
+                    f"{_truncate_label(row.get('name') or row.get('industry'), 32):<32} {_format_entry_count(row):>7} "
+                    f"{_truncate_label(row.get('market'), 18):<18} {_format_percent(_coerce_numeric(row.get('Perf.5D'))):>10} "
+                    f"{_format_percent(metrics['perf_1m']):>10} {_format_percent(_coerce_numeric(row.get('Perf.YTD'))):>10} "
+                    f"{_format_percent(_coerce_numeric(row.get('Perf.Y'))):>10} {_format_number(metrics['relative_volume']):>10} "
+                    f"{_format_number(metrics['momentum_participation_score']):>12}"
+                ),
+            )
+        else:
+            log_to_file(
+                log_file,
+                (
+                    f"{_get_symbol_name(row):<12} {str(row.get('name') or 'N/A')[:10]:<10} {str(row.get('industry') or '')[:28]:<28} "
+                    f"{_format_percent(_coerce_numeric(row.get('Perf.5D'))):>10} {_format_percent(metrics['perf_1m']):>10} "
+                    f"{_format_percent(_coerce_numeric(row.get('Perf.YTD'))):>10} {_format_percent(_coerce_numeric(row.get('Perf.Y'))):>10} "
+                    f"{_format_number(metrics['relative_volume']):>10} {_format_number(metrics['momentum_participation_score']):>12}"
+                ),
+            )
     log_to_file(log_file, "")
 
-    highest_score = max(
-        scan_data,
-        key=lambda row: _sort_key_desc(
-            _build_momentum_metrics(row)["momentum_participation_score"]
-        ),
+    highest_score_row, highest_score_metrics = max(
+        rows_with_metrics,
+        key=lambda item: _sort_key_desc(item[1]["momentum_participation_score"]),
     )
-    highest_perf_1m = max(
-        scan_data,
-        key=lambda row: _sort_key_desc(_build_momentum_metrics(row)["perf_1m"]),
+    highest_perf_1m_row, highest_perf_1m_metrics = max(
+        rows_with_metrics,
+        key=lambda item: _sort_key_desc(item[1]["perf_1m"]),
     )
     highest_perf_y = max(
         scan_data,
@@ -639,14 +907,14 @@ def _log_momentum_section(log_file: Path, scan_data: list[dict[str, Any]]) -> No
     log_to_file(
         log_file,
         (
-            f"- Strongest momentum with participation: {_row_label(highest_score)} | score={_format_number(_build_momentum_metrics(highest_score)['momentum_participation_score'])}. "
+            f"- Strongest momentum with participation: {_row_label(highest_score_row)} | score={_format_number(highest_score_metrics['momentum_participation_score'])}. "
             "This stands out because recent 1M performance is being reinforced by elevated relative volume."
         ),
     )
     log_to_file(
         log_file,
         (
-            f"- Highest 1M price move: {_row_label(highest_perf_1m)} | Perf.1M={_format_percent(_build_momentum_metrics(highest_perf_1m)['perf_1m'])}. "
+            f"- Highest 1M price move: {_row_label(highest_perf_1m_row)} | Perf.1M={_format_percent(highest_perf_1m_metrics['perf_1m'])}. "
             "This stands out because it has the strongest recent monthly price acceleration."
         ),
     )
@@ -660,7 +928,11 @@ def _log_momentum_section(log_file: Path, scan_data: list[dict[str, Any]]) -> No
     log_to_file(log_file, "")
 
 
-def _log_trend_section(log_file: Path, scan_data: list[dict[str, Any]]) -> None:
+def _log_trend_section(
+    log_file: Path,
+    scan_data: list[dict[str, Any]],
+    is_grouped_industry_report: bool = False,
+) -> None:
     _log_section_intro(
         log_file,
         "Section 4: Trend Confirmation",
@@ -668,91 +940,136 @@ def _log_trend_section(log_file: Path, scan_data: list[dict[str, Any]]) -> None:
             "Purpose: check whether price is trading above or below major moving averages. More averages confirmed to the upside usually indicates a stronger technical trend backdrop."
         ),
     )
-    ranked_rows = sorted(
-        scan_data,
-        key=lambda row: _sort_key_desc(_build_trend_metrics(row)["above_count"]),
+    rows_with_metrics = [(row, _build_trend_metrics(row)) for row in scan_data]
+    ranked_rows_with_metrics = sorted(
+        rows_with_metrics,
+        key=lambda item: _sort_key_desc(item[1]["above_count"]),
         reverse=True,
     )
-    log_to_file(
-        log_file,
-        f"{'Ticker':<12} {'Name':<10} {'Industry':<28} {'Close':>10} {'AboveCount':>10} {'TrendState':<80}",
-    )
-    log_to_file(log_file, "-" * 180)
-    for row in ranked_rows[:TOP_SECTION_ROWS]:
-        metrics = _build_trend_metrics(row)
+    if is_grouped_industry_report:
         log_to_file(
             log_file,
-            (
-                f"{_get_symbol_name(row):<12} {str(row.get('name') or 'N/A')[:10]:<10} {str(row.get('industry') or '')[:28]:<28} "
-                f"{_format_number(_coerce_numeric(row.get('close'))):>10} {_format_number(metrics['above_count']):>10} {str(metrics['trend_state'])[:80]:<80}"
-            ),
+            f"{'Industry':<32} {'Entries':>7} {'Market':<18} {'Close':>10} {'AboveCnt':>10} {'TrendState':<62}",
         )
+    else:
+        log_to_file(
+            log_file,
+            f"{'Ticker':<12} {'Name':<10} {'Industry':<28} {'Close':>10} {'AboveCount':>10} {'TrendState':<80}",
+        )
+    log_to_file(log_file, "-" * 180)
+    for row, metrics in ranked_rows_with_metrics[:TOP_SECTION_ROWS]:
+        if is_grouped_industry_report:
+            log_to_file(
+                log_file,
+                (
+                    f"{_truncate_label(row.get('name') or row.get('industry'), 32):<32} {_format_entry_count(row):>7} "
+                    f"{_truncate_label(row.get('market'), 18):<18} {_format_number(_coerce_numeric(row.get('close'))):>10} "
+                    f"{_format_number(metrics['above_count']):>10} {_truncate_label(metrics['trend_state'], 62):<62}"
+                ),
+            )
+        else:
+            log_to_file(
+                log_file,
+                (
+                    f"{_get_symbol_name(row):<12} {str(row.get('name') or 'N/A')[:10]:<10} {str(row.get('industry') or '')[:28]:<28} "
+                    f"{_format_number(_coerce_numeric(row.get('close'))):>10} {_format_number(metrics['above_count']):>10} {str(metrics['trend_state'])[:80]:<80}"
+                ),
+            )
     log_to_file(log_file, "")
 
-    strongest_trend = max(
-        scan_data,
-        key=lambda row: _sort_key_desc(_build_trend_metrics(row)["above_count"]),
+    strongest_trend_row, strongest_trend_metrics = max(
+        rows_with_metrics,
+        key=lambda item: _sort_key_desc(item[1]["above_count"]),
     )
-    weakest_trend = min(
-        scan_data,
-        key=lambda row: _sort_key_desc(_build_trend_metrics(row)["above_count"]),
+    weakest_trend_row, weakest_trend_metrics = min(
+        rows_with_metrics,
+        key=lambda item: _sort_key_desc(item[1]["above_count"]),
     )
 
     log_to_file(log_file, "STANDOUTS")
     log_to_file(
         log_file,
         (
-            f"- Strongest trend confirmation: {_row_label(strongest_trend)} | averages_above={_format_number(_build_trend_metrics(strongest_trend)['above_count'])}. "
+            f"- Strongest trend confirmation: {_row_label(strongest_trend_row)} | averages_above={_format_number(strongest_trend_metrics['above_count'])}. "
             "This stands out because price is above the largest number of key moving-average references."
         ),
     )
     log_to_file(
         log_file,
         (
-            f"- Weakest trend confirmation: {_row_label(weakest_trend)} | averages_above={_format_number(_build_trend_metrics(weakest_trend)['above_count'])}. "
+            f"- Weakest trend confirmation: {_row_label(weakest_trend_row)} | averages_above={_format_number(weakest_trend_metrics['above_count'])}. "
             "This stands out because price is above the fewest key moving-average references."
         ),
     )
     log_to_file(log_file, "")
 
 
-def _log_top_activity_table(log_file: Path, scan_data: list[dict[str, Any]]) -> None:
+def _log_top_activity_table(
+    log_file: Path,
+    scan_data: list[dict[str, Any]],
+    is_grouped_industry_report: bool = False,
+) -> None:
     log_to_file(log_file, "Overview Table")
     log_to_file(log_file, "-" * 180)
     log_to_file(log_file, "Top rows by relative volume")
     log_to_file(log_file, "-" * 180)
-    log_to_file(
-        log_file,
-        (
-            f"{'Ticker':<12} {'Name':<10} {'Company':<34} {'Industry':<28} {'MCap':>10} "
-            f"{'RelVol':>10} {'Vol':>14} {'ATRP':>10} {'Vol.W':>10} {'Perf5D':>10} {'Perf1M':>10} {'PerfY':>10}"
-        ),
-    )
+    if is_grouped_industry_report:
+        log_to_file(
+            log_file,
+            (
+                f"{'Industry':<32} {'Entries':>7} {'Market':<18} {'MCap':>10} {'RelVol':>10} {'Vol':>14} {'ATRP':>10} {'Vol.W':>10} {'Perf5D':>10} {'Perf1M':>10} {'PerfY':>10}"
+            ),
+        )
+    else:
+        log_to_file(
+            log_file,
+            (
+                f"{'Ticker':<12} {'Name':<10} {'Company':<34} {'Industry':<28} {'Market':<28} {'MCap':>10} "
+                f"{'RelVol':>10} {'Vol':>14} {'PreVol/Float':>14} {'ATRP':>10} {'Vol.W':>10} {'Perf5D':>10} {'Perf1M':>10} {'PerfY':>10}"
+            ),
+        )
     log_to_file(log_file, "-" * 180)
 
     for row in scan_data:
-        ticker = _get_symbol_name(row)
-        name = str(row.get("name") or "N/A")[:10]
-        company = _get_company_description(row)[:34]
-        industry = str(row.get("industry") or "")[:28]
         market_cap = _format_market_cap(_coerce_numeric(row.get("market_cap_basic")))
         relative_volume = _format_number(
             _coerce_numeric(row.get("relative_volume_10d_calc"))
         )
         volume = _format_number(_coerce_numeric(row.get("volume")))
+        premarket_float_turnover = _format_number(
+            _safe_ratio(
+                _coerce_numeric(row.get("premarket_volume")),
+                _coerce_numeric(row.get("float_shares_outstanding")),
+            )
+        )
         atrp = _format_number(_coerce_numeric(row.get("ATRP")))
         volatility_w = _format_number(_coerce_numeric(row.get("Volatility.W")))
         perf_5d = _format_percent(_coerce_numeric(row.get("Perf.5D")))
         perf_1m = _format_percent(_coerce_numeric(row.get("Perf.1M")))
         perf_y = _format_percent(_coerce_numeric(row.get("Perf.Y")))
 
-        log_to_file(
-            log_file,
-            (
-                f"{ticker:<12} {name:<10} {company:<34} {industry:<28} {market_cap:>10} "
-                f"{relative_volume:>10} {volume:>14} {atrp:>10} {volatility_w:>10} {perf_5d:>10} {perf_1m:>10} {perf_y:>10}"
-            ),
-        )
+        if is_grouped_industry_report:
+            log_to_file(
+                log_file,
+                (
+                    f"{_truncate_label(row.get('name') or row.get('industry'), 32):<32} {_format_entry_count(row):>7} "
+                    f"{_truncate_label(row.get('market'), 18):<18} {market_cap:>10} {relative_volume:>10} {volume:>14} "
+                    f"{atrp:>10} {volatility_w:>10} {perf_5d:>10} {perf_1m:>10} {perf_y:>10}"
+                ),
+            )
+        else:
+            ticker = _get_symbol_name(row)
+            name = str(row.get("name") or "N/A")[:10]
+            company = _get_company_description(row)[:34]
+            industry = str(row.get("industry") or "")[:28]
+            market = str(row.get("market") or "")[:28]
+            log_to_file(
+                log_file,
+                (
+                    f"{ticker:<12} {name:<10} {company:<34} {industry:<28} {market:<28} {market_cap:>10} "
+                    f"{relative_volume:>10} {volume:>14} {premarket_float_turnover:>14} {atrp:>10} {volatility_w:>10} {perf_5d:>10} {perf_1m:>10} {perf_y:>10}"
+                ),
+            )
 
     log_to_file(log_file, "")
 
@@ -916,42 +1233,32 @@ def _log_per_row_metric_deviations(
     log_to_file(log_file, "")
 
 
-def analyze_activity_float_attention_scan(
+def _run_activity_float_attention_analysis(
     scan_data: list[dict[str, Any]],
-    industries: list[str] | None = None,
-    min_market_cap_usd: float | None = None,
-    max_market_cap_usd: float | None = None,
+    log_file: Path,
+    csv_file: Path,
+    title: str,
+    metadata_lines: list[str],
 ) -> Path:
-    """Log a simple activity and float attention analysis for an already-fetched scan."""
-    log_file = _build_log_file_name(industries, min_market_cap_usd, max_market_cap_usd)
-    csv_file = _build_csv_file_name(industries, min_market_cap_usd, max_market_cap_usd)
     _reset_log_file(log_file)
+    is_grouped_industry_report = _is_grouped_industry_scan(scan_data)
 
-    log_to_file(log_file, "TradingView activity / float / attention scan")
+    log_to_file(log_file, title)
     log_to_file(log_file, "=" * 180)
-    log_to_file(
-        log_file,
-        (
-            f"Rows returned: {len(scan_data)} | industries={industries or 'all'} | "
-            f"min_market_cap_usd={min_market_cap_usd} | max_market_cap_usd={max_market_cap_usd}"
-        ),
-    )
-    log_to_file(log_file, "Sorted by query on relative_volume_10d_calc descending.")
+    for line in metadata_lines:
+        log_to_file(log_file, line)
     log_to_file(log_file, "")
 
     if not scan_data:
         log_to_file(log_file, "No rows returned for this scan.")
         return log_file
 
-    # Build comprehensive metric profiles for all fields
     metric_profiles = _build_metric_profiles(scan_data)
     _export_all_columns_per_ticker_csv(csv_file, scan_data, metric_profiles)
 
-    _log_top_activity_table(log_file, scan_data)
+    _log_top_activity_table(log_file, scan_data, is_grouped_industry_report)
     _log_metric_summaries(log_file, scan_data, metric_profiles)
-    # _log_all_columns_per_ticker_table(log_file, scan_data, metric_profiles)
 
-    # Log per-row deviations for top N rows by relative volume
     log_to_file(log_file, "Per-Row Metric Deviations (Top by Relative Volume)")
     log_to_file(log_file, "-" * 180)
     log_to_file(log_file, "")
@@ -963,11 +1270,74 @@ def analyze_activity_float_attention_scan(
         _log_per_row_metric_deviations(log_file, row, metric_profiles, max_deviations=8)
     log_to_file(log_file, "")
 
-    _log_participation_section(log_file, scan_data)
-    _log_event_section(log_file, scan_data)
-    _log_momentum_section(log_file, scan_data)
-    _log_trend_section(log_file, scan_data)
+    _log_participation_section(log_file, scan_data, is_grouped_industry_report)
+    _log_event_section(log_file, scan_data, is_grouped_industry_report)
+    _log_momentum_section(log_file, scan_data, is_grouped_industry_report)
+    _log_trend_section(log_file, scan_data, is_grouped_industry_report)
     return log_file
+
+
+def analyze_activity_float_attention_scan(
+    scan_data: list[dict[str, Any]],
+    industries: list[str] | None = None,
+    min_market_cap_usd: float | None = None,
+    max_market_cap_usd: float | None = None,
+) -> Path:
+    """Log a simple activity and float attention analysis for an already-fetched scan."""
+    log_file = _build_log_file_name(industries, min_market_cap_usd, max_market_cap_usd)
+    csv_file = _build_csv_file_name(industries, min_market_cap_usd, max_market_cap_usd)
+    return _run_activity_float_attention_analysis(
+        scan_data=scan_data,
+        log_file=log_file,
+        csv_file=csv_file,
+        title=_build_report_title("TradingView activity / float / attention scan"),
+        metadata_lines=[
+            (
+                f"Rows returned: {len(scan_data)} | industries={industries or 'all'} | "
+                f"min_market_cap_usd={min_market_cap_usd} | max_market_cap_usd={max_market_cap_usd}"
+            ),
+            "Sorted by query on relative_volume_10d_calc descending.",
+        ],
+    )
+
+
+def analyze_activity_float_attention_scan_grouped_industries(
+    scan_data: list[dict[str, Any]],
+    industries: list[str] | None = None,
+    min_market_cap_usd: float | None = None,
+    max_market_cap_usd: float | None = None,
+) -> Path:
+    """Aggregate activity scan rows by industry and run the same analysis on industry-level rows."""
+    grouped_scan_data = _group_scan_data_by_industry(scan_data)
+    log_file = _build_grouped_industries_log_file_name(
+        industries,
+        min_market_cap_usd,
+        max_market_cap_usd,
+    )
+    csv_file = _build_grouped_industries_csv_file_name(
+        industries,
+        min_market_cap_usd,
+        max_market_cap_usd,
+    )
+    return _run_activity_float_attention_analysis(
+        scan_data=grouped_scan_data,
+        log_file=log_file,
+        csv_file=csv_file,
+        title=_build_report_title(
+            "TradingView activity / float / attention scan grouped by industry"
+        ),
+        metadata_lines=[
+            (
+                f"Industry groups returned: {len(grouped_scan_data)} | source_rows={len(scan_data)} | "
+                f"industries={industries or 'all'} | min_market_cap_usd={min_market_cap_usd} | "
+                f"max_market_cap_usd={max_market_cap_usd}"
+            ),
+            (
+                "Grouped from the raw all-industry scan using the industry field, then sorted by "
+                "aggregate relative_volume_10d_calc descending."
+            ),
+        ],
+    )
 
 
 def run_activity_float_attention_scan(
@@ -978,6 +1348,21 @@ def run_activity_float_attention_scan(
 ) -> Path:
     """Execute the TradingView scan and log the returned data under logs/tradingview_analysis."""
     return analyze_activity_float_attention_scan(
+        scan_data=scan_data,
+        industries=industries,
+        min_market_cap_usd=min_market_cap_usd,
+        max_market_cap_usd=max_market_cap_usd,
+    )
+
+
+def run_activity_float_attention_scan_grouped_industries(
+    scan_data: list[dict[str, Any]],
+    industries: list[str] | None = None,
+    min_market_cap_usd: float | None = None,
+    max_market_cap_usd: float | None = None,
+) -> Path:
+    """Execute the activity scan analysis after aggregating rows by industry."""
+    return analyze_activity_float_attention_scan_grouped_industries(
         scan_data=scan_data,
         industries=industries,
         min_market_cap_usd=min_market_cap_usd,

@@ -1,11 +1,19 @@
 from pathlib import Path
 from typing import Any
+from datetime import datetime
 
 from generic_utils.log_to_files_util import log_to_file
+
 
 LOG_DIR = Path(
     r"D:\FinanceProjects\edgarDataManagementPython\logs\tradingview_analysis"
 )
+
+
+# Helper to get log file suffix with current date and hour
+def _log_time_suffix() -> str:
+    return datetime.now().strftime("_%Y%m%d_%H")
+
 
 # Performance metrics ordered from oldest (longest) to latest (shortest) time horizon
 PERFORMANCE_PERIODS_ORDERED = [
@@ -19,6 +27,7 @@ PERFORMANCE_PERIODS_ORDERED = [
     "Perf.1M",
     "Perf.W",
     "Perf.5D",
+    "change",
 ]
 
 PERIOD_LABELS = {
@@ -32,6 +41,7 @@ PERIOD_LABELS = {
     "Perf.1M": "1 Month",
     "Perf.W": "1 Week",
     "Perf.5D": "5 Day",
+    "change": "Change Daily",
 }
 
 
@@ -134,12 +144,15 @@ def _format_performance_pct(perf_value: float | None) -> str:
     return f"{perf_value:+.2f}%"
 
 
+from typing import Mapping
+
+
 def analyze_price_performance_by_market_cap(
     scan_data: list[dict],
     min_market_cap_usd: float | None = None,
     max_market_cap_usd: float | None = None,
-    min_performance_pct: float | None = None,
-    max_performance_pct: float | None = None,
+    min_performance_pct: float | Mapping[str, float] | None = None,
+    max_performance_pct: float | Mapping[str, float] | None = None,
 ) -> None:
     """
     Analyze price performance metrics by market cap (descending).
@@ -166,7 +179,9 @@ def analyze_price_performance_by_market_cap(
         key=lambda r: _coerce_numeric(r.get("market_cap_basic")) or 0, reverse=True
     )
 
-    log_file = str(LOG_DIR / "tradingview_price_performance_by_market_cap.log")
+    log_file = str(
+        LOG_DIR / f"tradingview_price_performance_by_market_cap{_log_time_suffix()}.log"
+    )
 
     log_to_file(log_file, "=" * 120)
     log_to_file(log_file, "PRICE PERFORMANCE ANALYSIS BY MARKET CAP (DESCENDING)")
@@ -179,6 +194,18 @@ def analyze_price_performance_by_market_cap(
     # Process each performance period
     for period in PERFORMANCE_PERIODS_ORDERED:
         period_label = PERIOD_LABELS.get(period, period)
+
+        # Determine min/max for this period
+        min_pct = None
+        max_pct = None
+        if isinstance(min_performance_pct, dict):
+            min_pct = min_performance_pct.get(period)
+        elif isinstance(min_performance_pct, (int, float)):
+            min_pct = min_performance_pct
+        if isinstance(max_performance_pct, dict):
+            max_pct = max_performance_pct.get(period)
+        elif isinstance(max_performance_pct, (int, float)):
+            max_pct = max_performance_pct
 
         # Check if period data exists in any row
         has_data = any(period in row for row in included_rows)
@@ -193,9 +220,9 @@ def analyze_price_performance_by_market_cap(
         for row in included_rows:
             perf_value = _coerce_numeric(row.get(period))
             if perf_value is not None:
-                if min_performance_pct is not None and perf_value < min_performance_pct:
+                if min_pct is not None and perf_value < min_pct:
                     continue
-                if max_performance_pct is not None and perf_value > max_performance_pct:
+                if max_pct is not None and perf_value > max_pct:
                     continue
                 period_rows.append(row)
 
@@ -236,8 +263,8 @@ def analyze_price_performance_by_metric(
     scan_data: list[dict],
     min_market_cap_usd: float | None = None,
     max_market_cap_usd: float | None = None,
-    min_performance_pct: float | None = None,
-    max_performance_pct: float | None = None,
+    min_performance_pct: float | Mapping[str, float] | None = None,
+    max_performance_pct: float | Mapping[str, float] | None = None,
 ) -> None:
     """
     Analyze price performance metrics sorted by performance value (descending).
@@ -259,7 +286,10 @@ def analyze_price_performance_by_metric(
     if not included_rows:
         return
 
-    log_file = str(LOG_DIR / "tradingview_price_performance_ranked_by_metric.log")
+    log_file = str(
+        LOG_DIR
+        / f"tradingview_price_performance_ranked_by_metric{_log_time_suffix()}.log"
+    )
 
     log_to_file(log_file, "=" * 140)
     log_to_file(log_file, "PRICE PERFORMANCE ANALYSIS RANKED BY METRIC (DESCENDING)")
@@ -273,6 +303,18 @@ def analyze_price_performance_by_metric(
     for period in PERFORMANCE_PERIODS_ORDERED:
         period_label = PERIOD_LABELS.get(period, period)
 
+        # Determine min/max for this period
+        min_pct = None
+        max_pct = None
+        if isinstance(min_performance_pct, dict):
+            min_pct = min_performance_pct.get(period)
+        elif isinstance(min_performance_pct, (int, float)):
+            min_pct = min_performance_pct
+        if isinstance(max_performance_pct, dict):
+            max_pct = max_performance_pct.get(period)
+        elif isinstance(max_performance_pct, (int, float)):
+            max_pct = max_performance_pct
+
         # Check if period data exists in any row
         has_data = any(period in row for row in included_rows)
         if not has_data:
@@ -283,9 +325,9 @@ def analyze_price_performance_by_metric(
         for row in included_rows:
             perf_value = _coerce_numeric(row.get(period))
             if perf_value is not None:
-                if min_performance_pct is not None and perf_value < min_performance_pct:
+                if min_pct is not None and perf_value < min_pct:
                     continue
-                if max_performance_pct is not None and perf_value > max_performance_pct:
+                if max_pct is not None and perf_value > max_pct:
                     continue
                 period_rows.append((row, perf_value))
 
@@ -333,8 +375,8 @@ def analyze_global_price_performance(
     min_market_cap_usd: float | None = None,
     max_market_cap_usd: float | None = None,
     performance_field: str | None = None,
-    min_performance_pct: float | None = None,
-    max_performance_pct: float | None = None,
+    min_performance_pct: float | Mapping[str, float] | None = None,
+    max_performance_pct: float | Mapping[str, float] | None = None,
 ) -> None:
     """
     Execute full price performance analysis workflow.
@@ -353,7 +395,10 @@ def analyze_global_price_performance(
     """
 
     if not scan_data:
-        log_file = str(LOG_DIR / "tradingview_price_performance_by_market_cap.log")
+        log_file = str(
+            LOG_DIR
+            / f"tradingview_price_performance_by_market_cap{_log_time_suffix()}.log"
+        )
         log_to_file(log_file, "No data available from TradingView scan.")
         return
 
@@ -369,7 +414,10 @@ def analyze_global_price_performance(
         )
 
         if not filtered_scan_data:
-            log_file = str(LOG_DIR / "tradingview_price_performance_by_market_cap.log")
+            log_file = str(
+                LOG_DIR
+                / f"tradingview_price_performance_by_market_cap{_log_time_suffix()}.log"
+            )
             log_to_file(
                 log_file,
                 (
