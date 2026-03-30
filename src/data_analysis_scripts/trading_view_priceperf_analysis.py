@@ -1,7 +1,10 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 from datetime import datetime
 
+from data_analysis_scripts._shared_analysis_utils import (
+    coerce_numeric as _coerce_numeric,
+)
 from generic_utils.log_to_files_util import log_to_file
 
 
@@ -43,15 +46,6 @@ PERIOD_LABELS = {
     "Perf.5D": "5 Day",
     "change": "Change Daily",
 }
-
-
-def _coerce_numeric(value: Any) -> float | None:
-    """Convert value to float, handling None and boolean edge cases."""
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    return None
 
 
 def _filter_by_market_cap(
@@ -142,9 +136,6 @@ def _format_performance_pct(perf_value: float | None) -> str:
     if perf_value is None:
         return "N/A"
     return f"{perf_value:+.2f}%"
-
-
-from typing import Mapping
 
 
 def analyze_price_performance_by_market_cap(

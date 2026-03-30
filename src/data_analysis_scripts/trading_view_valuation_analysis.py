@@ -2,6 +2,11 @@ from statistics import median
 from pathlib import Path
 
 from constants.trading_view_constants import TRADING_VIEW_INDUSTRIES
+from data_analysis_scripts._shared_analysis_utils import (
+    coerce_numeric as _coerce_numeric,
+    get_company_description as _get_company_description,
+    slugify as _slugify,
+)
 from generic_utils.log_to_files_util import log_to_file
 
 LOG_DIR = Path(
@@ -74,14 +79,6 @@ def _get_tradingview_industry_values() -> set[str]:
 
 
 KNOWN_TRADINGVIEW_INDUSTRIES = _get_tradingview_industry_values()
-
-
-def _coerce_numeric(value):
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    return None
 
 
 def _resolve_industry(row: dict) -> str:
@@ -266,11 +263,6 @@ def _group_rows_by_industry(rows: list[dict]) -> dict[str, list[dict]]:
     return grouped_rows
 
 
-def _slugify(value: str) -> str:
-    slug = "".join(char.lower() if char.isalnum() else "_" for char in str(value))
-    return "_".join(part for part in slug.split("_") if part)
-
-
 def _build_industry_log_file(industry_name: str) -> str:
     normalized_slug = _slugify(industry_name)
     log_dir = Path(INDUSTRY_ANALYSIS_LOG_FILE).resolve().parent
@@ -299,15 +291,6 @@ def _format_industries_for_log(industries: list[str] | None = None) -> str:
     normalized_industries = [str(industry).strip() for industry in industries]
     normalized_industries = [industry for industry in normalized_industries if industry]
     return ", ".join(normalized_industries) if normalized_industries else "all"
-
-
-def _get_company_description(row: dict) -> str:
-    ticker_view = row.get("ticker-view")
-    if isinstance(ticker_view, dict):
-        description = ticker_view.get("description")
-        if description:
-            return str(description)
-    return ""
 
 
 def _build_metric_exclusions(

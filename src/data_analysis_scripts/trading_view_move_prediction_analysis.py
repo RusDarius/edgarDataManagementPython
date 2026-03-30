@@ -2,18 +2,30 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import json
 from pathlib import Path
 from statistics import median
 from typing import Any, Mapping
 
+from data_analysis_scripts._shared_analysis_utils import (
+    REPORT_TIMESTAMP_FORMAT,
+    build_report_title as _build_report_title,
+    coerce_numeric as _coerce_numeric,
+    format_market_cap as _format_market_cap,
+    median_absolute_deviation as _median_absolute_deviation,
+    reset_log_file as _reset_log_file,
+    safe_ratio as _safe_ratio,
+    slugify as _slugify,
+    sort_key_desc as _sort_key_desc,
+)
 from generic_utils.log_to_files_util import log_to_file, log_rows_to_csv
+from data_loaders.api_tradingview_client import ApiTradingViewClient
 
 
 LOG_DIR = Path(
     r"D:\FinanceProjects\edgarDataManagementPython\logs\tradingview_analysis\prediction_analysis"
 )
 
-REPORT_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 TOP_SECTION_ROWS = 15
 
 PERFORMANCE_TRACKING_FIELD_ORDER = [
@@ -135,6 +147,21 @@ RAW_PROFILE_FIELDS = [
     "enterprise_value_to_revenue_ttm",
     "enterprise_value_to_ebit_ttm",
     "enterprise_value_ebitda_ttm",
+    "price_52_week_high",
+    "price_52_week_low",
+    "High.6M",
+    "Low.6M",
+    "earnings_yield",
+    "free_cash_flow_margin_ttm",
+    "buyback_yield",
+    "dividends_yield_current",
+    "Aroon.Up",
+    "Aroon.Down",
+    "ADX",
+    "ADX+DI",
+    "ADX-DI",
+    "BB.upper",
+    "BB.lower",
 ]
 
 DERIVED_PROFILE_FIELDS = [
@@ -146,7 +173,29 @@ DERIVED_PROFILE_FIELDS = [
     "macd_spread",
     "rsi_centered",
     "rsi7_centered",
+    "distance_from_52w_high",
+    "range_position_52w",
+    "aroon_spread",
+    "adx_directional_spread",
+    "bb_position",
+    "bb_squeeze",
 ]
+
+EXTENDED_SIGNALS: frozenset[str] = frozenset(
+    {
+        "Perf.6M",
+        "aroon_spread",
+        "adx_directional_spread",
+        "bb_position",
+        "bb_squeeze",
+        "free_cash_flow_margin_ttm",
+        "buyback_yield",
+        "dividends_yield_current",
+        "earnings_yield",
+        "distance_from_52w_high",
+        "range_position_52w",
+    }
+)
 
 COMPONENT_ORDER = [
     "attention",
@@ -217,6 +266,8 @@ HORIZON_TITLES = {
     "years": "Years horizon",
 }
 
+TOP_SECTION_ROWS = 15
+
 
 @dataclass(frozen=True)
 class DirectionalBias:
@@ -231,6 +282,9 @@ class ScoringProfile:
     horizon_weights: dict[str, dict[str, float]] = field(default_factory=dict)
     component_signal_weights: dict[str, dict[str, float]] = field(default_factory=dict)
     component_directional_bias: dict[str, DirectionalBias] = field(default_factory=dict)
+    missing_component_scores_by_horizon: dict[str, dict[str, float]] = field(
+        default_factory=dict
+    )
     performance_tracking_periods: dict[str, list[str]] = field(default_factory=dict)
     intro_metric_notes: list[str] = field(default_factory=list)
     confidence_multiplier: float = 1.0
@@ -247,278 +301,529 @@ PRESET_SCORING_PROFILES = {
     "breakout_long": ScoringProfile(
         name="breakout_long",
         description=(
-            "Bias toward upside continuation setups where unusual participation, event pressure, fast momentum, and trend alignment matter more than deep valuation support."
+            "Bias toward upside continuation setups where unusual participation, event pressure, fast momentum, and trend confirmation matter materially more than deep valuation support. It now also penalizes missing tactical confirmation so the leaderboard does not drift back toward the balanced profile."
         ),
         horizon_weights={
             "days": {
-                "attention": 0.29,
-                "event": 0.22,
-                "momentum": 0.26,
-                "trend": 0.15,
-                "quality": 0.03,
-                "valuation": 0.01,
-                "safety": 0.04,
+                "attention": 0.34,
+                "event": 0.24,
+                "momentum": 0.28,
+                "trend": 0.10,
+                "quality": 0.01,
+                "valuation": 0.00,
+                "safety": 0.03,
             },
             "weeks": {
-                "attention": 0.21,
-                "event": 0.12,
-                "momentum": 0.29,
+                "attention": 0.24,
+                "event": 0.14,
+                "momentum": 0.30,
+                "trend": 0.20,
+                "quality": 0.03,
+                "valuation": 0.01,
+                "safety": 0.08,
+            },
+            "months": {
+                "attention": 0.14,
+                "event": 0.10,
+                "momentum": 0.24,
                 "trend": 0.23,
-                "quality": 0.06,
-                "valuation": 0.02,
-                "safety": 0.07,
+                "quality": 0.10,
+                "valuation": 0.04,
+                "safety": 0.15,
+            },
+            "years": {
+                "attention": 0.04,
+                "event": 0.05,
+                "momentum": 0.15,
+                "trend": 0.20,
+                "quality": 0.18,
+                "valuation": 0.10,
+                "safety": 0.28,
             },
         },
         component_signal_weights={
             "attention": {
-                "relative_volume_10d_calc": 1.30,
-                "float_turnover": 1.20,
-                "dollar_turnover_intensity": 1.15,
+                "relative_volume_10d_calc": 1.45,
+                "float_turnover": 1.30,
+                "dollar_turnover_intensity": 1.20,
+                "Value.Traded": 1.15,
+                "AvgValue.Traded_10d": 1.10,
             },
             "event": {
+                "premarket_change": 1.15,
+                "postmarket_change": 1.15,
                 "gap": 1.15,
-                "gap_severity": 1.20,
-                "event_intensity": 1.20,
+                "gap_severity": 1.30,
+                "event_intensity": 1.25,
             },
             "momentum": {
-                "Perf.5D": 1.25,
-                "Perf.W": 1.20,
+                "change": 1.15,
+                "Perf.5D": 1.35,
+                "Perf.W": 1.25,
                 "Perf.1M": 1.15,
+                "Perf.3M": 1.05,
+                "Perf.YTD": 0.75,
+                "Perf.Y": 0.40,
                 "ROC": 1.10,
                 "Mom": 1.10,
-                "macd_spread": 1.10,
+                "macd_spread": 1.15,
+                "Recommend.MA": 1.10,
+                "rsi7_centered": 1.10,
             },
             "trend": {
-                "trend_alignment": 1.25,
-                "close_vs_sma50": 1.10,
-                "close_vs_ema50": 1.10,
-                "close_vs_vwap": 1.10,
+                "trend_alignment": 1.30,
+                "close_vs_sma50": 1.15,
+                "close_vs_sma200": 0.80,
+                "close_vs_ema50": 1.15,
+                "close_vs_ema200": 0.85,
+                "close_vs_vwap": 1.20,
+                "close_vs_vwma": 1.20,
             },
         },
         component_directional_bias={
             "attention": DirectionalBias(
-                positive_multiplier=1.15, negative_multiplier=0.95
+                positive_multiplier=1.25, negative_multiplier=0.80
             ),
             "event": DirectionalBias(
-                positive_multiplier=1.10, negative_multiplier=0.95
+                positive_multiplier=1.20, negative_multiplier=0.80
             ),
             "momentum": DirectionalBias(
-                positive_multiplier=1.15, negative_multiplier=0.90
+                positive_multiplier=1.28, negative_multiplier=0.78
             ),
             "trend": DirectionalBias(
-                positive_multiplier=1.10, negative_multiplier=0.95
+                positive_multiplier=1.18, negative_multiplier=0.85
+            ),
+            "quality": DirectionalBias(
+                positive_multiplier=1.00, negative_multiplier=0.85
+            ),
+            "valuation": DirectionalBias(
+                positive_multiplier=0.95, negative_multiplier=0.80
+            ),
+            "safety": DirectionalBias(
+                positive_multiplier=1.00, negative_multiplier=0.82
             ),
         },
-        confidence_multiplier=1.05,
+        missing_component_scores_by_horizon={
+            "days": {
+                "attention": -0.70,
+                "event": -0.45,
+                "momentum": -0.65,
+                "trend": -0.40,
+            },
+            "weeks": {
+                "attention": -0.45,
+                "momentum": -0.50,
+                "trend": -0.35,
+            },
+            "months": {
+                "momentum": -0.35,
+                "trend": -0.30,
+            },
+        },
+        confidence_multiplier=1.07,
     ),
     "quality_value_compounder": ScoringProfile(
         name="quality_value_compounder",
         description=(
-            "Bias toward durable long ideas where profitability, growth quality, balance-sheet support, and reasonable valuation matter more than near-term excitement."
+            "Bias toward durable long ideas where profitability, balance-sheet support, capital efficiency, and reasonable valuation matter more than near-term excitement. The profile now treats missing quality, valuation, and safety evidence as a real handicap instead of silently renormalizing around it."
         ),
         horizon_weights={
+            "days": {
+                "attention": 0.03,
+                "event": 0.01,
+                "momentum": 0.06,
+                "trend": 0.18,
+                "quality": 0.34,
+                "valuation": 0.16,
+                "safety": 0.22,
+            },
+            "weeks": {
+                "attention": 0.03,
+                "event": 0.02,
+                "momentum": 0.07,
+                "trend": 0.16,
+                "quality": 0.32,
+                "valuation": 0.18,
+                "safety": 0.22,
+            },
             "months": {
-                "attention": 0.04,
-                "event": 0.03,
-                "momentum": 0.12,
-                "trend": 0.20,
-                "quality": 0.28,
-                "valuation": 0.19,
-                "safety": 0.14,
+                "attention": 0.02,
+                "event": 0.02,
+                "momentum": 0.08,
+                "trend": 0.16,
+                "quality": 0.31,
+                "valuation": 0.18,
+                "safety": 0.23,
             },
             "years": {
-                "attention": 0.01,
-                "event": 0.02,
-                "momentum": 0.03,
-                "trend": 0.10,
-                "quality": 0.37,
-                "valuation": 0.26,
-                "safety": 0.21,
+                "attention": 0.00,
+                "event": 0.01,
+                "momentum": 0.02,
+                "trend": 0.08,
+                "quality": 0.41,
+                "valuation": 0.25,
+                "safety": 0.23,
             },
         },
         component_signal_weights={
+            "momentum": {
+                "change": 0.15,
+                "Perf.5D": 0.15,
+                "Perf.W": 0.20,
+                "Perf.1M": 0.40,
+                "Perf.3M": 1.05,
+                "Perf.YTD": 1.05,
+                "Perf.Y": 1.20,
+                "ROC": 0.40,
+                "Mom": 0.45,
+                "macd_spread": 0.35,
+                "Recommend.All": 0.70,
+                "Recommend.MA": 0.55,
+                "Recommend.Other": 0.65,
+                "rsi_centered": 0.20,
+                "rsi7_centered": 0.10,
+            },
+            "trend": {
+                "close_vs_sma50": 0.85,
+                "close_vs_sma200": 1.35,
+                "close_vs_ema50": 0.85,
+                "close_vs_ema200": 1.35,
+                "close_vs_vwap": 0.25,
+                "close_vs_vwma": 0.40,
+                "trend_alignment": 1.20,
+            },
             "quality": {
                 "total_revenue_yoy_growth_ttm": 1.10,
+                "total_revenue_qoq_growth_fq": 0.85,
                 "ebitda_yoy_growth_ttm": 1.15,
+                "ebitda_qoq_growth_fq": 0.90,
+                "net_income_yoy_growth_ttm": 1.05,
+                "net_income_qoq_growth_fq": 0.85,
                 "free_cash_flow_yoy_growth_ttm": 1.20,
+                "free_cash_flow_qoq_growth_fq": 1.00,
                 "gross_margin": 1.10,
-                "operating_margin": 1.15,
-                "return_on_invested_capital": 1.20,
+                "operating_margin": 1.20,
+                "after_tax_margin": 1.10,
+                "return_on_assets": 1.05,
+                "return_on_equity": 1.10,
+                "return_on_invested_capital": 1.30,
             },
             "valuation": {
-                "price_earnings_ttm": 1.15,
+                "price_earnings_ttm": 1.10,
+                "price_earnings_growth_ttm": 1.15,
+                "price_sales_current": 1.05,
+                "price_book_fq": 0.90,
                 "price_free_cash_flow_ttm": 1.20,
+                "price_to_cash_f_operating_activities_ttm": 1.10,
+                "enterprise_value_to_revenue_ttm": 1.05,
+                "enterprise_value_to_ebit_ttm": 0.95,
                 "enterprise_value_ebitda_ttm": 1.15,
             },
             "safety": {
                 "current_ratio": 1.05,
-                "altman_z_score_ttm": 1.15,
-                "debt_to_equity": 1.15,
-                "debt_to_revenue_ttm": 1.10,
-            },
-        },
-        component_directional_bias={
-            "quality": DirectionalBias(
-                positive_multiplier=1.15, negative_multiplier=0.95
-            ),
-            "valuation": DirectionalBias(
-                positive_multiplier=1.15, negative_multiplier=1.05
-            ),
-            "safety": DirectionalBias(
-                positive_multiplier=1.10, negative_multiplier=1.10
-            ),
-        },
-    ),
-    "value_recovery": ScoringProfile(
-        name="value_recovery",
-        description=(
-            "Bias toward recovery candidates where cheap valuation, improving safety, and acceptable quality matter more than already-strong short-term momentum."
-        ),
-        horizon_weights={
-            "weeks": {
-                "attention": 0.10,
-                "event": 0.08,
-                "momentum": 0.14,
-                "trend": 0.18,
-                "quality": 0.18,
-                "valuation": 0.17,
-                "safety": 0.15,
-            },
-            "months": {
-                "attention": 0.05,
-                "event": 0.04,
-                "momentum": 0.10,
-                "trend": 0.18,
-                "quality": 0.24,
-                "valuation": 0.23,
-                "safety": 0.16,
-            },
-            "years": {
-                "attention": 0.01,
-                "event": 0.02,
-                "momentum": 0.02,
-                "trend": 0.10,
-                "quality": 0.30,
-                "valuation": 0.31,
-                "safety": 0.24,
-            },
-        },
-        component_signal_weights={
-            "valuation": {
-                "price_earnings_ttm": 1.10,
-                "price_book_fq": 1.15,
-                "price_sales_current": 1.10,
-                "enterprise_value_to_revenue_ttm": 1.10,
-                "enterprise_value_ebitda_ttm": 1.15,
-            },
-            "quality": {
-                "free_cash_flow_yoy_growth_ttm": 1.15,
-                "net_income_yoy_growth_ttm": 1.10,
-                "operating_margin": 1.10,
-            },
-            "safety": {
-                "altman_z_score_ttm": 1.15,
-                "debt_to_equity": 1.10,
+                "quick_ratio": 1.05,
+                "cash_ratio": 1.00,
+                "short_term_cash_coverage": 1.15,
+                "altman_z_score_ttm": 1.20,
+                "debt_to_equity": 1.20,
+                "debt_to_revenue_ttm": 1.15,
                 "net_debt": 1.10,
+                "beta_1_year": 0.75,
             },
         },
         component_directional_bias={
             "momentum": DirectionalBias(
-                positive_multiplier=0.95, negative_multiplier=0.75
+                positive_multiplier=1.00, negative_multiplier=0.85
             ),
-            "valuation": DirectionalBias(
-                positive_multiplier=1.20, negative_multiplier=1.05
+            "trend": DirectionalBias(
+                positive_multiplier=1.05, negative_multiplier=1.10
             ),
             "quality": DirectionalBias(
-                positive_multiplier=1.10, negative_multiplier=1.00
+                positive_multiplier=1.20, negative_multiplier=1.25
+            ),
+            "valuation": DirectionalBias(
+                positive_multiplier=1.18, negative_multiplier=1.15
             ),
             "safety": DirectionalBias(
-                positive_multiplier=1.10, negative_multiplier=1.05
+                positive_multiplier=1.15, negative_multiplier=1.25
             ),
+        },
+        missing_component_scores_by_horizon={
+            "days": {
+                "quality": -0.90,
+                "valuation": -0.75,
+                "safety": -0.70,
+            },
+            "weeks": {
+                "quality": -1.00,
+                "valuation": -0.80,
+                "safety": -0.80,
+            },
+            "months": {
+                "quality": -1.10,
+                "valuation": -0.90,
+                "safety": -0.85,
+            },
+            "years": {
+                "quality": -1.20,
+                "valuation": -1.00,
+                "safety": -0.95,
+            },
+        },
+        confidence_multiplier=1.02,
+    ),
+    "value_recovery": ScoringProfile(
+        name="value_recovery",
+        description=(
+            "Bias toward recovery candidates where cheap valuation, improving safety, and acceptable quality matter more than already-strong short-term momentum. It now leans harder into rerating evidence and is more forgiving of still-imperfect short-term price action."
+        ),
+        horizon_weights={
+            "days": {
+                "attention": 0.05,
+                "event": 0.05,
+                "momentum": 0.04,
+                "trend": 0.12,
+                "quality": 0.22,
+                "valuation": 0.28,
+                "safety": 0.24,
+            },
+            "weeks": {
+                "attention": 0.06,
+                "event": 0.05,
+                "momentum": 0.08,
+                "trend": 0.16,
+                "quality": 0.20,
+                "valuation": 0.24,
+                "safety": 0.21,
+            },
+            "months": {
+                "attention": 0.03,
+                "event": 0.03,
+                "momentum": 0.06,
+                "trend": 0.16,
+                "quality": 0.25,
+                "valuation": 0.27,
+                "safety": 0.20,
+            },
+            "years": {
+                "attention": 0.00,
+                "event": 0.01,
+                "momentum": 0.01,
+                "trend": 0.08,
+                "quality": 0.28,
+                "valuation": 0.35,
+                "safety": 0.27,
+            },
+        },
+        component_signal_weights={
+            "momentum": {
+                "change": 0.40,
+                "Perf.5D": 0.30,
+                "Perf.W": 0.35,
+                "Perf.1M": 0.55,
+                "Perf.3M": 1.10,
+                "Perf.YTD": 1.05,
+                "Perf.Y": 0.90,
+                "ROC": 0.55,
+                "Mom": 0.60,
+                "macd_spread": 0.50,
+                "Recommend.All": 0.70,
+                "Recommend.MA": 0.60,
+                "Recommend.Other": 0.70,
+                "rsi_centered": 0.25,
+                "rsi7_centered": 0.15,
+            },
+            "valuation": {
+                "price_earnings_ttm": 1.10,
+                "price_earnings_growth_ttm": 1.20,
+                "price_book_fq": 1.20,
+                "price_sales_current": 1.10,
+                "price_free_cash_flow_ttm": 1.05,
+                "enterprise_value_to_revenue_ttm": 1.10,
+                "enterprise_value_ebitda_ttm": 1.15,
+            },
+            "quality": {
+                "free_cash_flow_yoy_growth_ttm": 1.20,
+                "free_cash_flow_qoq_growth_fq": 1.05,
+                "net_income_yoy_growth_ttm": 1.10,
+                "net_income_qoq_growth_fq": 1.05,
+                "ebitda_yoy_growth_ttm": 1.05,
+                "operating_margin": 1.10,
+                "after_tax_margin": 1.05,
+            },
+            "safety": {
+                "short_term_cash_coverage": 1.10,
+                "altman_z_score_ttm": 1.20,
+                "debt_to_equity": 1.15,
+                "debt_to_revenue_ttm": 1.10,
+                "net_debt": 1.15,
+            },
+            "trend": {
+                "close_vs_sma50": 0.90,
+                "close_vs_sma200": 1.15,
+                "close_vs_ema50": 0.90,
+                "close_vs_ema200": 1.15,
+                "close_vs_vwap": 0.60,
+                "close_vs_vwma": 0.75,
+                "trend_alignment": 1.10,
+            },
+        },
+        component_directional_bias={
+            "momentum": DirectionalBias(
+                positive_multiplier=0.90, negative_multiplier=0.65
+            ),
+            "trend": DirectionalBias(
+                positive_multiplier=1.05, negative_multiplier=0.90
+            ),
+            "valuation": DirectionalBias(
+                positive_multiplier=1.25, negative_multiplier=1.10
+            ),
+            "quality": DirectionalBias(
+                positive_multiplier=1.12, negative_multiplier=0.95
+            ),
+            "safety": DirectionalBias(
+                positive_multiplier=1.12, negative_multiplier=1.05
+            ),
+        },
+        missing_component_scores_by_horizon={
+            "days": {
+                "valuation": -0.75,
+                "quality": -0.45,
+                "safety": -0.55,
+            },
+            "weeks": {
+                "valuation": -0.85,
+                "quality": -0.55,
+                "safety": -0.65,
+            },
+            "months": {
+                "valuation": -0.95,
+                "quality": -0.65,
+                "safety": -0.75,
+            },
+            "years": {
+                "valuation": -1.05,
+                "quality": -0.75,
+                "safety": -0.85,
+            },
         },
     ),
     "fragility_short": ScoringProfile(
         name="fragility_short",
         description=(
-            "Bias toward short candidates where balance-sheet weakness, deteriorating trend, negative event pressure, and downside momentum should be penalized more aggressively."
+            "Bias toward short candidates where balance-sheet weakness, deteriorating trend, negative event pressure, and downside momentum should be penalized more aggressively. Missing fragility evidence is treated more cautiously so the profile does not just echo the balanced tape leaders."
         ),
         horizon_weights={
             "days": {
-                "attention": 0.20,
-                "event": 0.24,
-                "momentum": 0.24,
+                "attention": 0.18,
+                "event": 0.28,
+                "momentum": 0.28,
                 "trend": 0.18,
-                "quality": 0.04,
-                "valuation": 0.02,
-                "safety": 0.08,
+                "quality": 0.02,
+                "valuation": 0.01,
+                "safety": 0.05,
             },
             "weeks": {
-                "attention": 0.14,
-                "event": 0.15,
-                "momentum": 0.24,
-                "trend": 0.22,
-                "quality": 0.07,
-                "valuation": 0.03,
-                "safety": 0.15,
+                "attention": 0.10,
+                "event": 0.18,
+                "momentum": 0.28,
+                "trend": 0.24,
+                "quality": 0.05,
+                "valuation": 0.01,
+                "safety": 0.14,
             },
             "months": {
-                "attention": 0.07,
+                "attention": 0.04,
                 "event": 0.08,
-                "momentum": 0.19,
-                "trend": 0.22,
-                "quality": 0.16,
-                "valuation": 0.08,
-                "safety": 0.20,
+                "momentum": 0.22,
+                "trend": 0.24,
+                "quality": 0.12,
+                "valuation": 0.04,
+                "safety": 0.26,
             },
             "years": {
-                "attention": 0.01,
-                "event": 0.04,
+                "attention": 0.00,
+                "event": 0.03,
                 "momentum": 0.08,
-                "trend": 0.14,
-                "quality": 0.20,
-                "valuation": 0.08,
-                "safety": 0.45,
+                "trend": 0.15,
+                "quality": 0.16,
+                "valuation": 0.05,
+                "safety": 0.53,
             },
         },
         component_signal_weights={
             "event": {
-                "premarket_change": 1.10,
-                "postmarket_change": 1.10,
+                "premarket_change": 1.15,
+                "postmarket_change": 1.15,
                 "gap": 1.15,
-                "gap_severity": 1.20,
+                "gap_severity": 1.25,
+                "event_intensity": 1.10,
             },
             "momentum": {
-                "change": 1.10,
-                "Perf.5D": 1.15,
-                "Perf.W": 1.15,
+                "change": 1.15,
+                "Perf.5D": 1.20,
+                "Perf.W": 1.20,
                 "Perf.1M": 1.10,
+                "Perf.3M": 1.05,
                 "ROC": 1.10,
             },
+            "trend": {
+                "close_vs_sma50": 1.10,
+                "close_vs_sma200": 1.15,
+                "close_vs_ema50": 1.10,
+                "close_vs_ema200": 1.15,
+                "close_vs_vwap": 1.10,
+                "close_vs_vwma": 1.10,
+                "trend_alignment": 1.20,
+            },
             "safety": {
-                "debt_to_equity": 1.20,
-                "debt_to_revenue_ttm": 1.15,
-                "net_debt": 1.10,
-                "altman_z_score_ttm": 1.20,
+                "current_ratio": 1.05,
+                "short_term_cash_coverage": 1.10,
+                "debt_to_equity": 1.25,
+                "debt_to_revenue_ttm": 1.20,
+                "net_debt": 1.15,
+                "altman_z_score_ttm": 1.25,
+                "beta_1_year": 1.05,
             },
         },
         component_directional_bias={
             "event": DirectionalBias(
-                positive_multiplier=0.95, negative_multiplier=1.15
+                positive_multiplier=0.90, negative_multiplier=1.20
             ),
             "momentum": DirectionalBias(
-                positive_multiplier=0.90, negative_multiplier=1.15
+                positive_multiplier=0.85, negative_multiplier=1.20
             ),
             "trend": DirectionalBias(
-                positive_multiplier=0.95, negative_multiplier=1.20
+                positive_multiplier=0.90, negative_multiplier=1.25
             ),
             "quality": DirectionalBias(
-                positive_multiplier=0.95, negative_multiplier=1.10
+                positive_multiplier=0.90, negative_multiplier=1.15
             ),
             "safety": DirectionalBias(
-                positive_multiplier=0.90, negative_multiplier=1.30
+                positive_multiplier=0.85, negative_multiplier=1.35
             ),
         },
-        confidence_multiplier=1.05,
+        missing_component_scores_by_horizon={
+            "days": {
+                "event": -0.40,
+                "momentum": -0.45,
+                "trend": -0.35,
+            },
+            "weeks": {
+                "momentum": -0.50,
+                "trend": -0.40,
+                "safety": -0.45,
+            },
+            "months": {
+                "trend": -0.45,
+                "safety": -0.60,
+            },
+            "years": {
+                "safety": -0.80,
+                "quality": -0.35,
+            },
+        },
+        confidence_multiplier=1.07,
     ),
     "backtest_period_ladder": ScoringProfile(
         name="backtest_period_ladder",
@@ -632,40 +937,315 @@ PRESET_SCORING_PROFILES = {
         ],
         confidence_multiplier=1.03,
     ),
+    "asymmetric_value": ScoringProfile(
+        name="asymmetric_value",
+        description=(
+            "Surface names with deep value discounts where the fundamental floor "
+            "remains intact, creating asymmetric upside potential. The profile "
+            "combines traditional multiple-based valuation with forward-looking "
+            "signals — earnings yield, FCF margin, shareholder returns — and "
+            "price-position metrics that measure how far a stock sits below its "
+            "52-week ceiling. Safety carries meaningful weight across all horizons "
+            "so the leaderboard avoids value traps."
+        ),
+        horizon_weights={
+            "days": {
+                "attention": 0.02,
+                "event": 0.02,
+                "momentum": 0.06,
+                "trend": 0.15,
+                "quality": 0.20,
+                "valuation": 0.35,
+                "safety": 0.20,
+            },
+            "weeks": {
+                "attention": 0.03,
+                "event": 0.03,
+                "momentum": 0.08,
+                "trend": 0.14,
+                "quality": 0.22,
+                "valuation": 0.30,
+                "safety": 0.20,
+            },
+            "months": {
+                "attention": 0.02,
+                "event": 0.02,
+                "momentum": 0.06,
+                "trend": 0.12,
+                "quality": 0.26,
+                "valuation": 0.32,
+                "safety": 0.20,
+            },
+            "years": {
+                "attention": 0.00,
+                "event": 0.01,
+                "momentum": 0.02,
+                "trend": 0.07,
+                "quality": 0.28,
+                "valuation": 0.38,
+                "safety": 0.24,
+            },
+        },
+        component_signal_weights={
+            "momentum": {
+                "change": 0.25,
+                "Perf.5D": 0.30,
+                "Perf.W": 0.35,
+                "Perf.1M": 0.55,
+                "Perf.3M": 1.15,
+                "Perf.6M": 1.10,
+                "Perf.YTD": 1.05,
+                "Perf.Y": 0.80,
+                "ROC": 0.50,
+                "Mom": 0.55,
+                "macd_spread": 0.45,
+                "Recommend.All": 0.65,
+                "Recommend.MA": 0.55,
+                "Recommend.Other": 0.60,
+                "rsi_centered": 0.20,
+                "rsi7_centered": 0.10,
+            },
+            "trend": {
+                "close_vs_sma50": 0.80,
+                "close_vs_sma200": 1.30,
+                "close_vs_ema50": 0.80,
+                "close_vs_ema200": 1.30,
+                "close_vs_vwap": 0.50,
+                "close_vs_vwma": 0.60,
+                "trend_alignment": 1.15,
+            },
+            "quality": {
+                "total_revenue_yoy_growth_ttm": 1.05,
+                "total_revenue_qoq_growth_fq": 0.90,
+                "ebitda_yoy_growth_ttm": 1.10,
+                "ebitda_qoq_growth_fq": 0.95,
+                "net_income_yoy_growth_ttm": 1.05,
+                "net_income_qoq_growth_fq": 0.90,
+                "free_cash_flow_yoy_growth_ttm": 1.25,
+                "free_cash_flow_qoq_growth_fq": 1.05,
+                "gross_margin": 1.05,
+                "operating_margin": 1.15,
+                "after_tax_margin": 1.05,
+                "return_on_assets": 1.00,
+                "return_on_equity": 1.05,
+                "return_on_invested_capital": 1.30,
+                "free_cash_flow_margin_ttm": 1.30,
+                "buyback_yield": 1.10,
+                "dividends_yield_current": 0.90,
+            },
+            "valuation": {
+                "price_earnings_ttm": 1.10,
+                "price_earnings_growth_ttm": 1.15,
+                "price_sales_current": 1.00,
+                "price_book_fq": 1.10,
+                "price_free_cash_flow_ttm": 1.20,
+                "price_to_cash_f_operating_activities_ttm": 1.05,
+                "enterprise_value_to_revenue_ttm": 1.00,
+                "enterprise_value_to_ebit_ttm": 0.95,
+                "enterprise_value_ebitda_ttm": 1.10,
+                "earnings_yield": 1.30,
+                "distance_from_52w_high": 1.40,
+                "range_position_52w": 1.25,
+            },
+            "safety": {
+                "current_ratio": 1.05,
+                "quick_ratio": 1.05,
+                "cash_ratio": 1.00,
+                "short_term_cash_coverage": 1.15,
+                "altman_z_score_ttm": 1.25,
+                "debt_to_equity": 1.20,
+                "debt_to_revenue_ttm": 1.15,
+                "net_debt": 1.15,
+                "beta_1_year": 0.80,
+            },
+        },
+        component_directional_bias={
+            "momentum": DirectionalBias(
+                positive_multiplier=0.85, negative_multiplier=0.60
+            ),
+            "trend": DirectionalBias(
+                positive_multiplier=1.00, negative_multiplier=0.85
+            ),
+            "quality": DirectionalBias(
+                positive_multiplier=1.15, negative_multiplier=1.20
+            ),
+            "valuation": DirectionalBias(
+                positive_multiplier=1.30, negative_multiplier=1.00
+            ),
+            "safety": DirectionalBias(
+                positive_multiplier=1.10, negative_multiplier=1.30
+            ),
+        },
+        missing_component_scores_by_horizon={
+            "days": {
+                "valuation": -0.80,
+                "quality": -0.55,
+                "safety": -0.60,
+            },
+            "weeks": {
+                "valuation": -0.90,
+                "quality": -0.65,
+                "safety": -0.70,
+            },
+            "months": {
+                "valuation": -1.00,
+                "quality": -0.75,
+                "safety": -0.80,
+            },
+            "years": {
+                "valuation": -1.10,
+                "quality": -0.85,
+                "safety": -0.90,
+            },
+        },
+        intro_metric_notes=[
+            "This profile activates extended valuation signals: earnings_yield (higher = cheaper), distance_from_52w_high (inverted; further below peak = deeper discount), and range_position_52w (inverted; lower in 52-week range = more upside room).",
+            "Quality is also extended with free_cash_flow_margin_ttm, buyback_yield, and dividends_yield_current to capture forward-looking capital return and cash generation quality.",
+            "Momentum is intentionally damped so cheap-but-unloved names are not penalized for weak recent price action. Safety is elevated across all horizons to screen out value traps.",
+        ],
+        confidence_multiplier=1.02,
+    ),
+    "early_momentum_inflection": ScoringProfile(
+        name="early_momentum_inflection",
+        description=(
+            "Catch names at the very beginning of a directional move before the "
+            "crowd notices. The profile uses Aroon spread for new-trend detection, "
+            "ADX directional spread for emerging directional strength, Bollinger Band "
+            "squeeze for coiled-energy setups, and early volume signals. Established "
+            "long-duration momentum is de-emphasized so the leaderboard surfaces "
+            "inflection candidates rather than names already well into a run."
+        ),
+        horizon_weights={
+            "days": {
+                "attention": 0.22,
+                "event": 0.14,
+                "momentum": 0.32,
+                "trend": 0.22,
+                "quality": 0.03,
+                "valuation": 0.02,
+                "safety": 0.05,
+            },
+            "weeks": {
+                "attention": 0.16,
+                "event": 0.08,
+                "momentum": 0.30,
+                "trend": 0.28,
+                "quality": 0.06,
+                "valuation": 0.03,
+                "safety": 0.09,
+            },
+            "months": {
+                "attention": 0.08,
+                "event": 0.04,
+                "momentum": 0.24,
+                "trend": 0.26,
+                "quality": 0.14,
+                "valuation": 0.08,
+                "safety": 0.16,
+            },
+            "years": {
+                "attention": 0.02,
+                "event": 0.02,
+                "momentum": 0.10,
+                "trend": 0.18,
+                "quality": 0.24,
+                "valuation": 0.18,
+                "safety": 0.26,
+            },
+        },
+        component_signal_weights={
+            "attention": {
+                "relative_volume_10d_calc": 1.30,
+                "float_turnover": 1.25,
+                "dollar_turnover_intensity": 1.15,
+                "Value.Traded": 1.10,
+                "AvgValue.Traded_10d": 1.00,
+                "bb_squeeze": 1.30,
+            },
+            "event": {
+                "premarket_change": 1.10,
+                "postmarket_change": 1.10,
+                "gap": 1.10,
+                "gap_severity": 1.20,
+                "event_intensity": 1.15,
+            },
+            "momentum": {
+                "change": 1.00,
+                "Perf.5D": 1.30,
+                "Perf.W": 1.15,
+                "Perf.1M": 0.85,
+                "Perf.3M": 0.60,
+                "Perf.6M": 0.40,
+                "Perf.YTD": 0.40,
+                "Perf.Y": 0.25,
+                "ROC": 1.20,
+                "Mom": 1.15,
+                "macd_spread": 1.25,
+                "Recommend.All": 0.85,
+                "Recommend.MA": 1.00,
+                "Recommend.Other": 0.90,
+                "rsi_centered": 0.80,
+                "rsi7_centered": 1.05,
+                "aroon_spread": 1.45,
+                "adx_directional_spread": 1.35,
+            },
+            "trend": {
+                "close_vs_sma50": 1.10,
+                "close_vs_sma200": 0.85,
+                "close_vs_ema50": 1.10,
+                "close_vs_ema200": 0.85,
+                "close_vs_vwap": 1.25,
+                "close_vs_vwma": 1.20,
+                "trend_alignment": 1.10,
+                "bb_position": 1.20,
+            },
+        },
+        component_directional_bias={
+            "attention": DirectionalBias(
+                positive_multiplier=1.20, negative_multiplier=0.80
+            ),
+            "event": DirectionalBias(
+                positive_multiplier=1.10, negative_multiplier=0.90
+            ),
+            "momentum": DirectionalBias(
+                positive_multiplier=1.30, negative_multiplier=0.75
+            ),
+            "trend": DirectionalBias(
+                positive_multiplier=1.20, negative_multiplier=0.85
+            ),
+            "quality": DirectionalBias(
+                positive_multiplier=1.00, negative_multiplier=0.85
+            ),
+            "safety": DirectionalBias(
+                positive_multiplier=1.00, negative_multiplier=0.85
+            ),
+        },
+        missing_component_scores_by_horizon={
+            "days": {
+                "attention": -0.55,
+                "momentum": -0.60,
+                "trend": -0.40,
+            },
+            "weeks": {
+                "momentum": -0.45,
+                "trend": -0.35,
+            },
+            "months": {
+                "momentum": -0.30,
+            },
+        },
+        intro_metric_notes=[
+            "This profile activates extended momentum signals: aroon_spread (Aroon.Up minus Aroon.Down; positive = new uptrend forming) and adx_directional_spread (ADX+DI minus ADX-DI; positive = bullish directional strength emerging).",
+            "Trend is extended with bb_position (position within Bollinger Bands; higher = closer to upper band). Attention is extended with bb_squeeze (inverted band width; tighter bands = more coiled energy = higher attention score).",
+            "Longer-duration momentum signals (Perf.Y, Perf.YTD, Perf.6M) are heavily damped so names already well into a run do not dominate. Short-term inflection signals (Perf.5D, ROC, MACD spread, Aroon, ADX) carry the weight.",
+        ],
+        confidence_multiplier=1.05,
+    ),
 }
-
-
-def _coerce_numeric(value: Any) -> float | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    return None
-
-
-def _slugify(value: str) -> str:
-    slug = "".join(char.lower() if char.isalnum() else "_" for char in str(value))
-    return "_".join(part for part in slug.split("_") if part)
-
-
-def _safe_ratio(numerator: float | None, denominator: float | None) -> float | None:
-    if numerator is None or denominator in (None, 0):
-        return None
-    return numerator / denominator
 
 
 def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
-
-
-def _median_absolute_deviation(values: list[float], center: float) -> float:
-    return median([abs(value - center) for value in values])
-
-
-def _format_market_cap(value: float | None) -> str:
-    if value is None:
-        return "N/A"
-    return f"{value / 1e9:.2f}B"
 
 
 def _format_score(value: float | None) -> str:
@@ -743,12 +1323,6 @@ def resolve_move_prediction_scoring_profile(
     return profile
 
 
-def _sort_key_desc(value: float | None) -> float:
-    if value is None:
-        return float("-inf")
-    return value
-
-
 def _get_symbol_name(row: dict[str, Any]) -> str:
     ticker_view = row.get("ticker-view")
     if isinstance(ticker_view, dict):
@@ -777,11 +1351,6 @@ def _get_company_description(row: dict[str, Any]) -> str:
     return str(row.get("name") or "")
 
 
-def _build_report_title(report_name: str) -> str:
-    timestamp = datetime.now().strftime(REPORT_TIMESTAMP_FORMAT)
-    return f"{report_name} | generated {timestamp}"
-
-
 def _resolve_horizon_weights(
     scoring_profile: ScoringProfile,
 ) -> dict[str, dict[str, float]]:
@@ -801,7 +1370,9 @@ def _build_report_file_name(
     min_market_cap_usd: float | None,
     max_market_cap_usd: float | None,
     scoring_profile_name: str | None = None,
+    output_dir: Path | None = None,
 ) -> Path:
+    base_output_dir = output_dir or LOG_DIR
     industries = _normalize_industries(industries)
     industry_segment = "all_industries"
     if industries:
@@ -821,7 +1392,7 @@ def _build_report_file_name(
     if scoring_profile_name and scoring_profile_name != "balanced":
         profile_segment = f"__profile_{_slugify(scoring_profile_name)}"
     return (
-        LOG_DIR
+        base_output_dir
         / f"{report_slug}__{industry_segment}__{min_segment}__{max_segment}{profile_segment}.log"
     )
 
@@ -831,6 +1402,7 @@ def _build_log_file_name(
     min_market_cap_usd: float | None,
     max_market_cap_usd: float | None,
     scoring_profile_name: str | None = None,
+    output_dir: Path | None = None,
 ) -> Path:
     return _build_report_file_name(
         report_slug="tradingview_move_prediction",
@@ -838,6 +1410,7 @@ def _build_log_file_name(
         min_market_cap_usd=min_market_cap_usd,
         max_market_cap_usd=max_market_cap_usd,
         scoring_profile_name=scoring_profile_name,
+        output_dir=output_dir,
     )
 
 
@@ -846,13 +1419,32 @@ def _build_csv_file_name(
     min_market_cap_usd: float | None,
     max_market_cap_usd: float | None,
     scoring_profile_name: str | None = None,
+    output_dir: Path | None = None,
 ) -> Path:
     return _build_log_file_name(
         industries=industries,
         min_market_cap_usd=min_market_cap_usd,
         max_market_cap_usd=max_market_cap_usd,
         scoring_profile_name=scoring_profile_name,
+        output_dir=output_dir,
     ).with_suffix(".csv")
+
+
+def _build_raw_csv_file_name(
+    industries: list[str] | str | None,
+    min_market_cap_usd: float | None,
+    max_market_cap_usd: float | None,
+    scoring_profile_name: str | None = None,
+    output_dir: Path | None = None,
+) -> Path:
+    csv_file = _build_csv_file_name(
+        industries=industries,
+        min_market_cap_usd=min_market_cap_usd,
+        max_market_cap_usd=max_market_cap_usd,
+        scoring_profile_name=scoring_profile_name,
+        output_dir=output_dir,
+    )
+    return csv_file.with_name(f"{csv_file.stem}__raw_data.csv")
 
 
 def _build_tracking_log_file_name(
@@ -860,6 +1452,7 @@ def _build_tracking_log_file_name(
     min_market_cap_usd: float | None,
     max_market_cap_usd: float | None,
     scoring_profile_name: str | None = None,
+    output_dir: Path | None = None,
 ) -> Path:
     return _build_report_file_name(
         report_slug="tradingview_move_prediction_tracking",
@@ -867,12 +1460,54 @@ def _build_tracking_log_file_name(
         min_market_cap_usd=min_market_cap_usd,
         max_market_cap_usd=max_market_cap_usd,
         scoring_profile_name=scoring_profile_name,
+        output_dir=output_dir,
     )
 
 
-def _reset_log_file(log_file: Path) -> None:
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-    log_file.write_text("", encoding="utf-8")
+def _serialize_csv_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return str(value)
+
+
+def _build_raw_csv_headers(scan_data: list[dict[str, Any]]) -> list[str]:
+    if not scan_data:
+        return ["symbol", "Company"]
+
+    first_row = scan_data[0]
+    headers = ["symbol", "Company"]
+    headers.extend(key for key in first_row.keys() if key != "symbol")
+    return headers
+
+
+def _build_raw_csv_rows(scan_data: list[dict[str, Any]]) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for row in scan_data:
+        csv_row = [_serialize_csv_value(row.get("symbol")), _get_company_name(row)]
+        csv_row.extend(
+            _serialize_csv_value(value) for key, value in row.items() if key != "symbol"
+        )
+        rows.append(csv_row)
+    return rows
+
+
+def _sanitize_industry_folder_name(industry: str) -> str:
+    safe_name = str(industry).strip()
+    for old_value, new_value in {
+        "/": " - ",
+        "\\": " - ",
+        ":": " - ",
+        "*": "_",
+        "?": "_",
+        '"': "_",
+        "<": "_",
+        ">": "_",
+        "|": "_",
+    }.items():
+        safe_name = safe_name.replace(old_value, new_value)
+    return safe_name.rstrip(". ") or _slugify(industry)
 
 
 def _parse_event_days(value: Any) -> int | None:
@@ -926,6 +1561,14 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
     macd_signal = _coerce_numeric(row.get("MACD.signal"))
     rsi_value = _coerce_numeric(row.get("RSI"))
     rsi7_value = _coerce_numeric(row.get("RSI7"))
+    price_52w_high = _coerce_numeric(row.get("price_52_week_high"))
+    price_52w_low = _coerce_numeric(row.get("price_52_week_low"))
+    aroon_up = _coerce_numeric(row.get("Aroon.Up"))
+    aroon_down = _coerce_numeric(row.get("Aroon.Down"))
+    adx_plus = _coerce_numeric(row.get("ADX+DI"))
+    adx_minus = _coerce_numeric(row.get("ADX-DI"))
+    bb_upper = _coerce_numeric(row.get("BB.upper"))
+    bb_lower = _coerce_numeric(row.get("BB.lower"))
 
     short_term_cash_coverage = _safe_ratio(
         cash_n_short_term_invest_fy,
@@ -950,6 +1593,45 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
         sum(valid_comparisons) / len(valid_comparisons) if valid_comparisons else None
     )
 
+    distance_from_52w_high: float | None = None
+    if close is not None and price_52w_high is not None and price_52w_high != 0:
+        distance_from_52w_high = (close - price_52w_high) / abs(price_52w_high)
+
+    range_position_52w: float | None = None
+    if (
+        close is not None
+        and price_52w_high is not None
+        and price_52w_low is not None
+        and price_52w_high != price_52w_low
+    ):
+        range_position_52w = (close - price_52w_low) / (price_52w_high - price_52w_low)
+
+    aroon_spread: float | None = None
+    if aroon_up is not None and aroon_down is not None:
+        aroon_spread = aroon_up - aroon_down
+
+    adx_directional_spread: float | None = None
+    if adx_plus is not None and adx_minus is not None:
+        adx_directional_spread = adx_plus - adx_minus
+
+    bb_position: float | None = None
+    if (
+        close is not None
+        and bb_upper is not None
+        and bb_lower is not None
+        and bb_upper != bb_lower
+    ):
+        bb_position = (close - bb_lower) / (bb_upper - bb_lower)
+
+    bb_squeeze: float | None = None
+    if (
+        bb_upper is not None
+        and bb_lower is not None
+        and close is not None
+        and close != 0
+    ):
+        bb_squeeze = (bb_upper - bb_lower) / close
+
     return {
         "float_turnover": _safe_ratio(volume, float_shares),
         "dollar_turnover_intensity": _safe_ratio(avg_value_traded_10d, market_cap),
@@ -970,6 +1652,12 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
         "close_vs_vwap": comparisons[4],
         "close_vs_vwma": comparisons[5],
         "trend_alignment": trend_alignment,
+        "distance_from_52w_high": distance_from_52w_high,
+        "range_position_52w": range_position_52w,
+        "aroon_spread": aroon_spread,
+        "adx_directional_spread": adx_directional_spread,
+        "bb_position": bb_position,
+        "bb_squeeze": bb_squeeze,
     }
 
 
@@ -1084,11 +1772,14 @@ def _resolve_signal_weight(
     component_name: str,
     signal_name: str,
 ) -> float:
-    return float(
-        scoring_profile.component_signal_weights.get(component_name, {}).get(
-            signal_name, 1.0
-        )
+    override = scoring_profile.component_signal_weights.get(component_name, {}).get(
+        signal_name
     )
+    if override is not None:
+        return float(override)
+    if signal_name in EXTENDED_SIGNALS:
+        return 0.0
+    return 1.0
 
 
 def _apply_directional_bias(
@@ -1106,6 +1797,19 @@ def _apply_directional_bias(
     if value < 0:
         return _clamp(value * bias.negative_multiplier, -3.0, 3.0)
     return 0.0
+
+
+def _resolve_missing_component_score(
+    scoring_profile: ScoringProfile,
+    horizon_name: str,
+    component_name: str,
+) -> float | None:
+    value = scoring_profile.missing_component_scores_by_horizon.get(
+        horizon_name, {}
+    ).get(component_name)
+    if value is None:
+        return None
+    return _clamp(float(value), -3.0, 3.0)
 
 
 def _weighted_average_signals(
@@ -1148,6 +1852,9 @@ def _build_component_signal_map(
             ),
             "Value.Traded": _field_signal(row, profiles, "Value.Traded"),
             "AvgValue.Traded_10d": _field_signal(row, profiles, "AvgValue.Traded_10d"),
+            "bb_squeeze": _derived_signal(
+                derived_row, profiles, "bb_squeeze", invert=True
+            ),
         },
         "event": {
             "premarket_change": _field_signal(row, profiles, "premarket_change"),
@@ -1174,6 +1881,11 @@ def _build_component_signal_map(
             "Recommend.Other": _field_signal(row, profiles, "Recommend.Other"),
             "rsi_centered": _derived_signal(derived_row, profiles, "rsi_centered"),
             "rsi7_centered": _derived_signal(derived_row, profiles, "rsi7_centered"),
+            "Perf.6M": _field_signal(row, profiles, "Perf.6M"),
+            "aroon_spread": _derived_signal(derived_row, profiles, "aroon_spread"),
+            "adx_directional_spread": _derived_signal(
+                derived_row, profiles, "adx_directional_spread"
+            ),
         },
         "trend": {
             "close_vs_sma50": derived_row.get("close_vs_sma50"),
@@ -1183,6 +1895,7 @@ def _build_component_signal_map(
             "close_vs_vwap": derived_row.get("close_vs_vwap"),
             "close_vs_vwma": derived_row.get("close_vs_vwma"),
             "trend_alignment": derived_row.get("trend_alignment"),
+            "bb_position": _derived_signal(derived_row, profiles, "bb_position"),
         },
         "quality": {
             "total_revenue_yoy_growth_ttm": _field_signal(
@@ -1216,6 +1929,13 @@ def _build_component_signal_map(
             "return_on_equity": _field_signal(row, profiles, "return_on_equity"),
             "return_on_invested_capital": _field_signal(
                 row, profiles, "return_on_invested_capital"
+            ),
+            "free_cash_flow_margin_ttm": _field_signal(
+                row, profiles, "free_cash_flow_margin_ttm"
+            ),
+            "buyback_yield": _field_signal(row, profiles, "buyback_yield"),
+            "dividends_yield_current": _field_signal(
+                row, profiles, "dividends_yield_current"
             ),
         },
         "valuation": {
@@ -1269,6 +1989,13 @@ def _build_component_signal_map(
                 "enterprise_value_ebitda_ttm",
                 invert=True,
                 positive_only=True,
+            ),
+            "earnings_yield": _field_signal(row, profiles, "earnings_yield"),
+            "distance_from_52w_high": _derived_signal(
+                derived_row, profiles, "distance_from_52w_high", invert=True
+            ),
+            "range_position_52w": _derived_signal(
+                derived_row, profiles, "range_position_52w", invert=True
             ),
         },
         "safety": {
@@ -1418,7 +2145,13 @@ def _build_horizon_prediction(
     for component_name, component_weight in horizon_weights[horizon_name].items():
         component_value = component_scores.get(component_name)
         if component_value is None:
-            continue
+            component_value = _resolve_missing_component_score(
+                scoring_profile,
+                horizon_name,
+                component_name,
+            )
+            if component_value is None:
+                continue
         weighted_score += component_value * component_weight
         used_weight += component_weight
 
@@ -1519,6 +2252,7 @@ def _resolve_performance_tracking_periods(
 
 def _build_csv_headers(horizon_names: list[str]) -> list[str]:
     headers = list(ENTRY_METADATA_FIELDS)
+    headers.insert(1, "Company")
     headers.extend(
         [
             "scoring_profile",
@@ -1569,6 +2303,7 @@ def _build_csv_rows(
         horizons = prediction["horizons"]
 
         csv_row = [str(row.get(field_name, "")) for field_name in ENTRY_METADATA_FIELDS]
+        csv_row.insert(1, _get_company_name(row))
         csv_row.extend(
             [
                 str(prediction.get("scoring_profile", "")),
@@ -1648,6 +2383,10 @@ def _log_methodology(log_file: Path, scoring_profile: ScoringProfile) -> None:
     )
     log_to_file(
         log_file,
+        "Profiles can also assign fallback component scores when important evidence is missing. That makes quality, valuation, safety, or tactical-confirmation gaps show up explicitly instead of disappearing through partial-weight renormalization.",
+    )
+    log_to_file(
+        log_file,
         "Safety also includes a short-term cash coverage input that uses cash_n_short_term_invest_fy divided by short_term_debt_fy, and falls back to cash_n_short_term_invest_fq divided by short_term_debt_fq when the yearly pair is not available.",
     )
     log_to_file(
@@ -1703,6 +2442,22 @@ def _log_scoring_profile_details(
                     f"  {component_name}: positive x{bias.positive_multiplier:.2f}, "
                     f"negative x{bias.negative_multiplier:.2f}"
                 ),
+            )
+
+    if scoring_profile.missing_component_scores_by_horizon:
+        log_to_file(log_file, "")
+        log_to_file(log_file, "Missing-component fallback scores")
+        for (
+            horizon_name,
+            missing_scores,
+        ) in scoring_profile.missing_component_scores_by_horizon.items():
+            missing_summary = ", ".join(
+                f"{component_name}={component_score:.2f}"
+                for component_name, component_score in missing_scores.items()
+            )
+            log_to_file(
+                log_file,
+                f"  {HORIZON_TITLES.get(horizon_name, horizon_name)}: {missing_summary}",
             )
     log_to_file(log_file, "")
 
@@ -2220,21 +2975,32 @@ def analyze_move_prediction_scan(
     max_market_cap_usd: float | None = None,
     scoring_profile: str | ScoringProfile | None = None,
     include_blind_spot_sections: bool = True,
+    output_dir: str | Path | None = None,
 ) -> Path:
     industries = _normalize_industries(industries)
     resolved_profile = resolve_move_prediction_scoring_profile(scoring_profile)
     horizon_names = list(_resolve_horizon_weights(resolved_profile).keys())
+    resolved_output_dir = Path(output_dir) if output_dir is not None else None
     log_file = _build_log_file_name(
         industries,
         min_market_cap_usd,
         max_market_cap_usd,
         scoring_profile_name=resolved_profile.name,
+        output_dir=resolved_output_dir,
     )
     csv_file = _build_csv_file_name(
         industries,
         min_market_cap_usd,
         max_market_cap_usd,
         scoring_profile_name=resolved_profile.name,
+        output_dir=resolved_output_dir,
+    )
+    raw_csv_file = _build_raw_csv_file_name(
+        industries,
+        min_market_cap_usd,
+        max_market_cap_usd,
+        scoring_profile_name=resolved_profile.name,
+        output_dir=resolved_output_dir,
     )
     _reset_log_file(log_file)
 
@@ -2254,6 +3020,12 @@ def analyze_move_prediction_scan(
     if not scan_data:
         log_to_file(log_file, "No rows returned for this scan.")
         return log_file
+
+    log_rows_to_csv(
+        raw_csv_file,
+        _build_raw_csv_headers(scan_data),
+        _build_raw_csv_rows(scan_data),
+    )
 
     derived_metrics = [_build_derived_metrics(row) for row in scan_data]
     profiles = _build_metric_profiles(scan_data, derived_metrics)
@@ -2283,6 +3055,7 @@ def analyze_move_prediction_scan(
         min_market_cap_usd,
         max_market_cap_usd,
         scoring_profile_name=resolved_profile.name,
+        output_dir=resolved_output_dir,
     )
     _log_performance_tracking_analysis(
         log_file=tracking_log_file,
@@ -2303,6 +3076,7 @@ def run_move_prediction_scan(
     max_market_cap_usd: float | None = None,
     scoring_profile: str | ScoringProfile | None = None,
     include_blind_spot_sections: bool = True,
+    output_dir: str | Path | None = None,
 ) -> Path:
     return analyze_move_prediction_scan(
         scan_data=scan_data,
@@ -2311,6 +3085,7 @@ def run_move_prediction_scan(
         max_market_cap_usd=max_market_cap_usd,
         scoring_profile=scoring_profile,
         include_blind_spot_sections=include_blind_spot_sections,
+        output_dir=output_dir,
     )
 
 
@@ -2321,6 +3096,7 @@ def run_move_prediction_profile_suite(
     min_market_cap_usd: float | None = None,
     max_market_cap_usd: float | None = None,
     include_blind_spot_sections: bool = False,
+    output_dir: str | Path | None = None,
 ) -> dict[str, Path]:
     if profile_names is None:
         profile_names = [
@@ -2330,6 +3106,8 @@ def run_move_prediction_profile_suite(
             "quality_value_compounder",
             "value_recovery",
             "fragility_short",
+            "asymmetric_value",
+            "early_momentum_inflection",
         ]
 
     industries = _normalize_industries(industries)
@@ -2343,5 +3121,42 @@ def run_move_prediction_profile_suite(
             max_market_cap_usd=max_market_cap_usd,
             scoring_profile=profile_name,
             include_blind_spot_sections=include_blind_spot_sections,
+            output_dir=output_dir,
         )
+    return generated_logs
+
+
+def run_move_prediction_profile_suite_by_industry(
+    api_client: ApiTradingViewClient,
+    industries: list[str],
+    profile_names: list[str] | None = None,
+    markets: list[str] | None = None,
+    min_market_cap_usd: float | None = None,
+    max_market_cap_usd: float | None = None,
+    include_blind_spot_sections: bool = False,
+    timeout: int = 30,
+) -> dict[str, dict[str, Path]]:
+    normalized_industries = _normalize_industries(industries) or []
+    generated_logs: dict[str, dict[str, Path]] = {}
+
+    for industry in normalized_industries:
+        industry_output_dir = LOG_DIR / _sanitize_industry_folder_name(industry)
+        scan_data = api_client.scan_global_market_move_prediction(
+            industries=[industry],
+            markets=markets,
+            min_market_cap_usd=min_market_cap_usd,
+            max_market_cap_usd=max_market_cap_usd,
+            timeout=timeout,
+        ).get("data", [])
+
+        generated_logs[industry] = run_move_prediction_profile_suite(
+            scan_data=scan_data,
+            profile_names=profile_names,
+            industries=[industry],
+            min_market_cap_usd=min_market_cap_usd,
+            max_market_cap_usd=max_market_cap_usd,
+            include_blind_spot_sections=include_blind_spot_sections,
+            output_dir=industry_output_dir,
+        )
+
     return generated_logs

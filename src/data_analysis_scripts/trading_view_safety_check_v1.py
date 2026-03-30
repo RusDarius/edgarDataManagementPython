@@ -5,6 +5,17 @@ from statistics import fmean, median
 from typing import Any
 
 from data_loaders.api_tradingview_client import ApiTradingViewClient
+from data_analysis_scripts._shared_analysis_utils import (
+    coerce_numeric as _coerce_numeric,
+    format_market_cap as _format_market_cap,
+    format_number as _format_number,
+    format_signed_percent as _format_percent,
+    get_company_description as _get_company_description,
+    median_absolute_deviation as _median_absolute_deviation,
+    reset_log_file as _reset_log_file,
+    safe_ratio as _safe_div,
+    slugify as _slugify,
+)
 from generic_utils.log_to_files_util import log_to_file
 
 LOG_DIR = Path(
@@ -446,11 +457,6 @@ def _discover_numeric_fields(rows: list[dict[str, Any]]) -> list[str]:
     return sorted(fields)
 
 
-def _median_absolute_deviation(values: list[float], center: float) -> float:
-    absolute_deviations = [abs(value - center) for value in values]
-    return median(absolute_deviations)
-
-
 def _build_numeric_field_profiles(
     rows: list[dict[str, Any]],
 ) -> dict[str, dict[str, float | int | None]]:
@@ -481,19 +487,6 @@ def _build_numeric_field_profiles(
     return profiles
 
 
-def _coerce_numeric(value: Any) -> float | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    return None
-
-
-def _slugify(value: str) -> str:
-    slug = "".join(char.lower() if char.isalnum() else "_" for char in str(value))
-    return "_".join(part for part in slug.split("_") if part)
-
-
 def _build_log_file_name(
     industries: list[str] | None,
     min_market_cap_usd: float | None,
@@ -518,35 +511,6 @@ def _build_log_file_name(
         LOG_DIR
         / f"tradingview_safety_core__{industry_segment}__{min_segment}__{max_segment}.log"
     )
-
-
-def _reset_log_file(log_file: Path) -> None:
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-    log_file.write_text("", encoding="utf-8")
-
-
-def _format_number(value: float | None, decimals: int = 2) -> str:
-    if value is None:
-        return "N/A"
-    return f"{value:,.{decimals}f}"
-
-
-def _format_percent(value: float | None) -> str:
-    if value is None:
-        return "N/A"
-    return f"{value:+.2f}%"
-
-
-def _format_market_cap(value: float | None) -> str:
-    if value is None:
-        return "N/A"
-    return f"{value / 1e9:.2f}B"
-
-
-def _safe_div(numerator: float | None, denominator: float | None) -> float | None:
-    if numerator is None or denominator is None or denominator == 0:
-        return None
-    return numerator / denominator
 
 
 def _map_raw_scan_row(raw_row: dict[str, Any]) -> dict[str, Any]:
@@ -581,15 +545,6 @@ def _get_symbol_name(row: dict[str, Any]) -> str:
         if name:
             return str(name)
     return str(row.get("symbol") or "N/A")
-
-
-def _get_company_description(row: dict[str, Any]) -> str:
-    ticker_view = row.get("ticker-view")
-    if isinstance(ticker_view, dict):
-        description = ticker_view.get("description")
-        if description:
-            return str(description)
-    return ""
 
 
 def _get_industry(row: dict[str, Any]) -> str:

@@ -7,6 +7,9 @@ from data_analysis_scripts.trading_view_activity_float_attention import (
     run_activity_float_attention_scan,
     run_activity_float_attention_scan_grouped_industries,
 )
+from data_analysis_scripts.trading_view_export_all_tdfields import (
+    export_all_tradingview_fields,
+)
 from data_analysis_scripts.trading_view_priceperf_analysis import (
     analyze_global_price_performance,
 )
@@ -98,9 +101,11 @@ def main():
         scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
             min_market_cap_usd=1_000_000_000,
             markets=PREFERRED_MARKETS,
+            industries=[TRADING_VIEW_INDUSTRIES.CHEMICALS_SPECIALTY],
         ).get("data", []),
         min_market_cap_usd=1_000_000_000,
         include_blind_spot_sections=True,
+        industries=[TRADING_VIEW_INDUSTRIES.CHEMICALS_SPECIALTY],
     )
 
     # run_activity_float_attention_scan_grouped_industries(
@@ -109,6 +114,9 @@ def main():
     #     ).get("data", []),
     #     min_market_cap_usd=1_000_000_000,
     # )
+
+    # exported_file = export_all_tradingview_fields()
+    # print(f"TradingView all-fields export written to: {exported_file}")
 
     pass
 

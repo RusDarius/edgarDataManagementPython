@@ -1,9 +1,23 @@
 from collections import defaultdict
-from datetime import datetime
 from pathlib import Path
 from statistics import median
 from typing import Any
 
+from data_analysis_scripts._shared_analysis_utils import (
+    REPORT_TIMESTAMP_FORMAT,
+    build_report_title as _build_report_title,
+    coerce_numeric as _coerce_numeric,
+    format_market_cap as _format_market_cap,
+    format_number as _format_number,
+    format_raw_value as _format_raw_value,
+    format_signed_percent as _format_percent,
+    get_company_description as _get_company_description,
+    median_absolute_deviation as _median_absolute_deviation,
+    reset_log_file as _reset_log_file,
+    safe_ratio as _safe_ratio,
+    slugify as _slugify,
+    sort_key_desc as _sort_key_desc,
+)
 from generic_utils.log_to_files_util import log_to_file, log_rows_to_csv
 
 LOG_DIR = Path(
@@ -87,7 +101,6 @@ ENTRY_METADATA_FIELDS = [
 ]
 
 TOP_SECTION_ROWS = 12
-REPORT_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 SUM_AGGREGATED_FIELDS = {
     "market_cap_basic",
@@ -105,19 +118,6 @@ SUM_AGGREGATED_FIELDS = {
     "premarket_volume",
     "postmarket_volume",
 }
-
-
-def _coerce_numeric(value: Any) -> float | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    return None
-
-
-def _slugify(value: str) -> str:
-    slug = "".join(char.lower() if char.isalnum() else "_" for char in str(value))
-    return "_".join(part for part in slug.split("_") if part)
 
 
 def _build_report_file_name(
@@ -193,65 +193,6 @@ def _build_grouped_industries_csv_file_name(
         min_market_cap_usd=min_market_cap_usd,
         max_market_cap_usd=max_market_cap_usd,
     ).with_suffix(".csv")
-
-
-def _format_market_cap(value: float | None) -> str:
-    if value is None:
-        return "N/A"
-    return f"{value / 1e9:.2f}B"
-
-
-def _format_percent(value: float | None) -> str:
-    if value is None:
-        return "N/A"
-    return f"{value:+.2f}%"
-
-
-def _format_number(value: float | None) -> str:
-    if value is None:
-        return "N/A"
-    return f"{value:,.2f}"
-
-
-def _format_raw_value(value: Any) -> str:
-    if value is None:
-        return "N/A"
-    if isinstance(value, bool):
-        return str(value)
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, float):
-        formatted = f"{value:.6f}".rstrip("0").rstrip(".")
-        return formatted or "0"
-    return str(value)
-
-
-def _reset_log_file(log_file: Path) -> None:
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-    log_file.write_text("", encoding="utf-8")
-
-
-def _build_report_title(report_name: str) -> str:
-    timestamp = datetime.now().strftime(REPORT_TIMESTAMP_FORMAT)
-    return f"{report_name} | generated {timestamp}"
-
-
-def _safe_ratio(numerator: float | None, denominator: float | None) -> float | None:
-    if numerator is None or denominator is None or denominator == 0:
-        return None
-    return numerator / denominator
-
-
-def _sort_key_desc(value: float | None) -> float:
-    if value is None:
-        return float("-inf")
-    return value
-
-
-def _median_absolute_deviation(values: list[float], center: float) -> float:
-    """Compute robust dispersion metric: median absolute deviation from center."""
-    absolute_deviations = [abs(value - center) for value in values]
-    return median(absolute_deviations)
 
 
 def _build_metric_profiles(
@@ -350,15 +291,6 @@ def _get_symbol_name(row: dict[str, Any]) -> str:
         if name:
             return str(name)
     return str(row.get("name") or row.get("symbol") or "N/A")
-
-
-def _get_company_description(row: dict[str, Any]) -> str:
-    ticker_view = row.get("ticker-view")
-    if isinstance(ticker_view, dict):
-        description = ticker_view.get("description")
-        if description:
-            return str(description)
-    return ""
 
 
 # === AI MODIFIED CODE START (GitHub Copilot) ===

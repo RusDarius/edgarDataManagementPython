@@ -654,6 +654,8 @@ Examples:
 
 ## Included scoring profiles
 
+For a full field-by-field reference of move-prediction weighting, profile overrides, missing-component fallback logic, and the March 29, 2026 similarity diagnosis, see `documentation/tradingview_move_prediction_profile_weighting_reference.md`.
+
 The file now includes these presets:
 
 | Profile | Main intent |
