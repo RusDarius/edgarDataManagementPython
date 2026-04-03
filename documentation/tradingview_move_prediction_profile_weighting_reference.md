@@ -258,7 +258,21 @@ Intent:
 - broad multi-factor baseline
 - no signal overrides
 - no directional overrides
-- no missing-component fallback overrides
+- light missing-component fallbacks prevent names with sparse tactical or fundamental data from floating up through silent renormalization
+
+#### Missing-component fallback scores
+
+| Horizon | Fallbacks |
+| --- | --- |
+| `days` | `attention=-0.30`, `momentum=-0.30` |
+| `weeks` | `momentum=-0.25`, `trend=-0.20` |
+| `months` | `quality=-0.35`, `valuation=-0.25` |
+| `years` | `quality=-0.50`, `valuation=-0.40`, `safety=-0.35` |
+
+Interpretation:
+
+- without fallbacks, a missing component is skipped and the remaining components renormalize, which can silently boost low-data names
+- these light penalties ensure a name cannot dominate a horizon simply because a critical component was absent
 
 ### 2. `breakout_long`
 
@@ -330,17 +344,19 @@ Intent:
 - reward reasonable valuation
 - stop tactical excitement from dominating the leaderboard
 - explicitly penalize names with sparse fundamental support
+- amplify the penalty for low attention so passive low-volume vehicles (investment trusts, closed-end funds) face a real drag
+- activate extended quality signals (FCF margin, buyback yield) to distinguish operating company quality from financial holding structures
 
 #### Horizon weights
 
 | Horizon | Attention | Event | Momentum | Trend | Quality | Valuation | Safety |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `days` | 0.03 | 0.01 | 0.06 | 0.18 | 0.34 | 0.16 | 0.22 |
-| `weeks` | 0.03 | 0.02 | 0.07 | 0.16 | 0.32 | 0.18 | 0.22 |
-| `months` | 0.02 | 0.02 | 0.08 | 0.16 | 0.31 | 0.18 | 0.23 |
-| `years` | 0.00 | 0.01 | 0.02 | 0.08 | 0.41 | 0.25 | 0.23 |
+| `days` | 0.06 | 0.01 | 0.06 | 0.18 | 0.31 | 0.16 | 0.22 |
+| `weeks` | 0.05 | 0.02 | 0.07 | 0.16 | 0.30 | 0.18 | 0.22 |
+| `months` | 0.04 | 0.02 | 0.08 | 0.16 | 0.29 | 0.18 | 0.23 |
+| `years` | 0.02 | 0.01 | 0.02 | 0.08 | 0.39 | 0.25 | 0.23 |
 
-This is the main fix for the earlier similarity problem. The profile now defines its own `days` and `weeks` behavior instead of inheriting the balanced tactical map.
+Attention was raised from near-zero to 0.02–0.06 across all horizons. Quality was reduced slightly to compensate. This ensures low-volume names cannot score well purely on fundamental strength without any market participation.
 
 #### Signal weight overrides
 
@@ -348,7 +364,7 @@ This is the main fix for the earlier similarity problem. The profile now defines
 | --- | --- |
 | `momentum` | `change=0.15`, `Perf.5D=0.15`, `Perf.W=0.20`, `Perf.1M=0.40`, `Perf.3M=1.05`, `Perf.YTD=1.05`, `Perf.Y=1.20`, `ROC=0.40`, `Mom=0.45`, `macd_spread=0.35`, `Recommend.All=0.70`, `Recommend.MA=0.55`, `Recommend.Other=0.65`, `rsi_centered=0.20`, `rsi7_centered=0.10` |
 | `trend` | `close_vs_sma50=0.85`, `close_vs_sma200=1.35`, `close_vs_ema50=0.85`, `close_vs_ema200=1.35`, `close_vs_vwap=0.25`, `close_vs_vwma=0.40`, `trend_alignment=1.20` |
-| `quality` | `total_revenue_yoy_growth_ttm=1.10`, `total_revenue_qoq_growth_fq=0.85`, `ebitda_yoy_growth_ttm=1.15`, `ebitda_qoq_growth_fq=0.90`, `net_income_yoy_growth_ttm=1.05`, `net_income_qoq_growth_fq=0.85`, `free_cash_flow_yoy_growth_ttm=1.20`, `free_cash_flow_qoq_growth_fq=1.00`, `gross_margin=1.10`, `operating_margin=1.20`, `after_tax_margin=1.10`, `return_on_assets=1.05`, `return_on_equity=1.10`, `return_on_invested_capital=1.30` |
+| `quality` | `total_revenue_yoy_growth_ttm=1.10`, `total_revenue_qoq_growth_fq=0.85`, `ebitda_yoy_growth_ttm=1.15`, `ebitda_qoq_growth_fq=0.90`, `net_income_yoy_growth_ttm=1.05`, `net_income_qoq_growth_fq=0.85`, `free_cash_flow_yoy_growth_ttm=1.20`, `free_cash_flow_qoq_growth_fq=1.00`, `gross_margin=1.10`, `operating_margin=1.20`, `after_tax_margin=1.10`, `return_on_assets=1.05`, `return_on_equity=1.10`, `return_on_invested_capital=1.30`, `free_cash_flow_margin_ttm=1.15`, `buyback_yield=0.85` |
 | `valuation` | `price_earnings_ttm=1.10`, `price_earnings_growth_ttm=1.15`, `price_sales_current=1.05`, `price_book_fq=0.90`, `price_free_cash_flow_ttm=1.20`, `price_to_cash_f_operating_activities_ttm=1.10`, `enterprise_value_to_revenue_ttm=1.05`, `enterprise_value_to_ebit_ttm=0.95`, `enterprise_value_ebitda_ttm=1.15` |
 | `safety` | `current_ratio=1.05`, `quick_ratio=1.05`, `cash_ratio=1.00`, `short_term_cash_coverage=1.15`, `altman_z_score_ttm=1.20`, `debt_to_equity=1.20`, `debt_to_revenue_ttm=1.15`, `net_debt=1.10`, `beta_1_year=0.75` |
 
@@ -357,12 +373,15 @@ Interpretation:
 - short-term tape fields are heavily muted
 - 200-day structure matters more than intraday or fast tactical trend markers
 - return-on-capital, operating margin, and cash generation matter more than short bursts of price strength
+- `free_cash_flow_margin_ttm=1.15` (extended) rewards operating companies with real cash conversion — investment trusts and passive vehicles often lack meaningful FCF margins
+- `buyback_yield=0.85` (extended) gives a mild positive for companies that return capital through buybacks — most investment trusts do not execute buyback programs
 
 #### Directional bias overrides
 
 | Component | Positive multiplier | Negative multiplier |
 | --- | ---: | ---: |
-| `momentum` | 1.00 | 0.85 |
+| `attention` | 0.80 | 1.40 |
+| `momentum` | 1.00 | 0.95 |
 | `trend` | 1.05 | 1.10 |
 | `quality` | 1.20 | 1.25 |
 | `valuation` | 1.18 | 1.15 |
@@ -372,20 +391,23 @@ Interpretation:
 
 - positive quality and valuation help more than in balanced
 - negative quality and safety hurt more than in balanced
-- momentum weakness is partially tolerated because great compounders do not always have the hottest tape
+- momentum weakness is gently penalized (0.95) instead of heavily forgiven (was 0.85) — the previous value was too lenient and allowed low-momentum passive vehicles to score well
+- **attention negative multiplier at 1.40 is the key anti-concentration lever**: low-volume names now have their negative attention signal amplified by 40%, making passive vehicles like investment trusts and closed-end funds pay a real penalty
+- positive attention is dampened (0.80) because the profile does not care about volume leadership; it only cares that names are not completely inactive
 
 #### Missing-component fallback scores
 
 | Horizon | Fallbacks |
 | --- | --- |
-| `days` | `quality=-0.90`, `valuation=-0.75`, `safety=-0.70` |
-| `weeks` | `quality=-1.00`, `valuation=-0.80`, `safety=-0.80` |
-| `months` | `quality=-1.10`, `valuation=-0.90`, `safety=-0.85` |
-| `years` | `quality=-1.20`, `valuation=-1.00`, `safety=-0.95` |
+| `days` | `attention=-0.45`, `quality=-0.90`, `valuation=-0.75`, `safety=-0.70` |
+| `weeks` | `attention=-0.35`, `quality=-1.00`, `valuation=-0.80`, `safety=-0.80` |
+| `months` | `attention=-0.25`, `quality=-1.10`, `valuation=-0.90`, `safety=-0.85` |
+| `years` | `attention=-0.15`, `quality=-1.20`, `valuation=-1.00`, `safety=-0.95` |
 
 Interpretation:
 
 - sparse fundamentals now materially hurt this profile
+- attention fallbacks were added: names with missing activity data are penalized instead of silently skipped
 - this specifically addresses the prior problem where a name with missing quality and valuation could still rank highly on trend or event strength alone
 
 ### 4. `value_recovery`
@@ -395,23 +417,27 @@ Intent:
 - reward cheap names with improving fundamentals and solvency
 - tolerate imperfect short-term momentum more than balanced or breakout
 - distinguish rerating candidates from already-crowded momentum winners
+- amplify the penalty for low attention so passive financial vehicles do not dominate the recovery leaderboard
+- activate extended signals (earnings yield, FCF margin) to separate operating recovery plays from structurally cheap holdings
 
 #### Horizon weights
 
 | Horizon | Attention | Event | Momentum | Trend | Quality | Valuation | Safety |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `days` | 0.05 | 0.05 | 0.04 | 0.12 | 0.22 | 0.28 | 0.24 |
-| `weeks` | 0.06 | 0.05 | 0.08 | 0.16 | 0.20 | 0.24 | 0.21 |
-| `months` | 0.03 | 0.03 | 0.06 | 0.16 | 0.25 | 0.27 | 0.20 |
-| `years` | 0.00 | 0.01 | 0.01 | 0.08 | 0.28 | 0.35 | 0.27 |
+| `days` | 0.07 | 0.05 | 0.04 | 0.12 | 0.22 | 0.26 | 0.24 |
+| `weeks` | 0.07 | 0.05 | 0.08 | 0.16 | 0.20 | 0.23 | 0.21 |
+| `months` | 0.05 | 0.03 | 0.06 | 0.16 | 0.25 | 0.25 | 0.20 |
+| `years` | 0.02 | 0.01 | 0.01 | 0.08 | 0.28 | 0.33 | 0.27 |
+
+Attention was raised from 0.00–0.06 to 0.02–0.07 and valuation was reduced proportionally.
 
 #### Signal weight overrides
 
 | Component | Override details |
 | --- | --- |
 | `momentum` | `change=0.40`, `Perf.5D=0.30`, `Perf.W=0.35`, `Perf.1M=0.55`, `Perf.3M=1.10`, `Perf.YTD=1.05`, `Perf.Y=0.90`, `ROC=0.55`, `Mom=0.60`, `macd_spread=0.50`, `Recommend.All=0.70`, `Recommend.MA=0.60`, `Recommend.Other=0.70`, `rsi_centered=0.25`, `rsi7_centered=0.15` |
-| `valuation` | `price_earnings_ttm=1.10`, `price_earnings_growth_ttm=1.20`, `price_book_fq=1.20`, `price_sales_current=1.10`, `price_free_cash_flow_ttm=1.05`, `enterprise_value_to_revenue_ttm=1.10`, `enterprise_value_ebitda_ttm=1.15` |
-| `quality` | `free_cash_flow_yoy_growth_ttm=1.20`, `free_cash_flow_qoq_growth_fq=1.05`, `net_income_yoy_growth_ttm=1.10`, `net_income_qoq_growth_fq=1.05`, `ebitda_yoy_growth_ttm=1.05`, `operating_margin=1.10`, `after_tax_margin=1.05` |
+| `valuation` | `price_earnings_ttm=1.10`, `price_earnings_growth_ttm=1.20`, `price_book_fq=1.20`, `price_sales_current=1.10`, `price_free_cash_flow_ttm=1.05`, `enterprise_value_to_revenue_ttm=1.10`, `enterprise_value_ebitda_ttm=1.15`, `earnings_yield=1.15` |
+| `quality` | `free_cash_flow_yoy_growth_ttm=1.20`, `free_cash_flow_qoq_growth_fq=1.05`, `net_income_yoy_growth_ttm=1.10`, `net_income_qoq_growth_fq=1.05`, `ebitda_yoy_growth_ttm=1.05`, `operating_margin=1.10`, `after_tax_margin=1.05`, `free_cash_flow_margin_ttm=1.10` |
 | `safety` | `short_term_cash_coverage=1.10`, `altman_z_score_ttm=1.20`, `debt_to_equity=1.15`, `debt_to_revenue_ttm=1.10`, `net_debt=1.15` |
 | `trend` | `close_vs_sma50=0.90`, `close_vs_sma200=1.15`, `close_vs_ema50=0.90`, `close_vs_ema200=1.15`, `close_vs_vwap=0.60`, `close_vs_vwma=0.75`, `trend_alignment=1.10` |
 
@@ -419,11 +445,14 @@ Interpretation:
 
 - very short-term momentum is muted, but medium-term recovery trend is still allowed to matter
 - cheapness, cash flow improvement, and balance-sheet repair matter most
+- `earnings_yield=1.15` (extended) adds an income-yield valuation signal that directly measures how cheap a stock is on an earnings basis
+- `free_cash_flow_margin_ttm=1.10` (extended) confirms that the recovery candidate is generating real cash, not just having cheap multiples because of a shrinking denominator
 
 #### Directional bias overrides
 
 | Component | Positive multiplier | Negative multiplier |
 | --- | ---: | ---: |
+| `attention` | 0.85 | 1.30 |
 | `momentum` | 0.90 | 0.65 |
 | `trend` | 1.05 | 0.90 |
 | `valuation` | 1.25 | 1.10 |
@@ -434,19 +463,22 @@ Interpretation:
 
 - this profile deliberately dampens negative momentum punishment
 - cheap, improving names should not be pushed too far down just because the tape still looks ugly
+- **attention negative multiplier at 1.30 penalizes low-volume names**: passive vehicles that look cheap but have no real market engagement face a meaningful drag
+- positive attention is dampened (0.85) because recovery candidates often do not have the highest volume yet
 
 #### Missing-component fallback scores
 
 | Horizon | Fallbacks |
 | --- | --- |
-| `days` | `valuation=-0.75`, `quality=-0.45`, `safety=-0.55` |
-| `weeks` | `valuation=-0.85`, `quality=-0.55`, `safety=-0.65` |
-| `months` | `valuation=-0.95`, `quality=-0.65`, `safety=-0.75` |
+| `days` | `attention=-0.35`, `valuation=-0.75`, `quality=-0.45`, `safety=-0.55` |
+| `weeks` | `attention=-0.25`, `valuation=-0.85`, `quality=-0.55`, `safety=-0.65` |
+| `months` | `attention=-0.15`, `valuation=-0.95`, `quality=-0.65`, `safety=-0.75` |
 | `years` | `valuation=-1.05`, `quality=-0.75`, `safety=-0.85` |
 
 Interpretation:
 
 - you cannot earn a strong recovery score without actual evidence of cheapness and stabilization
+- attention fallbacks were added for days/weeks/months: names with missing activity data are penalized instead of silently skipped
 
 ### 5. `fragility_short`
 
@@ -517,6 +549,19 @@ This profile remains unchanged in principle. Its special behavior is:
   - `months -> Perf.YTD`
   - `years -> Perf.Y` and `Perf.5Y`
 
+#### Missing-component fallback scores
+
+| Horizon | Fallbacks |
+| --- | --- |
+| `days` | `attention=-0.25` |
+| `weeks` | `attention=-0.20` |
+| `months` | `quality=-0.25` |
+| `years` | `quality=-0.35`, `valuation=-0.25` |
+
+Interpretation:
+
+- light fallbacks prevent names with missing tactical or fundamental data from floating up in the retrospective tracking report
+
 ### 7. `asymmetric_value`
 
 Intent:
@@ -526,17 +571,18 @@ Intent:
 - use price-position metrics (distance from 52-week high, range position in 52-week window) to identify over-discounted names
 - maintain a strong safety floor across all horizons to avoid value traps
 - tolerate weak recent momentum — cheap-but-unloved names should not be penalized for lack of short-term price action
+- amplify the penalty for low attention so passive low-volume vehicles face a meaningful drag
 
 #### Horizon weights
 
 | Horizon | Attention | Event | Momentum | Trend | Quality | Valuation | Safety |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `days` | 0.02 | 0.02 | 0.06 | 0.15 | 0.20 | 0.35 | 0.20 |
-| `weeks` | 0.03 | 0.03 | 0.08 | 0.14 | 0.22 | 0.30 | 0.20 |
-| `months` | 0.02 | 0.02 | 0.06 | 0.12 | 0.26 | 0.32 | 0.20 |
-| `years` | 0.00 | 0.01 | 0.02 | 0.07 | 0.28 | 0.38 | 0.24 |
+| `days` | 0.05 | 0.02 | 0.06 | 0.15 | 0.20 | 0.32 | 0.20 |
+| `weeks` | 0.05 | 0.03 | 0.08 | 0.14 | 0.22 | 0.28 | 0.20 |
+| `months` | 0.04 | 0.02 | 0.06 | 0.12 | 0.26 | 0.30 | 0.20 |
+| `years` | 0.02 | 0.01 | 0.02 | 0.07 | 0.28 | 0.36 | 0.24 |
 
-Valuation dominates every horizon. Quality and safety together account for 40-52% of each horizon, guaranteeing that cheap names without fundamental support are filtered out.
+Attention was raised from 0.00–0.03 to 0.02–0.05 and valuation was reduced slightly to compensate. Valuation still dominates every horizon, but low-volume names now face a real structural drag.
 
 #### Signal weight overrides
 
@@ -559,6 +605,7 @@ Interpretation:
 
 | Component | Positive multiplier | Negative multiplier |
 | --- | ---: | ---: |
+| `attention` | 0.80 | 1.35 |
 | `momentum` | 0.85 | 0.60 |
 | `trend` | 1.00 | 0.85 |
 | `quality` | 1.15 | 1.20 |
@@ -570,19 +617,22 @@ Interpretation:
 - positive valuation evidence (deep value) is amplified to 1.30x so genuinely cheap names stand out
 - negative safety is amplified to 1.30x so balance-sheet deterioration kills the score — this is the main value-trap guard
 - momentum in either direction is deliberately suppressed; the profile is patient about price action
+- **attention negative multiplier at 1.35 penalizes low-volume names**: passive vehicles that look cheap but have no real market engagement face a drag
+- positive attention is dampened (0.80) because the profile cares about value, not popularity
 
 #### Missing-component fallback scores
 
 | Horizon | Fallbacks |
 | --- | --- |
-| `days` | `valuation=-0.80`, `quality=-0.55`, `safety=-0.60` |
-| `weeks` | `valuation=-0.90`, `quality=-0.65`, `safety=-0.70` |
-| `months` | `valuation=-1.00`, `quality=-0.75`, `safety=-0.80` |
+| `days` | `attention=-0.40`, `valuation=-0.80`, `quality=-0.55`, `safety=-0.60` |
+| `weeks` | `attention=-0.30`, `valuation=-0.90`, `quality=-0.65`, `safety=-0.70` |
+| `months` | `attention=-0.20`, `valuation=-1.00`, `quality=-0.75`, `safety=-0.80` |
 | `years` | `valuation=-1.10`, `quality=-0.85`, `safety=-0.90` |
 
 Interpretation:
 
 - you cannot earn an asymmetric-value score without actual evidence of cheapness, quality, and safety
+- attention fallbacks were added: names with missing activity data are penalized on shorter horizons
 - the penalties are comparable to `value_recovery` but slightly heavier on the safety side
 
 ### 8. `early_momentum_inflection`
@@ -783,11 +833,13 @@ These are secondary to score construction. The main ranking differentiation come
 The revised preset logic is intentionally less interchangeable.
 
 - `breakout_long` is now more tactical and less valuation-sensitive.
-- `quality_value_compounder` is now more fundamentally strict across every horizon.
-- `value_recovery` is now more explicitly rerating-focused.
+- `quality_value_compounder` is now more fundamentally strict across every horizon. Attention weight was raised and negative attention is amplified to penalize passive low-volume vehicles. Extended quality signals (FCF margin, buyback yield) now activate to distinguish operating quality from financial holding structures.
+- `value_recovery` is now more explicitly rerating-focused. Attention weight was raised and negative attention is amplified. Extended signals (earnings yield, FCF margin) were added to separate operating recovery plays from structurally cheap financial holdings.
 - `fragility_short` is now more explicitly downside-fragility-focused.
-- `asymmetric_value` surfaces deep-discount names with forward-looking value conviction and a safety floor against value traps.
+- `asymmetric_value` surfaces deep-discount names with forward-looking value conviction and a safety floor against value traps. Attention weight was raised and negative attention is amplified to filter out passive vehicles.
 - `early_momentum_inflection` catches early directional winds via Aroon, ADX, and Bollinger Band signals before established momentum dominates.
+- `balanced` now has light missing-component fallbacks to prevent silent renormalization from boosting names with sparse data.
+- `backtest_period_ladder` now has light missing-component fallbacks for attention and fundamentals.
 - missing data can no longer disappear as easily inside the profile types that are supposed to care about specific evidence.
 
 ## Extended Signal System (March 30, 2026)
@@ -798,8 +850,9 @@ Eleven new signals were added to the component signal map but placed behind a ba
 
 Signals in the `EXTENDED_SIGNALS` set default to weight `0.00` when a profile does not explicitly override them. This means:
 
-- existing profiles (`balanced`, `breakout_long`, `quality_value_compounder`, `value_recovery`, `fragility_short`, `backtest_period_ladder`) continue to behave identically
-- new profiles (`asymmetric_value`, `early_momentum_inflection`) activate the extended signals they need by setting nonzero weights
+- existing profiles (`balanced`, `breakout_long`, `fragility_short`, `backtest_period_ladder`) continue to behave identically for non-extended signals
+- `quality_value_compounder` and `value_recovery` now also activate relevant extended signals (`free_cash_flow_margin_ttm`, `buyback_yield`, `earnings_yield`)
+- `asymmetric_value` and `early_momentum_inflection` activate the extended signals they need by setting nonzero weights
 - any future or custom profile can opt into arbitrary subsets of the extended signals
 
 ### Extended signal list
@@ -825,3 +878,154 @@ The following columns were added to the TradingView scan payload (`GLOBAL_MARKET
 `price_52_week_high`, `price_52_week_low`, `High.6M`, `Low.6M`, `earnings_yield`, `free_cash_flow_margin_ttm`, `buyback_yield`, `dividends_yield_current`, `Aroon.Up`, `Aroon.Down`, `ADX`, `ADX+DI`, `ADX-DI`, `BB.upper`, `BB.lower`
 
 That combination is what should reduce the excessive profile similarity seen in the March 29, 2026 results.
+
+## Anti-Concentration Tuning (March 30, 2026)
+
+The March 30 run revealed a concentration bias toward Investment Trusts / Mutual Fund industry names across multiple profiles. These entities score well on valuation (structurally low P/E, P/B, P/S), safety (low debt, low beta), and quality (stable margins) because their financial structure is fundamentally different from operating companies. When the fundamental-heavy profiles gave near-zero weight to attention, this structural advantage went unchecked.
+
+### Root causes identified
+
+1. **Valuation component uses `positive_only=True`**: Investment trusts always have positive multiples (low P/E, low P/B). Many growth/tech companies have negative P/E and are excluded from valuation scoring. This means trusts are always evaluated on valuation while many peers are skipped.
+
+2. **Safety advantage is structural**: Trusts typically have low/zero debt, high cash ratios, and low beta. The inverted safety signals (lower = better for debt, beta) give them consistently strong safety scores.
+
+3. **Near-zero attention weight**: Profiles like `quality_value_compounder` (0.03-0.00), `value_recovery` (0.05-0.00), and `asymmetric_value` (0.02-0.00) gave almost no weight to attention. Low-volume passive vehicles were not penalized for lack of market engagement.
+
+4. **MAD normalization is correct but industry-blind**: The scan-relative robust normalization (MAD-based) is working as designed, but it normalizes across the entire scan universe including structurally different entity types. Trusts with stable financials cluster in favorable territory for fundamental components.
+
+### Changes applied
+
+1. **Raised attention weight** in `quality_value_compounder`, `value_recovery`, and `asymmetric_value` (from 0.00-0.03 to 0.02-0.07). Compensated by reducing quality or valuation weights proportionally. All horizon weight sums still equal 1.00.
+
+2. **Added attention directional bias** (`positive_multiplier < 1.0`, `negative_multiplier > 1.0`): negative attention signals are now amplified by 30-40%, so low-volume names face a real drag. Positive attention is dampened because these profiles do not reward volume leadership — they only care that names are not completely inactive.
+
+3. **Activated extended quality signals** in `quality_value_compounder` (`free_cash_flow_margin_ttm=1.15`, `buyback_yield=0.85`) and `value_recovery` (`free_cash_flow_margin_ttm=1.10`). FCF margin rewards operating businesses with real cash conversion. Buyback yield rewards companies that return capital through share repurchases — most investment trusts do not execute buyback programs.
+
+4. **Activated extended valuation signal** in `value_recovery` (`earnings_yield=1.15`). Earnings yield directly measures how cheap a stock is on an earnings basis, adding another dimension beyond multiple-based inversion.
+
+5. **Added missing-component fallbacks for attention** across `quality_value_compounder`, `value_recovery`, `asymmetric_value`, `balanced`, and `backtest_period_ladder`. Names with missing activity data are now penalized instead of silently skipped during renormalization.
+
+6. **Tightened momentum forgiveness** in `quality_value_compounder` (negative_multiplier changed from 0.85 to 0.95). The previous value was too lenient and allowed low-momentum passive vehicles to score well.
+
+### Expected effect
+
+Investment trusts and closed-end funds will still score well on individual fundamental components (quality, valuation, safety) because the MAD normalization correctly identifies their relative strength. However, the combination of higher attention weight, amplified negative attention bias, and extended quality signals should reduce their overall ranking dominance by:
+
+- introducing a structural drag from low attention scores (amplified by 1.30-1.40x)
+- requiring evidence of operating cash generation via FCF margin
+- penalizing missing activity data through fallback scores
+
+This is a tuning adjustment, not a hard filter. Trusts with genuinely strong engagement and operating characteristics can still rank well.
+
+## Forward-Edge Active Profile And New Signal Infrastructure (March 31, 2026)
+
+### Problem observed
+
+The CF Industries example (flagged on March 30 leaderboard, dropped significantly on March 31 and no longer anywhere near the list) exposed a systematic bias in `breakout_long`, `quality_value_compounder`, `asymmetric_value`, and `early_momentum_inflection`. The profiles catch names "in the making" or "too late" because:
+
+1. **Trailing momentum dominance**: All profiles heavily weight Perf.W through Perf.Y. These are backward-looking — they measure what already happened, not what is about to happen.
+2. **No forward-looking fundamental signals**: The scan already fetches `earnings_per_share_forecast_next_fq` and `earnings_per_share_fq` but these were not used in any component scoring.
+3. **No anticipatory technical signals**: Short-term MAs (SMA10/20/30, EMA10/20/30), Stoch.RSI.K, and CCI20 were fetched but not wired into the signal map. No volatility contraction or range compression detection existed.
+4. **No mean-reversion or exhaustion detection**: Current momentum signals are all trend-following with no mechanism to detect overextension.
+
+### New signals implemented
+
+Seven new derived metrics and three new raw-field signals were added to the infrastructure. All are registered as extended signals (default weight 0.00) so existing profiles are unaffected unless they explicitly activate them.
+
+#### Trend component additions
+
+| Signal | Source | How computed | Higher value effect |
+| --- | --- | --- | --- |
+| `close_vs_sma10` | derived | `+1` if `close >= SMA10`, else `-1` | above shortest-term average |
+| `close_vs_sma20` | derived | `+1` if `close >= SMA20`, else `-1` | above 20-day average |
+| `close_vs_sma30` | derived | `+1` if `close >= SMA30`, else `-1` | above 30-day average |
+| `close_vs_ema10` | derived | `+1` if `close >= EMA10`, else `-1` | above 10-day EMA |
+| `close_vs_ema20` | derived | `+1` if `close >= EMA20`, else `-1` | above 20-day EMA |
+| `close_vs_ema30` | derived | `+1` if `close >= EMA30`, else `-1` | above 30-day EMA |
+| `short_trend_emergence` | derived | average of the six short-term MA comparisons above | more short-term MAs crossed above = early trend forming |
+
+#### Attention component additions
+
+| Signal | Source | How computed | Higher value effect |
+| --- | --- | --- | --- |
+| `range_compression` | derived | `(High.3M - Low.3M) / close`, inverted | tighter 3-month range = more coiled energy |
+| `volatility_contraction` | derived | `Volatility.D / Volatility.M`, inverted | daily vol lower than monthly = contraction / coiling |
+
+#### Momentum component additions
+
+| Signal | Source | How computed | Higher value effect |
+| --- | --- | --- | --- |
+| `stoch_rsi_centered` | derived | `Stoch.RSI.K - 50` | stronger short-term momentum impulse |
+| `CCI20` | raw field | robust normalized | stronger directional thrust |
+
+#### Quality component addition
+
+| Signal | Source | How computed | Higher value effect |
+| --- | --- | --- | --- |
+| `eps_forward_growth` | derived | `(forecast_next_fq - actual_fq) / abs(actual_fq)` | analysts expect EPS improvement next quarter |
+
+#### Event component addition
+
+| Signal | Source | How computed | Higher value effect |
+| --- | --- | --- | --- |
+| `eps_surprise_percent_fq` | raw field | robust normalized | last quarter beat consensus = positive surprise history |
+
+### Scan payload changes
+
+Added to `GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD`:
+- `eps_surprise_percent_fq` — most recent quarter earnings surprise percentage
+- `earnings_per_share_forecast_next_fy` — next fiscal year EPS forecast
+
+Changed `ignore_unknown_fields` to `True` to handle fields that may not be available for all global markets.
+
+### `forward_edge_active` profile design
+
+This profile targets risk-adjusted outperformance on the weeks-to-months timescale as an early catcher.
+
+#### Core design principles
+
+1. **Trend leads momentum**: The `trend` component (featuring short-term MA alignment) carries the most weight across days and weeks horizons. A stock crossing above its 10/20/30-day MAs is an earlier signal than waiting for Perf.W or Perf.1M to confirm.
+
+2. **Trailing performance heavily damped**: `Perf.Y` weight is 0.10 (vs 1.00 default), `Perf.YTD` is 0.25, `Perf.6M` is 0.40. This prevents names already well into multi-month runs from dominating.
+
+3. **Forward-looking quality emphasis**: `eps_forward_growth` (1.50 weight) and QoQ growth metrics (1.20-1.25 weight) are prioritized over trailing annual metrics. This shifts the quality lens toward what is changing rather than what was.
+
+4. **Attention inversion**: Positive attention is damped (0.65x multiplier) while negative attention is amplified (1.30x). Low-attention names with early technical confirmation get the forward edge. High-attention names face a natural drag because crowded trades have less forward upside.
+
+5. **Coiled-energy detection**: `bb_squeeze` (1.50), `range_compression` (1.40), and `volatility_contraction` (1.35) in the attention component detect names whose price action is compressing — a precursor to directional moves.
+
+6. **Safety guardrails**: Safety weight increases from 0.12 (days) to 0.26 (years). Missing quality or safety data produces penalty fallback scores (-0.50 to -0.85 depending on horizon). This prevents catching falling knives.
+
+7. **Earnings surprise as event signal**: `eps_surprise_percent_fq` (1.40 weight) in the event component rewards companies that consistently beat consensus. Persistent beaters tend to outperform in subsequent quarters.
+
+#### Horizon weight table
+
+| Component | Days | Weeks | Months | Years |
+| --- | ---: | ---: | ---: | ---: |
+| attention | 0.08 | 0.06 | 0.04 | 0.02 |
+| event | 0.10 | 0.08 | 0.05 | 0.02 |
+| momentum | 0.18 | 0.16 | 0.12 | 0.06 |
+| trend | 0.26 | 0.24 | 0.20 | 0.14 |
+| quality | 0.16 | 0.20 | 0.24 | 0.28 |
+| valuation | 0.10 | 0.12 | 0.16 | 0.22 |
+| safety | 0.12 | 0.14 | 0.19 | 0.26 |
+
+### Suggestions for further improvement (not yet implemented)
+
+These are data-layer and scan-level enhancements that could further improve forward-edge detection. They require either new TradingView fields, external data sources, or architectural changes.
+
+1. **Analyst price target delta** (`price_target_1y_delta`): Available in TradingView field catalog. Measures percentage upside/downside to consensus analyst target. Could be added to the valuation component as a forward-looking anchor. Currently not fetched in the scan payload.
+
+2. **Multi-timeframe relative volume**: Using `relative_volume_10d_calc` across different timeframes (weekly, monthly) could detect sustained accumulation patterns rather than single-day spikes.
+
+3. **Insider and institutional flow signals**: Fields like institutional ownership changes and insider buying/selling are not currently available from TradingView scan but could be sourced from SEC Form 4 filings (already available in the EDGAR database). High insider buying + low attention + emerging trend = strongest forward edge.
+
+4. **Industry-relative scoring**: The current model normalizes against the entire scan universe. Computing signals relative to industry peers (e.g., "this stock's momentum rank within its industry") would separate genuine sector-relative leadership from broad market moves.
+
+5. **Earnings calendar proximity weighting**: Stocks approaching earnings within 2-4 weeks often exhibit pre-earnings drift (positive historical surprise → upward drift). The model currently penalizes confidence near earnings but doesn't reward the drift pattern.
+
+6. **Short interest ratio**: Not available in standard TradingView scan but could be sourced from FINRA/exchange data. High short interest + positive momentum inflection = short squeeze candidate.
+
+7. **Options-implied volatility**: IV percentile or IV rank could replace or supplement Bollinger Band squeeze as a more market-informed volatility contraction measure. Not available from TradingView scan.
+
+8. **Revenue estimate revisions**: Track whether analyst revenue estimates are being revised upward. This is often a leading indicator of earnings beats and price re-rating. The field `earnings_per_share_forecast_next_fy` was added to the payload (March 31) and could be used to compute a forward growth rate against trailing EPS.

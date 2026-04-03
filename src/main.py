@@ -1,7 +1,14 @@
+from pathlib import Path
+
 from constants.trading_view_constants import (
     PREFERRED_MARKETS,
     TRADING_VIEW_ALL_MARKETS,
     TRADING_VIEW_INDUSTRIES,
+)
+from data_analysis_scripts.sherwood_news_feed_gather import (
+    fetch_and_log_full_articles,
+    gather_sherwood_markets_feed,
+    load_sherwood_feed_as_text,
 )
 from data_analysis_scripts.trading_view_activity_float_attention import (
     run_activity_float_attention_scan,
@@ -22,6 +29,7 @@ from data_analysis_scripts.trading_view_valuation_analysis import (
     analyze_ev_ebitda_deviation,
 )
 from data_loaders.api_tradingview_client import ApiTradingViewClient
+from database_scripts.split_large_csv_by_rows import split_csv_by_rows
 
 
 USER_AGENT = "Barnnabass daniOO7XbX@gmail.com"
@@ -97,16 +105,14 @@ def main():
     #     min_market_cap_usd=1_000_000_000,
     # )
 
-    run_move_prediction_profile_suite(
-        scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-            min_market_cap_usd=1_000_000_000,
-            markets=PREFERRED_MARKETS,
-            industries=[TRADING_VIEW_INDUSTRIES.CHEMICALS_SPECIALTY],
-        ).get("data", []),
-        min_market_cap_usd=1_000_000_000,
-        include_blind_spot_sections=True,
-        industries=[TRADING_VIEW_INDUSTRIES.CHEMICALS_SPECIALTY],
-    )
+    # run_move_prediction_profile_suite(
+    #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+    #         min_market_cap_usd=1_000_000_000,
+    #         markets=PREFERRED_MARKETS,
+    #     ).get("data", []),
+    #     min_market_cap_usd=1_000_000_000,
+    #     include_blind_spot_sections=True,
+    # )
 
     # run_activity_float_attention_scan_grouped_industries(
     #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_activity_float_attention(
@@ -117,6 +123,23 @@ def main():
 
     # exported_file = export_all_tradingview_fields()
     # print(f"TradingView all-fields export written to: {exported_file}")
+    # split_csv_by_rows(
+    #     input_csv=Path(
+    #         "d:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/02_04_2026/tradingview_global_all_tdfields_02_04_2026.csv"
+    #     )
+    # )
+
+    # 1. Pull new articles from sitemap into the feed
+    gather_result = gather_sherwood_markets_feed()
+    print(
+        f"New: {gather_result['new_articles']}, Total: {gather_result['total_articles']}"
+    )
+
+    # 2. Fetch full body text for articles missing it & write .log dump
+    scan_result = fetch_and_log_full_articles(max_articles=20)
+    print(
+        f"Fetched: {scan_result['articles_fetched']}, Log: {scan_result['session_log']}"
+    )
 
     pass
 

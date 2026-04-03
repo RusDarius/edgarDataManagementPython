@@ -8,7 +8,7 @@ from typing import Iterable, TextIO
 
 
 PATH_EXAMPLE = Path(
-    "d:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/29_03_2026/tradingview_global_all_tdfields_29_03_2026.csv"
+    "d:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/30_03_2026/tradingview_global_all_tdfields_30_03_2026.csv"
 )
 DEFAULT_MAX_ROWS_PER_CHUNK = 10_000
 HARD_MAX_ROWS_PER_CHUNK = 500_000

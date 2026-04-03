@@ -33,7 +33,7 @@ FIELD_CATALOG_CSV = Path(
 OUTPUT_DIR = Path(
     r"d:\FinanceProjects\edgarDataManagementPython\logs\tradingview_analysis"
 )
-CHUNK_SIZE = 120
+CHUNK_SIZE = 600
 REQUEST_TIMEOUT_SECONDS = 60
 SCAN_RANGE_END = 100_000
 DB_MERGE_BATCH_SIZE = 500
