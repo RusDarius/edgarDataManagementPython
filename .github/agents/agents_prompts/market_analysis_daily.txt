@@ -1,0 +1,43 @@
+### MARKET OPEN CHECK ###
+
+Executive Snapshot
+Market shows a fragile bullish bias with rotation underneath. Strength is concentrated in megacaps and AI-related names, while overall participation is weak.
+Bias: Neutral to slight risk-on. Tactical trading environment, not structurally strong.
+Mega-cap leadership
+Large-cap tech continues to lead with strong relative strength and inflows. However, gap-up exhaustion and weaker breakout follow-through suggest late-stage momentum. Entries are becoming less efficient.
+Rotation signals
+There are early signs of capital rotating into cyclicals like financials and industrials, but this lacks consistency and volume. No confirmed trend yet.
+Weak breadth
+Market participation is narrow. Indices are rising but fewer stocks are contributing. This increases fragility and raises the risk of sharp intraday reversals.
+Volatility setup
+Recent sessions show tight ranges and compressed volatility, which typically leads to expansion. Expect potential strong directional moves early in the session.
+AI and high-beta focus
+AI-related names remain the main liquidity focus with consistent dip-buying. However, intraday reversals and faster profit-taking indicate a shift toward shorter-term trading behavior.
+Actionable Items
+Long side
+Focus on strong stocks pulling back rather than chasing breakouts. Prefer entries near VWAP with volume confirmation and some level of market breadth support.
+Short side
+Look for failed breakouts, especially gap-ups that cannot hold. Weak sectors that fail to participate in early strength are potential short candidates. Key signals include lower highs and VWAP loss with volume.
+Risk management
+Reduce overnight exposure. Be more active intraday. Expect trades to invalidate quickly and adjust accordingly.
+High-Probability Setups
+Opening range break
+Follow the first clear directional move with volume after the open.
+Gap and fade
+Watch for gap-ups that fail early, especially if breadth is weak.
+Selective continuation
+Only take continuation trades if supported by breadth and sector alignment.
+Key Risks
+Ongoing weak breadth
+Overextended megacaps
+False rotation signals
+Unexpected macro-driven volatility
+Intraday Signals to Watch
+Breadth in the first hour
+Consistency in sector leadership
+Volume compared to prior sessions
+The market is slightly bullish but driven by a small group of stocks. Underlying conditions are weaker than they appear. This favors quick, tactical trades rather than holding positions. Expect volatility and reversals. Best opportunities are pullbacks in strong names and failures in weak ones.
+Active management
+Not broad risk-on, not risk-off
+Controlled aggression with risk management
+USE DATA IN THE FOLDER PROVIDED AS CONTEXT TO DRAW CONCLUSIONS AND WRITE THEM IN THE DAY FOLDER IN A .md file

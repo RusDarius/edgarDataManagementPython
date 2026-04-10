@@ -1,0 +1,13 @@
+-- -- @block
+-- CREATE TABLE bvb_tickers (
+--     simbol VARCHAR(32) NULL,
+--     isin VARCHAR(32) PRIMARY KEY,
+--     denumire_emisiune VARCHAR(128) NULL,
+--     tip_instrument VARCHAR(64) NULL,
+--     stare VARCHAR(8) NULL,
+--     emitent VARCHAR(128) NULL,
+--     tara VARCHAR(64) NULL,
+--     judet VARCHAR(64) NULL,
+--     localitate VARCHAR(64) NULL,
+--     cod_fiscal VARCHAR(32) NULL
+-- );

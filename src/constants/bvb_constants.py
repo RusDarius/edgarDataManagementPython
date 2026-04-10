@@ -1,0 +1,11 @@
+class BVB_TICKERS_FIELDS:
+    SIMBOL = "simbol"
+    ISIN = "isin"
+    DENUMIRE_EMISIUNE = "denumire_emisiune"
+    TIP_INSTRUMENT = "tip_instrument"
+    STARE = "stare"
+    EMITENT = "emitent"
+    TARA = "tara"
+    JUDET = "judet"
+    LOCALITATE = "localitate"
+    COD_FISCAL = "cod_fiscal"

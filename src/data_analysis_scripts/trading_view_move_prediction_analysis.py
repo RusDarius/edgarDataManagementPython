@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import collections
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
@@ -8,7 +9,6 @@ from statistics import median
 from typing import Any, Mapping
 
 from data_analysis_scripts._shared_analysis_utils import (
-    REPORT_TIMESTAMP_FORMAT,
     build_report_title as _build_report_title,
     coerce_numeric as _coerce_numeric,
     format_market_cap as _format_market_cap,
@@ -182,6 +182,14 @@ RAW_PROFILE_FIELDS = [
     "earnings_per_share_forecast_next_fq",
     "earnings_per_share_fq",
     "eps_surprise_percent_fq",
+    "average_volume_30d_calc",
+    "Stoch.RSI.D",
+    "change_from_open",
+    "earnings_per_share_diluted_yoy_growth_ttm",
+    "ebitda",
+    "net_income",
+    "Pivot.M.Classic.Middle",
+    "gross_profit_margin_fy",
 ]
 
 DERIVED_PROFILE_FIELDS = [
@@ -210,6 +218,11 @@ DERIVED_PROFILE_FIELDS = [
     "volatility_contraction",
     "eps_forward_growth",
     "stoch_rsi_centered",
+    "volume_trend",
+    "stoch_rsi_crossover",
+    "intraday_momentum",
+    "pivot_distance",
+    "revenue_per_employee",
 ]
 
 EXTENDED_SIGNALS: frozenset[str] = frozenset(
@@ -238,6 +251,13 @@ EXTENDED_SIGNALS: frozenset[str] = frozenset(
         "stoch_rsi_centered",
         "CCI20",
         "eps_surprise_percent_fq",
+        "volume_trend",
+        "stoch_rsi_crossover",
+        "intraday_momentum",
+        "pivot_distance",
+        "revenue_per_employee",
+        "earnings_per_share_diluted_yoy_growth_ttm",
+        "gross_profit_margin_fy",
     }
 )
 
@@ -342,155 +362,302 @@ class ScoringProfile:
 
 
 PRESET_SCORING_PROFILES = {
-    "balanced": ScoringProfile(
-        name="balanced",
-        description=(
-            "Default balanced profile. It keeps the base scoreflow intact so short-term tape action, trend quality, valuation, and safety all contribute according to the default horizon map. Light missing-component fallbacks now prevent names with sparse tactical or fundamental data from floating up through silent renormalization."
-        ),
-        missing_component_scores_by_horizon={
-            "days": {
-                "attention": -0.30,
-                "momentum": -0.30,
-                "scale": -0.20,
-            },
-            "weeks": {
-                "momentum": -0.25,
-                "trend": -0.20,
-                "scale": -0.20,
-            },
-            "months": {
-                "quality": -0.35,
-                "valuation": -0.25,
-                "scale": -0.25,
-            },
-            "years": {
-                "quality": -0.50,
-                "valuation": -0.40,
-                "safety": -0.35,
-                "scale": -0.30,
-            },
-        },
-    ),
+    # ──────────────────────────────────────────────────────────────────────────
+    # IDEA 1 — TREND FOLLOWING: where the market is moving
+    # ──────────────────────────────────────────────────────────────────────────
     "breakout_long": ScoringProfile(
         name="breakout_long",
         description=(
-            "Bias toward upside continuation setups where unusual participation, "
-            "event pressure, fast momentum, and confirmed trend continuation "
-            "matter materially more than deep valuation support. Extended signals "
-            "now activate short-term MA alignment, Bollinger Band position, "
-            "Stoch.RSI, CCI20, and EPS surprise for catalyst-confirmed "
-            "continuation. 200-day trend markers are further dampened so the "
-            "profile stays firmly tactical. Missing tactical confirmation is "
-            "penalized so the leaderboard does not drift back toward the balanced "
-            "profile."
+            "Trend-following profile for confirmed upside continuation. Rewards "
+            "strong participation, confirmed momentum across multiple timeframes, "
+            "and aligned trend structure. Fundamentals carry minimal weight — this "
+            "is a pure tape-reading lens. Noise reduction: requires volume "
+            "confirmation (volume_trend activated), intraday momentum, and "
+            "multi-timeframe MA alignment to distinguish genuine breakouts from "
+            "low-conviction noise spikes. ADX directional spread confirms the "
+            "move has directional strength, not just volatility."
         ),
         horizon_weights={
             "days": {
-                "attention": 0.32,
-                "event": 0.20,
-                "momentum": 0.28,
-                "trend": 0.14,
-                "quality": 0.02,
+                "attention": 0.30,
+                "event": 0.18,
+                "momentum": 0.30,
+                "trend": 0.16,
+                "quality": 0.00,
                 "valuation": 0.00,
-                "safety": 0.04,
+                "safety": 0.06,
             },
             "weeks": {
-                "attention": 0.22,
-                "event": 0.12,
+                "attention": 0.20,
+                "event": 0.10,
                 "momentum": 0.28,
-                "trend": 0.24,
-                "quality": 0.04,
-                "valuation": 0.01,
-                "safety": 0.09,
+                "trend": 0.28,
+                "quality": 0.02,
+                "valuation": 0.00,
+                "safety": 0.12,
             },
             "months": {
-                "attention": 0.12,
-                "event": 0.08,
+                "attention": 0.10,
+                "event": 0.06,
                 "momentum": 0.22,
-                "trend": 0.26,
-                "quality": 0.12,
+                "trend": 0.30,
+                "quality": 0.10,
                 "valuation": 0.04,
-                "safety": 0.16,
+                "safety": 0.18,
             },
             "years": {
-                "attention": 0.04,
-                "event": 0.05,
-                "momentum": 0.14,
-                "trend": 0.20,
+                "attention": 0.03,
+                "event": 0.03,
+                "momentum": 0.12,
+                "trend": 0.22,
                 "quality": 0.18,
-                "valuation": 0.10,
-                "safety": 0.29,
+                "valuation": 0.12,
+                "safety": 0.30,
             },
         },
         component_signal_weights={
             "attention": {
-                "relative_volume_10d_calc": 1.45,
-                "float_turnover": 1.30,
-                "dollar_turnover_intensity": 1.20,
-                "Value.Traded": 1.15,
+                "relative_volume_10d_calc": 1.50,
+                "float_turnover": 1.35,
+                "dollar_turnover_intensity": 1.25,
+                "Value.Traded": 1.20,
                 "AvgValue.Traded_10d": 1.10,
+                "volume_trend": 1.40,
+                "intraday_momentum": 1.25,
+                "bb_squeeze": 0.60,
+                "range_compression": 0.50,
+                "volatility_contraction": 0.50,
             },
             "event": {
-                "premarket_change": 1.15,
-                "postmarket_change": 1.15,
-                "gap": 1.15,
-                "gap_severity": 1.30,
-                "event_intensity": 1.25,
-                "eps_surprise_percent_fq": 1.10,
+                "premarket_change": 1.20,
+                "postmarket_change": 1.20,
+                "gap": 1.20,
+                "gap_severity": 1.35,
+                "event_intensity": 1.30,
+                "eps_surprise_percent_fq": 1.15,
             },
             "momentum": {
-                "change": 1.15,
-                "Perf.5D": 1.35,
-                "Perf.W": 1.25,
+                "change": 1.20,
+                "Perf.5D": 1.40,
+                "Perf.W": 1.30,
                 "Perf.1M": 1.15,
-                "Perf.3M": 1.05,
-                "Perf.6M": 0.55,
-                "Perf.YTD": 0.65,
-                "Perf.Y": 0.30,
-                "ROC": 1.10,
-                "Mom": 1.10,
-                "macd_spread": 1.15,
-                "Recommend.MA": 1.10,
-                "rsi7_centered": 1.10,
-                "stoch_rsi_centered": 0.85,
-                "CCI20": 0.80,
+                "Perf.3M": 0.85,
+                "Perf.6M": 0.40,
+                "Perf.YTD": 0.45,
+                "Perf.Y": 0.20,
+                "ROC": 1.15,
+                "Mom": 1.15,
+                "macd_spread": 1.20,
+                "Recommend.All": 0.90,
+                "Recommend.MA": 1.15,
+                "Recommend.Other": 0.85,
+                "rsi_centered": 0.85,
+                "rsi7_centered": 1.15,
+                "aroon_spread": 1.45,
+                "adx_directional_spread": 1.50,
+                "stoch_rsi_centered": 0.90,
+                "CCI20": 0.85,
+                "stoch_rsi_crossover": 1.10,
             },
             "trend": {
-                "trend_alignment": 1.30,
-                "close_vs_sma10": 1.25,
-                "close_vs_sma20": 1.10,
-                "close_vs_sma30": 0.95,
-                "close_vs_sma50": 1.15,
-                "close_vs_sma200": 0.65,
-                "close_vs_ema10": 1.25,
-                "close_vs_ema20": 1.10,
-                "close_vs_ema30": 0.95,
-                "close_vs_ema50": 1.15,
-                "close_vs_ema200": 0.70,
-                "close_vs_vwap": 1.20,
-                "close_vs_vwma": 1.20,
-                "bb_position": 1.15,
-                "short_trend_emergence": 1.15,
+                "trend_alignment": 1.35,
+                "close_vs_sma10": 1.30,
+                "close_vs_sma20": 1.15,
+                "close_vs_sma30": 1.00,
+                "close_vs_sma50": 1.20,
+                "close_vs_sma200": 0.55,
+                "close_vs_ema10": 1.30,
+                "close_vs_ema20": 1.15,
+                "close_vs_ema30": 1.00,
+                "close_vs_ema50": 1.20,
+                "close_vs_ema200": 0.60,
+                "close_vs_vwap": 1.25,
+                "close_vs_vwma": 1.25,
+                "bb_position": 1.20,
+                "short_trend_emergence": 1.20,
+                "pivot_distance": 0.90,
             },
         },
         component_directional_bias={
             "attention": DirectionalBias(
-                positive_multiplier=1.28, negative_multiplier=0.78
+                positive_multiplier=1.35, negative_multiplier=0.70
             ),
             "event": DirectionalBias(
-                positive_multiplier=1.22, negative_multiplier=0.78
+                positive_multiplier=1.25, negative_multiplier=0.75
             ),
             "momentum": DirectionalBias(
-                positive_multiplier=1.32, negative_multiplier=0.72
+                positive_multiplier=1.40, negative_multiplier=0.65
             ),
             "trend": DirectionalBias(
-                positive_multiplier=1.22, negative_multiplier=0.82
+                positive_multiplier=1.30, negative_multiplier=0.75
             ),
             "quality": DirectionalBias(
-                positive_multiplier=1.00, negative_multiplier=0.85
+                positive_multiplier=1.00, negative_multiplier=0.80
             ),
             "valuation": DirectionalBias(
-                positive_multiplier=0.95, negative_multiplier=0.80
+                positive_multiplier=0.90, negative_multiplier=0.75
+            ),
+            "safety": DirectionalBias(
+                positive_multiplier=1.00, negative_multiplier=0.80
+            ),
+        },
+        missing_component_scores_by_horizon={
+            "days": {
+                "attention": -0.85,
+                "event": -0.55,
+                "momentum": -0.80,
+                "trend": -0.50,
+            },
+            "weeks": {
+                "attention": -0.60,
+                "momentum": -0.65,
+                "trend": -0.45,
+            },
+            "months": {
+                "momentum": -0.45,
+                "trend": -0.40,
+            },
+        },
+        intro_metric_notes=[
+            "Pure trend-following profile for confirmed upside continuation.",
+            "Volume confirmation: volume_trend=1.40 requires sustained accumulation, not one-day spikes. intraday_momentum=1.25 confirms real-time move conviction.",
+            "ADX directional spread=1.50 confirms directional strength — distinguishes true breakouts from volatility noise.",
+            "Aroon spread=1.45 detects new uptrend formation at the indicator level.",
+            "Short-term MA override: SMA10/EMA10=1.30, SMA50/EMA50=1.20. Long-term trend (200-day) damped to 0.55-0.60 so the profile stays tactical.",
+            "Trailing momentum aggressively decayed: Perf.Y=0.20, Perf.YTD=0.45, Perf.6M=0.40. Names already mid-run are deprioritized.",
+            "Directional bias amplifies upside signals (momentum +1.40x) while heavily suppressing downside readings (momentum -0.65x).",
+        ],
+        confidence_multiplier=1.07,
+    ),
+    "early_momentum_inflection": ScoringProfile(
+        name="early_momentum_inflection",
+        description=(
+            "Early trend detection profile that catches names at the beginning of "
+            "a directional move before crowd confirmation. Core differentiator: "
+            "the coiled-energy suite (bb_squeeze, range_compression, volatility_"
+            "contraction) combined with early directional indicators (aroon_spread, "
+            "adx_directional_spread, stoch_rsi_crossover). This profile specifically "
+            "looks for names exiting consolidation phases — price compression "
+            "followed by the first signs of directional expansion. Established "
+            "momentum is aggressively damped so the leaderboard surfaces "
+            "genuinely nascent moves, not names mid-run."
+        ),
+        horizon_weights={
+            "days": {
+                "attention": 0.26,
+                "event": 0.10,
+                "momentum": 0.30,
+                "trend": 0.26,
+                "quality": 0.02,
+                "valuation": 0.01,
+                "safety": 0.05,
+            },
+            "weeks": {
+                "attention": 0.20,
+                "event": 0.06,
+                "momentum": 0.28,
+                "trend": 0.32,
+                "quality": 0.04,
+                "valuation": 0.02,
+                "safety": 0.08,
+            },
+            "months": {
+                "attention": 0.12,
+                "event": 0.04,
+                "momentum": 0.22,
+                "trend": 0.28,
+                "quality": 0.12,
+                "valuation": 0.06,
+                "safety": 0.16,
+            },
+            "years": {
+                "attention": 0.02,
+                "event": 0.02,
+                "momentum": 0.08,
+                "trend": 0.18,
+                "quality": 0.24,
+                "valuation": 0.18,
+                "safety": 0.28,
+            },
+        },
+        component_signal_weights={
+            "attention": {
+                "relative_volume_10d_calc": 1.25,
+                "float_turnover": 1.20,
+                "dollar_turnover_intensity": 1.10,
+                "Value.Traded": 1.00,
+                "AvgValue.Traded_10d": 0.90,
+                "bb_squeeze": 1.55,
+                "range_compression": 1.50,
+                "volatility_contraction": 1.45,
+                "volume_trend": 1.40,
+                "intraday_momentum": 1.00,
+            },
+            "event": {
+                "premarket_change": 1.10,
+                "postmarket_change": 1.10,
+                "gap": 1.10,
+                "gap_severity": 1.20,
+                "event_intensity": 1.15,
+                "eps_surprise_percent_fq": 0.90,
+            },
+            "momentum": {
+                "change": 0.95,
+                "Perf.5D": 1.30,
+                "Perf.W": 1.10,
+                "Perf.1M": 0.65,
+                "Perf.3M": 0.40,
+                "Perf.6M": 0.20,
+                "Perf.YTD": 0.15,
+                "Perf.Y": 0.10,
+                "ROC": 1.30,
+                "Mom": 1.25,
+                "macd_spread": 1.35,
+                "Recommend.All": 0.75,
+                "Recommend.MA": 0.90,
+                "Recommend.Other": 0.80,
+                "rsi_centered": 0.65,
+                "rsi7_centered": 1.15,
+                "aroon_spread": 1.65,
+                "adx_directional_spread": 1.55,
+                "stoch_rsi_centered": 1.15,
+                "CCI20": 0.95,
+                "stoch_rsi_crossover": 1.40,
+            },
+            "trend": {
+                "close_vs_sma10": 1.40,
+                "close_vs_sma20": 1.25,
+                "close_vs_sma30": 1.15,
+                "close_vs_sma50": 0.90,
+                "close_vs_sma200": 0.50,
+                "close_vs_ema10": 1.40,
+                "close_vs_ema20": 1.25,
+                "close_vs_ema30": 1.15,
+                "close_vs_ema50": 0.90,
+                "close_vs_ema200": 0.50,
+                "close_vs_vwap": 1.20,
+                "close_vs_vwma": 1.15,
+                "trend_alignment": 0.75,
+                "bb_position": 1.30,
+                "short_trend_emergence": 1.55,
+                "pivot_distance": 0.80,
+            },
+        },
+        component_directional_bias={
+            "attention": DirectionalBias(
+                positive_multiplier=1.30, negative_multiplier=0.72
+            ),
+            "event": DirectionalBias(
+                positive_multiplier=1.12, negative_multiplier=0.88
+            ),
+            "momentum": DirectionalBias(
+                positive_multiplier=1.40, negative_multiplier=0.65
+            ),
+            "trend": DirectionalBias(
+                positive_multiplier=1.30, negative_multiplier=0.75
+            ),
+            "quality": DirectionalBias(
+                positive_multiplier=1.00, negative_multiplier=0.82
             ),
             "safety": DirectionalBias(
                 positive_multiplier=1.00, negative_multiplier=0.82
@@ -499,74 +666,288 @@ PRESET_SCORING_PROFILES = {
         missing_component_scores_by_horizon={
             "days": {
                 "attention": -0.75,
-                "event": -0.50,
-                "momentum": -0.70,
-                "trend": -0.45,
+                "momentum": -0.80,
+                "trend": -0.55,
             },
             "weeks": {
                 "attention": -0.50,
-                "momentum": -0.55,
-                "trend": -0.40,
+                "momentum": -0.60,
+                "trend": -0.45,
             },
             "months": {
                 "momentum": -0.40,
-                "trend": -0.35,
+                "trend": -0.30,
             },
         },
-        confidence_multiplier=1.07,
+        intro_metric_notes=[
+            "Early inflection profile for catching moves BEFORE confirmation.",
+            "Coiled-energy detection: bb_squeeze=1.55 (inverted band width — tighter bands = more energy stored), range_compression=1.50 (inverted 3-month range — tighter range = pending expansion), volatility_contraction=1.45 (daily vol below monthly = compression before release).",
+            "Early directional indicators: aroon_spread=1.65 (highest in system — new uptrend at indicator level), adx_directional_spread=1.55 (bullish directional divergence emerging), stoch_rsi_crossover=1.40 (first bullish crossover signal).",
+            "Short-term MA override: SMA10/EMA10=1.40 catch first crossovers. long-term alignment (SMA200/EMA200) reduced to 0.50. trend_alignment reduced to 0.75 — established alignment is irrelevant for nascent moves.",
+            "Established momentum crushed: Perf.Y=0.10, Perf.YTD=0.15, Perf.6M=0.20, Perf.3M=0.40. Names already mid-run are invisible.",
+            "Momentum bias is the most aggressive in the system: upside +1.40x, downside 0.65x. This makes early positive readings amplified while negative legacy does not dominate.",
+        ],
+        confidence_multiplier=1.05,
     ),
+    # ──────────────────────────────────────────────────────────────────────────
+    # IDEA 2 — REAL QUALITY: where quality lies ahead of time
+    # ──────────────────────────────────────────────────────────────────────────
     "quality_value_compounder": ScoringProfile(
         name="quality_value_compounder",
         description=(
-            "Bias toward durable long ideas where profitability, balance-sheet support, capital efficiency, and reasonable valuation matter more than near-term excitement. Attention weight was raised and negative attention is amplified so passive low-volume vehicles like investment trusts face a real drag. Extended quality signals (FCF margin, buyback yield) now activate to better distinguish operating quality from financial holding structures."
+            "Durable quality identification profile. Surfaces companies with "
+            "persistent profitability, capital efficiency, and margin stability "
+            "that justify premium positioning. This is NOT a value profile — it "
+            "rewards operational excellence at any reasonable valuation. Noise "
+            "reduction: all extended quality signals activated (FCF margin, "
+            "buyback yield, revenue per employee, gross profit margin FY, EPS "
+            "diluted growth) to build a multi-dimensional quality picture that "
+            "cannot be gamed by a single strong metric. Short-term momentum is "
+            "nearly zeroed so quality ranking is not polluted by recent price "
+            "moves. Missing quality/safety evidence is heavily penalized."
         ),
         horizon_weights={
             "days": {
-                "attention": 0.06,
+                "attention": 0.04,
                 "event": 0.01,
-                "momentum": 0.06,
-                "trend": 0.18,
-                "quality": 0.31,
+                "momentum": 0.04,
+                "trend": 0.16,
+                "quality": 0.35,
                 "valuation": 0.16,
-                "safety": 0.22,
+                "safety": 0.24,
             },
             "weeks": {
-                "attention": 0.05,
-                "event": 0.02,
-                "momentum": 0.07,
-                "trend": 0.16,
-                "quality": 0.30,
+                "attention": 0.03,
+                "event": 0.01,
+                "momentum": 0.05,
+                "trend": 0.14,
+                "quality": 0.34,
                 "valuation": 0.18,
-                "safety": 0.22,
+                "safety": 0.25,
             },
             "months": {
-                "attention": 0.04,
-                "event": 0.02,
-                "momentum": 0.08,
-                "trend": 0.16,
-                "quality": 0.29,
-                "valuation": 0.18,
-                "safety": 0.23,
-            },
-            "years": {
                 "attention": 0.02,
                 "event": 0.01,
-                "momentum": 0.02,
-                "trend": 0.08,
-                "quality": 0.39,
-                "valuation": 0.25,
-                "safety": 0.23,
+                "momentum": 0.04,
+                "trend": 0.12,
+                "quality": 0.36,
+                "valuation": 0.20,
+                "safety": 0.25,
+            },
+            "years": {
+                "attention": 0.01,
+                "event": 0.00,
+                "momentum": 0.01,
+                "trend": 0.06,
+                "quality": 0.42,
+                "valuation": 0.24,
+                "safety": 0.26,
             },
         },
         component_signal_weights={
             "momentum": {
+                "change": 0.10,
+                "Perf.5D": 0.10,
+                "Perf.W": 0.15,
+                "Perf.1M": 0.30,
+                "Perf.3M": 0.80,
+                "Perf.6M": 0.90,
+                "Perf.YTD": 1.05,
+                "Perf.Y": 1.25,
+                "ROC": 0.30,
+                "Mom": 0.35,
+                "macd_spread": 0.25,
+                "Recommend.All": 0.60,
+                "Recommend.MA": 0.45,
+                "Recommend.Other": 0.55,
+                "rsi_centered": 0.15,
+                "rsi7_centered": 0.05,
+            },
+            "trend": {
+                "close_vs_sma50": 0.80,
+                "close_vs_sma200": 1.40,
+                "close_vs_ema50": 0.80,
+                "close_vs_ema200": 1.40,
+                "close_vs_vwap": 0.20,
+                "close_vs_vwma": 0.30,
+                "trend_alignment": 1.25,
+                "pivot_distance": 0.90,
+            },
+            "quality": {
+                "total_revenue_yoy_growth_ttm": 1.15,
+                "total_revenue_qoq_growth_fq": 0.80,
+                "ebitda_yoy_growth_ttm": 1.20,
+                "ebitda_qoq_growth_fq": 0.85,
+                "net_income_yoy_growth_ttm": 1.10,
+                "net_income_qoq_growth_fq": 0.80,
+                "free_cash_flow_yoy_growth_ttm": 1.25,
+                "free_cash_flow_qoq_growth_fq": 0.95,
+                "gross_margin": 1.15,
+                "operating_margin": 1.30,
+                "after_tax_margin": 1.15,
+                "return_on_assets": 1.10,
+                "return_on_equity": 1.15,
+                "return_on_invested_capital": 1.40,
+                "free_cash_flow_margin_ttm": 1.25,
+                "buyback_yield": 0.90,
+                "dividends_yield_current": 0.70,
+                "eps_forward_growth": 1.10,
+                "revenue_per_employee": 1.15,
+                "earnings_per_share_diluted_yoy_growth_ttm": 1.15,
+                "gross_profit_margin_fy": 1.15,
+            },
+            "valuation": {
+                "price_earnings_ttm": 1.10,
+                "price_earnings_growth_ttm": 1.20,
+                "price_sales_current": 1.00,
+                "price_book_fq": 0.85,
+                "price_free_cash_flow_ttm": 1.25,
+                "price_to_cash_f_operating_activities_ttm": 1.10,
+                "enterprise_value_to_revenue_ttm": 1.00,
+                "enterprise_value_to_ebit_ttm": 0.90,
+                "enterprise_value_ebitda_ttm": 1.15,
+                "earnings_yield": 1.10,
+            },
+            "safety": {
+                "current_ratio": 1.10,
+                "quick_ratio": 1.10,
+                "cash_ratio": 1.05,
+                "short_term_cash_coverage": 1.20,
+                "altman_z_score_ttm": 1.25,
+                "debt_to_equity": 1.25,
+                "debt_to_revenue_ttm": 1.20,
+                "net_debt": 1.15,
+                "beta_1_year": 0.70,
+            },
+        },
+        component_directional_bias={
+            "attention": DirectionalBias(
+                positive_multiplier=0.70, negative_multiplier=1.50
+            ),
+            "momentum": DirectionalBias(
+                positive_multiplier=1.00, negative_multiplier=0.90
+            ),
+            "trend": DirectionalBias(
+                positive_multiplier=1.05, negative_multiplier=1.15
+            ),
+            "quality": DirectionalBias(
+                positive_multiplier=1.25, negative_multiplier=1.35
+            ),
+            "valuation": DirectionalBias(
+                positive_multiplier=1.20, negative_multiplier=1.20
+            ),
+            "safety": DirectionalBias(
+                positive_multiplier=1.18, negative_multiplier=1.30
+            ),
+        },
+        missing_component_scores_by_horizon={
+            "days": {
+                "attention": -0.50,
+                "quality": -1.00,
+                "valuation": -0.80,
+                "safety": -0.75,
+            },
+            "weeks": {
+                "attention": -0.40,
+                "quality": -1.10,
+                "valuation": -0.85,
+                "safety": -0.85,
+            },
+            "months": {
+                "attention": -0.30,
+                "quality": -1.20,
+                "valuation": -0.95,
+                "safety": -0.90,
+            },
+            "years": {
+                "attention": -0.20,
+                "quality": -1.30,
+                "valuation": -1.05,
+                "safety": -1.00,
+            },
+        },
+        intro_metric_notes=[
+            "Durable quality identification — NOT a value profile.",
+            "All extended quality signals activated: ROIC=1.40 (capital efficiency king), operating_margin=1.30, FCF_margin=1.25, revenue_per_employee=1.15, gross_profit_margin_fy=1.15, EPS_diluted_growth=1.15.",
+            "YoY growth is prioritized over QoQ (1.10-1.25 vs 0.80-0.95) because quality compounders show persistent annual improvement, not quarterly noise.",
+            "Momentum nearly zeroed (short-term 0.05-0.15) so quality rank is independent of recent price action. Only Perf.Y=1.25 retained to confirm secular winners.",
+            "Attention INVERTED: positive=0.70x, negative=1.50x. Strong crowd inversion means popular names must earn their quality rank; low-volume names face structural penalty for missing data, not for being quiet.",
+            "Missing quality penalty is the harshest in the system: -1.30 at years horizon. Names without fundamental data cannot rank.",
+            "Safety carries 24-26% weight across all horizons — the floor against quality traps with hidden leverage.",
+        ],
+        confidence_multiplier=1.02,
+    ),
+    "sector_relative_outperformer": ScoringProfile(
+        name="sector_relative_outperformer",
+        description=(
+            "Operational excellence profile that surfaces best-in-class operators "
+            "within their peer group. Emphasizes revenue efficiency per employee, "
+            "ROIC, margin durability, capital return discipline (buyback yield, "
+            "dividend yield), and forward earnings growth. Differentiator from "
+            "quality_value_compounder: this profile rewards RELATIVE strength "
+            "via long-duration momentum (Perf.Y, Perf.6M) to identify companies "
+            "that the market has already begun to recognize as superior operators. "
+            "Noise reduction: volume_trend detects sustained institutional "
+            "accumulation; pivot_distance confirms structural support. Short-term "
+            "tape noise is aggressively damped."
+        ),
+        horizon_weights={
+            "days": {
+                "attention": 0.04,
+                "event": 0.02,
+                "momentum": 0.08,
+                "trend": 0.20,
+                "quality": 0.32,
+                "valuation": 0.14,
+                "safety": 0.20,
+            },
+            "weeks": {
+                "attention": 0.03,
+                "event": 0.02,
+                "momentum": 0.08,
+                "trend": 0.18,
+                "quality": 0.32,
+                "valuation": 0.17,
+                "safety": 0.20,
+            },
+            "months": {
+                "attention": 0.02,
+                "event": 0.01,
+                "momentum": 0.06,
+                "trend": 0.14,
+                "quality": 0.35,
+                "valuation": 0.22,
+                "safety": 0.20,
+            },
+            "years": {
+                "attention": 0.01,
+                "event": 0.01,
+                "momentum": 0.03,
+                "trend": 0.07,
+                "quality": 0.40,
+                "valuation": 0.26,
+                "safety": 0.22,
+            },
+        },
+        component_signal_weights={
+            "attention": {
+                "relative_volume_10d_calc": 0.85,
+                "float_turnover": 0.80,
+                "dollar_turnover_intensity": 0.75,
+                "Value.Traded": 0.70,
+                "AvgValue.Traded_10d": 0.65,
+                "volume_trend": 1.50,
+                "intraday_momentum": 0.40,
+            },
+            "momentum": {
                 "change": 0.15,
                 "Perf.5D": 0.15,
-                "Perf.W": 0.20,
-                "Perf.1M": 0.40,
+                "Perf.W": 0.25,
+                "Perf.1M": 0.45,
                 "Perf.3M": 1.05,
-                "Perf.YTD": 1.05,
-                "Perf.Y": 1.20,
+                "Perf.6M": 1.20,
+                "Perf.YTD": 1.15,
+                "Perf.Y": 1.30,
                 "ROC": 0.40,
                 "Mom": 0.45,
                 "macd_spread": 0.35,
@@ -578,79 +959,86 @@ PRESET_SCORING_PROFILES = {
             },
             "trend": {
                 "close_vs_sma50": 0.85,
-                "close_vs_sma200": 1.35,
+                "close_vs_sma200": 1.40,
                 "close_vs_ema50": 0.85,
-                "close_vs_ema200": 1.35,
-                "close_vs_vwap": 0.25,
+                "close_vs_ema200": 1.40,
+                "close_vs_vwap": 0.30,
                 "close_vs_vwma": 0.40,
-                "trend_alignment": 1.20,
+                "trend_alignment": 1.30,
+                "pivot_distance": 1.15,
             },
             "quality": {
-                "total_revenue_yoy_growth_ttm": 1.10,
+                "total_revenue_yoy_growth_ttm": 1.20,
                 "total_revenue_qoq_growth_fq": 0.85,
-                "ebitda_yoy_growth_ttm": 1.15,
+                "ebitda_yoy_growth_ttm": 1.25,
                 "ebitda_qoq_growth_fq": 0.90,
-                "net_income_yoy_growth_ttm": 1.05,
+                "net_income_yoy_growth_ttm": 1.15,
                 "net_income_qoq_growth_fq": 0.85,
-                "free_cash_flow_yoy_growth_ttm": 1.20,
+                "free_cash_flow_yoy_growth_ttm": 1.30,
                 "free_cash_flow_qoq_growth_fq": 1.00,
-                "gross_margin": 1.10,
-                "operating_margin": 1.20,
+                "gross_margin": 1.15,
+                "operating_margin": 1.30,
                 "after_tax_margin": 1.10,
-                "return_on_assets": 1.05,
-                "return_on_equity": 1.10,
-                "return_on_invested_capital": 1.30,
-                "free_cash_flow_margin_ttm": 1.15,
-                "buyback_yield": 0.85,
+                "return_on_assets": 1.15,
+                "return_on_equity": 1.20,
+                "return_on_invested_capital": 1.40,
+                "free_cash_flow_margin_ttm": 1.30,
+                "buyback_yield": 1.10,
+                "dividends_yield_current": 0.85,
+                "eps_forward_growth": 1.35,
+                "revenue_per_employee": 1.30,
+                "earnings_per_share_diluted_yoy_growth_ttm": 1.20,
+                "gross_profit_margin_fy": 1.15,
             },
             "valuation": {
-                "price_earnings_ttm": 1.10,
-                "price_earnings_growth_ttm": 1.15,
-                "price_sales_current": 1.05,
-                "price_book_fq": 0.90,
+                "price_earnings_ttm": 1.05,
+                "price_earnings_growth_ttm": 1.25,
+                "price_sales_current": 0.90,
+                "price_book_fq": 0.80,
                 "price_free_cash_flow_ttm": 1.20,
-                "price_to_cash_f_operating_activities_ttm": 1.10,
-                "enterprise_value_to_revenue_ttm": 1.05,
-                "enterprise_value_to_ebit_ttm": 0.95,
-                "enterprise_value_ebitda_ttm": 1.15,
+                "price_to_cash_f_operating_activities_ttm": 1.05,
+                "enterprise_value_to_revenue_ttm": 0.95,
+                "enterprise_value_to_ebit_ttm": 0.85,
+                "enterprise_value_ebitda_ttm": 1.10,
+                "earnings_yield": 1.20,
             },
             "safety": {
                 "current_ratio": 1.05,
                 "quick_ratio": 1.05,
-                "cash_ratio": 1.00,
-                "short_term_cash_coverage": 1.15,
+                "cash_ratio": 0.90,
+                "short_term_cash_coverage": 1.10,
                 "altman_z_score_ttm": 1.20,
-                "debt_to_equity": 1.20,
-                "debt_to_revenue_ttm": 1.15,
+                "debt_to_equity": 1.15,
+                "debt_to_revenue_ttm": 1.10,
                 "net_debt": 1.10,
-                "beta_1_year": 0.75,
+                "beta_1_year": 0.65,
             },
         },
         component_directional_bias={
             "attention": DirectionalBias(
-                positive_multiplier=0.80, negative_multiplier=1.40
+                positive_multiplier=0.70, negative_multiplier=1.40
             ),
             "momentum": DirectionalBias(
-                positive_multiplier=1.00, negative_multiplier=0.95
+                positive_multiplier=1.08, negative_multiplier=0.85
             ),
             "trend": DirectionalBias(
-                positive_multiplier=1.05, negative_multiplier=1.10
+                positive_multiplier=1.12, negative_multiplier=1.12
             ),
             "quality": DirectionalBias(
-                positive_multiplier=1.20, negative_multiplier=1.25
+                positive_multiplier=1.30, negative_multiplier=1.35
             ),
             "valuation": DirectionalBias(
-                positive_multiplier=1.18, negative_multiplier=1.15
+                positive_multiplier=1.18, negative_multiplier=1.12
             ),
             "safety": DirectionalBias(
-                positive_multiplier=1.15, negative_multiplier=1.25
+                positive_multiplier=1.15, negative_multiplier=1.28
             ),
         },
         missing_component_scores_by_horizon={
             "days": {
                 "attention": -0.45,
                 "quality": -0.90,
-                "valuation": -0.75,
+                "valuation": -0.70,
                 "safety": -0.70,
             },
             "weeks": {
@@ -663,963 +1051,229 @@ PRESET_SCORING_PROFILES = {
                 "attention": -0.25,
                 "quality": -1.10,
                 "valuation": -0.90,
-                "safety": -0.85,
+                "safety": -0.90,
             },
             "years": {
-                "attention": -0.15,
                 "quality": -1.20,
                 "valuation": -1.00,
                 "safety": -0.95,
             },
         },
-        confidence_multiplier=1.02,
-    ),
-    "value_recovery": ScoringProfile(
-        name="value_recovery",
-        description=(
-            "Bias toward recovery candidates where cheap valuation, improving "
-            "sequential fundamentals, and stabilizing safety matter more than "
-            "already-strong short-term momentum. The profile now emphasizes "
-            "QoQ growth metrics over YoY to detect genuine recovery trajectory "
-            "rather than static cheapness. Extended signals include "
-            "distance_from_52w_high and range_position_52w for discount depth, "
-            "eps_forward_growth for analyst recovery expectations, and "
-            "stoch_rsi_centered for oversold-to-recovery turn detection. "
-            "Attention weight is raised and negative attention amplified so "
-            "low-volume passive vehicles are penalized."
-        ),
-        horizon_weights={
-            "days": {
-                "attention": 0.07,
-                "event": 0.05,
-                "momentum": 0.04,
-                "trend": 0.12,
-                "quality": 0.22,
-                "valuation": 0.26,
-                "safety": 0.24,
-            },
-            "weeks": {
-                "attention": 0.07,
-                "event": 0.05,
-                "momentum": 0.08,
-                "trend": 0.16,
-                "quality": 0.20,
-                "valuation": 0.23,
-                "safety": 0.21,
-            },
-            "months": {
-                "attention": 0.05,
-                "event": 0.03,
-                "momentum": 0.06,
-                "trend": 0.16,
-                "quality": 0.25,
-                "valuation": 0.25,
-                "safety": 0.20,
-            },
-            "years": {
-                "attention": 0.02,
-                "event": 0.01,
-                "momentum": 0.01,
-                "trend": 0.08,
-                "quality": 0.28,
-                "valuation": 0.33,
-                "safety": 0.27,
-            },
-        },
-        component_signal_weights={
-            "momentum": {
-                "change": 0.40,
-                "Perf.5D": 0.30,
-                "Perf.W": 0.35,
-                "Perf.1M": 0.55,
-                "Perf.3M": 1.20,
-                "Perf.YTD": 1.05,
-                "Perf.Y": 0.80,
-                "ROC": 0.55,
-                "Mom": 0.60,
-                "macd_spread": 0.50,
-                "Recommend.All": 0.70,
-                "Recommend.MA": 0.60,
-                "Recommend.Other": 0.70,
-                "rsi_centered": 0.25,
-                "rsi7_centered": 0.15,
-                "stoch_rsi_centered": 0.45,
-            },
-            "valuation": {
-                "price_earnings_ttm": 1.10,
-                "price_earnings_growth_ttm": 1.20,
-                "price_book_fq": 1.20,
-                "price_sales_current": 1.10,
-                "price_free_cash_flow_ttm": 1.05,
-                "enterprise_value_to_revenue_ttm": 1.10,
-                "enterprise_value_ebitda_ttm": 1.15,
-                "earnings_yield": 1.20,
-                "distance_from_52w_high": 1.15,
-                "range_position_52w": 1.05,
-            },
-            "quality": {
-                "total_revenue_yoy_growth_ttm": 0.95,
-                "total_revenue_qoq_growth_fq": 1.15,
-                "ebitda_yoy_growth_ttm": 1.00,
-                "ebitda_qoq_growth_fq": 1.10,
-                "net_income_yoy_growth_ttm": 1.05,
-                "net_income_qoq_growth_fq": 1.20,
-                "free_cash_flow_yoy_growth_ttm": 1.15,
-                "free_cash_flow_qoq_growth_fq": 1.25,
-                "operating_margin": 1.10,
-                "after_tax_margin": 1.05,
-                "free_cash_flow_margin_ttm": 1.15,
-                "buyback_yield": 0.70,
-                "dividends_yield_current": 0.60,
-                "eps_forward_growth": 1.25,
-            },
-            "safety": {
-                "short_term_cash_coverage": 1.10,
-                "altman_z_score_ttm": 1.20,
-                "debt_to_equity": 1.15,
-                "debt_to_revenue_ttm": 1.10,
-                "net_debt": 1.15,
-            },
-            "trend": {
-                "close_vs_sma50": 0.90,
-                "close_vs_sma200": 1.15,
-                "close_vs_ema50": 0.90,
-                "close_vs_ema200": 1.15,
-                "close_vs_vwap": 0.60,
-                "close_vs_vwma": 0.75,
-                "trend_alignment": 1.10,
-            },
-        },
-        component_directional_bias={
-            "attention": DirectionalBias(
-                positive_multiplier=0.85, negative_multiplier=1.30
-            ),
-            "momentum": DirectionalBias(
-                positive_multiplier=0.90, negative_multiplier=0.65
-            ),
-            "trend": DirectionalBias(
-                positive_multiplier=1.05, negative_multiplier=0.90
-            ),
-            "valuation": DirectionalBias(
-                positive_multiplier=1.28, negative_multiplier=1.10
-            ),
-            "quality": DirectionalBias(
-                positive_multiplier=1.15, negative_multiplier=1.10
-            ),
-            "safety": DirectionalBias(
-                positive_multiplier=1.15, negative_multiplier=1.15
-            ),
-        },
-        missing_component_scores_by_horizon={
-            "days": {
-                "attention": -0.35,
-                "valuation": -0.80,
-                "quality": -0.50,
-                "safety": -0.60,
-            },
-            "weeks": {
-                "attention": -0.25,
-                "valuation": -0.90,
-                "quality": -0.60,
-                "safety": -0.70,
-            },
-            "months": {
-                "attention": -0.15,
-                "valuation": -1.00,
-                "quality": -0.70,
-                "safety": -0.80,
-            },
-            "years": {
-                "valuation": -1.10,
-                "quality": -0.80,
-                "safety": -0.90,
-            },
-        },
         intro_metric_notes=[
-            "Recovery trajectory emphasis: QoQ growth metrics are weighted 1.10-1.25 while YoY are 0.95-1.15. This surfaces names with sequential improvement even if trailing annual figures are still negative.",
-            "Extended valuation signals: distance_from_52w_high (1.15) and range_position_52w (1.05) now detect beaten-down names with room to recover, differentiating from asymmetric_value which weights these more aggressively for static cheapness.",
-            "Forward recovery conviction: eps_forward_growth (1.25) captures analyst expectations of EPS improvement, confirming the recovery trajectory thesis.",
-            "Momentum recovery detection: stoch_rsi_centered (0.45) is activated to detect when oversold names start turning, a key recovery inflection signal.",
-            "Quality directional bias tightened: negative quality (1.10x) is now penalized more than before (was 0.95x) so names with deteriorating fundamentals cannot ride cheap multiples alone.",
-        ],
-    ),
-    "fragility_short": ScoringProfile(
-        name="fragility_short",
-        description=(
-            "Bias toward short candidates where balance-sheet weakness, deteriorating trend, negative event pressure, and downside momentum should be penalized more aggressively. Missing fragility evidence is treated more cautiously so the profile does not just echo the balanced tape leaders."
-        ),
-        horizon_weights={
-            "days": {
-                "attention": 0.18,
-                "event": 0.28,
-                "momentum": 0.28,
-                "trend": 0.18,
-                "quality": 0.02,
-                "valuation": 0.01,
-                "safety": 0.05,
-            },
-            "weeks": {
-                "attention": 0.10,
-                "event": 0.18,
-                "momentum": 0.28,
-                "trend": 0.24,
-                "quality": 0.05,
-                "valuation": 0.01,
-                "safety": 0.14,
-            },
-            "months": {
-                "attention": 0.04,
-                "event": 0.08,
-                "momentum": 0.22,
-                "trend": 0.24,
-                "quality": 0.12,
-                "valuation": 0.04,
-                "safety": 0.26,
-            },
-            "years": {
-                "attention": 0.00,
-                "event": 0.03,
-                "momentum": 0.08,
-                "trend": 0.15,
-                "quality": 0.16,
-                "valuation": 0.05,
-                "safety": 0.53,
-            },
-        },
-        component_signal_weights={
-            "event": {
-                "premarket_change": 1.15,
-                "postmarket_change": 1.15,
-                "gap": 1.15,
-                "gap_severity": 1.25,
-                "event_intensity": 1.10,
-            },
-            "momentum": {
-                "change": 1.15,
-                "Perf.5D": 1.20,
-                "Perf.W": 1.20,
-                "Perf.1M": 1.10,
-                "Perf.3M": 1.05,
-                "ROC": 1.10,
-            },
-            "trend": {
-                "close_vs_sma50": 1.10,
-                "close_vs_sma200": 1.15,
-                "close_vs_ema50": 1.10,
-                "close_vs_ema200": 1.15,
-                "close_vs_vwap": 1.10,
-                "close_vs_vwma": 1.10,
-                "trend_alignment": 1.20,
-            },
-            "safety": {
-                "current_ratio": 1.05,
-                "short_term_cash_coverage": 1.10,
-                "debt_to_equity": 1.25,
-                "debt_to_revenue_ttm": 1.20,
-                "net_debt": 1.15,
-                "altman_z_score_ttm": 1.25,
-                "beta_1_year": 1.05,
-            },
-        },
-        component_directional_bias={
-            "event": DirectionalBias(
-                positive_multiplier=0.90, negative_multiplier=1.20
-            ),
-            "momentum": DirectionalBias(
-                positive_multiplier=0.85, negative_multiplier=1.20
-            ),
-            "trend": DirectionalBias(
-                positive_multiplier=0.90, negative_multiplier=1.25
-            ),
-            "quality": DirectionalBias(
-                positive_multiplier=0.90, negative_multiplier=1.15
-            ),
-            "safety": DirectionalBias(
-                positive_multiplier=0.85, negative_multiplier=1.35
-            ),
-        },
-        missing_component_scores_by_horizon={
-            "days": {
-                "event": -0.40,
-                "momentum": -0.45,
-                "trend": -0.35,
-            },
-            "weeks": {
-                "momentum": -0.50,
-                "trend": -0.40,
-                "safety": -0.45,
-            },
-            "months": {
-                "trend": -0.45,
-                "safety": -0.60,
-            },
-            "years": {
-                "safety": -0.80,
-                "quality": -0.35,
-            },
-        },
-        confidence_multiplier=1.07,
-    ),
-    "backtest_period_ladder": ScoringProfile(
-        name="backtest_period_ladder",
-        description=(
-            "Purpose-built for retrospective horizon tracking against TradingView trailing performance windows. Short horizons lean on attention, event pressure, and fresh trend confirmation, while longer horizons progressively hand off to trend durability, quality, valuation, and safety."
-        ),
-        horizon_weights={
-            "days": {
-                "attention": 0.29,
-                "event": 0.24,
-                "momentum": 0.17,
-                "trend": 0.21,
-                "quality": 0.02,
-                "valuation": 0.01,
-                "safety": 0.06,
-            },
-            "weeks": {
-                "attention": 0.19,
-                "event": 0.10,
-                "momentum": 0.17,
-                "trend": 0.27,
-                "quality": 0.08,
-                "valuation": 0.04,
-                "safety": 0.15,
-            },
-            "months": {
-                "attention": 0.07,
-                "event": 0.04,
-                "momentum": 0.10,
-                "trend": 0.24,
-                "quality": 0.22,
-                "valuation": 0.12,
-                "safety": 0.21,
-            },
-            "years": {
-                "attention": 0.01,
-                "event": 0.02,
-                "momentum": 0.03,
-                "trend": 0.18,
-                "quality": 0.31,
-                "valuation": 0.22,
-                "safety": 0.23,
-            },
-        },
-        component_signal_weights={
-            "momentum": {
-                "Perf.W": 0.0,
-                "Perf.1M": 0.0,
-                "Perf.YTD": 0.0,
-                "Perf.Y": 0.0,
-                "Perf.5D": 1.15,
-                "Perf.3M": 1.15,
-                "Perf.6M": 1.10,
-                "ROC": 1.10,
-                "Mom": 1.10,
-                "macd_spread": 1.10,
-            },
-            "trend": {
-                "trend_alignment": 1.25,
-                "close_vs_sma50": 1.10,
-                "close_vs_sma200": 1.20,
-                "close_vs_ema50": 1.10,
-                "close_vs_ema200": 1.20,
-                "close_vs_vwap": 1.05,
-            },
-            "quality": {
-                "total_revenue_yoy_growth_ttm": 1.10,
-                "ebitda_yoy_growth_ttm": 1.10,
-                "free_cash_flow_yoy_growth_ttm": 1.20,
-                "operating_margin": 1.10,
-                "return_on_invested_capital": 1.20,
-            },
-            "valuation": {
-                "price_earnings_ttm": 1.05,
-                "price_free_cash_flow_ttm": 1.10,
-                "enterprise_value_ebitda_ttm": 1.10,
-                "enterprise_value_to_revenue_ttm": 1.05,
-            },
-            "safety": {
-                "current_ratio": 1.05,
-                "short_term_cash_coverage": 1.10,
-                "altman_z_score_ttm": 1.15,
-                "debt_to_equity": 1.10,
-                "debt_to_revenue_ttm": 1.10,
-            },
-        },
-        component_directional_bias={
-            "trend": DirectionalBias(
-                positive_multiplier=1.10, negative_multiplier=1.05
-            ),
-            "quality": DirectionalBias(
-                positive_multiplier=1.10, negative_multiplier=1.00
-            ),
-            "valuation": DirectionalBias(
-                positive_multiplier=1.10, negative_multiplier=1.05
-            ),
-            "safety": DirectionalBias(
-                positive_multiplier=1.05, negative_multiplier=1.15
-            ),
-        },
-        performance_tracking_periods={
-            "days": ["Perf.W"],
-            "weeks": ["Perf.1M"],
-            "months": ["Perf.YTD"],
-            "years": ["Perf.Y", "Perf.5Y"],
-        },
-        intro_metric_notes=[
-            "Perf.5Y was added as a five-year trailing price-performance benchmark so long-duration calls can be checked against secular winners instead of only one-year moves.",
-            "This profile intentionally mutes Perf.W, Perf.1M, Perf.YTD, and Perf.Y inside the momentum component so the companion tracking report is less circular when it compares horizon scores against those same realized-return windows.",
-            "Tracking map: days to Perf.W, weeks to Perf.1M, months to Perf.YTD, and years to Perf.Y plus Perf.5Y.",
-        ],
-        confidence_multiplier=1.03,
-        missing_component_scores_by_horizon={
-            "days": {
-                "attention": -0.25,
-            },
-            "weeks": {
-                "attention": -0.20,
-            },
-            "months": {
-                "quality": -0.25,
-            },
-            "years": {
-                "quality": -0.35,
-                "valuation": -0.25,
-            },
-        },
-    ),
-    "asymmetric_value": ScoringProfile(
-        name="asymmetric_value",
-        description=(
-            "Surface names with deep value discounts where the fundamental floor "
-            "remains intact, creating asymmetric upside potential. The profile "
-            "combines traditional multiple-based valuation with forward-looking "
-            "signals — earnings yield, FCF margin, shareholder returns — and "
-            "price-position metrics that measure how far a stock sits below its "
-            "52-week ceiling. Attention weight was raised and negative attention is "
-            "amplified so passive low-volume vehicles face a meaningful drag. Safety "
-            "carries meaningful weight across all horizons so the leaderboard avoids "
-            "value traps."
-        ),
-        horizon_weights={
-            "days": {
-                "attention": 0.05,
-                "event": 0.02,
-                "momentum": 0.06,
-                "trend": 0.15,
-                "quality": 0.20,
-                "valuation": 0.32,
-                "safety": 0.20,
-            },
-            "weeks": {
-                "attention": 0.05,
-                "event": 0.03,
-                "momentum": 0.08,
-                "trend": 0.14,
-                "quality": 0.22,
-                "valuation": 0.28,
-                "safety": 0.20,
-            },
-            "months": {
-                "attention": 0.04,
-                "event": 0.02,
-                "momentum": 0.06,
-                "trend": 0.12,
-                "quality": 0.26,
-                "valuation": 0.30,
-                "safety": 0.20,
-            },
-            "years": {
-                "attention": 0.02,
-                "event": 0.01,
-                "momentum": 0.02,
-                "trend": 0.07,
-                "quality": 0.28,
-                "valuation": 0.36,
-                "safety": 0.24,
-            },
-        },
-        component_signal_weights={
-            "momentum": {
-                "change": 0.25,
-                "Perf.5D": 0.30,
-                "Perf.W": 0.35,
-                "Perf.1M": 0.55,
-                "Perf.3M": 1.15,
-                "Perf.6M": 1.10,
-                "Perf.YTD": 1.05,
-                "Perf.Y": 0.80,
-                "ROC": 0.50,
-                "Mom": 0.55,
-                "macd_spread": 0.45,
-                "Recommend.All": 0.65,
-                "Recommend.MA": 0.55,
-                "Recommend.Other": 0.60,
-                "rsi_centered": 0.20,
-                "rsi7_centered": 0.10,
-            },
-            "trend": {
-                "close_vs_sma50": 0.80,
-                "close_vs_sma200": 1.30,
-                "close_vs_ema50": 0.80,
-                "close_vs_ema200": 1.30,
-                "close_vs_vwap": 0.50,
-                "close_vs_vwma": 0.60,
-                "trend_alignment": 1.15,
-            },
-            "quality": {
-                "total_revenue_yoy_growth_ttm": 1.05,
-                "total_revenue_qoq_growth_fq": 0.90,
-                "ebitda_yoy_growth_ttm": 1.10,
-                "ebitda_qoq_growth_fq": 0.95,
-                "net_income_yoy_growth_ttm": 1.05,
-                "net_income_qoq_growth_fq": 0.90,
-                "free_cash_flow_yoy_growth_ttm": 1.25,
-                "free_cash_flow_qoq_growth_fq": 1.05,
-                "gross_margin": 1.05,
-                "operating_margin": 1.15,
-                "after_tax_margin": 1.05,
-                "return_on_assets": 1.00,
-                "return_on_equity": 1.05,
-                "return_on_invested_capital": 1.30,
-                "free_cash_flow_margin_ttm": 1.30,
-                "buyback_yield": 1.10,
-                "dividends_yield_current": 0.90,
-            },
-            "valuation": {
-                "price_earnings_ttm": 1.10,
-                "price_earnings_growth_ttm": 1.15,
-                "price_sales_current": 1.00,
-                "price_book_fq": 1.10,
-                "price_free_cash_flow_ttm": 1.20,
-                "price_to_cash_f_operating_activities_ttm": 1.05,
-                "enterprise_value_to_revenue_ttm": 1.00,
-                "enterprise_value_to_ebit_ttm": 0.95,
-                "enterprise_value_ebitda_ttm": 1.10,
-                "earnings_yield": 1.30,
-                "distance_from_52w_high": 1.40,
-                "range_position_52w": 1.25,
-            },
-            "safety": {
-                "current_ratio": 1.05,
-                "quick_ratio": 1.05,
-                "cash_ratio": 1.00,
-                "short_term_cash_coverage": 1.15,
-                "altman_z_score_ttm": 1.25,
-                "debt_to_equity": 1.20,
-                "debt_to_revenue_ttm": 1.15,
-                "net_debt": 1.15,
-                "beta_1_year": 0.80,
-            },
-        },
-        component_directional_bias={
-            "attention": DirectionalBias(
-                positive_multiplier=0.80, negative_multiplier=1.35
-            ),
-            "momentum": DirectionalBias(
-                positive_multiplier=0.85, negative_multiplier=0.60
-            ),
-            "trend": DirectionalBias(
-                positive_multiplier=1.00, negative_multiplier=0.85
-            ),
-            "quality": DirectionalBias(
-                positive_multiplier=1.15, negative_multiplier=1.20
-            ),
-            "valuation": DirectionalBias(
-                positive_multiplier=1.30, negative_multiplier=1.00
-            ),
-            "safety": DirectionalBias(
-                positive_multiplier=1.10, negative_multiplier=1.30
-            ),
-        },
-        missing_component_scores_by_horizon={
-            "days": {
-                "attention": -0.40,
-                "valuation": -0.80,
-                "quality": -0.55,
-                "safety": -0.60,
-            },
-            "weeks": {
-                "attention": -0.30,
-                "valuation": -0.90,
-                "quality": -0.65,
-                "safety": -0.70,
-            },
-            "months": {
-                "attention": -0.20,
-                "valuation": -1.00,
-                "quality": -0.75,
-                "safety": -0.80,
-            },
-            "years": {
-                "valuation": -1.10,
-                "quality": -0.85,
-                "safety": -0.90,
-            },
-        },
-        intro_metric_notes=[
-            "This profile activates extended valuation signals: earnings_yield (higher = cheaper), distance_from_52w_high (inverted; further below peak = deeper discount), and range_position_52w (inverted; lower in 52-week range = more upside room).",
-            "Quality is also extended with free_cash_flow_margin_ttm, buyback_yield, and dividends_yield_current to capture forward-looking capital return and cash generation quality.",
-            "Momentum is intentionally damped so cheap-but-unloved names are not penalized for weak recent price action. Safety is elevated across all horizons to screen out value traps.",
+            "Operational excellence profile — rewards relative strength within peer group.",
+            "Efficiency core: revenue_per_employee=1.30 (highest in system), ROIC=1.40, operating_margin=1.30, FCF_margin=1.30.",
+            "Capital return discipline: buyback_yield=1.10, dividends_yield=0.85. Companies returning cash to shareholders consistently outperform over long horizons.",
+            "Forward conviction: eps_forward_growth=1.35, EPS_diluted_growth=1.20. The market prices forward earnings, not backward.",
+            "Long-duration momentum confirms market recognition: Perf.Y=1.30, Perf.6M=1.20, Perf.YTD=1.15. Short-term tape crushed (change=0.15, Perf.5D=0.15).",
+            "Volume accumulation: volume_trend=1.50 (highest in system) detects sustained institutional buying pattern — not one-day attention spikes.",
+            "Attention strongly inverted: positive=0.70x, negative=1.40x. Quality must stand on its own merits, not popularity.",
         ],
         confidence_multiplier=1.02,
-    ),
-    "early_momentum_inflection": ScoringProfile(
-        name="early_momentum_inflection",
-        description=(
-            "Catch names at the very beginning of a directional move before the "
-            "crowd notices. The profile now fully activates its coiled-energy "
-            "detection suite: range_compression, volatility_contraction, and "
-            "bb_squeeze in attention alongside Aroon spread and ADX directional "
-            "spread for new-trend detection. Short-term MA alignment (SMA10/20/30, "
-            "EMA10/20/30) and short_trend_emergence are activated in trend. "
-            "stoch_rsi_centered and CCI20 are activated in momentum for early "
-            "impulse detection. Established long-duration momentum is damped even "
-            "more aggressively and 200-day trend markers are further reduced so "
-            "the leaderboard surfaces genuine inflection candidates."
-        ),
-        horizon_weights={
-            "days": {
-                "attention": 0.24,
-                "event": 0.12,
-                "momentum": 0.30,
-                "trend": 0.24,
-                "quality": 0.03,
-                "valuation": 0.02,
-                "safety": 0.05,
-            },
-            "weeks": {
-                "attention": 0.18,
-                "event": 0.06,
-                "momentum": 0.28,
-                "trend": 0.30,
-                "quality": 0.06,
-                "valuation": 0.03,
-                "safety": 0.09,
-            },
-            "months": {
-                "attention": 0.10,
-                "event": 0.04,
-                "momentum": 0.22,
-                "trend": 0.26,
-                "quality": 0.14,
-                "valuation": 0.08,
-                "safety": 0.16,
-            },
-            "years": {
-                "attention": 0.02,
-                "event": 0.02,
-                "momentum": 0.10,
-                "trend": 0.18,
-                "quality": 0.24,
-                "valuation": 0.18,
-                "safety": 0.26,
-            },
-        },
-        component_signal_weights={
-            "attention": {
-                "relative_volume_10d_calc": 1.30,
-                "float_turnover": 1.25,
-                "dollar_turnover_intensity": 1.15,
-                "Value.Traded": 1.10,
-                "AvgValue.Traded_10d": 1.00,
-                "bb_squeeze": 1.40,
-                "range_compression": 1.35,
-                "volatility_contraction": 1.30,
-            },
-            "event": {
-                "premarket_change": 1.10,
-                "postmarket_change": 1.10,
-                "gap": 1.10,
-                "gap_severity": 1.20,
-                "event_intensity": 1.15,
-                "eps_surprise_percent_fq": 0.85,
-            },
-            "momentum": {
-                "change": 1.00,
-                "Perf.5D": 1.35,
-                "Perf.W": 1.15,
-                "Perf.1M": 0.75,
-                "Perf.3M": 0.50,
-                "Perf.6M": 0.30,
-                "Perf.YTD": 0.25,
-                "Perf.Y": 0.15,
-                "ROC": 1.25,
-                "Mom": 1.20,
-                "macd_spread": 1.30,
-                "Recommend.All": 0.80,
-                "Recommend.MA": 0.95,
-                "Recommend.Other": 0.85,
-                "rsi_centered": 0.70,
-                "rsi7_centered": 1.10,
-                "aroon_spread": 1.55,
-                "adx_directional_spread": 1.45,
-                "stoch_rsi_centered": 1.10,
-                "CCI20": 0.90,
-            },
-            "trend": {
-                "close_vs_sma10": 1.30,
-                "close_vs_sma20": 1.20,
-                "close_vs_sma30": 1.10,
-                "close_vs_sma50": 1.00,
-                "close_vs_sma200": 0.60,
-                "close_vs_ema10": 1.30,
-                "close_vs_ema20": 1.20,
-                "close_vs_ema30": 1.10,
-                "close_vs_ema50": 1.00,
-                "close_vs_ema200": 0.60,
-                "close_vs_vwap": 1.25,
-                "close_vs_vwma": 1.20,
-                "trend_alignment": 0.85,
-                "bb_position": 1.25,
-                "short_trend_emergence": 1.45,
-            },
-        },
-        component_directional_bias={
-            "attention": DirectionalBias(
-                positive_multiplier=1.25, negative_multiplier=0.78
-            ),
-            "event": DirectionalBias(
-                positive_multiplier=1.10, negative_multiplier=0.90
-            ),
-            "momentum": DirectionalBias(
-                positive_multiplier=1.35, negative_multiplier=0.70
-            ),
-            "trend": DirectionalBias(
-                positive_multiplier=1.25, negative_multiplier=0.80
-            ),
-            "quality": DirectionalBias(
-                positive_multiplier=1.00, negative_multiplier=0.85
-            ),
-            "safety": DirectionalBias(
-                positive_multiplier=1.00, negative_multiplier=0.85
-            ),
-        },
-        missing_component_scores_by_horizon={
-            "days": {
-                "attention": -0.65,
-                "momentum": -0.70,
-                "trend": -0.50,
-            },
-            "weeks": {
-                "attention": -0.40,
-                "momentum": -0.55,
-                "trend": -0.40,
-            },
-            "months": {
-                "momentum": -0.35,
-                "trend": -0.25,
-            },
-        },
-        intro_metric_notes=[
-            "This profile activates extended momentum signals: aroon_spread (1.55, Aroon.Up minus Aroon.Down; positive = new uptrend forming) and adx_directional_spread (1.45, ADX+DI minus ADX-DI; positive = bullish directional strength emerging). Both are boosted from prior values.",
-            "Coiled-energy suite fully activated in attention: bb_squeeze (1.40, inverted band width), range_compression (1.35, inverted 3-month range), volatility_contraction (1.30, inverted daily-vs-monthly vol ratio). These detect names where price is consolidating before an expansion.",
-            "Short-term MA alignment activated in trend: close_vs_sma10/20/30 and close_vs_ema10/20/30 (1.30/1.20/1.10) plus short_trend_emergence (1.45). These catch the very first MA crossovers before SMA50/200 confirm.",
-            "stoch_rsi_centered (1.10) and CCI20 (0.90) activated for early momentum impulse and directional thrust detection.",
-            "Longer-duration momentum further damped: Perf.Y=0.15, Perf.YTD=0.25, Perf.6M=0.30, Perf.3M=0.50, Perf.1M=0.75. 200-day trend signals reduced to 0.60. trend_alignment reduced to 0.85 (established alignment is less relevant for nascent direction).",
-        ],
-        confidence_multiplier=1.05,
     ),
     "forward_edge_active": ScoringProfile(
         name="forward_edge_active",
         description=(
-            "Forward-looking active management profile targeting risk-adjusted "
-            "outperformance on the weeks-to-months timescale. Designed to catch "
-            "setups before the crowd by combining early trend emergence (short-term "
-            "MA alignment), volatility contraction (coiled energy), forward EPS "
-            "growth expectations, and earnings surprise history. Trailing long-"
-            "horizon performance is now damped even more aggressively — Perf.Y "
-            "at 0.05 and Perf.YTD at 0.15. QoQ growth metrics are boosted to "
-            "1.30-1.40 to prioritize what is changing over what was. Attention "
-            "inversion is stronger (positive 0.55x, negative 1.40x) so the "
-            "profile surfaces genuinely undiscovered names. Quality and safety "
-            "carry meaningful weight across all horizons with heavier missing-"
-            "component penalties to avoid catching falling knives."
+            "Forward-looking active management profile that identifies quality "
+            "improvement BEFORE the market prices it in. Core differentiators: "
+            "eps_forward_growth (analyst EPS revision direction), QoQ sequential "
+            "improvement metrics, and EPS surprise history. This profile answers "
+            "'what is getting better?' not 'what has been good?'. Noise reduction: "
+            "trailing performance is nearly invisible (Perf.Y=0.05), attention is "
+            "maximally inverted, and missing fundamental data faces the heaviest "
+            "penalties. Designed for weeks-to-months outperformance positioning."
         ),
         horizon_weights={
             "days": {
-                "attention": 0.07,
-                "event": 0.10,
-                "momentum": 0.16,
-                "trend": 0.28,
-                "quality": 0.18,
-                "valuation": 0.09,
-                "safety": 0.12,
+                "attention": 0.05,
+                "event": 0.08,
+                "momentum": 0.14,
+                "trend": 0.26,
+                "quality": 0.22,
+                "valuation": 0.10,
+                "safety": 0.15,
             },
             "weeks": {
-                "attention": 0.05,
-                "event": 0.07,
-                "momentum": 0.14,
-                "trend": 0.24,
-                "quality": 0.22,
-                "valuation": 0.12,
+                "attention": 0.04,
+                "event": 0.06,
+                "momentum": 0.12,
+                "trend": 0.22,
+                "quality": 0.26,
+                "valuation": 0.14,
                 "safety": 0.16,
             },
             "months": {
-                "attention": 0.04,
-                "event": 0.04,
-                "momentum": 0.10,
-                "trend": 0.18,
-                "quality": 0.26,
-                "valuation": 0.16,
+                "attention": 0.03,
+                "event": 0.03,
+                "momentum": 0.08,
+                "trend": 0.16,
+                "quality": 0.30,
+                "valuation": 0.18,
                 "safety": 0.22,
             },
             "years": {
                 "attention": 0.02,
-                "event": 0.02,
-                "momentum": 0.04,
-                "trend": 0.12,
-                "quality": 0.30,
+                "event": 0.01,
+                "momentum": 0.03,
+                "trend": 0.10,
+                "quality": 0.32,
                 "valuation": 0.22,
-                "safety": 0.28,
+                "safety": 0.30,
             },
         },
         component_signal_weights={
             "attention": {
-                "relative_volume_10d_calc": 0.80,
-                "float_turnover": 0.75,
-                "dollar_turnover_intensity": 0.70,
-                "Value.Traded": 0.60,
-                "AvgValue.Traded_10d": 0.50,
-                "bb_squeeze": 1.55,
-                "range_compression": 1.50,
-                "volatility_contraction": 1.45,
+                "relative_volume_10d_calc": 0.70,
+                "float_turnover": 0.65,
+                "dollar_turnover_intensity": 0.60,
+                "Value.Traded": 0.50,
+                "AvgValue.Traded_10d": 0.45,
+                "bb_squeeze": 1.60,
+                "range_compression": 1.55,
+                "volatility_contraction": 1.50,
+                "volume_trend": 1.50,
+                "intraday_momentum": 0.80,
             },
             "event": {
-                "premarket_change": 0.85,
-                "postmarket_change": 0.85,
-                "gap": 0.75,
-                "gap_severity": 0.80,
-                "event_intensity": 0.85,
-                "eps_surprise_percent_fq": 1.50,
+                "premarket_change": 0.80,
+                "postmarket_change": 0.80,
+                "gap": 0.70,
+                "gap_severity": 0.75,
+                "event_intensity": 0.80,
+                "eps_surprise_percent_fq": 1.60,
             },
             "momentum": {
-                "change": 0.70,
-                "Perf.5D": 1.10,
-                "Perf.W": 0.95,
-                "Perf.1M": 0.80,
-                "Perf.3M": 0.60,
-                "Perf.6M": 0.30,
-                "Perf.YTD": 0.15,
+                "change": 0.60,
+                "Perf.5D": 1.05,
+                "Perf.W": 0.90,
+                "Perf.1M": 0.75,
+                "Perf.3M": 0.50,
+                "Perf.6M": 0.25,
+                "Perf.YTD": 0.12,
                 "Perf.Y": 0.05,
                 "ROC": 1.20,
                 "Mom": 1.15,
                 "macd_spread": 1.30,
-                "Recommend.All": 0.65,
-                "Recommend.MA": 0.80,
-                "Recommend.Other": 0.60,
-                "rsi_centered": 0.50,
-                "rsi7_centered": 0.75,
+                "Recommend.All": 0.60,
+                "Recommend.MA": 0.75,
+                "Recommend.Other": 0.55,
+                "rsi_centered": 0.45,
+                "rsi7_centered": 0.70,
                 "aroon_spread": 1.40,
                 "adx_directional_spread": 1.30,
                 "stoch_rsi_centered": 1.15,
                 "CCI20": 1.00,
+                "stoch_rsi_crossover": 1.25,
             },
             "trend": {
-                "close_vs_sma10": 1.45,
-                "close_vs_sma20": 1.35,
-                "close_vs_sma30": 1.25,
-                "close_vs_ema10": 1.45,
-                "close_vs_ema20": 1.35,
-                "close_vs_ema30": 1.25,
-                "short_trend_emergence": 1.60,
-                "close_vs_sma50": 0.90,
-                "close_vs_sma200": 0.55,
-                "close_vs_ema50": 0.90,
-                "close_vs_ema200": 0.55,
-                "close_vs_vwap": 1.10,
-                "close_vs_vwma": 1.05,
-                "trend_alignment": 0.75,
-                "bb_position": 1.20,
+                "close_vs_sma10": 1.50,
+                "close_vs_sma20": 1.40,
+                "close_vs_sma30": 1.30,
+                "close_vs_ema10": 1.50,
+                "close_vs_ema20": 1.40,
+                "close_vs_ema30": 1.30,
+                "short_trend_emergence": 1.65,
+                "close_vs_sma50": 0.85,
+                "close_vs_sma200": 0.50,
+                "close_vs_ema50": 0.85,
+                "close_vs_ema200": 0.50,
+                "close_vs_vwap": 1.05,
+                "close_vs_vwma": 1.00,
+                "trend_alignment": 0.70,
+                "bb_position": 1.25,
+                "pivot_distance": 1.00,
             },
             "quality": {
-                "total_revenue_yoy_growth_ttm": 1.00,
-                "total_revenue_qoq_growth_fq": 1.30,
-                "ebitda_yoy_growth_ttm": 1.00,
-                "ebitda_qoq_growth_fq": 1.35,
-                "net_income_yoy_growth_ttm": 0.95,
-                "net_income_qoq_growth_fq": 1.30,
-                "free_cash_flow_yoy_growth_ttm": 1.05,
-                "free_cash_flow_qoq_growth_fq": 1.40,
-                "gross_margin": 0.90,
+                "total_revenue_yoy_growth_ttm": 0.95,
+                "total_revenue_qoq_growth_fq": 1.35,
+                "ebitda_yoy_growth_ttm": 0.95,
+                "ebitda_qoq_growth_fq": 1.40,
+                "net_income_yoy_growth_ttm": 0.90,
+                "net_income_qoq_growth_fq": 1.35,
+                "free_cash_flow_yoy_growth_ttm": 1.00,
+                "free_cash_flow_qoq_growth_fq": 1.45,
+                "gross_margin": 0.85,
                 "operating_margin": 1.10,
-                "after_tax_margin": 0.90,
-                "return_on_assets": 0.85,
-                "return_on_equity": 0.95,
+                "after_tax_margin": 0.85,
+                "return_on_assets": 0.80,
+                "return_on_equity": 0.90,
                 "return_on_invested_capital": 1.20,
-                "free_cash_flow_margin_ttm": 1.30,
-                "buyback_yield": 0.70,
-                "dividends_yield_current": 0.35,
-                "eps_forward_growth": 1.65,
+                "free_cash_flow_margin_ttm": 1.35,
+                "buyback_yield": 0.65,
+                "dividends_yield_current": 0.30,
+                "eps_forward_growth": 1.75,
+                "revenue_per_employee": 0.80,
+                "earnings_per_share_diluted_yoy_growth_ttm": 1.15,
+                "gross_profit_margin_fy": 0.85,
             },
             "valuation": {
-                "price_earnings_ttm": 0.85,
-                "price_earnings_growth_ttm": 1.25,
-                "price_sales_current": 0.80,
-                "price_book_fq": 0.75,
-                "price_free_cash_flow_ttm": 1.10,
-                "price_to_cash_f_operating_activities_ttm": 0.90,
-                "enterprise_value_to_revenue_ttm": 0.80,
-                "enterprise_value_to_ebit_ttm": 0.85,
-                "enterprise_value_ebitda_ttm": 0.95,
-                "earnings_yield": 1.20,
-                "distance_from_52w_high": 1.15,
-                "range_position_52w": 1.10,
+                "price_earnings_ttm": 0.80,
+                "price_earnings_growth_ttm": 1.30,
+                "price_sales_current": 0.75,
+                "price_book_fq": 0.70,
+                "price_free_cash_flow_ttm": 1.15,
+                "price_to_cash_f_operating_activities_ttm": 0.85,
+                "enterprise_value_to_revenue_ttm": 0.75,
+                "enterprise_value_to_ebit_ttm": 0.80,
+                "enterprise_value_ebitda_ttm": 0.90,
+                "earnings_yield": 1.25,
+                "distance_from_52w_high": 1.20,
+                "range_position_52w": 1.15,
             },
             "safety": {
                 "current_ratio": 1.00,
                 "quick_ratio": 1.00,
-                "cash_ratio": 0.95,
+                "cash_ratio": 0.90,
                 "short_term_cash_coverage": 1.10,
                 "altman_z_score_ttm": 1.25,
                 "debt_to_equity": 1.20,
                 "debt_to_revenue_ttm": 1.15,
                 "net_debt": 1.15,
-                "beta_1_year": 0.70,
+                "beta_1_year": 0.65,
             },
         },
         component_directional_bias={
             "attention": DirectionalBias(
-                positive_multiplier=0.55, negative_multiplier=1.40
+                positive_multiplier=0.50, negative_multiplier=1.50
             ),
             "event": DirectionalBias(
-                positive_multiplier=1.18, negative_multiplier=0.85
+                positive_multiplier=1.20, negative_multiplier=0.82
             ),
             "momentum": DirectionalBias(
-                positive_multiplier=1.12, negative_multiplier=0.75
+                positive_multiplier=1.15, negative_multiplier=0.72
             ),
             "trend": DirectionalBias(
-                positive_multiplier=1.28, negative_multiplier=0.85
+                positive_multiplier=1.30, negative_multiplier=0.82
             ),
             "quality": DirectionalBias(
-                positive_multiplier=1.18, negative_multiplier=1.30
+                positive_multiplier=1.22, negative_multiplier=1.35
             ),
             "valuation": DirectionalBias(
-                positive_multiplier=1.10, negative_multiplier=0.80
+                positive_multiplier=1.12, negative_multiplier=0.78
             ),
             "safety": DirectionalBias(
-                positive_multiplier=1.08, negative_multiplier=1.35
+                positive_multiplier=1.10, negative_multiplier=1.40
             ),
         },
         missing_component_scores_by_horizon={
             "days": {
-                "quality": -0.55,
-                "safety": -0.60,
-                "trend": -0.45,
+                "quality": -0.65,
+                "safety": -0.65,
+                "trend": -0.50,
             },
             "weeks": {
-                "quality": -0.65,
-                "safety": -0.70,
-                "trend": -0.40,
+                "quality": -0.75,
+                "safety": -0.75,
+                "trend": -0.45,
             },
             "months": {
-                "quality": -0.80,
-                "safety": -0.85,
-                "valuation": -0.55,
+                "quality": -0.90,
+                "safety": -0.90,
+                "valuation": -0.60,
             },
             "years": {
-                "quality": -0.90,
-                "safety": -0.95,
-                "valuation": -0.75,
+                "quality": -1.00,
+                "safety": -1.00,
+                "valuation": -0.80,
             },
         },
         performance_tracking_periods={
@@ -1629,18 +1283,599 @@ PRESET_SCORING_PROFILES = {
             "years": ["Perf.Y"],
         },
         intro_metric_notes=[
-            "Forward-edge active profile for weeks-to-months risk-adjusted outperformance.",
-            "Short-term trend emergence: uses SMA10/20/30 and EMA10/20/30 comparisons to detect price crossing above short-term moving averages before SMA50/200 confirm. short_trend_emergence weight boosted to 1.60 (from 1.50). 200-day markers reduced to 0.55 (from 0.70). trend_alignment reduced to 0.75 (from 0.90) — the profile values emerging alignment, not established confirmation.",
-            "Volatility contraction signals boosted: bb_squeeze=1.55, range_compression=1.50, volatility_contraction=1.45. Traditional volume attention signals further dampened (0.50-0.80) to shift attention from crowd participation toward coiled-energy detection.",
-            "EPS forward growth boosted to 1.65 (from 1.50) — THE core differentiator. QoQ growth metrics boosted to 1.30-1.40 (from 1.20-1.25), YoY growth reduced to 0.95-1.05 (from 1.05-1.15). This profile cares about what is CHANGING, not what has been.",
-            "EPS surprise boosted to 1.50 (from 1.40) — persistent beaters tend to outperform.",
-            "Trailing performance damping more aggressive: Perf.Y=0.05, Perf.YTD=0.15, Perf.6M=0.30 (previously 0.10, 0.25, 0.40). Names already in multi-month runs are nearly invisible.",
-            "Attention inversion stronger: positive attention damped to 0.55x (from 0.65x), negative amplified to 1.40x (from 1.30x). This is the most anti-crowd profile in the system.",
-            "Quality and safety carry more weight: days quality=0.18 (from 0.16), weeks safety=0.16 (from 0.14), months safety=0.22 (from 0.19), years safety=0.28 (from 0.26). Missing-component penalties increased across all horizons.",
-            "Stoch.RSI.K boosted to 1.15 (from 1.10) and CCI20 to 1.00 (from 0.95) for sharper early impulse detection.",
+            "Forward-looking quality profile — answers 'what is getting better?' not 'what has been good?'.",
+            "THE core differentiator: eps_forward_growth=1.75 (highest weight in entire system). Names where analysts expect next-quarter EPS improvement rank highest.",
+            "QoQ growth dominates YoY: QoQ=1.35-1.45 vs YoY=0.90-1.00. Sequential improvement captures acceleration that annual figures lag.",
+            "EPS surprise history: eps_surprise_percent_fq=1.60. Persistent beaters have demonstrated ability to deliver above expectations.",
+            "Trailing performance nearly invisible: Perf.Y=0.05, Perf.YTD=0.12, Perf.6M=0.25. This prevents recent winners from dominating — the profile finds quality BEFORE price follows.",
+            "Attention inversion is the strongest in the system: positive=0.50x, negative=1.50x. The most anti-crowd profile.",
+            "Safety penalty on negative readings is 1.40x — the highest safety punishment. Falling knives with improving QoQ metrics but deteriorating balance sheets are blocked.",
+            "Short-term trend emergence=1.65 (highest) — earliest possible trend detection layer.",
         ],
         confidence_multiplier=1.03,
     ),
+    # ──────────────────────────────────────────────────────────────────────────
+    # IDEA 2b — OVERLOOKED FUNDAMENTALS: quality not rewarded by the market
+    # ──────────────────────────────────────────────────────────────────────────
+    "asymmetric_value": ScoringProfile(
+        name="asymmetric_value",
+        description=(
+            "Overlooked fundamentals profile that surfaces names where strong "
+            "quality and reasonable valuation have NOT been rewarded by market "
+            "performance. The key mechanism: valuation signals are maximally "
+            "weighted (distance_from_52w_high, range_position_52w, earnings_yield) "
+            "while quality signals remain high, but trailing momentum is INVERTED "
+            "in bias — poor recent performance HELPS rather than hurts. This creates "
+            "a natural 'market disconnect' detector that finds quality companies "
+            "the crowd has overlooked or punished unfairly. Safety is the primary "
+            "value-trap filter: names with weak balance sheets cannot make the "
+            "leaderboard regardless of cheapness."
+        ),
+        horizon_weights={
+            "days": {
+                "attention": 0.04,
+                "event": 0.02,
+                "momentum": 0.05,
+                "trend": 0.12,
+                "quality": 0.22,
+                "valuation": 0.33,
+                "safety": 0.22,
+            },
+            "weeks": {
+                "attention": 0.04,
+                "event": 0.02,
+                "momentum": 0.06,
+                "trend": 0.12,
+                "quality": 0.24,
+                "valuation": 0.30,
+                "safety": 0.22,
+            },
+            "months": {
+                "attention": 0.03,
+                "event": 0.02,
+                "momentum": 0.04,
+                "trend": 0.10,
+                "quality": 0.28,
+                "valuation": 0.32,
+                "safety": 0.21,
+            },
+            "years": {
+                "attention": 0.02,
+                "event": 0.01,
+                "momentum": 0.02,
+                "trend": 0.06,
+                "quality": 0.30,
+                "valuation": 0.36,
+                "safety": 0.23,
+            },
+        },
+        component_signal_weights={
+            "momentum": {
+                "change": 0.20,
+                "Perf.5D": 0.25,
+                "Perf.W": 0.30,
+                "Perf.1M": 0.50,
+                "Perf.3M": 1.00,
+                "Perf.6M": 1.05,
+                "Perf.YTD": 1.00,
+                "Perf.Y": 0.75,
+                "ROC": 0.45,
+                "Mom": 0.50,
+                "macd_spread": 0.40,
+                "Recommend.All": 0.60,
+                "Recommend.MA": 0.50,
+                "Recommend.Other": 0.55,
+                "rsi_centered": 0.20,
+                "rsi7_centered": 0.10,
+            },
+            "trend": {
+                "close_vs_sma50": 0.75,
+                "close_vs_sma200": 1.25,
+                "close_vs_ema50": 0.75,
+                "close_vs_ema200": 1.25,
+                "close_vs_vwap": 0.45,
+                "close_vs_vwma": 0.55,
+                "trend_alignment": 1.10,
+                "pivot_distance": 1.00,
+            },
+            "quality": {
+                "total_revenue_yoy_growth_ttm": 1.10,
+                "total_revenue_qoq_growth_fq": 0.95,
+                "ebitda_yoy_growth_ttm": 1.15,
+                "ebitda_qoq_growth_fq": 1.00,
+                "net_income_yoy_growth_ttm": 1.10,
+                "net_income_qoq_growth_fq": 0.95,
+                "free_cash_flow_yoy_growth_ttm": 1.30,
+                "free_cash_flow_qoq_growth_fq": 1.10,
+                "gross_margin": 1.10,
+                "operating_margin": 1.20,
+                "after_tax_margin": 1.10,
+                "return_on_assets": 1.05,
+                "return_on_equity": 1.10,
+                "return_on_invested_capital": 1.35,
+                "free_cash_flow_margin_ttm": 1.35,
+                "buyback_yield": 1.15,
+                "dividends_yield_current": 1.00,
+                "eps_forward_growth": 1.20,
+                "revenue_per_employee": 1.10,
+                "earnings_per_share_diluted_yoy_growth_ttm": 1.10,
+                "gross_profit_margin_fy": 1.05,
+            },
+            "valuation": {
+                "price_earnings_ttm": 1.15,
+                "price_earnings_growth_ttm": 1.20,
+                "price_sales_current": 1.05,
+                "price_book_fq": 1.15,
+                "price_free_cash_flow_ttm": 1.25,
+                "price_to_cash_f_operating_activities_ttm": 1.10,
+                "enterprise_value_to_revenue_ttm": 1.05,
+                "enterprise_value_to_ebit_ttm": 1.00,
+                "enterprise_value_ebitda_ttm": 1.15,
+                "earnings_yield": 1.40,
+                "distance_from_52w_high": 1.50,
+                "range_position_52w": 1.35,
+            },
+            "safety": {
+                "current_ratio": 1.10,
+                "quick_ratio": 1.10,
+                "cash_ratio": 1.05,
+                "short_term_cash_coverage": 1.20,
+                "altman_z_score_ttm": 1.30,
+                "debt_to_equity": 1.25,
+                "debt_to_revenue_ttm": 1.20,
+                "net_debt": 1.20,
+                "beta_1_year": 0.75,
+            },
+        },
+        component_directional_bias={
+            "attention": DirectionalBias(
+                positive_multiplier=0.75, negative_multiplier=1.40
+            ),
+            "momentum": DirectionalBias(
+                positive_multiplier=0.75, negative_multiplier=0.55
+            ),
+            "trend": DirectionalBias(
+                positive_multiplier=1.00, negative_multiplier=0.80
+            ),
+            "quality": DirectionalBias(
+                positive_multiplier=1.20, negative_multiplier=1.25
+            ),
+            "valuation": DirectionalBias(
+                positive_multiplier=1.35, negative_multiplier=1.00
+            ),
+            "safety": DirectionalBias(
+                positive_multiplier=1.12, negative_multiplier=1.35
+            ),
+        },
+        missing_component_scores_by_horizon={
+            "days": {
+                "attention": -0.45,
+                "valuation": -0.90,
+                "quality": -0.60,
+                "safety": -0.65,
+            },
+            "weeks": {
+                "attention": -0.35,
+                "valuation": -1.00,
+                "quality": -0.70,
+                "safety": -0.75,
+            },
+            "months": {
+                "attention": -0.25,
+                "valuation": -1.10,
+                "quality": -0.80,
+                "safety": -0.85,
+            },
+            "years": {
+                "valuation": -1.20,
+                "quality": -0.90,
+                "safety": -0.95,
+            },
+        },
+        intro_metric_notes=[
+            "Overlooked fundamentals profile — finds quality that the market has NOT rewarded.",
+            "Key mechanism: momentum bias is INVERTED (positive=0.75x, negative=0.55x). Poor recent performance REDUCES penalty — this surfaces names the crowd has overlooked or punished unfairly.",
+            "Valuation signals at maximum: distance_from_52w_high=1.50 (deepest discount detection), earnings_yield=1.40, range_position_52w=1.35, price_book=1.15.",
+            "Quality MUST be present: ROIC=1.35, FCF_margin=1.35, FCF_growth=1.30, buyback_yield=1.15. Cheapness without quality is ignored.",
+            "Shareholder return emphasis: buyback_yield=1.15, dividends_yield=1.00. Companies returning cash despite being undervalued by the market confirm fundamental strength.",
+            "Safety is the value-trap filter: altman_z_score=1.30, debt metrics heavily weighted. Negative safety bias=1.35x — the strongest value-trap guard.",
+            "This profile specifically targets the disconnect between fundamental quality and market recognition — the 'unrewarded quality' gap.",
+        ],
+        confidence_multiplier=1.02,
+    ),
+    "value_recovery": ScoringProfile(
+        name="value_recovery",
+        description=(
+            "Recovery trajectory profile that targets turnaround candidates where "
+            "cheap valuation and SEQUENTIAL fundamental improvement combine. The "
+            "key differentiator from asymmetric_value: this profile rewards names "
+            "that are actively IMPROVING (QoQ metrics prioritized), not just "
+            "statically cheap. Forward EPS growth expectations confirm the recovery "
+            "thesis. Stoch RSI crosses detect the oversold-to-recovery technical "
+            "turn. Noise reduction: momentum is damped so recent weakness does not "
+            "penalize recovering names, but negative quality IS penalized — the "
+            "profile requires evidence that the turn is real."
+        ),
+        horizon_weights={
+            "days": {
+                "attention": 0.06,
+                "event": 0.04,
+                "momentum": 0.04,
+                "trend": 0.12,
+                "quality": 0.24,
+                "valuation": 0.26,
+                "safety": 0.24,
+            },
+            "weeks": {
+                "attention": 0.06,
+                "event": 0.04,
+                "momentum": 0.06,
+                "trend": 0.14,
+                "quality": 0.22,
+                "valuation": 0.25,
+                "safety": 0.23,
+            },
+            "months": {
+                "attention": 0.04,
+                "event": 0.03,
+                "momentum": 0.05,
+                "trend": 0.14,
+                "quality": 0.28,
+                "valuation": 0.26,
+                "safety": 0.20,
+            },
+            "years": {
+                "attention": 0.02,
+                "event": 0.01,
+                "momentum": 0.01,
+                "trend": 0.07,
+                "quality": 0.30,
+                "valuation": 0.32,
+                "safety": 0.27,
+            },
+        },
+        component_signal_weights={
+            "momentum": {
+                "change": 0.35,
+                "Perf.5D": 0.25,
+                "Perf.W": 0.30,
+                "Perf.1M": 0.50,
+                "Perf.3M": 1.15,
+                "Perf.YTD": 1.00,
+                "Perf.Y": 0.70,
+                "ROC": 0.50,
+                "Mom": 0.55,
+                "macd_spread": 0.45,
+                "Recommend.All": 0.65,
+                "Recommend.MA": 0.55,
+                "Recommend.Other": 0.65,
+                "rsi_centered": 0.20,
+                "rsi7_centered": 0.12,
+                "stoch_rsi_centered": 0.55,
+                "stoch_rsi_crossover": 0.65,
+            },
+            "valuation": {
+                "price_earnings_ttm": 1.15,
+                "price_earnings_growth_ttm": 1.25,
+                "price_book_fq": 1.25,
+                "price_sales_current": 1.10,
+                "price_free_cash_flow_ttm": 1.10,
+                "price_to_cash_f_operating_activities_ttm": 1.00,
+                "enterprise_value_to_revenue_ttm": 1.10,
+                "enterprise_value_to_ebit_ttm": 1.00,
+                "enterprise_value_ebitda_ttm": 1.20,
+                "earnings_yield": 1.25,
+                "distance_from_52w_high": 1.20,
+                "range_position_52w": 1.10,
+            },
+            "quality": {
+                "total_revenue_yoy_growth_ttm": 0.85,
+                "total_revenue_qoq_growth_fq": 1.25,
+                "ebitda_yoy_growth_ttm": 0.90,
+                "ebitda_qoq_growth_fq": 1.20,
+                "net_income_yoy_growth_ttm": 0.95,
+                "net_income_qoq_growth_fq": 1.30,
+                "free_cash_flow_yoy_growth_ttm": 1.10,
+                "free_cash_flow_qoq_growth_fq": 1.35,
+                "gross_margin": 0.90,
+                "operating_margin": 1.10,
+                "after_tax_margin": 1.00,
+                "return_on_assets": 0.90,
+                "return_on_equity": 0.95,
+                "return_on_invested_capital": 1.10,
+                "free_cash_flow_margin_ttm": 1.20,
+                "buyback_yield": 0.65,
+                "dividends_yield_current": 0.55,
+                "eps_forward_growth": 1.40,
+                "revenue_per_employee": 0.80,
+                "earnings_per_share_diluted_yoy_growth_ttm": 1.00,
+                "gross_profit_margin_fy": 0.85,
+            },
+            "safety": {
+                "current_ratio": 1.05,
+                "quick_ratio": 1.05,
+                "cash_ratio": 1.00,
+                "short_term_cash_coverage": 1.15,
+                "altman_z_score_ttm": 1.25,
+                "debt_to_equity": 1.20,
+                "debt_to_revenue_ttm": 1.15,
+                "net_debt": 1.20,
+                "beta_1_year": 0.80,
+            },
+            "trend": {
+                "close_vs_sma50": 0.85,
+                "close_vs_sma200": 1.10,
+                "close_vs_ema50": 0.85,
+                "close_vs_ema200": 1.10,
+                "close_vs_vwap": 0.55,
+                "close_vs_vwma": 0.70,
+                "trend_alignment": 1.05,
+                "pivot_distance": 1.10,
+                "short_trend_emergence": 0.75,
+            },
+        },
+        component_directional_bias={
+            "attention": DirectionalBias(
+                positive_multiplier=0.82, negative_multiplier=1.32
+            ),
+            "momentum": DirectionalBias(
+                positive_multiplier=0.85, negative_multiplier=0.60
+            ),
+            "trend": DirectionalBias(
+                positive_multiplier=1.08, negative_multiplier=0.85
+            ),
+            "valuation": DirectionalBias(
+                positive_multiplier=1.30, negative_multiplier=1.12
+            ),
+            "quality": DirectionalBias(
+                positive_multiplier=1.18, negative_multiplier=1.18
+            ),
+            "safety": DirectionalBias(
+                positive_multiplier=1.18, negative_multiplier=1.20
+            ),
+        },
+        missing_component_scores_by_horizon={
+            "days": {
+                "attention": -0.40,
+                "valuation": -0.85,
+                "quality": -0.55,
+                "safety": -0.65,
+            },
+            "weeks": {
+                "attention": -0.30,
+                "valuation": -0.95,
+                "quality": -0.65,
+                "safety": -0.75,
+            },
+            "months": {
+                "attention": -0.20,
+                "valuation": -1.05,
+                "quality": -0.75,
+                "safety": -0.85,
+            },
+            "years": {
+                "valuation": -1.15,
+                "quality": -0.85,
+                "safety": -0.95,
+            },
+        },
+        intro_metric_notes=[
+            "Recovery trajectory profile — rewards active IMPROVEMENT, not static cheapness.",
+            "QoQ growth dominates YoY: QoQ=1.20-1.35 vs YoY=0.85-1.10. Sequential positive inflection is the recovery signal.",
+            "Forward recovery conviction: eps_forward_growth=1.40 (second highest after forward_edge_active). Analyst revision toward positive EPS confirms the recovery thesis.",
+            "Technical recovery detection: stoch_rsi_centered=0.55 and stoch_rsi_crossover=0.65 detect oversold-to-recovery turn. These are the only momentum-adjacent signals that remain active.",
+            "Momentum bias inverted for downside: negative=0.60x so recent poor performance does not dominate rankings. Recovering names need room to breathe.",
+            "Valuation discount detection: distance_from_52w_high=1.20, price_book=1.25 (tangible asset value relevant for recovery plays), enterprise_value_ebitda=1.20.",
+            "Quality directional bias symmetrical: positive=1.18x, negative=1.18x. Equally rewards improving quality and punishes deteriorating quality — the turn must be real.",
+        ],
+    ),
+    # ──────────────────────────────────────────────────────────────────────────
+    # IDEA 3 — HEDGING: capture drastic event opportunities and short pressure
+    # ──────────────────────────────────────────────────────────────────────────
+    "fragility_short": ScoringProfile(
+        name="fragility_short",
+        description=(
+            "Hedging and short opportunity profile that identifies structurally "
+            "fragile names positioned for downside dislocation. The scoring is "
+            "INVERTED: negative event pressure, deteriorating momentum, breaking "
+            "trend, and weak safety are all REWARDED. This profile specifically "
+            "answers 'what is most likely to break?' for hedging basket "
+            "construction and short watchlist management. Noise reduction: "
+            "requires convergence of MULTIPLE weakness signals — a single "
+            "component failure is insufficient. Heavy safety emphasis at longer "
+            "horizons catches leverage-driven blowup risk. EPS surprise history "
+            "and forward growth are activated to detect earnings deterioration "
+            "catalysts."
+        ),
+        horizon_weights={
+            "days": {
+                "attention": 0.16,
+                "event": 0.30,
+                "momentum": 0.28,
+                "trend": 0.18,
+                "quality": 0.02,
+                "valuation": 0.01,
+                "safety": 0.05,
+            },
+            "weeks": {
+                "attention": 0.08,
+                "event": 0.20,
+                "momentum": 0.28,
+                "trend": 0.24,
+                "quality": 0.04,
+                "valuation": 0.02,
+                "safety": 0.14,
+            },
+            "months": {
+                "attention": 0.04,
+                "event": 0.08,
+                "momentum": 0.20,
+                "trend": 0.22,
+                "quality": 0.14,
+                "valuation": 0.04,
+                "safety": 0.28,
+            },
+            "years": {
+                "attention": 0.00,
+                "event": 0.02,
+                "momentum": 0.06,
+                "trend": 0.12,
+                "quality": 0.18,
+                "valuation": 0.05,
+                "safety": 0.57,
+            },
+        },
+        component_signal_weights={
+            "attention": {
+                "relative_volume_10d_calc": 1.20,
+                "float_turnover": 1.15,
+                "dollar_turnover_intensity": 1.10,
+                "Value.Traded": 1.05,
+                "AvgValue.Traded_10d": 1.00,
+                "volume_trend": 1.30,
+                "intraday_momentum": 1.20,
+            },
+            "event": {
+                "premarket_change": 1.20,
+                "postmarket_change": 1.20,
+                "gap": 1.20,
+                "gap_severity": 1.35,
+                "event_intensity": 1.15,
+                "eps_surprise_percent_fq": 1.25,
+            },
+            "momentum": {
+                "change": 1.20,
+                "Perf.5D": 1.25,
+                "Perf.W": 1.25,
+                "Perf.1M": 1.15,
+                "Perf.3M": 1.10,
+                "Perf.6M": 0.90,
+                "Perf.YTD": 0.85,
+                "Perf.Y": 0.70,
+                "ROC": 1.15,
+                "Mom": 1.10,
+                "macd_spread": 1.10,
+                "Recommend.All": 0.95,
+                "Recommend.MA": 0.90,
+                "Recommend.Other": 0.95,
+                "rsi_centered": 0.80,
+                "rsi7_centered": 0.85,
+                "aroon_spread": 1.15,
+                "adx_directional_spread": 1.20,
+                "stoch_rsi_centered": 0.75,
+                "CCI20": 0.80,
+            },
+            "trend": {
+                "close_vs_sma10": 1.10,
+                "close_vs_sma20": 1.05,
+                "close_vs_sma50": 1.15,
+                "close_vs_sma200": 1.20,
+                "close_vs_ema10": 1.10,
+                "close_vs_ema20": 1.05,
+                "close_vs_ema50": 1.15,
+                "close_vs_ema200": 1.20,
+                "close_vs_vwap": 1.10,
+                "close_vs_vwma": 1.10,
+                "trend_alignment": 1.25,
+                "short_trend_emergence": 0.90,
+                "pivot_distance": 0.95,
+            },
+            "quality": {
+                "total_revenue_yoy_growth_ttm": 1.10,
+                "total_revenue_qoq_growth_fq": 1.15,
+                "ebitda_yoy_growth_ttm": 1.10,
+                "ebitda_qoq_growth_fq": 1.15,
+                "net_income_yoy_growth_ttm": 1.10,
+                "net_income_qoq_growth_fq": 1.15,
+                "free_cash_flow_yoy_growth_ttm": 1.20,
+                "free_cash_flow_qoq_growth_fq": 1.20,
+                "gross_margin": 1.00,
+                "operating_margin": 1.15,
+                "after_tax_margin": 1.00,
+                "return_on_assets": 1.00,
+                "return_on_equity": 1.05,
+                "return_on_invested_capital": 1.10,
+                "free_cash_flow_margin_ttm": 1.20,
+                "eps_forward_growth": 1.15,
+                "earnings_per_share_diluted_yoy_growth_ttm": 1.10,
+            },
+            "safety": {
+                "current_ratio": 1.10,
+                "quick_ratio": 1.10,
+                "cash_ratio": 1.05,
+                "short_term_cash_coverage": 1.15,
+                "debt_to_equity": 1.35,
+                "debt_to_revenue_ttm": 1.30,
+                "net_debt": 1.25,
+                "altman_z_score_ttm": 1.35,
+                "beta_1_year": 1.15,
+            },
+        },
+        component_directional_bias={
+            "attention": DirectionalBias(
+                positive_multiplier=1.00, negative_multiplier=1.00
+            ),
+            "event": DirectionalBias(
+                positive_multiplier=0.85, negative_multiplier=1.30
+            ),
+            "momentum": DirectionalBias(
+                positive_multiplier=0.80, negative_multiplier=1.30
+            ),
+            "trend": DirectionalBias(
+                positive_multiplier=0.85, negative_multiplier=1.35
+            ),
+            "quality": DirectionalBias(
+                positive_multiplier=0.85, negative_multiplier=1.25
+            ),
+            "valuation": DirectionalBias(
+                positive_multiplier=0.90, negative_multiplier=1.20
+            ),
+            "safety": DirectionalBias(
+                positive_multiplier=0.80, negative_multiplier=1.45
+            ),
+        },
+        missing_component_scores_by_horizon={
+            "days": {
+                "event": -0.45,
+                "momentum": -0.50,
+                "trend": -0.40,
+            },
+            "weeks": {
+                "momentum": -0.55,
+                "trend": -0.45,
+                "safety": -0.50,
+            },
+            "months": {
+                "trend": -0.50,
+                "safety": -0.70,
+                "quality": -0.40,
+            },
+            "years": {
+                "safety": -0.90,
+                "quality": -0.45,
+                "valuation": -0.30,
+            },
+        },
+        intro_metric_notes=[
+            "Hedging and short identification profile — answers 'what is most likely to break?'.",
+            "Scoring is INVERTED: all directional biases amplify NEGATIVE readings (event -1.30x, momentum -1.30x, trend -1.35x, quality -1.25x, safety -1.45x) while suppressing positive readings.",
+            "Safety is THE dominant factor: years horizon safety=0.57 (highest single-component weight in system). Leverage-driven blowup risk is the strongest structural short thesis.",
+            "Safety signal weights: debt_to_equity=1.35, altman_z_score=1.35, debt_to_revenue=1.30, net_debt=1.25, beta=1.15. Multiple leverage metrics must converge.",
+            "Catalyst detection: eps_surprise_percent_fq=1.25 catches names with history of missing. eps_forward_growth=1.15 detects analyst downgrades.",
+            "Event pressure heavily weighted at days horizon: event=0.30, with gap_severity=1.35 and gap=1.20. Earnings gaps and intraday collapses are key short-term catalysts.",
+            "Beta is NOT inverted for this profile: beta_1_year=1.15 means higher beta HELPS the fragility score — more volatile names are more susceptible to downside dislocations.",
+            "Attention is neutral (1.0/1.0) — fragility can strike crowded AND uncrowded names equally.",
+        ],
+        confidence_multiplier=1.07,
+    ),
+}
+
+
+# Backwards compatibility: resolve 'balanced' to 'quality_value_compounder'
+# and 'backtest_period_ladder' is no longer available.
+_PROFILE_ALIASES = {
+    "balanced": "quality_value_compounder",
+    "backtest_period_ladder": "sector_relative_outperformer",
 }
 
 
@@ -1711,10 +1946,12 @@ def resolve_move_prediction_scoring_profile(
     scoring_profile: str | ScoringProfile | None,
 ) -> ScoringProfile:
     if scoring_profile is None:
-        return PRESET_SCORING_PROFILES["balanced"]
+        return PRESET_SCORING_PROFILES["quality_value_compounder"]
     if isinstance(scoring_profile, ScoringProfile):
         return scoring_profile
-    profile = PRESET_SCORING_PROFILES.get(str(scoring_profile))
+    profile_key = str(scoring_profile)
+    profile_key = _PROFILE_ALIASES.get(profile_key, profile_key)
+    profile = PRESET_SCORING_PROFILES.get(profile_key)
     if profile is None:
         available = ", ".join(sorted(PRESET_SCORING_PROFILES))
         raise ValueError(
@@ -1979,6 +2216,12 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
     eps_actual_fq = _coerce_numeric(row.get("earnings_per_share_fq"))
     stoch_rsi_k = _coerce_numeric(row.get("Stoch.RSI.K"))
     eps_surprise_pct = _coerce_numeric(row.get("eps_surprise_percent_fq"))
+    avg_volume_30d = _coerce_numeric(row.get("average_volume_30d_calc"))
+    stoch_rsi_d = _coerce_numeric(row.get("Stoch.RSI.D"))
+    change_from_open = _coerce_numeric(row.get("change_from_open"))
+    total_revenue_val = _coerce_numeric(row.get("total_revenue"))
+    num_employees = _coerce_numeric(row.get("number_of_employees"))
+    pivot_middle = _coerce_numeric(row.get("Pivot.M.Classic.Middle"))
 
     short_term_cash_coverage = _safe_ratio(
         cash_n_short_term_invest_fy,
@@ -2077,6 +2320,32 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
         None if stoch_rsi_k is None else stoch_rsi_k - 50.0
     )
 
+    volume_trend: float | None = None
+    if (
+        average_volume_10d is not None
+        and avg_volume_30d is not None
+        and avg_volume_30d > 0
+    ):
+        volume_trend = average_volume_10d / avg_volume_30d
+
+    stoch_rsi_crossover: float | None = None
+    if stoch_rsi_k is not None and stoch_rsi_d is not None:
+        stoch_rsi_crossover = stoch_rsi_k - stoch_rsi_d
+
+    intraday_momentum: float | None = change_from_open
+
+    pivot_distance: float | None = None
+    if close is not None and pivot_middle is not None and close != 0:
+        pivot_distance = (close - pivot_middle) / close
+
+    revenue_per_employee: float | None = None
+    if (
+        total_revenue_val is not None
+        and num_employees is not None
+        and num_employees > 0
+    ):
+        revenue_per_employee = total_revenue_val / num_employees
+
     return {
         "float_turnover": _safe_ratio(volume, float_shares),
         "dollar_turnover_intensity": _safe_ratio(avg_value_traded_10d, market_cap),
@@ -2114,6 +2383,11 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
         "volatility_contraction": volatility_contraction,
         "eps_forward_growth": eps_forward_growth,
         "stoch_rsi_centered": stoch_rsi_centered,
+        "volume_trend": volume_trend,
+        "stoch_rsi_crossover": stoch_rsi_crossover,
+        "intraday_momentum": intraday_momentum,
+        "pivot_distance": pivot_distance,
+        "revenue_per_employee": revenue_per_employee,
     }
 
 
@@ -2337,6 +2611,10 @@ def _build_component_signal_map(
             "volatility_contraction": _derived_signal(
                 derived_row, profiles, "volatility_contraction", invert=True
             ),
+            "volume_trend": _derived_signal(derived_row, profiles, "volume_trend"),
+            "intraday_momentum": _derived_signal(
+                derived_row, profiles, "intraday_momentum"
+            ),
         },
         "event": {
             "premarket_change": _field_signal(row, profiles, "premarket_change"),
@@ -2375,6 +2653,9 @@ def _build_component_signal_map(
                 derived_row, profiles, "stoch_rsi_centered"
             ),
             "CCI20": _field_signal(row, profiles, "CCI20"),
+            "stoch_rsi_crossover": _derived_signal(
+                derived_row, profiles, "stoch_rsi_crossover"
+            ),
         },
         "trend": {
             "close_vs_sma50": derived_row.get("close_vs_sma50"),
@@ -2392,6 +2673,7 @@ def _build_component_signal_map(
             "close_vs_ema20": derived_row.get("close_vs_ema20"),
             "close_vs_ema30": derived_row.get("close_vs_ema30"),
             "short_trend_emergence": derived_row.get("short_trend_emergence"),
+            "pivot_distance": _derived_signal(derived_row, profiles, "pivot_distance"),
         },
         "quality": {
             "total_revenue_yoy_growth_ttm": _field_signal(
@@ -2435,6 +2717,15 @@ def _build_component_signal_map(
             ),
             "eps_forward_growth": _derived_signal(
                 derived_row, profiles, "eps_forward_growth"
+            ),
+            "revenue_per_employee": _derived_signal(
+                derived_row, profiles, "revenue_per_employee"
+            ),
+            "earnings_per_share_diluted_yoy_growth_ttm": _field_signal(
+                row, profiles, "earnings_per_share_diluted_yoy_growth_ttm"
+            ),
+            "gross_profit_margin_fy": _field_signal(
+                row, profiles, "gross_profit_margin_fy"
             ),
         },
         "valuation": {
@@ -3614,8 +3905,6 @@ def run_move_prediction_profile_suite(
 ) -> dict[str, Path]:
     if profile_names is None:
         profile_names = [
-            "balanced",
-            "backtest_period_ladder",
             "breakout_long",
             "quality_value_compounder",
             "value_recovery",
@@ -3623,6 +3912,7 @@ def run_move_prediction_profile_suite(
             "asymmetric_value",
             "early_momentum_inflection",
             "forward_edge_active",
+            "sector_relative_outperformer",
         ]
 
     industries = _normalize_industries(industries)
@@ -3675,3 +3965,1025 @@ def run_move_prediction_profile_suite_by_industry(
         )
 
     return generated_logs
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CONSENSUS AGGREGATOR — cross-profile ranking
+# ──────────────────────────────────────────────────────────────────────────────
+
+CONSENSUS_PROFILE_WEIGHTS: dict[str, float] = {
+    "breakout_long": 0.10,
+    "early_momentum_inflection": 0.10,
+    "quality_value_compounder": 0.18,
+    "sector_relative_outperformer": 0.15,
+    "forward_edge_active": 0.15,
+    "asymmetric_value": 0.12,
+    "value_recovery": 0.10,
+    "fragility_short": 0.10,
+}
+
+MINIMUM_COVERAGE_FOR_CONSENSUS = 0.40
+
+
+def _build_consensus_scores(
+    scan_data: list[dict[str, Any]],
+    profile_names: list[str] | None = None,
+    min_coverage: float = MINIMUM_COVERAGE_FOR_CONSENSUS,
+) -> list[dict[str, Any]]:
+    if profile_names is None:
+        profile_names = list(CONSENSUS_PROFILE_WEIGHTS.keys())
+
+    profiles_data: dict[str, list[dict[str, Any]]] = {}
+    shared_profiles: dict[str, dict[str, float | int | None]] | None = None
+    shared_derived: list[dict[str, float | None]] | None = None
+
+    for profile_name in profile_names:
+        resolved_profile = resolve_move_prediction_scoring_profile(profile_name)
+        if shared_profiles is None:
+            _enrich_with_peer_metrics(scan_data)
+            shared_derived = [_build_derived_metrics(row) for row in scan_data]
+            shared_profiles = _build_metric_profiles(scan_data, shared_derived)
+        prediction_rows = _build_prediction_rows(
+            scan_data,
+            shared_profiles,
+            shared_derived,
+            resolved_profile,
+        )
+        profiles_data[profile_name] = prediction_rows
+
+    horizon_names = list(DEFAULT_HORIZON_WEIGHTS.keys())
+    consensus_rows: list[dict[str, Any]] = []
+
+    for row_idx, row in enumerate(scan_data):
+        ticker = _get_symbol_name(row)
+        company = _get_company_name(row)
+        market_cap = _coerce_numeric(row.get("market_cap_basic"))
+
+        profile_scores: dict[str, dict[str, dict[str, float | None]]] = {}
+        profile_components: dict[str, dict[str, float | None]] = {}
+
+        for profile_name in profile_names:
+            prediction = profiles_data[profile_name][row_idx]
+            profile_scores[profile_name] = prediction["horizons"]
+            profile_components[profile_name] = prediction["components"]
+
+        consensus_horizons: dict[str, dict[str, Any]] = {}
+        for horizon_name in horizon_names:
+            weighted_score = 0.0
+            weight_used = 0.0
+            scores_collected: list[float] = []
+            agreements_positive = 0
+            agreements_negative = 0
+            total_opinions = 0
+
+            for profile_name in profile_names:
+                horizon_data = profile_scores[profile_name].get(horizon_name, {})
+                score = horizon_data.get("score")
+                coverage = horizon_data.get("coverage", 0.0)
+
+                if score is None or (coverage or 0) < min_coverage:
+                    continue
+
+                profile_weight = CONSENSUS_PROFILE_WEIGHTS.get(profile_name, 0.10)
+
+                if profile_name == "fragility_short":
+                    score = -score
+
+                weighted_score += score * profile_weight
+                weight_used += profile_weight
+                scores_collected.append(score)
+                total_opinions += 1
+                if score >= DIRECTIONAL_MOVE_SCORE_THRESHOLD:
+                    agreements_positive += 1
+                elif score <= -DIRECTIONAL_MOVE_SCORE_THRESHOLD:
+                    agreements_negative += 1
+
+            if weight_used == 0 or total_opinions < 3:
+                consensus_horizons[horizon_name] = {
+                    "score": None,
+                    "direction": "N/A",
+                    "confidence": None,
+                    "agreement_ratio": 0.0,
+                    "opinions": total_opinions,
+                }
+                continue
+
+            final_score = _clamp(weighted_score / weight_used, -3.0, 3.0)
+
+            score_variance = (
+                sum((s - final_score) ** 2 for s in scores_collected)
+                / len(scores_collected)
+                if scores_collected
+                else 0.0
+            )
+            consistency_bonus = max(0.0, 1.0 - score_variance) * 10.0
+
+            max_agreement = max(agreements_positive, agreements_negative)
+            agreement_ratio = max_agreement / total_opinions if total_opinions else 0.0
+
+            confidence = _clamp(
+                25.0
+                + abs(final_score) * 15.0
+                + agreement_ratio * 30.0
+                + consistency_bonus
+                + (total_opinions / len(profile_names)) * 15.0,
+                5.0,
+                99.0,
+            )
+
+            consensus_horizons[horizon_name] = {
+                "score": final_score,
+                "direction": _direction_label(final_score),
+                "confidence": confidence,
+                "agreement_ratio": agreement_ratio,
+                "opinions": total_opinions,
+            }
+
+        consensus_components: dict[str, float | None] = {}
+        for component_name in COMPONENT_ORDER:
+            component_values: list[float] = []
+            for profile_name in profile_names:
+                val = profile_components[profile_name].get(component_name)
+                if val is not None:
+                    component_values.append(val)
+            consensus_components[component_name] = (
+                sum(component_values) / len(component_values)
+                if component_values
+                else None
+            )
+
+        consensus_rows.append(
+            {
+                "row": row,
+                "ticker": ticker,
+                "company": company,
+                "market_cap": market_cap,
+                "horizons": consensus_horizons,
+                "components": consensus_components,
+                "profile_scores": profile_scores,
+            }
+        )
+
+    return consensus_rows
+
+
+def _log_consensus_aggregator_report(
+    log_file: Path,
+    consensus_rows: list[dict[str, Any]],
+    scan_data_count: int,
+    industries: list[str] | None,
+    min_market_cap_usd: float | None,
+    max_market_cap_usd: float | None,
+    profile_names: list[str],
+) -> None:
+    _reset_log_file(log_file)
+    log_to_file(
+        log_file,
+        _build_report_title("TradingView consensus aggregator — cross-profile ranking"),
+    )
+    log_to_file(log_file, "=" * 160)
+    log_to_file(
+        log_file,
+        (
+            f"Rows: {scan_data_count} | industries={industries or 'all'} | "
+            f"min_market_cap={min_market_cap_usd} | max_market_cap={max_market_cap_usd}"
+        ),
+    )
+    log_to_file(
+        log_file,
+        f"Profiles aggregated: {', '.join(profile_names)} | "
+        f"Profile weights: {', '.join(f'{k}={v:.2f}' for k, v in CONSENSUS_PROFILE_WEIGHTS.items() if k in profile_names)}",
+    )
+    log_to_file(log_file, "")
+    log_to_file(log_file, "Methodology")
+    log_to_file(log_file, "-" * 160)
+    log_to_file(
+        log_file,
+        "Each profile scores every name independently. The consensus score is a weighted average across all profiles per horizon. "
+        "Fragility_short scores are sign-inverted before aggregation (a bearish fragility call becomes a negative consensus contribution). "
+        "Agreement ratio measures what fraction of profiles with directional opinions agree on direction. "
+        "Score variance penalizes inconsistent cross-profile readings — names where profiles disagree heavily get lower confidence.",
+    )
+    log_to_file(
+        log_file,
+        f"Minimum coverage threshold: {MINIMUM_COVERAGE_FOR_CONSENSUS:.0%} — profiles with insufficient component data for a name are excluded from that name's consensus.",
+    )
+    log_to_file(log_file, "")
+
+    horizon_names = list(DEFAULT_HORIZON_WEIGHTS.keys())
+
+    for horizon_name in horizon_names:
+        scored_rows = [
+            r
+            for r in consensus_rows
+            if r["horizons"].get(horizon_name, {}).get("score") is not None
+        ]
+        if not scored_rows:
+            continue
+
+        scored_rows_sorted = sorted(
+            scored_rows,
+            key=lambda r: r["horizons"][horizon_name]["score"] or 0,
+            reverse=True,
+        )
+
+        horizon_title = HORIZON_TITLES.get(horizon_name, horizon_name.title())
+        log_to_file(log_file, f"CONSENSUS — {horizon_title}")
+        log_to_file(log_file, "=" * 160)
+        log_to_file(
+            log_file,
+            f"{'Rank':<6} {'Ticker':<12} {'Company':<28} {'Score':>8} {'Dir':<12} "
+            f"{'Conf':>6} {'Agree':>7} {'Opinions':>9} "
+            f"{'MCap':>14} {'Perf.W':>8} {'Perf.1M':>8} {'Perf.YTD':>8}",
+        )
+        log_to_file(log_file, "-" * 160)
+
+        top_count = min(TOP_SECTION_ROWS, len(scored_rows_sorted))
+        for rank, consensus_row in enumerate(scored_rows_sorted[:top_count], 1):
+            horizon_data = consensus_row["horizons"][horizon_name]
+            row = consensus_row["row"]
+            log_to_file(
+                log_file,
+                f"{rank:<6} {consensus_row['ticker']:<12} "
+                f"{(consensus_row['company'] or 'N/A')[:27]:<28} "
+                f"{_format_score(horizon_data['score']):>8} "
+                f"{horizon_data['direction']:<12} "
+                f"{_format_confidence(horizon_data['confidence']):>6} "
+                f"{horizon_data['agreement_ratio']:.0%}{'':<3} "
+                f"{horizon_data['opinions']:>9} "
+                f"{_format_market_cap(consensus_row['market_cap']):>14} "
+                f"{_format_percent(_coerce_numeric(row.get('Perf.W'))):>8} "
+                f"{_format_percent(_coerce_numeric(row.get('Perf.1M'))):>8} "
+                f"{_format_percent(_coerce_numeric(row.get('Perf.YTD'))):>8}",
+            )
+        log_to_file(log_file, "")
+
+        log_to_file(log_file, f"CONSENSUS — {horizon_title} — Bottom {top_count}")
+        log_to_file(log_file, "-" * 160)
+        log_to_file(
+            log_file,
+            f"{'Rank':<6} {'Ticker':<12} {'Company':<28} {'Score':>8} {'Dir':<12} "
+            f"{'Conf':>6} {'Agree':>7} {'Opinions':>9} "
+            f"{'MCap':>14} {'Perf.W':>8} {'Perf.1M':>8} {'Perf.YTD':>8}",
+        )
+        log_to_file(log_file, "-" * 160)
+        bottom_rows = scored_rows_sorted[-top_count:]
+        for rank, consensus_row in enumerate(reversed(bottom_rows), 1):
+            horizon_data = consensus_row["horizons"][horizon_name]
+            row = consensus_row["row"]
+            log_to_file(
+                log_file,
+                f"{rank:<6} {consensus_row['ticker']:<12} "
+                f"{(consensus_row['company'] or 'N/A')[:27]:<28} "
+                f"{_format_score(horizon_data['score']):>8} "
+                f"{horizon_data['direction']:<12} "
+                f"{_format_confidence(horizon_data['confidence']):>6} "
+                f"{horizon_data['agreement_ratio']:.0%}{'':<3} "
+                f"{horizon_data['opinions']:>9} "
+                f"{_format_market_cap(consensus_row['market_cap']):>14} "
+                f"{_format_percent(_coerce_numeric(row.get('Perf.W'))):>8} "
+                f"{_format_percent(_coerce_numeric(row.get('Perf.1M'))):>8} "
+                f"{_format_percent(_coerce_numeric(row.get('Perf.YTD'))):>8}",
+            )
+        log_to_file(log_file, "")
+
+    log_to_file(log_file, "CROSS-PROFILE AGREEMENT — High conviction names")
+    log_to_file(log_file, "=" * 160)
+    log_to_file(
+        log_file,
+        "Names where 5+ profiles agree on direction with agreement ratio >= 60%:",
+    )
+    log_to_file(log_file, "-" * 160)
+
+    for horizon_name in horizon_names:
+        high_conviction = [
+            r
+            for r in consensus_rows
+            if (r["horizons"].get(horizon_name, {}).get("agreement_ratio") or 0) >= 0.60
+            and (r["horizons"].get(horizon_name, {}).get("opinions") or 0) >= 5
+            and r["horizons"].get(horizon_name, {}).get("score") is not None
+        ]
+        if not high_conviction:
+            continue
+
+        high_conviction_sorted = sorted(
+            high_conviction,
+            key=lambda r: abs(r["horizons"][horizon_name]["score"] or 0),
+            reverse=True,
+        )
+        horizon_title = HORIZON_TITLES.get(horizon_name, horizon_name.title())
+        log_to_file(
+            log_file,
+            f"  {horizon_title} — {len(high_conviction_sorted)} high-conviction names",
+        )
+        for consensus_row in high_conviction_sorted[:15]:
+            h = consensus_row["horizons"][horizon_name]
+            log_to_file(
+                log_file,
+                f"    {consensus_row['ticker']:<12} "
+                f"{(consensus_row['company'] or '')[:25]:<26} "
+                f"score={_format_score(h['score'])} "
+                f"dir={h['direction']:<12} "
+                f"agree={h['agreement_ratio']:.0%} "
+                f"opinions={h['opinions']}",
+            )
+        log_to_file(log_file, "")
+
+
+def run_consensus_aggregator(
+    scan_data: list[dict[str, Any]],
+    profile_names: list[str] | None = None,
+    industries: list[str] | str | None = None,
+    min_market_cap_usd: float | None = None,
+    max_market_cap_usd: float | None = None,
+    output_dir: str | Path | None = None,
+) -> Path:
+    industries = _normalize_industries(industries)
+    if profile_names is None:
+        profile_names = list(CONSENSUS_PROFILE_WEIGHTS.keys())
+
+    resolved_output_dir = Path(output_dir) if output_dir is not None else None
+    log_file = _build_report_file_name(
+        report_slug="tradingview_consensus_aggregator",
+        industries=industries,
+        min_market_cap_usd=min_market_cap_usd,
+        max_market_cap_usd=max_market_cap_usd,
+        scoring_profile_name="consensus",
+        output_dir=resolved_output_dir,
+    )
+
+    consensus_rows = _build_consensus_scores(
+        scan_data=scan_data,
+        profile_names=profile_names,
+    )
+
+    _log_consensus_aggregator_report(
+        log_file=log_file,
+        consensus_rows=consensus_rows,
+        scan_data_count=len(scan_data),
+        industries=industries,
+        min_market_cap_usd=min_market_cap_usd,
+        max_market_cap_usd=max_market_cap_usd,
+        profile_names=profile_names,
+    )
+
+    csv_file = log_file.with_suffix(".csv")
+    horizon_names = list(DEFAULT_HORIZON_WEIGHTS.keys())
+    csv_headers = [
+        "ticker",
+        "company",
+        "market_cap",
+    ]
+    for horizon_name in horizon_names:
+        csv_headers.extend(
+            [
+                f"consensus_{horizon_name}_score",
+                f"consensus_{horizon_name}_direction",
+                f"consensus_{horizon_name}_confidence",
+                f"consensus_{horizon_name}_agreement",
+                f"consensus_{horizon_name}_opinions",
+            ]
+        )
+    for profile_name in profile_names:
+        for horizon_name in horizon_names:
+            csv_headers.append(f"{profile_name}_{horizon_name}_score")
+
+    csv_rows: list[list[str]] = []
+    for consensus_row in consensus_rows:
+        csv_row = [
+            consensus_row["ticker"],
+            consensus_row["company"] or "",
+            str(consensus_row["market_cap"] or ""),
+        ]
+        for horizon_name in horizon_names:
+            h = consensus_row["horizons"].get(horizon_name, {})
+            csv_row.extend(
+                [
+                    str(h.get("score", "")),
+                    str(h.get("direction", "")),
+                    str(h.get("confidence", "")),
+                    str(h.get("agreement_ratio", "")),
+                    str(h.get("opinions", "")),
+                ]
+            )
+        for profile_name in profile_names:
+            for horizon_name in horizon_names:
+                profile_horizon = (
+                    consensus_row["profile_scores"]
+                    .get(profile_name, {})
+                    .get(horizon_name, {})
+                )
+                csv_row.append(str(profile_horizon.get("score", "")))
+        csv_rows.append(csv_row)
+
+    log_rows_to_csv(csv_file, csv_headers, csv_rows)
+
+    return log_file
+
+
+def run_full_analysis_suite(
+    scan_data: list[dict[str, Any]],
+    industries: list[str] | str | None = None,
+    min_market_cap_usd: float | None = None,
+    max_market_cap_usd: float | None = None,
+    include_blind_spot_sections: bool = False,
+    output_dir: str | Path | None = None,
+) -> dict[str, Path]:
+    profile_logs = run_move_prediction_profile_suite(
+        scan_data=scan_data,
+        industries=industries,
+        min_market_cap_usd=min_market_cap_usd,
+        max_market_cap_usd=max_market_cap_usd,
+        include_blind_spot_sections=include_blind_spot_sections,
+        output_dir=output_dir,
+    )
+
+    consensus_log = run_consensus_aggregator(
+        scan_data=scan_data,
+        industries=industries,
+        min_market_cap_usd=min_market_cap_usd,
+        max_market_cap_usd=max_market_cap_usd,
+        output_dir=output_dir,
+    )
+
+    result = dict(profile_logs)
+    result["_consensus_aggregator"] = consensus_log
+    return result
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# INDUSTRY-SCOPED FULL ANALYSIS SUITE
+# ──────────────────────────────────────────────────────────────────────────────
+
+DATE_FOLDER_FORMAT = "%d_%m_%Y"
+
+
+def _group_scan_data_by_field(
+    scan_data: list[dict[str, Any]],
+    group_field: str = "sector",
+) -> dict[str, list[dict[str, Any]]]:
+    """Group scan rows by a categorical field (sector or industry).
+
+    Returns a dict mapping each distinct field value to its list of rows.
+    Rows where the field is missing or empty are grouped under ``"Unknown"``.
+    """
+    groups: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+    for row in scan_data:
+        value = row.get(group_field)
+        key = str(value).strip() if value else "Unknown"
+        groups[key].append(row)
+    return dict(groups)
+
+
+def _build_industry_coverage_stats(
+    scan_data: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build per-sector coverage statistics to surface structural bias.
+
+    For each sector, computes:
+    - row_count / share of total scan
+    - sub-industry count
+    - median market cap
+    - median close price
+    - aggregate market cap share (sector total market cap / universe total)
+    - top 3 sub-industries by count
+    """
+    total_rows = len(scan_data)
+    if total_rows == 0:
+        return []
+
+    sector_groups = _group_scan_data_by_field(scan_data, "sector")
+    universe_total_mcap = sum(
+        _coerce_numeric(r.get("market_cap_basic")) or 0.0 for r in scan_data
+    )
+
+    stats: list[dict[str, Any]] = []
+    for sector, rows in sorted(sector_groups.items(), key=lambda x: -len(x[1])):
+        mcaps = [
+            m
+            for r in rows
+            if (m := _coerce_numeric(r.get("market_cap_basic"))) is not None
+        ]
+        sector_total_mcap = sum(mcaps) if mcaps else 0.0
+
+        sub_industries = collections.Counter(
+            str(r.get("industry", "Unknown")).strip() for r in rows
+        )
+
+        stats.append(
+            {
+                "sector": sector,
+                "row_count": len(rows),
+                "row_share": len(rows) / total_rows if total_rows else 0.0,
+                "sub_industry_count": len(sub_industries),
+                "median_market_cap": median(mcaps) if mcaps else None,
+                "sector_total_market_cap": sector_total_mcap,
+                "market_cap_share": (
+                    sector_total_mcap / universe_total_mcap
+                    if universe_total_mcap > 0
+                    else 0.0
+                ),
+                "top_sub_industries": sub_industries.most_common(5),
+            }
+        )
+    return stats
+
+
+def _log_industry_coverage_report(
+    log_file: Path,
+    scan_data: list[dict[str, Any]],
+) -> None:
+    """Write an industry coverage / bias analysis report."""
+    _reset_log_file(log_file)
+    log_to_file(
+        log_file, _build_report_title("Industry Coverage & Structural Bias Analysis")
+    )
+    log_to_file(log_file, "=" * 160)
+    log_to_file(log_file, f"Total universe rows: {len(scan_data)}")
+    log_to_file(log_file, "")
+
+    stats = _build_industry_coverage_stats(scan_data)
+    if not stats:
+        log_to_file(log_file, "No data to analyse.")
+        return
+
+    # ── Sector summary table ──
+    log_to_file(log_file, "SECTOR COVERAGE SUMMARY")
+    log_to_file(log_file, "-" * 160)
+    log_to_file(
+        log_file,
+        f"{'Sector':<35} {'Rows':>6} {'Share':>8} {'McapShare':>10} "
+        f"{'MedianMcap':>14} {'SubInds':>8}  Top sub-industries",
+    )
+    log_to_file(log_file, "-" * 160)
+
+    for s in stats:
+        top_subs = ", ".join(
+            f"{name} ({cnt})" for name, cnt in s["top_sub_industries"][:3]
+        )
+        log_to_file(
+            log_file,
+            f"{s['sector']:<35} {s['row_count']:>6} {s['row_share']:>7.1%} "
+            f"{s['market_cap_share']:>9.1%} "
+            f"{_format_market_cap(s['median_market_cap']):>14} "
+            f"{s['sub_industry_count']:>8}  {top_subs}",
+        )
+    log_to_file(log_file, "")
+
+    # ── Bias analysis ──
+    log_to_file(log_file, "STRUCTURAL BIAS ANALYSIS")
+    log_to_file(log_file, "-" * 160)
+
+    # Detect sectors whose row share is disproportionate to their market-cap share
+    overrepresented = [
+        s
+        for s in stats
+        if s["row_share"] > 0.05 and s["row_share"] > s["market_cap_share"] * 1.5
+    ]
+    underrepresented = [
+        s
+        for s in stats
+        if s["market_cap_share"] > 0.05 and s["market_cap_share"] > s["row_share"] * 1.5
+    ]
+    proportional = [
+        s
+        for s in stats
+        if s not in overrepresented
+        and s not in underrepresented
+        and s["row_share"] > 0.02
+    ]
+
+    if overrepresented:
+        log_to_file(
+            log_file,
+            "Overrepresented sectors (row share > 1.5x their market-cap share):",
+        )
+        for s in overrepresented:
+            log_to_file(
+                log_file,
+                f"  {s['sector']}: {s['row_share']:.1%} of rows vs {s['market_cap_share']:.1%} of market cap "
+                f"({s['row_count']} names, {s['sub_industry_count']} sub-industries)",
+            )
+        log_to_file(log_file, "")
+        log_to_file(
+            log_file,
+            "  Interpretation: These sectors have many listed entities relative to their "
+            "combined market capitalisation. This is structural — sectors like Finance "
+            "include REITs, regional banks, investment trusts and insurance companies "
+            "which are numerous but individually smaller. The data is not biased; "
+            "the market simply has more Finance-sector names above the market-cap floor.",
+        )
+    else:
+        log_to_file(
+            log_file,
+            "No overrepresented sectors detected relative to market-cap share.",
+        )
+    log_to_file(log_file, "")
+
+    if underrepresented:
+        log_to_file(
+            log_file,
+            "Underrepresented sectors (market-cap share > 1.5x their row share):",
+        )
+        for s in underrepresented:
+            log_to_file(
+                log_file,
+                f"  {s['sector']}: {s['row_share']:.1%} of rows vs {s['market_cap_share']:.1%} of market cap "
+                f"({s['row_count']} names, {s['sub_industry_count']} sub-industries)",
+            )
+        log_to_file(log_file, "")
+        log_to_file(
+            log_file,
+            "  Interpretation: These sectors are dominated by mega-cap names. "
+            "Few listed entities but large aggregate capitalisation.",
+        )
+    log_to_file(log_file, "")
+
+    if proportional:
+        log_to_file(log_file, "Proportionally represented sectors:")
+        for s in proportional:
+            log_to_file(
+                log_file,
+                f"  {s['sector']}: {s['row_share']:.1%} of rows, {s['market_cap_share']:.1%} of market cap",
+            )
+    log_to_file(log_file, "")
+
+    # ── Sub-industry concentration within the largest sector ──
+    largest = stats[0] if stats else None
+    if largest and largest["row_count"] > 50:
+        log_to_file(
+            log_file,
+            f"LARGEST SECTOR DEEP DIVE: {largest['sector']} ({largest['row_count']} rows, "
+            f"{largest['row_share']:.1%} of universe)",
+        )
+        log_to_file(log_file, "-" * 160)
+        for name, cnt in largest["top_sub_industries"]:
+            sub_share = cnt / largest["row_count"]
+            log_to_file(
+                log_file,
+                f"  {name:<50} {cnt:>5} rows ({sub_share:>6.1%} of sector)",
+            )
+        log_to_file(log_file, "")
+        log_to_file(
+            log_file,
+            "  Note: When running per-industry analysis the suite automatically isolates "
+            "each sector so cross-sector count imbalance does not contaminate relative "
+            "scoring. Peer metrics and component scores are computed within-sector.",
+        )
+    log_to_file(log_file, "")
+
+
+def _log_cross_industry_aggregate_report(
+    log_file: Path,
+    industry_results: dict[str, dict[str, Path]],
+    scan_data: list[dict[str, Any]],
+    min_market_cap_usd: float | None,
+    max_market_cap_usd: float | None,
+) -> None:
+    """Write a cross-industry aggregate report summarising top/bottom names per sector.
+
+    Reads the consensus CSV from each industry's results and extracts the
+    top-ranked names per horizon. This surfaces cross-industry performers
+    without requiring the user to open each sector folder.
+    """
+    import csv as _csv
+
+    _reset_log_file(log_file)
+    log_to_file(
+        log_file, _build_report_title("Cross-Industry Aggregate — Top Performers")
+    )
+    log_to_file(log_file, "=" * 160)
+    log_to_file(
+        log_file,
+        f"Industries analysed: {len(industry_results)} | "
+        f"min_market_cap={min_market_cap_usd} | max_market_cap={max_market_cap_usd}",
+    )
+    log_to_file(log_file, "")
+
+    horizon_names = list(DEFAULT_HORIZON_WEIGHTS.keys())
+
+    # Collect consensus rows from each industry's CSV
+    all_consensus_rows: list[dict[str, Any]] = []
+    for sector, paths in sorted(industry_results.items()):
+        consensus_path = paths.get("_consensus_aggregator")
+        if consensus_path is None:
+            continue
+        csv_path = Path(consensus_path).with_suffix(".csv")
+        if not csv_path.exists():
+            continue
+        try:
+            with csv_path.open(encoding="utf-8-sig") as f:
+                reader = _csv.DictReader(f)
+                for row in reader:
+                    row["_sector"] = sector
+                    all_consensus_rows.append(row)
+        except Exception:
+            continue
+
+    if not all_consensus_rows:
+        log_to_file(log_file, "No consensus data available.")
+        return
+
+    log_to_file(
+        log_file, f"Total names across all industries: {len(all_consensus_rows)}"
+    )
+    log_to_file(log_file, "")
+
+    # ── Per-horizon top and bottom names ──
+    for horizon_name in horizon_names:
+        score_col = f"consensus_{horizon_name}_score"
+        direction_col = f"consensus_{horizon_name}_direction"
+        confidence_col = f"consensus_{horizon_name}_confidence"
+        agreement_col = f"consensus_{horizon_name}_agreement"
+
+        scored_rows = []
+        for row in all_consensus_rows:
+            try:
+                score = float(row.get(score_col, ""))
+            except (ValueError, TypeError):
+                continue
+            scored_rows.append((row, score))
+
+        if not scored_rows:
+            continue
+
+        scored_rows.sort(key=lambda x: x[1], reverse=True)
+        horizon_title = HORIZON_TITLES.get(horizon_name, horizon_name.title())
+
+        log_to_file(log_file, f"{horizon_title.upper()} — CROSS-INDUSTRY RANKING")
+        log_to_file(log_file, "=" * 160)
+
+        # Top bullish
+        log_to_file(
+            log_file, f"  Top {min(20, len(scored_rows))} bullish consensus names:"
+        )
+        log_to_file(log_file, "-" * 160)
+        log_to_file(
+            log_file,
+            f"  {'Rank':>4}  {'Ticker':<16} {'Company':<35} {'Sector':<30} "
+            f"{'Score':>8} {'Dir':>12} {'Conf':>8} {'Agree':>8}",
+        )
+        log_to_file(log_file, "-" * 160)
+        for rank, (row, score) in enumerate(scored_rows[:20], 1):
+            log_to_file(
+                log_file,
+                f"  {rank:>4}  {row.get('ticker', 'N/A'):<16} "
+                f"{(row.get('company', '') or '')[:34]:<35} "
+                f"{row.get('_sector', '')[:29]:<30} "
+                f"{score:>+8.3f} "
+                f"{row.get(direction_col, 'N/A'):>12} "
+                f"{row.get(confidence_col, 'N/A'):>8} "
+                f"{row.get(agreement_col, 'N/A'):>8}",
+            )
+        log_to_file(log_file, "")
+
+        # Bottom bearish
+        log_to_file(
+            log_file, f"  Top {min(20, len(scored_rows))} bearish consensus names:"
+        )
+        log_to_file(log_file, "-" * 160)
+        for rank, (row, score) in enumerate(reversed(scored_rows[-20:]), 1):
+            log_to_file(
+                log_file,
+                f"  {rank:>4}  {row.get('ticker', 'N/A'):<16} "
+                f"{(row.get('company', '') or '')[:34]:<35} "
+                f"{row.get('_sector', '')[:29]:<30} "
+                f"{score:>+8.3f} "
+                f"{row.get(direction_col, 'N/A'):>12} "
+                f"{row.get(confidence_col, 'N/A'):>8} "
+                f"{row.get(agreement_col, 'N/A'):>8}",
+            )
+        log_to_file(log_file, "")
+
+    # ── Per-sector summary: best name per horizon ──
+    log_to_file(log_file, "PER-SECTOR BEST NAME — QUICK REFERENCE")
+    log_to_file(log_file, "=" * 160)
+    for horizon_name in horizon_names:
+        score_col = f"consensus_{horizon_name}_score"
+        horizon_title = HORIZON_TITLES.get(horizon_name, horizon_name.title())
+        log_to_file(log_file, f"  {horizon_title}:")
+        log_to_file(log_file, "-" * 160)
+
+        sector_best: dict[str, tuple[dict[str, Any], float]] = {}
+        for row in all_consensus_rows:
+            try:
+                score = float(row.get(score_col, ""))
+            except (ValueError, TypeError):
+                continue
+            sector = row.get("_sector", "Unknown")
+            if sector not in sector_best or score > sector_best[sector][1]:
+                sector_best[sector] = (row, score)
+
+        for sector in sorted(sector_best, key=lambda s: -sector_best[s][1]):
+            row, score = sector_best[sector]
+            log_to_file(
+                log_file,
+                f"    {sector:<30} {row.get('ticker', 'N/A'):<16} "
+                f"{(row.get('company', '') or '')[:34]:<35} score={score:>+.3f}",
+            )
+        log_to_file(log_file, "")
+
+    # ── Sector average score comparison ──
+    log_to_file(log_file, "SECTOR AVERAGE CONSENSUS SCORE COMPARISON")
+    log_to_file(log_file, "=" * 160)
+    for horizon_name in horizon_names:
+        score_col = f"consensus_{horizon_name}_score"
+        horizon_title = HORIZON_TITLES.get(horizon_name, horizon_name.title())
+
+        sector_scores: dict[str, list[float]] = collections.defaultdict(list)
+        for row in all_consensus_rows:
+            try:
+                score = float(row.get(score_col, ""))
+            except (ValueError, TypeError):
+                continue
+            sector_scores[row.get("_sector", "Unknown")].append(score)
+
+        ranked = sorted(
+            sector_scores.items(),
+            key=lambda item: sum(item[1]) / len(item[1]) if item[1] else 0,
+            reverse=True,
+        )
+        log_to_file(log_file, f"  {horizon_title}:")
+        log_to_file(
+            log_file,
+            f"    {'Sector':<30} {'AvgScore':>10} {'Names':>6} "
+            f"{'Bullish%':>10} {'Bearish%':>10}",
+        )
+        log_to_file(log_file, "    " + "-" * 70)
+        for sector, scores in ranked:
+            avg = sum(scores) / len(scores) if scores else 0
+            bullish_pct = (
+                sum(1 for s in scores if s > 0) / len(scores) * 100 if scores else 0
+            )
+            bearish_pct = (
+                sum(1 for s in scores if s < 0) / len(scores) * 100 if scores else 0
+            )
+            log_to_file(
+                log_file,
+                f"    {sector:<30} {avg:>+10.3f} {len(scores):>6} "
+                f"{bullish_pct:>9.1f}% {bearish_pct:>9.1f}%",
+            )
+        log_to_file(log_file, "")
+
+
+def _build_cross_industry_aggregate_csv(
+    csv_file: Path,
+    industry_results: dict[str, dict[str, Path]],
+) -> None:
+    """Build a single CSV combining consensus scores from all industries."""
+    import csv as _csv
+
+    horizon_names = list(DEFAULT_HORIZON_WEIGHTS.keys())
+
+    all_rows: list[list[str]] = []
+    for sector, paths in sorted(industry_results.items()):
+        consensus_path = paths.get("_consensus_aggregator")
+        if consensus_path is None:
+            continue
+        source_csv = Path(consensus_path).with_suffix(".csv")
+        if not source_csv.exists():
+            continue
+        try:
+            with source_csv.open(encoding="utf-8-sig") as f:
+                reader = _csv.DictReader(f)
+                for row in reader:
+                    csv_row = [
+                        sector,
+                        row.get("ticker", ""),
+                        row.get("company", ""),
+                        row.get("market_cap", ""),
+                    ]
+                    for horizon_name in horizon_names:
+                        csv_row.extend(
+                            [
+                                row.get(f"consensus_{horizon_name}_score", ""),
+                                row.get(f"consensus_{horizon_name}_direction", ""),
+                                row.get(f"consensus_{horizon_name}_confidence", ""),
+                                row.get(f"consensus_{horizon_name}_agreement", ""),
+                                row.get(f"consensus_{horizon_name}_opinions", ""),
+                            ]
+                        )
+                    all_rows.append(csv_row)
+        except Exception:
+            continue
+
+    headers = ["sector", "ticker", "company", "market_cap"]
+    for horizon_name in horizon_names:
+        headers.extend(
+            [
+                f"consensus_{horizon_name}_score",
+                f"consensus_{horizon_name}_direction",
+                f"consensus_{horizon_name}_confidence",
+                f"consensus_{horizon_name}_agreement",
+                f"consensus_{horizon_name}_opinions",
+            ]
+        )
+    log_rows_to_csv(csv_file, headers, all_rows)
+
+
+def run_full_analysis_suite_by_industry(
+    scan_data: list[dict[str, Any]],
+    min_market_cap_usd: float | None = None,
+    max_market_cap_usd: float | None = None,
+    include_blind_spot_sections: bool = False,
+    group_field: str = "sector",
+    output_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    """Orchestrate the full analysis suite split by industry/sector.
+
+    Creates the following folder structure under the output directory::
+
+        full_analysis_suite_DD_MM_YYYY/
+            _global/                       ← full-universe analysis
+               (all profile logs, consensus, etc.)
+            _coverage_bias_analysis.log    ← industry coverage report
+            _cross_industry_aggregate.log  ← cross-industry ranked report
+            _cross_industry_aggregate.csv  ← combined consensus CSV
+            Finance/                       ← one folder per sector
+               (all profile logs, consensus for this sector)
+            Health Technology/
+            Technology Services/
+            ...
+
+    Parameters
+    ----------
+    scan_data : list[dict]
+        Raw scan rows from ``ApiTradingViewClient.scan_global_market_move_prediction``.
+    min_market_cap_usd / max_market_cap_usd : float | None
+        Market-cap bounds (used for report labelling; data is already filtered).
+    include_blind_spot_sections : bool
+        Whether to include blind-spot analysis in per-profile logs.
+    group_field : str
+        Field to group rows by. ``"sector"`` (default) gives ~20 groups.
+        ``"industry"`` gives ~130 groups (finer granularity).
+    output_dir : str | Path | None
+        Override the root output directory. Defaults to ``LOG_DIR``.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``{ "_root_dir": Path, "_global": dict, "_coverage": Path,
+        "_cross_industry_aggregate": Path, "<sector>": dict, ... }``
+    """
+    base_dir = Path(output_dir) if output_dir is not None else LOG_DIR
+    date_folder = datetime.now().strftime(DATE_FOLDER_FORMAT)
+    suite_root = base_dir / f"full_analysis_suite_{date_folder}"
+    suite_root.mkdir(parents=True, exist_ok=True)
+
+    result: dict[str, Any] = {"_root_dir": suite_root}
+
+    # ── 1. Global analysis (full universe) ──
+    global_dir = suite_root / "_global"
+    global_dir.mkdir(parents=True, exist_ok=True)
+    global_logs = run_full_analysis_suite(
+        scan_data=scan_data,
+        min_market_cap_usd=min_market_cap_usd,
+        max_market_cap_usd=max_market_cap_usd,
+        include_blind_spot_sections=include_blind_spot_sections,
+        output_dir=global_dir,
+    )
+    result["_global"] = global_logs
+
+    # ── 2. Coverage / bias analysis ──
+    coverage_log = suite_root / "_coverage_bias_analysis.log"
+    _log_industry_coverage_report(coverage_log, scan_data)
+    result["_coverage"] = coverage_log
+
+    # ── 3. Per-industry analysis ──
+    groups = _group_scan_data_by_field(scan_data, group_field)
+    industry_results: dict[str, dict[str, Path]] = {}
+
+    for group_name in sorted(groups):
+        group_rows = groups[group_name]
+        if len(group_rows) < 3:
+            continue
+
+        industry_folder = suite_root / _sanitize_industry_folder_name(group_name)
+        industry_folder.mkdir(parents=True, exist_ok=True)
+
+        industry_logs = run_full_analysis_suite(
+            scan_data=group_rows,
+            industries=[group_name],
+            min_market_cap_usd=min_market_cap_usd,
+            max_market_cap_usd=max_market_cap_usd,
+            include_blind_spot_sections=include_blind_spot_sections,
+            output_dir=industry_folder,
+        )
+        industry_results[group_name] = industry_logs
+        result[group_name] = industry_logs
+
+    # ── 4. Cross-industry aggregate report ──
+    aggregate_log = suite_root / "_cross_industry_aggregate.log"
+    _log_cross_industry_aggregate_report(
+        log_file=aggregate_log,
+        industry_results=industry_results,
+        scan_data=scan_data,
+        min_market_cap_usd=min_market_cap_usd,
+        max_market_cap_usd=max_market_cap_usd,
+    )
+    result["_cross_industry_aggregate"] = aggregate_log
+
+    aggregate_csv = suite_root / "_cross_industry_aggregate.csv"
+    _build_cross_industry_aggregate_csv(aggregate_csv, industry_results)
+
+    return result
