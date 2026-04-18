@@ -2,7 +2,7 @@
 -- CREATE TABLE IF NOT EXISTS trading_view_company_data_map (
 --     internal_id INT PRIMARY KEY AUTO_INCREMENT,
 --     symbol VARCHAR(50) NOT NULL,
---     name VARCHAR(128),
+--     name VARCHAR(256),
 --     exchange VARCHAR(32),
 --     description VARCHAR(256),
 --     type VARCHAR(32),
@@ -22,11 +22,11 @@
 --     perf_10y DOUBLE,
 --     perf_3y DOUBLE,
 --     perf_5d DOUBLE,
---     logoid VARCHAR(64),
+--     logoid VARCHAR(255),
 --     logo_style VARCHAR(32),
 --     kind_delay INT,
 --     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
---     UNIQUE KEY uq_symbol (symbol)
+--     UNIQUE KEY uq_symbol_exchange (symbol, exchange)
 -- );
 -- -- @block
 -- CREATE INDEX idx_symbol ON trading_view_company_data_map(symbol);
@@ -34,8 +34,15 @@
 -- CREATE INDEX idx_market ON trading_view_company_data_map(market);
 -- CREATE INDEX idx_exchange ON trading_view_company_data_map(exchange);
 -- @block
+DROP INDEX uq_symbol ON trading_view_company_data_map;
+UPDATE trading_view_company_data_map
+SET symbol = TRIM(SUBSTRING_INDEX(symbol, ':', -1))
+WHERE symbol LIKE '%:%';
+CREATE UNIQUE INDEX uq_symbol_exchange ON trading_view_company_data_map(symbol, exchange);
+-- @block
 SELECT *
-FROM trading_view_company_data_map;
+FROM trading_view_company_data_map
+WHERE symbol IN ('AAPL', 'VUAA');
 -- ────────────────────────────────────────────────────────────────────────
 -- Portfolio management tables
 -- ────────────────────────────────────────────────────────────────────────

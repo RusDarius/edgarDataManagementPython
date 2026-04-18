@@ -56,11 +56,11 @@ def get_trading_view_company_by_symbol(symbol: str) -> dict[str, Any] | None:
                 SELECT {COMPANY_LOOKUP_FIELDS}
                 FROM trading_view_company_data_map
                 WHERE symbol = %s
-                   OR symbol LIKE CONCAT('%:', %s)
+                   OR symbol = SUBSTRING_INDEX(%s, ':', -1)
                 ORDER BY
                     CASE
                         WHEN symbol = %s THEN 0
-                        WHEN symbol LIKE CONCAT('%:', %s) THEN 1
+                        WHEN symbol = SUBSTRING_INDEX(%s, ':', -1) THEN 1
                         ELSE 2
                     END,
                     market_cap_basic DESC,

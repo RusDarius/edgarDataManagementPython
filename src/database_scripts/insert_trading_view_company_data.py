@@ -36,7 +36,7 @@ TRADING_VIEW_COMPANY_SCHEMA_STATEMENTS = [
         logo_style VARCHAR(32),
         kind_delay INT,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY uq_symbol (symbol)
+        UNIQUE KEY uq_symbol_exchange (symbol, exchange)
     )
     """,
 ]
@@ -110,7 +110,7 @@ def _get_character_maximum_length(
 def _index_exists(cursor, table_name: str, index_name: str) -> bool:
     cursor.execute(
         """
-        SELECT 1
+        SELECT COUNT(*)
         FROM information_schema.statistics
         WHERE table_schema = DATABASE()
           AND table_name = %s
@@ -118,7 +118,8 @@ def _index_exists(cursor, table_name: str, index_name: str) -> bool:
         """,
         (table_name, index_name),
     )
-    return cursor.fetchone() is not None
+    result = cursor.fetchone()
+    return bool(result and result[0] > 0)
 
 
 def _ensure_index(
@@ -130,6 +131,27 @@ def _ensure_index(
     if _index_exists(cursor, table_name, index_name):
         return
     cursor.execute(f"CREATE INDEX {index_name} ON {table_name}({column_name})")
+
+
+def _ensure_unique_index(
+    cursor,
+    index_name: str,
+    table_name: str,
+    columns_sql: str,
+) -> None:
+    if _index_exists(cursor, table_name, index_name):
+        return
+    cursor.execute(f"CREATE UNIQUE INDEX {index_name} ON {table_name} ({columns_sql})")
+
+
+def _drop_index_if_exists(
+    cursor,
+    table_name: str,
+    index_name: str,
+) -> None:
+    if not _index_exists(cursor, table_name, index_name):
+        return
+    cursor.execute(f"DROP INDEX {index_name} ON {table_name}")
 
 
 def _ensure_column(
@@ -163,6 +185,30 @@ def _ensure_minimum_varchar_length(
     )
 
 
+def _normalize_existing_symbols(cursor, table_name: str) -> None:
+    cursor.execute(
+        f"""
+        UPDATE {table_name}
+        SET symbol = TRIM(SUBSTRING_INDEX(symbol, ':', -1))
+        WHERE symbol LIKE '%:%'
+        """
+    )
+
+
+def _deduplicate_symbol_exchange(cursor, table_name: str) -> None:
+    # Keep the newest row (highest internal_id) for each symbol/exchange pair.
+    cursor.execute(
+        f"""
+        DELETE older
+        FROM {table_name} AS older
+        INNER JOIN {table_name} AS newer
+            ON older.symbol = newer.symbol
+           AND COALESCE(older.exchange, '') = COALESCE(newer.exchange, '')
+           AND older.internal_id < newer.internal_id
+        """
+    )
+
+
 def ensure_tradingview_company_data_schema() -> None:
     conn = get_mysql_connection(**BASE_DB_CONFIG)
     try:
@@ -188,6 +234,19 @@ def ensure_tradingview_company_data_schema() -> None:
                     minimum_length,
                     definition_sql,
                 )
+            _drop_index_if_exists(
+                cursor,
+                "trading_view_company_data_map",
+                "uq_symbol",
+            )
+            _normalize_existing_symbols(cursor, "trading_view_company_data_map")
+            _deduplicate_symbol_exchange(cursor, "trading_view_company_data_map")
+            _ensure_unique_index(
+                cursor,
+                "uq_symbol_exchange",
+                "trading_view_company_data_map",
+                "symbol, exchange",
+            )
             for index_name, table_name, column_name in TRADING_VIEW_COMPANY_INDEXES:
                 _ensure_index(cursor, index_name, table_name, column_name)
         conn.commit()
@@ -223,6 +282,12 @@ def _normalize_company_entry(row: dict[str, Any]) -> dict[str, Any] | None:
     if not isinstance(symbol, str) or not symbol.strip():
         return None
 
+    normalized_symbol = symbol.strip()
+    if ":" in normalized_symbol:
+        normalized_symbol = normalized_symbol.split(":")[-1].strip()
+    if not normalized_symbol:
+        return None
+
     normalized_typespecs = row.get("typespecs")
     if normalized_typespecs is None:
         normalized_typespecs = ticker_view_metadata.get("typespecs")
@@ -245,7 +310,7 @@ def _normalize_company_entry(row: dict[str, Any]) -> dict[str, Any] | None:
     )
 
     return {
-        "symbol": symbol.strip(),
+        "symbol": normalized_symbol,
         "name": display_name,
         "exchange": row.get("exchange") or ticker_view_metadata.get("exchange"),
         "description": row.get("description")

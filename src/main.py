@@ -16,6 +16,9 @@ from data_analysis_scripts.trading_view_activity_float_attention import (
     run_activity_float_attention_scan,
     run_activity_float_attention_scan_grouped_industries,
 )
+from data_analysis_scripts.trading_view_cross_scanner_aggregator import (
+    run_cross_scanner_aggregate,
+)
 from data_analysis_scripts.trading_view_export_all_tdfields import (
     export_all_tradingview_fields,
 )
@@ -65,11 +68,6 @@ def run_portfolio_bootstrap_example() -> dict[str, object]:
     an FX rate into ``add_holding_by_amount``. A future FX API can replace the
     manual rate.
     """
-    load_result = load_tradingview_company_data(
-        api_client=TRADINGVIEW_API_CLIENT,
-        markets=PREFERRED_MARKETS,
-    )
-    print(f"TradingView companies loaded: {load_result}")
 
     tracker = PortfolioTracker(
         portfolio_name="TV Date Aware Demo",
@@ -136,7 +134,6 @@ def run_portfolio_bootstrap_example() -> dict[str, object]:
     print(f"Portfolio analysis exported to: {export_paths}")
 
     return {
-        "load_result": load_result,
         "opened_positions": opened_positions,
         "snapshot_result": snapshot_result,
         "summary": summary,
@@ -148,11 +145,6 @@ def run_portfolio_bootstrap_example() -> dict[str, object]:
 # Main entry point for running workflows and data loaders.
 def main():
     base_data_dir = r"D:\FinanceProjects\edgarFinancialStatements"
-
-    load_tradingview_company_data(
-        api_client=TRADINGVIEW_API_CLIENT,
-        markets=TRADING_VIEW_ALL_MARKETS_ARRAY,
-    )
 
     # analyze_global_price_performance(
     #     scan_data=TRADINGVIEW_API_CLIENT.scan_world_market_all_priceperf_metrics().get(
@@ -213,6 +205,14 @@ def main():
     #     min_market_cap_usd=1_000_000_000,
     # )
 
+    # run_cross_scanner_aggregate(
+    #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+    #         min_market_cap_usd=1_000_000_000,
+    #         markets=PREFERRED_MARKETS,
+    #     ).get("data", []),
+    #     min_market_cap_usd=1_000_000_000,
+    # )
+
     # run_activity_float_attention_scan_grouped_industries(
     #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_activity_float_attention(
     #         min_market_cap_usd=1_000_000_000,
@@ -223,11 +223,11 @@ def main():
     # daily use to get all market data for a day
     # exported_file = export_all_tradingview_fields()
     # print(f"TradingView all-fields export written to: {exported_file}")
-    # split_csv_by_rows(
-    #     input_csv=Path(
-    #         "d:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/09_04_2026/tradingview_global_all_tdfields_09_04_2026.csv"
-    #     )
-    # )
+    split_csv_by_rows(
+        input_csv=Path(
+            "d:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/17_04_2026/tradingview_global_all_tdfields_17_04_2026.csv"
+        )
+    )
 
     # # 1. Pull new articles from sitemap into the feed
     # gather_result = gather_sherwood_markets_feed()
@@ -253,7 +253,7 @@ def main():
     # print(load_result)
 
     # Step 2: Open dated positions sized by money input.
-    # tracker = PortfolioTracker("TV Date Aware Demo", currency="USD")
+    # tracker = PortfolioTracker("Demo1", currency="USD")
     # tracker.add_holding_by_amount(
     #     internal_id=1,
     #     avg_price=120.00,
@@ -264,9 +264,7 @@ def main():
 
     # Step 3: Refresh market snapshots from the move-prediction scan and measure
     # holding-period metrics such as days held, total return, and annualized return.
-    # snapshot_scan = TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-    #     min_market_cap_usd=1_000_000_000,
-    #     markets=PREFERRED_MARKETS,
+    # snapshot_scan = TRADINGVIEW_API_CLIENT.scan_world_market_all_priceperf_metrics(
     # ).get("data", [])
     # tracker.sync_market_snapshots(snapshot_scan, symbol_key="ticker-view")
     # tracker.print_summary()
