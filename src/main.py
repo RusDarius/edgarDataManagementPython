@@ -30,6 +30,10 @@ from data_analysis_scripts.trading_view_move_prediction_analysis import (
     run_move_prediction_profile_suite,
     run_move_prediction_scan,
 )
+from data_analysis_scripts.trading_view_move_prediction_history_aggregator import (
+    build_move_prediction_history_inputs_from_folder_names,
+    run_move_prediction_history_aggregation,
+)
 from data_analysis_scripts.trading_view_safety_check_v1 import run_safety_core_scan
 from data_analysis_scripts.trading_view_targets_analysis import run_targets_scan
 from data_analysis_scripts.trading_view_valuation_analysis import (
@@ -142,6 +146,63 @@ def run_portfolio_bootstrap_example() -> dict[str, object]:
     }
 
 
+def run_move_prediction_history_aggregation_example() -> dict[str, object]:
+    """Example flow for aggregating profile progression across selected day folders.
+
+    Each folder name below is resolved under the chosen history root and is
+    expected to contain both ``marketOpen`` and ``marketClose`` subfolders.
+    """
+
+    history_root = Path(
+        r"D:\FinanceProjects\edgarDataManagementPython\logs\tradingview_analysis\prediction_analysis\AllInUniverse_min1bil"
+    )
+    included_snapshot_folders = [
+        "30_03_2026",
+        "31_03_2026",
+        "01_04_2026",
+        "02_04_2026",
+        "06_04_2026",
+        "07_04_2026",
+        "08_04_2026",
+        "09_04_2026",
+        "10_04_2026",
+        "13_04_2026",
+        "14_04_2026",
+        "15_04_2026",
+        "16_04_2026",
+        "17_04_2026",
+        "20_04_2026",
+        "21_04_2026",
+    ]
+
+    input_paths = build_move_prediction_history_inputs_from_folder_names(
+        base_dir=history_root,
+        folder_names=included_snapshot_folders,
+    )
+    output_dir = (
+        history_root
+        / "history_aggregations"
+        / "all_in_universe_min1bil__30_03_2026__21_04_2026"
+    )
+
+    aggregation_result = run_move_prediction_history_aggregation(
+        input_paths=input_paths,
+        output_dir=output_dir,
+        # include_profiles=["breakout_long", "quality_value_compounder"],
+    )
+    print(f"History aggregation written to: {aggregation_result['output_dir']}")
+    print(f"Manifest CSV: {aggregation_result['manifest_csv']}")
+    print(f"Combined summary CSV: {aggregation_result['summary_csv']}")
+
+    breakout_summary = (
+        aggregation_result["profiles"].get("breakout_long", {}).get("summary_csv")
+    )
+    if breakout_summary is not None:
+        print(f"Breakout long summary CSV: {breakout_summary}")
+
+    return aggregation_result
+
+
 # Main entry point for running workflows and data loaders.
 def main():
     base_data_dir = r"D:\FinanceProjects\edgarFinancialStatements"
@@ -213,21 +274,20 @@ def main():
     #     min_market_cap_usd=1_000_000_000,
     # )
 
-    # run_activity_float_attention_scan_grouped_industries(
-    #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_activity_float_attention(
-    #         min_market_cap_usd=1_000_000_000,
-    #     ).get("data", []),
-    #     min_market_cap_usd=1_000_000_000,
-    # )
+    run_move_prediction_history_aggregation_example()
+
+    # Aggregate progression across selected dated result folders.
+    # Pass only the dated folder names under AllInUniverse_min1bil.
+    # run_move_prediction_history_aggregation_example()
 
     # daily use to get all market data for a day
     # exported_file = export_all_tradingview_fields()
     # print(f"TradingView all-fields export written to: {exported_file}")
-    split_csv_by_rows(
-        input_csv=Path(
-            "d:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/17_04_2026/tradingview_global_all_tdfields_17_04_2026.csv"
-        )
-    )
+    # split_csv_by_rows(
+    #     input_csv=Path(
+    #         "d:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/21_04_2026/tradingview_global_all_tdfields_21_04_2026.csv"
+    #     )
+    # )
 
     # # 1. Pull new articles from sitemap into the feed
     # gather_result = gather_sherwood_markets_feed()

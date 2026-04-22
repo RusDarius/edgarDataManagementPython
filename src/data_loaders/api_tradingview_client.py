@@ -1064,6 +1064,33 @@ GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD = {
         "net_income",
         "Pivot.M.Classic.Middle",
         "gross_profit_margin_fy",
+        # Analyst-consensus targets (street view): used by the targets module
+        # as an institutional-grade lens that mirrors sell-side fair value.
+        "price_target_average",
+        "price_target_median",
+        "price_target_high",
+        "price_target_low",
+        "price_target_1y",
+        "AnalystRating",
+        # Book-value / Graham-style anchor inputs.
+        "book_value_per_share_fq",
+        # Fundamental-quality anchors (sustainable growth + value-trap filters).
+        "sustainable_growth_rate_ttm",
+        "piotroski_f_score_ttm",
+        # Yield / dividend-discount inputs.
+        "dividend_yield_recent",
+        "dividends_per_share_fq",
+        "dps_common_stock_prim_issue_yoy_growth_fy",
+        # Additional valuation multiples (broaden the multiple-anchored lens).
+        "enterprise_value_to_free_cash_flow_ttm",
+        "enterprise_value_to_gross_profit_ttm",
+        # Leverage quality (modulates trajectory + bear bands).
+        "total_debt_to_ebitda_fq",
+        # Camarilla pivots — additional technical anchors (support/resistance).
+        "Pivot.M.Camarilla.S1",
+        "Pivot.M.Camarilla.S2",
+        "Pivot.M.Camarilla.R1",
+        "Pivot.M.Camarilla.R2",
     ],
     "sort": {"sortBy": "relative_volume_10d_calc", "sortOrder": "desc"},
     "filter": [{"left": "is_primary", "operation": "equal", "right": True}],
