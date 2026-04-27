@@ -129,6 +129,51 @@ MANIFEST_HEADERS = [
     "unique_symbols",
 ]
 
+SCORE_PROGRESSION_BASE_HEADERS = [
+    "profile_name",
+    "symbol",
+    "company_name",
+    "sector",
+    "industry",
+    "snapshots_seen",
+    "profile_snapshot_count",
+    "presence_ratio",
+    "first_score",
+    "last_score",
+    "score_delta_total",
+    "avg_score",
+    "first_rank",
+    "last_rank",
+    "best_rank",
+    "worst_rank",
+    "rank_improvement_total",
+]
+
+PRICE_PROGRESSION_BASE_HEADERS = [
+    "profile_name",
+    "symbol",
+    "company_name",
+    "sector",
+    "industry",
+    "snapshots_seen",
+    "profile_snapshot_count",
+    "presence_ratio",
+    "first_close",
+    "last_close",
+    "close_return_pct_total",
+    "max_close",
+    "min_close",
+    "max_drawdown_pct",
+]
+
+PRICE_PROGRESSION_AGGREGATE_BASE_HEADERS = [
+    header_name
+    for header_name in PRICE_PROGRESSION_BASE_HEADERS
+    if header_name != "profile_name"
+]
+
+SNAPSHOT_COLUMN_PREFIX = "snap__"
+
 
 for horizon_name in TRACKED_HORIZONS:
     HISTORY_HEADERS.extend(
@@ -199,8 +244,16 @@ def aggregate_move_prediction_history(
     - ``_aggregation_manifest.csv``: one row per processed snapshot file
     - ``_all_profiles_history.csv``: one row per ``profile + symbol + snapshot``
     - ``_all_profiles_summary.csv``: one row per ``profile + symbol``
+    - ``_all_profiles_score_progression__<horizon>.csv``: wide score matrix per
+      ``profile + symbol`` for that horizon, one column per snapshot
+      (one file per horizon: ``days``, ``weeks``, ``months``, ``years``)
+    - ``_all_profiles_price_progression.csv``: wide matrix of close prices per
+      symbol (deduplicated across profiles) with one column per snapshot
     - ``profile_<name>__history.csv``: profile-specific timeline rows
     - ``profile_<name>__summary.csv``: profile-specific summary rows
+    - ``profile_<name>__score_progression__<horizon>.csv``: per-profile score
+      matrix, one file per horizon
+    - ``profile_<name>__price_progression.csv``: per-profile price matrix
     - ``_aggregation_overview.log``: human-readable run summary
     """
 
@@ -221,33 +274,81 @@ def aggregate_move_prediction_history(
     manifest_rows: list[dict[str, Any]] = []
     all_history_rows: list[dict[str, Any]] = []
     all_summary_rows: list[dict[str, Any]] = []
+    all_price_progression_rows: list[dict[str, Any]] = []
     profile_outputs: dict[str, dict[str, Any]] = {}
 
     snapshots_by_profile: dict[str, list[SnapshotFileData]] = defaultdict(list)
     for snapshot in snapshot_files:
         snapshots_by_profile[snapshot.metadata.profile_name].append(snapshot)
 
+    aggregate_snapshot_labels = _ordered_unique_snapshot_labels(snapshot_files)
+    aggregate_snapshot_columns = [
+        _snapshot_column_key(label) for label in aggregate_snapshot_labels
+    ]
+
     for profile_name in sorted(snapshots_by_profile):
         profile_snapshots = sorted(
             snapshots_by_profile[profile_name],
             key=lambda snapshot: snapshot.metadata.sort_key,
         )
+        profile_snapshot_labels = _ordered_unique_snapshot_labels(profile_snapshots)
+        profile_snapshot_columns = [
+            _snapshot_column_key(label) for label in profile_snapshot_labels
+        ]
+
         history_rows, summary_rows = _build_profile_outputs(
             profile_name=profile_name,
             profile_snapshots=profile_snapshots,
         )
+        price_progression_rows = _build_price_progression_rows(
+            profile_name=profile_name,
+            snapshots=profile_snapshots,
+            snapshot_labels=profile_snapshot_labels,
+            include_profile_column=True,
+        )
+
         manifest_rows.extend(_build_manifest_rows(profile_snapshots))
         all_history_rows.extend(history_rows)
         all_summary_rows.extend(summary_rows)
+        all_price_progression_rows.extend(price_progression_rows)
 
         history_csv = output_root / f"profile_{profile_name}__history.csv"
         summary_csv = output_root / f"profile_{profile_name}__summary.csv"
+        price_progression_csv = (
+            output_root / f"profile_{profile_name}__price_progression.csv"
+        )
         _write_dict_rows_to_csv(history_csv, HISTORY_HEADERS, history_rows)
         _write_dict_rows_to_csv(summary_csv, SUMMARY_HEADERS, summary_rows)
+        _write_dict_rows_to_csv(
+            price_progression_csv,
+            PRICE_PROGRESSION_BASE_HEADERS + profile_snapshot_columns,
+            price_progression_rows,
+        )
+
+        score_progression_csv_by_horizon: dict[str, Path] = {}
+        for horizon_name in TRACKED_HORIZONS:
+            score_rows = _build_score_progression_rows(
+                profile_name=profile_name,
+                snapshots=profile_snapshots,
+                horizon_name=horizon_name,
+                include_profile_column=True,
+            )
+            score_progression_csv = (
+                output_root
+                / f"profile_{profile_name}__score_progression__{horizon_name}.csv"
+            )
+            _write_dict_rows_to_csv(
+                score_progression_csv,
+                SCORE_PROGRESSION_BASE_HEADERS + profile_snapshot_columns,
+                score_rows,
+            )
+            score_progression_csv_by_horizon[horizon_name] = score_progression_csv
 
         profile_outputs[profile_name] = {
             "history_csv": history_csv,
             "summary_csv": summary_csv,
+            "score_progression_csv_by_horizon": score_progression_csv_by_horizon,
+            "price_progression_csv": price_progression_csv,
             "snapshot_count": len(profile_snapshots),
             "symbol_count": len(summary_rows),
         }
@@ -285,11 +386,65 @@ def aggregate_move_prediction_history(
     manifest_csv = output_root / "_aggregation_manifest.csv"
     all_history_csv = output_root / "_all_profiles_history.csv"
     all_summary_csv = output_root / "_all_profiles_summary.csv"
+    all_price_progression_csv = output_root / "_all_profiles_price_progression.csv"
     overview_log = output_root / "_aggregation_overview.log"
+
+    aggregate_price_progression_rows = _build_price_progression_rows(
+        profile_name=None,
+        snapshots=snapshot_files,
+        snapshot_labels=aggregate_snapshot_labels,
+        include_profile_column=False,
+    )
+
+    all_score_progression_csv_by_horizon: dict[str, Path] = {}
+    for horizon_name in TRACKED_HORIZONS:
+        aggregate_score_rows: list[dict[str, Any]] = []
+        for profile_name in sorted(snapshots_by_profile):
+            profile_snapshots = sorted(
+                snapshots_by_profile[profile_name],
+                key=lambda snapshot: snapshot.metadata.sort_key,
+            )
+            aggregate_score_rows.extend(
+                _build_score_progression_rows(
+                    profile_name=profile_name,
+                    snapshots=profile_snapshots,
+                    horizon_name=horizon_name,
+                    include_profile_column=True,
+                )
+            )
+        aggregate_score_rows.sort(
+            key=lambda row: (
+                str(row.get("profile_name") or ""),
+                _sort_rank_value(row.get("last_rank")),
+                str(row.get("symbol") or ""),
+            )
+        )
+        all_score_progression_csv = (
+            output_root / f"_all_profiles_score_progression__{horizon_name}.csv"
+        )
+        _write_dict_rows_to_csv(
+            all_score_progression_csv,
+            SCORE_PROGRESSION_BASE_HEADERS + aggregate_snapshot_columns,
+            aggregate_score_rows,
+        )
+        all_score_progression_csv_by_horizon[horizon_name] = all_score_progression_csv
+
+    all_price_progression_rows.sort(
+        key=lambda row: (
+            str(row.get("profile_name") or ""),
+            -(_coerce_float(row.get("close_return_pct_total")) or float("-inf")),
+            str(row.get("symbol") or ""),
+        )
+    )
 
     _write_dict_rows_to_csv(manifest_csv, MANIFEST_HEADERS, manifest_rows)
     _write_dict_rows_to_csv(all_history_csv, HISTORY_HEADERS, all_history_rows)
     _write_dict_rows_to_csv(all_summary_csv, SUMMARY_HEADERS, all_summary_rows)
+    _write_dict_rows_to_csv(
+        all_price_progression_csv,
+        PRICE_PROGRESSION_AGGREGATE_BASE_HEADERS + aggregate_snapshot_columns,
+        aggregate_price_progression_rows,
+    )
     _write_overview_log(
         overview_log=overview_log,
         input_paths=_normalize_input_paths(input_paths),
@@ -302,6 +457,8 @@ def aggregate_move_prediction_history(
         "manifest_csv": manifest_csv,
         "history_csv": all_history_csv,
         "summary_csv": all_summary_csv,
+        "score_progression_csv_by_horizon": all_score_progression_csv_by_horizon,
+        "price_progression_csv": all_price_progression_csv,
         "overview_log": overview_log,
         "profiles": profile_outputs,
     }
@@ -645,6 +802,226 @@ def _build_symbol_summary_row(
     return summary_row
 
 
+def _ordered_unique_snapshot_labels(
+    snapshots: Sequence[SnapshotFileData],
+) -> list[str]:
+    seen_labels: set[str] = set()
+    ordered_labels: list[str] = []
+    for snapshot in sorted(snapshots, key=lambda item: item.metadata.sort_key):
+        label = snapshot.metadata.snapshot_label
+        if label in seen_labels:
+            continue
+        seen_labels.add(label)
+        ordered_labels.append(label)
+    return ordered_labels
+
+
+def _snapshot_column_key(snapshot_label: str) -> str:
+    return SNAPSHOT_COLUMN_PREFIX + snapshot_label.replace(" ", "__")
+
+
+def _max_drawdown_pct(values: list[float]) -> float | None:
+    if not values:
+        return None
+    running_peak = values[0]
+    max_drawdown = 0.0
+    for value in values[1:]:
+        if value > running_peak:
+            running_peak = value
+            continue
+        if running_peak == 0.0:
+            continue
+        drawdown = ((value - running_peak) / running_peak) * 100.0
+        if drawdown < max_drawdown:
+            max_drawdown = drawdown
+    return max_drawdown
+
+
+def _build_score_progression_rows(
+    profile_name: str | None,
+    snapshots: list[SnapshotFileData],
+    horizon_name: str,
+    include_profile_column: bool,
+) -> list[dict[str, Any]]:
+    snapshot_count = len(_ordered_unique_snapshot_labels(snapshots))
+    score_key = f"{horizon_name}_score"
+
+    metadata_by_symbol: dict[str, dict[str, str]] = {}
+    rows_by_symbol: dict[str, dict[str, Any]] = {}
+    score_series_by_symbol: dict[str, list[tuple[Any, float]]] = defaultdict(list)
+    rank_series_by_symbol: dict[str, list[tuple[Any, int]]] = defaultdict(list)
+
+    for snapshot in snapshots:
+        column_key = _snapshot_column_key(snapshot.metadata.snapshot_label)
+        for row in snapshot.rows:
+            symbol = _normalize_text(row.get("symbol"))
+            if symbol is None:
+                continue
+
+            metadata = metadata_by_symbol.setdefault(
+                symbol,
+                {"company_name": "", "sector": "", "industry": ""},
+            )
+            metadata["company_name"] = (
+                _normalize_text(row.get("Company")) or metadata["company_name"]
+            )
+            metadata["sector"] = (
+                _normalize_text(row.get("sector")) or metadata["sector"]
+            )
+            metadata["industry"] = (
+                _normalize_text(row.get("industry")) or metadata["industry"]
+            )
+
+            progression_row = rows_by_symbol.setdefault(
+                symbol,
+                {"symbol": symbol},
+            )
+            if include_profile_column and profile_name is not None:
+                progression_row["profile_name"] = profile_name
+
+            score_value = _coerce_float(row.get(score_key))
+            if score_value is not None and column_key not in progression_row:
+                progression_row[column_key] = score_value
+                score_series_by_symbol[symbol].append(
+                    (snapshot.metadata.sort_key, score_value)
+                )
+
+            rank_value = snapshot.horizon_ranks[horizon_name].get(symbol)
+            if rank_value is not None:
+                existing_ranks = rank_series_by_symbol[symbol]
+                if (
+                    not existing_ranks
+                    or existing_ranks[-1][0] != snapshot.metadata.sort_key
+                ):
+                    existing_ranks.append((snapshot.metadata.sort_key, rank_value))
+
+    finalized_rows: list[dict[str, Any]] = []
+    for symbol, progression_row in rows_by_symbol.items():
+        metadata = metadata_by_symbol[symbol]
+        progression_row["company_name"] = metadata["company_name"]
+        progression_row["sector"] = metadata["sector"]
+        progression_row["industry"] = metadata["industry"]
+
+        score_series = [score for _, score in sorted(score_series_by_symbol[symbol])]
+        rank_series = [rank for _, rank in sorted(rank_series_by_symbol[symbol])]
+
+        progression_row["snapshots_seen"] = len(score_series)
+        progression_row["profile_snapshot_count"] = snapshot_count
+        progression_row["presence_ratio"] = (
+            len(score_series) / snapshot_count if snapshot_count else None
+        )
+        progression_row["first_score"] = score_series[0] if score_series else None
+        progression_row["last_score"] = score_series[-1] if score_series else None
+        progression_row["score_delta_total"] = (
+            score_series[-1] - score_series[0] if len(score_series) >= 2 else None
+        )
+        progression_row["avg_score"] = (
+            sum(score_series) / len(score_series) if score_series else None
+        )
+        progression_row["first_rank"] = int(rank_series[0]) if rank_series else None
+        progression_row["last_rank"] = int(rank_series[-1]) if rank_series else None
+        progression_row["best_rank"] = int(min(rank_series)) if rank_series else None
+        progression_row["worst_rank"] = int(max(rank_series)) if rank_series else None
+        progression_row["rank_improvement_total"] = (
+            int(rank_series[0] - rank_series[-1]) if len(rank_series) >= 2 else None
+        )
+
+        finalized_rows.append(progression_row)
+
+    finalized_rows.sort(
+        key=lambda row: (
+            str(row.get("profile_name") or ""),
+            _sort_rank_value(row.get("last_rank")),
+            row["symbol"],
+        )
+    )
+    return finalized_rows
+
+
+def _build_price_progression_rows(
+    profile_name: str | None,
+    snapshots: list[SnapshotFileData],
+    snapshot_labels: list[str],
+    include_profile_column: bool,
+) -> list[dict[str, Any]]:
+    snapshot_count = len(snapshot_labels)
+    metadata_by_symbol: dict[str, dict[str, str]] = {}
+    rows_by_symbol: dict[str, dict[str, Any]] = {}
+    close_series_by_symbol: dict[str, list[tuple[Any, float]]] = defaultdict(list)
+
+    for snapshot in snapshots:
+        column_key = _snapshot_column_key(snapshot.metadata.snapshot_label)
+        for row in snapshot.rows:
+            symbol = _normalize_text(row.get("symbol"))
+            if symbol is None:
+                continue
+
+            metadata = metadata_by_symbol.setdefault(
+                symbol,
+                {"company_name": "", "sector": "", "industry": ""},
+            )
+            metadata["company_name"] = (
+                _normalize_text(row.get("Company")) or metadata["company_name"]
+            )
+            metadata["sector"] = (
+                _normalize_text(row.get("sector")) or metadata["sector"]
+            )
+            metadata["industry"] = (
+                _normalize_text(row.get("industry")) or metadata["industry"]
+            )
+
+            progression_row = rows_by_symbol.setdefault(symbol, {"symbol": symbol})
+            if include_profile_column and profile_name is not None:
+                progression_row["profile_name"] = profile_name
+
+            close_value = _coerce_float(row.get("close"))
+            if close_value is None:
+                continue
+
+            existing_value = progression_row.get(column_key)
+            if existing_value is None:
+                progression_row[column_key] = close_value
+                close_series_by_symbol[symbol].append(
+                    (snapshot.metadata.sort_key, close_value)
+                )
+
+    finalized_rows: list[dict[str, Any]] = []
+    for symbol, progression_row in rows_by_symbol.items():
+        metadata = metadata_by_symbol[symbol]
+        progression_row["company_name"] = metadata["company_name"]
+        progression_row["sector"] = metadata["sector"]
+        progression_row["industry"] = metadata["industry"]
+
+        close_series = [
+            close_value for _, close_value in sorted(close_series_by_symbol[symbol])
+        ]
+        progression_row["snapshots_seen"] = len(close_series)
+        progression_row["profile_snapshot_count"] = snapshot_count
+        progression_row["presence_ratio"] = (
+            len(close_series) / snapshot_count if snapshot_count else None
+        )
+        progression_row["first_close"] = close_series[0] if close_series else None
+        progression_row["last_close"] = close_series[-1] if close_series else None
+        progression_row["close_return_pct_total"] = (
+            _pct_change(close_series[-1], close_series[0])
+            if len(close_series) >= 2
+            else None
+        )
+        progression_row["max_close"] = max(close_series) if close_series else None
+        progression_row["min_close"] = min(close_series) if close_series else None
+        progression_row["max_drawdown_pct"] = _max_drawdown_pct(close_series)
+
+        finalized_rows.append(progression_row)
+
+    finalized_rows.sort(
+        key=lambda row: (
+            -(_coerce_float(row.get("close_return_pct_total")) or float("-inf")),
+            row["symbol"],
+        )
+    )
+    return finalized_rows
+
+
 def _build_manifest_rows(
     profile_snapshots: list[SnapshotFileData],
 ) -> list[dict[str, Any]]:
@@ -727,18 +1104,30 @@ def _write_overview_log(
         overview_log,
         "Perf.* columns are preserved exactly as exported in each snapshot, and *_delta fields measure how those reported trailing values changed between snapshots.",
     )
+    log_to_file(
+        overview_log,
+        "Progression CSVs are wide matrices: one row per (profile, symbol[, horizon]) and one column per snapshot label (prefixed with 'snap__'); empty cells indicate the symbol was not present in that snapshot.",
+    )
     log_to_file(overview_log, "")
     log_to_file(overview_log, "Per-profile outputs")
     log_to_file(overview_log, "-" * 160)
     for profile_name in sorted(profile_outputs):
         profile_data = profile_outputs[profile_name]
+        score_files_text = ", ".join(
+            f"{horizon_name}={Path(csv_path).name}"
+            for horizon_name, csv_path in profile_data[
+                "score_progression_csv_by_horizon"
+            ].items()
+        )
         log_to_file(
             overview_log,
             (
                 f"{profile_name}: snapshots={profile_data['snapshot_count']} | "
                 f"symbols={profile_data['symbol_count']} | "
                 f"history={Path(profile_data['history_csv']).name} | "
-                f"summary={Path(profile_data['summary_csv']).name}"
+                f"summary={Path(profile_data['summary_csv']).name} | "
+                f"score_progression=[{score_files_text}] | "
+                f"price_progression={Path(profile_data['price_progression_csv']).name}"
             ),
         )
 

@@ -274,7 +274,7 @@ def main():
     #     min_market_cap_usd=1_000_000_000,
     # )
 
-    run_move_prediction_history_aggregation_example()
+    # run_move_prediction_history_aggregation_example()
 
     # Aggregate progression across selected dated result folders.
     # Pass only the dated folder names under AllInUniverse_min1bil.
@@ -285,21 +285,21 @@ def main():
     # print(f"TradingView all-fields export written to: {exported_file}")
     # split_csv_by_rows(
     #     input_csv=Path(
-    #         "d:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/21_04_2026/tradingview_global_all_tdfields_21_04_2026.csv"
+    #         "d:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/24_04_2026/tradingview_global_all_tdfields_24_04_2026.csv"
     #     )
     # )
 
-    # # 1. Pull new articles from sitemap into the feed
-    # gather_result = gather_sherwood_markets_feed()
-    # print(
-    #     f"New: {gather_result['new_articles']}, Total: {gather_result['total_articles']}"
-    # )
+    # 1. Pull new articles from sitemap into the feed
+    gather_result = gather_sherwood_markets_feed()
+    print(
+        f"New: {gather_result['new_articles']}, Total: {gather_result['total_articles']}"
+    )
 
-    # # 2. Fetch full body text for articles missing it & write .log dump
-    # scan_result = fetch_and_log_full_articles(max_articles=20)
-    # print(
-    #     f"Fetched: {scan_result['articles_fetched']}, Log: {scan_result['session_log']}"
-    # )
+    # 2. Fetch full body text for articles missing it & write .log dump
+    scan_result = fetch_and_log_full_articles(max_articles=20)
+    print(
+        f"Fetched: {scan_result['articles_fetched']}, Log: {scan_result['session_log']}"
+    )
 
     # print(len(get_bvb_tickers_filtered()))
 
