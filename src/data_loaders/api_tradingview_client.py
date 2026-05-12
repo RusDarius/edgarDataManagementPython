@@ -6,7 +6,6 @@ import requests
 
 from constants.trading_view_constants import TRADING_VIEW_ALL_MARKETS_ARRAY
 
-
 TRADINGVIEW_AMERICA_SCAN_URL = (
     "https://scanner.tradingview.com/america/scan?label-product=screener-stock"
 )
@@ -940,6 +939,8 @@ GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD = {
         "sector",
         "industry",
         "market",
+        "type",
+        "typespecs",
         "market_cap_basic",
         "float_shares_outstanding",
         "float_shares_percent_current",
@@ -1162,27 +1163,6 @@ GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD = {
                                 ],
                             }
                         },
-                        {
-                            "operation": {
-                                "operator": "and",
-                                "operands": [
-                                    {
-                                        "expression": {
-                                            "left": "type",
-                                            "operation": "equal",
-                                            "right": "fund",
-                                        }
-                                    },
-                                    {
-                                        "expression": {
-                                            "left": "typespecs",
-                                            "operation": "has_none_of",
-                                            "right": ["etf"],
-                                        }
-                                    },
-                                ],
-                            }
-                        },
                     ],
                 }
             },
@@ -1196,6 +1176,32 @@ GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD = {
         ],
     },
 }
+
+
+# Additional earnings calendar columns layered on top of the move-prediction
+# payload. The base payload already includes ``earnings_release_date`` and
+# ``earnings_release_next_date``; the fields below provide the rest of the
+# upcoming-earnings catalyst metadata (calendar dates, intraday timing, and
+# trading-day mapped variants for the next FQ / FY release).
+MOVE_PREDICTION_EARNINGS_EXTRA_COLUMNS = [
+    "earnings_release_calendar_date",
+    "earnings_release_next_calendar_date",
+    "earnings_release_next_time",
+    "earnings_release_next_trading_date_fq",
+    "earnings_release_next_trading_date_fy",
+    "earnings_release_time",
+]
+
+GLOBAL_MARKET_MOVE_PREDICTION_WITH_EARNINGS_BASE_PAYLOAD = deepcopy(
+    GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD
+)
+GLOBAL_MARKET_MOVE_PREDICTION_WITH_EARNINGS_BASE_PAYLOAD["columns"] = list(
+    GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD["columns"]
+) + [
+    column
+    for column in MOVE_PREDICTION_EARNINGS_EXTRA_COLUMNS
+    if column not in GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD["columns"]
+]
 
 
 class ApiTradingViewClient:
@@ -1492,7 +1498,68 @@ class ApiTradingViewClient:
         valuation, and safety-style scans so one response can power multi-horizon
         directional analysis.
         """
-        request_payload = deepcopy(GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD)
+        return self._run_move_prediction_scan(
+            base_payload=GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD,
+            timeout=timeout,
+            industries=industries,
+            markets=markets,
+            min_market_cap_usd=min_market_cap_usd,
+            max_market_cap_usd=max_market_cap_usd,
+            ticker_filter=ticker_filter,
+            include_mapped_rows=include_mapped_rows,
+        )
+
+    def scan_global_market_move_prediction_with_earnings(
+        self,
+        timeout: int = 30,
+        industries: list[str] | None = None,
+        markets: list[str] | None = None,
+        min_market_cap_usd: float | None = None,
+        max_market_cap_usd: float | None = None,
+        ticker_filter: str | None = None,
+        include_mapped_rows: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Execute the move-prediction scan enriched with the full set of earnings
+        calendar columns.
+
+        Identical to ``scan_global_market_move_prediction`` but the underlying
+        payload includes the additional fields ``earnings_release_calendar_date``,
+        ``earnings_release_next_calendar_date``, ``earnings_release_next_time``,
+        ``earnings_release_next_trading_date_fq``,
+        ``earnings_release_next_trading_date_fy`` and ``earnings_release_time``.
+        Use this when downstream analysis needs to rank, filter, or sort by
+        upcoming earnings catalysts.
+        """
+        return self._run_move_prediction_scan(
+            base_payload=GLOBAL_MARKET_MOVE_PREDICTION_WITH_EARNINGS_BASE_PAYLOAD,
+            timeout=timeout,
+            industries=industries,
+            markets=markets,
+            min_market_cap_usd=min_market_cap_usd,
+            max_market_cap_usd=max_market_cap_usd,
+            ticker_filter=ticker_filter,
+            include_mapped_rows=include_mapped_rows,
+        )
+
+    def _run_move_prediction_scan(
+        self,
+        base_payload: dict[str, Any],
+        timeout: int,
+        industries: list[str] | None,
+        markets: list[str] | None,
+        min_market_cap_usd: float | None,
+        max_market_cap_usd: float | None,
+        ticker_filter: str | None,
+        include_mapped_rows: bool,
+    ) -> dict[str, Any]:
+        """Shared executor for the move-prediction scan variants.
+
+        Centralizes filter assembly and request handling so the regular and
+        earnings-enriched variants stay behaviorally identical apart from the
+        column set defined in their base payload.
+        """
+        request_payload = deepcopy(base_payload)
         self._apply_markets_override(request_payload, markets)
 
         if min_market_cap_usd is not None:

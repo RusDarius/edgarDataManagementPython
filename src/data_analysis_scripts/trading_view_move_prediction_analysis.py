@@ -21,7 +21,6 @@ from data_analysis_scripts._shared_analysis_utils import (
 from generic_utils.log_to_files_util import log_to_file, log_rows_to_csv
 from data_loaders.api_tradingview_client import ApiTradingViewClient
 
-
 LOG_DIR = Path(
     r"D:\FinanceProjects\edgarDataManagementPython\logs\tradingview_analysis\prediction_analysis"
 )
@@ -59,6 +58,8 @@ ENTRY_METADATA_FIELDS = [
     "sector",
     "industry",
     "market",
+    "type",
+    "typespecs",
     "earnings_release_date",
     "earnings_release_next_date",
 ]
@@ -190,6 +191,24 @@ RAW_PROFILE_FIELDS = [
     "net_income",
     "Pivot.M.Classic.Middle",
     "gross_profit_margin_fy",
+    "price_target_average",
+    "price_target_median",
+    "price_target_high",
+    "price_target_low",
+    "price_target_1y",
+    "book_value_per_share_fq",
+    "sustainable_growth_rate_ttm",
+    "piotroski_f_score_ttm",
+    "dividend_yield_recent",
+    "dividends_per_share_fq",
+    "dps_common_stock_prim_issue_yoy_growth_fy",
+    "enterprise_value_to_free_cash_flow_ttm",
+    "enterprise_value_to_gross_profit_ttm",
+    "total_debt_to_ebitda_fq",
+    "Pivot.M.Camarilla.S1",
+    "Pivot.M.Camarilla.S2",
+    "Pivot.M.Camarilla.R1",
+    "Pivot.M.Camarilla.R2",
 ]
 
 DERIVED_PROFILE_FIELDS = [
@@ -223,6 +242,16 @@ DERIVED_PROFILE_FIELDS = [
     "intraday_momentum",
     "pivot_distance",
     "revenue_per_employee",
+    "price_target_upside_average",
+    "price_target_upside_median",
+    "price_target_downside_floor",
+    "price_target_dispersion",
+    "book_value_discount",
+    "beta_adjusted_atrp",
+    "close_vs_camarilla_s1",
+    "close_vs_camarilla_s2",
+    "close_vs_camarilla_r1",
+    "close_vs_camarilla_r2",
 ]
 
 EXTENDED_SIGNALS: frozenset[str] = frozenset(
@@ -258,6 +287,23 @@ EXTENDED_SIGNALS: frozenset[str] = frozenset(
         "revenue_per_employee",
         "earnings_per_share_diluted_yoy_growth_ttm",
         "gross_profit_margin_fy",
+        "price_target_upside_average",
+        "price_target_upside_median",
+        "price_target_downside_floor",
+        "price_target_dispersion",
+        "book_value_discount",
+        "sustainable_growth_rate_ttm",
+        "piotroski_f_score_ttm",
+        "dividend_yield_recent",
+        "dps_common_stock_prim_issue_yoy_growth_fy",
+        "enterprise_value_to_free_cash_flow_ttm",
+        "enterprise_value_to_gross_profit_ttm",
+        "total_debt_to_ebitda_fq",
+        "beta_adjusted_atrp",
+        "close_vs_camarilla_s1",
+        "close_vs_camarilla_s2",
+        "close_vs_camarilla_r1",
+        "close_vs_camarilla_r2",
     }
 )
 
@@ -795,6 +841,10 @@ PRESET_SCORING_PROFILES = {
                 "revenue_per_employee": 1.15,
                 "earnings_per_share_diluted_yoy_growth_ttm": 1.15,
                 "gross_profit_margin_fy": 1.15,
+                "sustainable_growth_rate_ttm": 1.20,
+                "piotroski_f_score_ttm": 1.30,
+                "dividend_yield_recent": 0.70,
+                "dps_common_stock_prim_issue_yoy_growth_fy": 0.75,
             },
             "valuation": {
                 "price_earnings_ttm": 1.10,
@@ -807,6 +857,10 @@ PRESET_SCORING_PROFILES = {
                 "enterprise_value_to_ebit_ttm": 0.90,
                 "enterprise_value_ebitda_ttm": 1.15,
                 "earnings_yield": 1.10,
+                "enterprise_value_to_free_cash_flow_ttm": 1.25,
+                "enterprise_value_to_gross_profit_ttm": 1.00,
+                "price_target_upside_median": 0.85,
+                "price_target_downside_floor": 0.75,
             },
             "safety": {
                 "current_ratio": 1.10,
@@ -818,6 +872,9 @@ PRESET_SCORING_PROFILES = {
                 "debt_to_revenue_ttm": 1.20,
                 "net_debt": 1.15,
                 "beta_1_year": 0.70,
+                "total_debt_to_ebitda_fq": 1.30,
+                "beta_adjusted_atrp": 0.85,
+                "price_target_dispersion": 0.55,
             },
         },
         component_directional_bias={
@@ -869,6 +926,8 @@ PRESET_SCORING_PROFILES = {
         intro_metric_notes=[
             "Durable quality identification — NOT a value profile.",
             "All extended quality signals activated: ROIC=1.40 (capital efficiency king), operating_margin=1.30, FCF_margin=1.25, revenue_per_employee=1.15, gross_profit_margin_fy=1.15, EPS_diluted_growth=1.15.",
+            "Fundamental durability strengthened with Piotroski F-score=1.30 and sustainable_growth_rate=1.20; these help separate durable operating companies from statistically cheap but weak names.",
+            "Risk-adjusted value anchors added: EV/FCF=1.25, debt/EBITDA=1.30, beta_adjusted_atrp=0.85, and target dispersion=0.55. Quality must be investable, not merely profitable.",
             "YoY growth is prioritized over QoQ (1.10-1.25 vs 0.80-0.95) because quality compounders show persistent annual improvement, not quarterly noise.",
             "Momentum nearly zeroed (short-term 0.05-0.15) so quality rank is independent of recent price action. Only Perf.Y=1.25 retained to confirm secular winners.",
             "Attention INVERTED: positive=0.70x, negative=1.50x. Strong crowd inversion means popular names must earn their quality rank; low-volume names face structural penalty for missing data, not for being quiet.",
@@ -1367,6 +1426,8 @@ PRESET_SCORING_PROFILES = {
                 "Recommend.Other": 0.55,
                 "rsi_centered": 0.20,
                 "rsi7_centered": 0.10,
+                "stoch_rsi_centered": 0.65,
+                "stoch_rsi_crossover": 1.10,
             },
             "trend": {
                 "close_vs_sma50": 0.75,
@@ -1396,10 +1457,14 @@ PRESET_SCORING_PROFILES = {
                 "free_cash_flow_margin_ttm": 1.35,
                 "buyback_yield": 1.15,
                 "dividends_yield_current": 1.00,
-                "eps_forward_growth": 1.20,
+                "eps_forward_growth": 1.45,
                 "revenue_per_employee": 1.10,
                 "earnings_per_share_diluted_yoy_growth_ttm": 1.10,
                 "gross_profit_margin_fy": 1.05,
+                "sustainable_growth_rate_ttm": 1.05,
+                "piotroski_f_score_ttm": 1.35,
+                "dividend_yield_recent": 0.90,
+                "dps_common_stock_prim_issue_yoy_growth_fy": 0.80,
             },
             "valuation": {
                 "price_earnings_ttm": 1.15,
@@ -1412,8 +1477,14 @@ PRESET_SCORING_PROFILES = {
                 "enterprise_value_to_ebit_ttm": 1.00,
                 "enterprise_value_ebitda_ttm": 1.15,
                 "earnings_yield": 1.40,
-                "distance_from_52w_high": 1.50,
+                "distance_from_52w_high": 1.25,
                 "range_position_52w": 1.35,
+                "enterprise_value_to_free_cash_flow_ttm": 1.35,
+                "enterprise_value_to_gross_profit_ttm": 0.95,
+                "price_target_upside_average": 1.05,
+                "price_target_upside_median": 1.10,
+                "price_target_downside_floor": 1.20,
+                "book_value_discount": 1.30,
             },
             "safety": {
                 "current_ratio": 1.10,
@@ -1425,6 +1496,9 @@ PRESET_SCORING_PROFILES = {
                 "debt_to_revenue_ttm": 1.20,
                 "net_debt": 1.20,
                 "beta_1_year": 0.75,
+                "total_debt_to_ebitda_fq": 1.25,
+                "beta_adjusted_atrp": 0.75,
+                "price_target_dispersion": 0.80,
             },
         },
         component_directional_bias={
@@ -1432,7 +1506,7 @@ PRESET_SCORING_PROFILES = {
                 positive_multiplier=0.75, negative_multiplier=1.40
             ),
             "momentum": DirectionalBias(
-                positive_multiplier=0.75, negative_multiplier=0.55
+                positive_multiplier=0.82, negative_multiplier=0.62
             ),
             "trend": DirectionalBias(
                 positive_multiplier=1.00, negative_multiplier=0.80
@@ -1451,35 +1525,36 @@ PRESET_SCORING_PROFILES = {
             "days": {
                 "attention": -0.45,
                 "valuation": -0.90,
-                "quality": -0.60,
+                "quality": -1.00,
                 "safety": -0.65,
             },
             "weeks": {
                 "attention": -0.35,
                 "valuation": -1.00,
-                "quality": -0.70,
+                "quality": -1.10,
                 "safety": -0.75,
             },
             "months": {
                 "attention": -0.25,
                 "valuation": -1.10,
-                "quality": -0.80,
+                "quality": -1.20,
                 "safety": -0.85,
             },
             "years": {
                 "valuation": -1.20,
-                "quality": -0.90,
+                "quality": -1.30,
                 "safety": -0.95,
             },
         },
         intro_metric_notes=[
-            "Overlooked fundamentals profile — finds quality that the market has NOT rewarded.",
-            "Key mechanism: momentum bias is INVERTED (positive=0.75x, negative=0.55x). Poor recent performance REDUCES penalty — this surfaces names the crowd has overlooked or punished unfairly.",
-            "Valuation signals at maximum: distance_from_52w_high=1.50 (deepest discount detection), earnings_yield=1.40, range_position_52w=1.35, price_book=1.15.",
-            "Quality MUST be present: ROIC=1.35, FCF_margin=1.35, FCF_growth=1.30, buyback_yield=1.15. Cheapness without quality is ignored.",
-            "Shareholder return emphasis: buyback_yield=1.15, dividends_yield=1.00. Companies returning cash despite being undervalued by the market confirm fundamental strength.",
+            "Overlooked fundamentals profile — finds operating quality the market has NOT rewarded.",
+            "Key mechanism: momentum bias mildly inverted (positive=0.82x, negative=0.62x). Still surfaces beaten-down names, but does NOT aggressively reward stagnant passive vehicles (ETFs/trusts).",
+            "Forward earnings gate: eps_forward_growth=1.45 (raised). Investment trusts and gold/silver ETFs score near zero here — this is the primary passive vehicle filter.",
+            "Operating-company value anchors added: book_value_discount=1.30, EV/FCF=1.35, target downside floor=1.20, and Piotroski F-score=1.35. Cheapness must have balance-sheet and operating support.",
+            "Valuation signals strong but rebalanced: earnings_yield=1.40, range_position_52w=1.35, distance_from_52w_high=1.25 (lowered from 1.50 to reduce ETF-at-NAV-discount bias).",
+            "stoch_rsi_crossover=1.10 added to momentum: rewards early oversold-to-recovery turns, not just static cheapness. Requires a hint of reversal to surface.",
+            "Quality MUST be present: ROIC=1.35, FCF_margin=1.35, FCF_growth=1.30. Missing quality penalty raised to -1.00/-1.10/-1.20/-1.30 — passive vehicles without operating metrics cannot rank.",
             "Safety is the value-trap filter: altman_z_score=1.30, debt metrics heavily weighted. Negative safety bias=1.35x — the strongest value-trap guard.",
-            "This profile specifically targets the disconnect between fundamental quality and market recognition — the 'unrewarded quality' gap.",
         ],
         confidence_multiplier=1.02,
     ),
@@ -1552,7 +1627,7 @@ PRESET_SCORING_PROFILES = {
                 "rsi_centered": 0.20,
                 "rsi7_centered": 0.12,
                 "stoch_rsi_centered": 0.55,
-                "stoch_rsi_crossover": 0.65,
+                "stoch_rsi_crossover": 1.35,
             },
             "valuation": {
                 "price_earnings_ttm": 1.15,
@@ -1567,6 +1642,12 @@ PRESET_SCORING_PROFILES = {
                 "earnings_yield": 1.25,
                 "distance_from_52w_high": 1.20,
                 "range_position_52w": 1.10,
+                "enterprise_value_to_free_cash_flow_ttm": 1.15,
+                "enterprise_value_to_gross_profit_ttm": 0.90,
+                "price_target_upside_average": 1.20,
+                "price_target_upside_median": 1.20,
+                "price_target_downside_floor": 1.00,
+                "book_value_discount": 1.10,
             },
             "quality": {
                 "total_revenue_yoy_growth_ttm": 0.85,
@@ -1586,10 +1667,13 @@ PRESET_SCORING_PROFILES = {
                 "free_cash_flow_margin_ttm": 1.20,
                 "buyback_yield": 0.65,
                 "dividends_yield_current": 0.55,
-                "eps_forward_growth": 1.40,
+                "eps_forward_growth": 1.50,
                 "revenue_per_employee": 0.80,
                 "earnings_per_share_diluted_yoy_growth_ttm": 1.00,
                 "gross_profit_margin_fy": 0.85,
+                "sustainable_growth_rate_ttm": 1.10,
+                "piotroski_f_score_ttm": 1.20,
+                "dps_common_stock_prim_issue_yoy_growth_fy": 0.50,
             },
             "safety": {
                 "current_ratio": 1.05,
@@ -1601,6 +1685,9 @@ PRESET_SCORING_PROFILES = {
                 "debt_to_revenue_ttm": 1.15,
                 "net_debt": 1.20,
                 "beta_1_year": 0.80,
+                "total_debt_to_ebitda_fq": 1.25,
+                "beta_adjusted_atrp": 0.75,
+                "price_target_dispersion": 0.65,
             },
             "trend": {
                 "close_vs_sma50": 0.85,
@@ -1611,7 +1698,7 @@ PRESET_SCORING_PROFILES = {
                 "close_vs_vwma": 0.70,
                 "trend_alignment": 1.05,
                 "pivot_distance": 1.10,
-                "short_trend_emergence": 0.75,
+                "short_trend_emergence": 1.20,
             },
         },
         component_directional_bias={
@@ -1662,12 +1749,243 @@ PRESET_SCORING_PROFILES = {
         intro_metric_notes=[
             "Recovery trajectory profile — rewards active IMPROVEMENT, not static cheapness.",
             "QoQ growth dominates YoY: QoQ=1.20-1.35 vs YoY=0.85-1.10. Sequential positive inflection is the recovery signal.",
-            "Forward recovery conviction: eps_forward_growth=1.40 (second highest after forward_edge_active). Analyst revision toward positive EPS confirms the recovery thesis.",
-            "Technical recovery detection: stoch_rsi_centered=0.55 and stoch_rsi_crossover=0.65 detect oversold-to-recovery turn. These are the only momentum-adjacent signals that remain active.",
+            "Forward recovery conviction: eps_forward_growth=1.50 (highest in system). Analyst revision toward positive EPS confirms the recovery thesis.",
+            "Street-value confirmation added: target upside average/median=1.20, target downside floor=1.00, book_value_discount=1.10. Recovery candidates need upside support and a tolerable downside floor.",
+            "Value-trap controls strengthened with Piotroski F-score=1.20 and debt/EBITDA=1.25.",
+            "Technical recovery detection: stoch_rsi_crossover=1.35 (raised from 0.65) is the PRIMARY entry trigger — oversold-to-recovery momentum crossover at the start of the move.",
+            "Trend reversal confirmation: short_trend_emergence=1.20 (raised from 0.75) — detects first meaningful break above compressed price action.",
             "Momentum bias inverted for downside: negative=0.60x so recent poor performance does not dominate rankings. Recovering names need room to breathe.",
             "Valuation discount detection: distance_from_52w_high=1.20, price_book=1.25 (tangible asset value relevant for recovery plays), enterprise_value_ebitda=1.20.",
             "Quality directional bias symmetrical: positive=1.18x, negative=1.18x. Equally rewards improving quality and punishes deteriorating quality — the turn must be real.",
         ],
+    ),
+    # ──────────────────────────────────────────────────────────────────────────
+    # IDEA 2b — AGGRESSIVE VALUE + CATALYST: value is awakening detector
+    # ──────────────────────────────────────────────────────────────────────────
+    "deep_value_momentum": ScoringProfile(
+        name="deep_value_momentum",
+        description=(
+            "Aggressive value + catalyst profile for nimble positioning. Identifies "
+            "operating companies with deep valuation discounts AND confirmed early "
+            "momentum reversal signals. Designed for investors who want the margin "
+            "of safety of value metrics COMBINED with evidence the market is beginning "
+            "to recognize that value. Requires BOTH deep cheapness AND early technical "
+            "reversal — pure cheapness or pure momentum alone is insufficient. "
+            "Excludes passive vehicles (investment trusts, gold ETFs) by requiring "
+            "active operating quality metrics including forward EPS growth and "
+            "sequential EBITDA/FCF improvement. Targets: semiconductor turnarounds, "
+            "deep value industrials, beaten-down growth companies with improving "
+            "margins. The combination of earnings_yield, EV/EBITDA, price_book "
+            "PLUS stoch_rsi_crossover and short_trend_emergence is the defining "
+            "signal pair for the value-driven aggressive risk style."
+        ),
+        horizon_weights={
+            "days": {
+                "attention": 0.07,
+                "event": 0.03,
+                "momentum": 0.22,
+                "trend": 0.22,
+                "quality": 0.16,
+                "valuation": 0.22,
+                "safety": 0.08,
+            },
+            "weeks": {
+                "attention": 0.05,
+                "event": 0.03,
+                "momentum": 0.16,
+                "trend": 0.22,
+                "quality": 0.22,
+                "valuation": 0.24,
+                "safety": 0.08,
+            },
+            "months": {
+                "attention": 0.03,
+                "event": 0.02,
+                "momentum": 0.10,
+                "trend": 0.16,
+                "quality": 0.28,
+                "valuation": 0.28,
+                "safety": 0.13,
+            },
+            "years": {
+                "attention": 0.02,
+                "event": 0.01,
+                "momentum": 0.05,
+                "trend": 0.10,
+                "quality": 0.32,
+                "valuation": 0.32,
+                "safety": 0.18,
+            },
+        },
+        component_signal_weights={
+            "attention": {
+                "relative_volume_10d_calc": 1.10,
+                "float_turnover": 1.05,
+                "dollar_turnover_intensity": 1.00,
+                "volume_trend": 1.35,
+                "intraday_momentum": 0.80,
+            },
+            "momentum": {
+                "change": 0.50,
+                "Perf.5D": 0.70,
+                "Perf.W": 0.80,
+                "Perf.1M": 0.60,
+                "Perf.3M": 0.35,
+                "Perf.6M": 0.20,
+                "Perf.YTD": 0.15,
+                "Perf.Y": 0.10,
+                "ROC": 0.80,
+                "Mom": 0.75,
+                "macd_spread": 0.90,
+                "Recommend.All": 0.80,
+                "Recommend.MA": 0.75,
+                "Recommend.Other": 0.70,
+                "rsi_centered": 0.60,
+                "rsi7_centered": 0.85,
+                "aroon_spread": 1.35,
+                "adx_directional_spread": 1.30,
+                "stoch_rsi_centered": 1.10,
+                "stoch_rsi_crossover": 1.55,
+                "CCI20": 0.70,
+            },
+            "trend": {
+                "close_vs_sma10": 1.10,
+                "close_vs_sma20": 1.00,
+                "close_vs_sma50": 0.80,
+                "close_vs_sma200": 0.50,
+                "close_vs_ema10": 1.10,
+                "close_vs_ema20": 1.00,
+                "close_vs_ema50": 0.80,
+                "close_vs_ema200": 0.50,
+                "close_vs_vwap": 1.00,
+                "close_vs_vwma": 1.00,
+                "trend_alignment": 0.90,
+                "bb_position": 1.10,
+                "short_trend_emergence": 1.40,
+                "pivot_distance": 0.80,
+                "close_vs_camarilla_s1": 0.90,
+                "close_vs_camarilla_s2": 0.70,
+                "close_vs_camarilla_r1": 1.00,
+                "close_vs_camarilla_r2": 0.80,
+            },
+            "quality": {
+                "total_revenue_yoy_growth_ttm": 0.80,
+                "total_revenue_qoq_growth_fq": 1.20,
+                "ebitda_yoy_growth_ttm": 0.85,
+                "ebitda_qoq_growth_fq": 1.25,
+                "net_income_yoy_growth_ttm": 0.90,
+                "net_income_qoq_growth_fq": 1.30,
+                "free_cash_flow_yoy_growth_ttm": 1.00,
+                "free_cash_flow_qoq_growth_fq": 1.40,
+                "gross_margin": 0.85,
+                "operating_margin": 1.10,
+                "after_tax_margin": 0.95,
+                "return_on_assets": 0.90,
+                "return_on_equity": 0.95,
+                "return_on_invested_capital": 1.10,
+                "free_cash_flow_margin_ttm": 1.15,
+                "buyback_yield": 0.70,
+                "dividends_yield_current": 0.50,
+                "eps_forward_growth": 1.55,
+                "revenue_per_employee": 0.80,
+                "earnings_per_share_diluted_yoy_growth_ttm": 1.05,
+                "gross_profit_margin_fy": 0.80,
+                "sustainable_growth_rate_ttm": 1.15,
+                "piotroski_f_score_ttm": 1.25,
+                "dps_common_stock_prim_issue_yoy_growth_fy": 0.45,
+            },
+            "valuation": {
+                "price_earnings_ttm": 1.20,
+                "price_earnings_growth_ttm": 1.10,
+                "price_sales_current": 0.90,
+                "price_book_fq": 1.35,
+                "price_free_cash_flow_ttm": 1.25,
+                "price_to_cash_f_operating_activities_ttm": 1.15,
+                "enterprise_value_to_revenue_ttm": 1.00,
+                "enterprise_value_to_ebit_ttm": 1.10,
+                "enterprise_value_ebitda_ttm": 1.30,
+                "earnings_yield": 1.40,
+                "distance_from_52w_high": 1.20,
+                "range_position_52w": 1.10,
+                "enterprise_value_to_free_cash_flow_ttm": 1.30,
+                "enterprise_value_to_gross_profit_ttm": 1.00,
+                "price_target_upside_average": 1.25,
+                "price_target_upside_median": 1.30,
+                "price_target_downside_floor": 1.15,
+                "book_value_discount": 1.25,
+            },
+            "safety": {
+                "current_ratio": 1.00,
+                "quick_ratio": 1.05,
+                "cash_ratio": 1.00,
+                "short_term_cash_coverage": 1.10,
+                "altman_z_score_ttm": 1.20,
+                "debt_to_equity": 1.15,
+                "debt_to_revenue_ttm": 1.10,
+                "net_debt": 1.15,
+                "beta_1_year": 0.75,
+                "total_debt_to_ebitda_fq": 1.20,
+                "beta_adjusted_atrp": 0.85,
+                "price_target_dispersion": 0.70,
+            },
+        },
+        component_directional_bias={
+            "attention": DirectionalBias(
+                positive_multiplier=0.90, negative_multiplier=1.20
+            ),
+            "momentum": DirectionalBias(
+                positive_multiplier=1.35, negative_multiplier=0.70
+            ),
+            "trend": DirectionalBias(
+                positive_multiplier=1.30, negative_multiplier=0.75
+            ),
+            "quality": DirectionalBias(
+                positive_multiplier=1.20, negative_multiplier=1.20
+            ),
+            "valuation": DirectionalBias(
+                positive_multiplier=1.30, negative_multiplier=1.10
+            ),
+            "safety": DirectionalBias(
+                positive_multiplier=1.10, negative_multiplier=1.30
+            ),
+        },
+        missing_component_scores_by_horizon={
+            "days": {
+                "attention": -0.30,
+                "quality": -1.00,
+                "valuation": -0.85,
+                "safety": -0.60,
+            },
+            "weeks": {
+                "attention": -0.25,
+                "quality": -1.10,
+                "valuation": -0.95,
+                "safety": -0.70,
+            },
+            "months": {
+                "attention": -0.15,
+                "quality": -1.20,
+                "valuation": -1.05,
+                "safety": -0.80,
+            },
+            "years": {
+                "quality": -1.30,
+                "valuation": -1.15,
+                "safety": -0.90,
+            },
+        },
+        intro_metric_notes=[
+            "Aggressive value + catalyst profile — the 'value is awakening' detector for the nimble aggressive style.",
+            "Primary signal pair: deep valuation discount (price_book=1.35, earnings_yield=1.40, EV/EBITDA=1.30) COMBINED WITH technical reversal (stoch_rsi_crossover=1.55, short_trend_emergence=1.40).",
+            "Value detection broadened with book_value_discount=1.25, EV/FCF=1.30, target upside median=1.30, and target downside floor=1.15 — value must be visible across accounting value, cash flow value, and street fair-value gap.",
+            "Risk guardrails: debt/EBITDA=1.20, beta_adjusted_atrp=0.85, and target dispersion=0.70 prevent the profile from blindly chasing volatile value traps.",
+            "Sequential improvement is the quality gate: QoQ FCF growth=1.40, QoQ net income=1.30, QoQ EBITDA=1.25. Confirms the fundamental turn is real.",
+            "Forward earnings catalyst required: eps_forward_growth=1.55 (highest in system). ETFs and Investment Trusts score near zero here — the primary passive vehicle filter.",
+            "Momentum directional bias AMPLIFIED (positive=1.35x, negative=0.70x) for early reversal confirmation. Unlike asymmetric_value, this profile REWARDS early price recovery.",
+            "Missing quality penalty at -1.00 to -1.30 across horizons: passive vehicles without operating quality data cannot make the leaderboard.",
+            "Designed for: semiconductor turnarounds, deep value industrials, beaten-down companies with improving margins. The value + catalyst intersection.",
+        ],
+        confidence_multiplier=1.05,
     ),
     # ──────────────────────────────────────────────────────────────────────────
     # IDEA 3 — HEDGING: capture drastic event opportunities and short pressure
@@ -1798,6 +2116,14 @@ PRESET_SCORING_PROFILES = {
                 "free_cash_flow_margin_ttm": 1.20,
                 "eps_forward_growth": 1.15,
                 "earnings_per_share_diluted_yoy_growth_ttm": 1.10,
+                "sustainable_growth_rate_ttm": 1.10,
+                "piotroski_f_score_ttm": 1.25,
+            },
+            "valuation": {
+                "price_target_downside_floor": 1.20,
+                "enterprise_value_to_free_cash_flow_ttm": 1.10,
+                "enterprise_value_to_gross_profit_ttm": 1.05,
+                "book_value_discount": 0.80,
             },
             "safety": {
                 "current_ratio": 1.10,
@@ -1809,6 +2135,8 @@ PRESET_SCORING_PROFILES = {
                 "net_debt": 1.25,
                 "altman_z_score_ttm": 1.35,
                 "beta_1_year": 1.15,
+                "total_debt_to_ebitda_fq": 1.45,
+                "beta_adjusted_atrp": 1.25,
             },
         },
         component_directional_bias={
@@ -1861,6 +2189,7 @@ PRESET_SCORING_PROFILES = {
             "Scoring is INVERTED: all directional biases amplify NEGATIVE readings (event -1.30x, momentum -1.30x, trend -1.35x, quality -1.25x, safety -1.45x) while suppressing positive readings.",
             "Safety is THE dominant factor: years horizon safety=0.57 (highest single-component weight in system). Leverage-driven blowup risk is the strongest structural short thesis.",
             "Safety signal weights: debt_to_equity=1.35, altman_z_score=1.35, debt_to_revenue=1.30, net_debt=1.25, beta=1.15. Multiple leverage metrics must converge.",
+            "Fragility risk strengthened with debt/EBITDA=1.45, beta_adjusted_atrp=1.25, weak Piotroski=1.25, and target downside floor=1.20. This surfaces shorts where leverage, volatility, and street downside align.",
             "Catalyst detection: eps_surprise_percent_fq=1.25 catches names with history of missing. eps_forward_growth=1.15 detects analyst downgrades.",
             "Event pressure heavily weighted at days horizon: event=0.30, with gap_severity=1.35 and gap=1.20. Earnings gaps and intraday collapses are key short-term catalysts.",
             "Beta is NOT inverted for this profile: beta_1_year=1.15 means higher beta HELPS the fragility score — more volatile names are more susceptible to downside dislocations.",
@@ -2222,6 +2551,16 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
     total_revenue_val = _coerce_numeric(row.get("total_revenue"))
     num_employees = _coerce_numeric(row.get("number_of_employees"))
     pivot_middle = _coerce_numeric(row.get("Pivot.M.Classic.Middle"))
+    price_target_average = _coerce_numeric(row.get("price_target_average"))
+    price_target_median = _coerce_numeric(row.get("price_target_median"))
+    price_target_high = _coerce_numeric(row.get("price_target_high"))
+    price_target_low = _coerce_numeric(row.get("price_target_low"))
+    book_value_per_share = _coerce_numeric(row.get("book_value_per_share_fq"))
+    beta_1_year = _coerce_numeric(row.get("beta_1_year"))
+    camarilla_s1 = _coerce_numeric(row.get("Pivot.M.Camarilla.S1"))
+    camarilla_s2 = _coerce_numeric(row.get("Pivot.M.Camarilla.S2"))
+    camarilla_r1 = _coerce_numeric(row.get("Pivot.M.Camarilla.R1"))
+    camarilla_r2 = _coerce_numeric(row.get("Pivot.M.Camarilla.R2"))
 
     short_term_cash_coverage = _safe_ratio(
         cash_n_short_term_invest_fy,
@@ -2346,6 +2685,40 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
     ):
         revenue_per_employee = total_revenue_val / num_employees
 
+    price_target_upside_average: float | None = None
+    if close is not None and close != 0 and price_target_average is not None:
+        price_target_upside_average = (price_target_average - close) / close
+
+    price_target_upside_median: float | None = None
+    if close is not None and close != 0 and price_target_median is not None:
+        price_target_upside_median = (price_target_median - close) / close
+
+    price_target_downside_floor: float | None = None
+    if close is not None and close != 0 and price_target_low is not None:
+        price_target_downside_floor = (price_target_low - close) / close
+
+    price_target_dispersion: float | None = None
+    if (
+        close is not None
+        and close != 0
+        and price_target_high is not None
+        and price_target_low is not None
+    ):
+        price_target_dispersion = (price_target_high - price_target_low) / close
+
+    book_value_discount: float | None = None
+    if close is not None and close != 0 and book_value_per_share is not None:
+        book_value_discount = (book_value_per_share - close) / close
+
+    beta_adjusted_atrp: float | None = None
+    if atrp is not None:
+        beta_adjusted_atrp = atrp * (beta_1_year if beta_1_year is not None else 1.0)
+
+    def _pivot_distance(pivot_value: float | None) -> float | None:
+        if close is None or close == 0 or pivot_value is None:
+            return None
+        return (close - pivot_value) / close
+
     return {
         "float_turnover": _safe_ratio(volume, float_shares),
         "dollar_turnover_intensity": _safe_ratio(avg_value_traded_10d, market_cap),
@@ -2388,6 +2761,16 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
         "intraday_momentum": intraday_momentum,
         "pivot_distance": pivot_distance,
         "revenue_per_employee": revenue_per_employee,
+        "price_target_upside_average": price_target_upside_average,
+        "price_target_upside_median": price_target_upside_median,
+        "price_target_downside_floor": price_target_downside_floor,
+        "price_target_dispersion": price_target_dispersion,
+        "book_value_discount": book_value_discount,
+        "beta_adjusted_atrp": beta_adjusted_atrp,
+        "close_vs_camarilla_s1": _pivot_distance(camarilla_s1),
+        "close_vs_camarilla_s2": _pivot_distance(camarilla_s2),
+        "close_vs_camarilla_r1": _pivot_distance(camarilla_r1),
+        "close_vs_camarilla_r2": _pivot_distance(camarilla_r2),
     }
 
 
@@ -2674,6 +3057,18 @@ def _build_component_signal_map(
             "close_vs_ema30": derived_row.get("close_vs_ema30"),
             "short_trend_emergence": derived_row.get("short_trend_emergence"),
             "pivot_distance": _derived_signal(derived_row, profiles, "pivot_distance"),
+            "close_vs_camarilla_s1": _derived_signal(
+                derived_row, profiles, "close_vs_camarilla_s1"
+            ),
+            "close_vs_camarilla_s2": _derived_signal(
+                derived_row, profiles, "close_vs_camarilla_s2"
+            ),
+            "close_vs_camarilla_r1": _derived_signal(
+                derived_row, profiles, "close_vs_camarilla_r1"
+            ),
+            "close_vs_camarilla_r2": _derived_signal(
+                derived_row, profiles, "close_vs_camarilla_r2"
+            ),
         },
         "quality": {
             "total_revenue_yoy_growth_ttm": _field_signal(
@@ -2726,6 +3121,18 @@ def _build_component_signal_map(
             ),
             "gross_profit_margin_fy": _field_signal(
                 row, profiles, "gross_profit_margin_fy"
+            ),
+            "sustainable_growth_rate_ttm": _field_signal(
+                row, profiles, "sustainable_growth_rate_ttm"
+            ),
+            "piotroski_f_score_ttm": _field_signal(
+                row, profiles, "piotroski_f_score_ttm"
+            ),
+            "dividend_yield_recent": _field_signal(
+                row, profiles, "dividend_yield_recent"
+            ),
+            "dps_common_stock_prim_issue_yoy_growth_fy": _field_signal(
+                row, profiles, "dps_common_stock_prim_issue_yoy_growth_fy"
             ),
         },
         "valuation": {
@@ -2787,6 +3194,32 @@ def _build_component_signal_map(
             "range_position_52w": _derived_signal(
                 derived_row, profiles, "range_position_52w", invert=True
             ),
+            "enterprise_value_to_free_cash_flow_ttm": _field_signal(
+                row,
+                profiles,
+                "enterprise_value_to_free_cash_flow_ttm",
+                invert=True,
+                positive_only=True,
+            ),
+            "enterprise_value_to_gross_profit_ttm": _field_signal(
+                row,
+                profiles,
+                "enterprise_value_to_gross_profit_ttm",
+                invert=True,
+                positive_only=True,
+            ),
+            "price_target_upside_average": _derived_signal(
+                derived_row, profiles, "price_target_upside_average"
+            ),
+            "price_target_upside_median": _derived_signal(
+                derived_row, profiles, "price_target_upside_median"
+            ),
+            "price_target_downside_floor": _derived_signal(
+                derived_row, profiles, "price_target_downside_floor"
+            ),
+            "book_value_discount": _derived_signal(
+                derived_row, profiles, "book_value_discount"
+            ),
         },
         "safety": {
             "current_ratio": _field_signal(row, profiles, "current_ratio"),
@@ -2807,6 +3240,27 @@ def _build_component_signal_map(
             ),
             "net_debt": _field_signal(row, profiles, "net_debt", invert=True),
             "beta_1_year": _field_signal(row, profiles, "beta_1_year", invert=True),
+            "total_debt_to_ebitda_fq": _field_signal(
+                row,
+                profiles,
+                "total_debt_to_ebitda_fq",
+                invert=True,
+                positive_only=True,
+            ),
+            "beta_adjusted_atrp": _derived_signal(
+                derived_row,
+                profiles,
+                "beta_adjusted_atrp",
+                invert=True,
+                positive_only=True,
+            ),
+            "price_target_dispersion": _derived_signal(
+                derived_row,
+                profiles,
+                "price_target_dispersion",
+                invert=True,
+                positive_only=True,
+            ),
         },
         "scale": {
             "market_cap_basic": _field_signal(row, profiles, "market_cap_basic"),
@@ -2931,6 +3385,123 @@ def _classify_setup(
     return "mixed / neutral"
 
 
+def _risk_tier(component_scores: dict[str, float | None]) -> str:
+    safety_score = component_scores.get("safety")
+    if safety_score is None:
+        return "risk-unknown"
+    if safety_score >= 0.70:
+        return "risk-contained"
+    if safety_score >= 0.10:
+        return "risk-watch"
+    if safety_score >= -0.60:
+        return "risk-elevated"
+    return "high-risk"
+
+
+def _risk_adjusted_score(
+    score: float | None, component_scores: dict[str, float | None]
+) -> float | None:
+    if score is None:
+        return None
+
+    safety = component_scores.get("safety") or 0.0
+    quality = component_scores.get("quality") or 0.0
+    valuation = component_scores.get("valuation") or 0.0
+
+    if score >= 0:
+        penalty = (
+            max(0.0, -safety) * 0.35
+            + max(0.0, -quality) * 0.16
+            + max(0.0, -valuation) * 0.10
+        )
+        bonus = max(0.0, safety) * 0.08 + max(0.0, quality) * 0.05
+        return _clamp(score * (1.0 + bonus) / (1.0 + penalty), -3.0, 3.0)
+
+    short_bonus = (
+        max(0.0, -safety) * 0.16
+        + max(0.0, -quality) * 0.10
+        + max(0.0, -valuation) * 0.08
+    )
+    short_penalty = max(0.0, safety) * 0.18 + max(0.0, quality) * 0.10
+    return _clamp(score * (1.0 + short_bonus) / (1.0 + short_penalty), -3.0, 3.0)
+
+
+def _manager_action_signal(
+    horizons: dict[str, dict[str, Any]],
+    component_scores: dict[str, float | None],
+) -> str:
+    days = horizons.get("days", {}).get("score")
+    weeks = horizons.get("weeks", {}).get("score")
+    months = horizons.get("months", {}).get("score")
+    years = horizons.get("years", {}).get("score")
+
+    attention = component_scores.get("attention") or 0.0
+    momentum = component_scores.get("momentum") or 0.0
+    trend = component_scores.get("trend") or 0.0
+    quality = component_scores.get("quality") or 0.0
+    valuation = component_scores.get("valuation") or 0.0
+    safety = component_scores.get("safety") or 0.0
+
+    if valuation >= 0.55 and (quality <= -0.35 or safety <= -0.55):
+        return "avoid_value_trap"
+    if (
+        weeks is not None
+        and days is not None
+        and weeks >= 0.75
+        and days >= 0.35
+        and momentum >= 0.45
+        and trend >= 0.35
+        and safety >= -0.35
+    ):
+        return "add_long_breakout"
+    if (
+        months is not None
+        and months >= 0.55
+        and valuation >= 0.45
+        and quality >= 0.15
+        and (momentum >= 0.10 or trend >= 0.20)
+        and safety >= -0.50
+    ):
+        return "accumulate_value_catalyst"
+    if (
+        months is not None
+        and days is not None
+        and months >= 0.35
+        and days <= 0.25
+        and valuation >= 0.65
+        and quality >= 0.00
+        and safety >= -0.35
+    ):
+        return "watch_value_reversal"
+    if (
+        weeks is not None
+        and months is not None
+        and weeks <= -0.55
+        and months <= -0.35
+        and safety <= -0.30
+        and (momentum <= -0.30 or trend <= -0.30)
+    ):
+        return "hedge_or_short"
+    if (
+        days is not None
+        and months is not None
+        and days <= -0.35
+        and months >= 0.35
+        and valuation >= 0.35
+        and quality >= 0.05
+    ):
+        return "mean_reversion_watch"
+    if (
+        years is not None
+        and years >= 0.45
+        and quality >= 0.60
+        and safety >= 0.10
+        and attention <= 0.40
+    ):
+        return "hold_quality_long"
+    return "neutral_watch"
+
+
 def _build_horizon_prediction(
     horizon_name: str,
     component_scores: dict[str, float | None],
@@ -2958,6 +3529,8 @@ def _build_horizon_prediction(
     if used_weight == 0:
         return {
             "score": None,
+            "risk_adjusted_score": None,
+            "risk_tier": _risk_tier(component_scores),
             "direction": "N/A",
             "confidence": None,
             "coverage": 0.0,
@@ -2993,6 +3566,8 @@ def _build_horizon_prediction(
     )
     return {
         "score": final_score,
+        "risk_adjusted_score": _risk_adjusted_score(final_score, component_scores),
+        "risk_tier": _risk_tier(component_scores),
         "direction": _direction_label(final_score),
         "confidence": confidence,
         "coverage": coverage_ratio,
@@ -3032,6 +3607,9 @@ def _build_prediction_rows(
                 "horizons": horizons,
                 "earnings_days_to_next": earnings_days_to_next,
                 "scoring_profile": scoring_profile.name,
+                "manager_action_signal": _manager_action_signal(
+                    horizons, component_scores
+                ),
             }
         )
 
@@ -3056,6 +3634,7 @@ def _build_csv_headers(horizon_names: list[str]) -> list[str]:
     headers.extend(
         [
             "scoring_profile",
+            "manager_action_signal",
             "market_cap_basic",
             "close",
             "Perf.5D",
@@ -3072,6 +3651,12 @@ def _build_csv_headers(horizon_names: list[str]) -> list[str]:
             "gap_severity",
             "event_intensity",
             "trend_alignment",
+            "price_target_upside_average",
+            "price_target_upside_median",
+            "price_target_downside_floor",
+            "price_target_dispersion",
+            "book_value_discount",
+            "beta_adjusted_atrp",
         ]
     )
 
@@ -3086,6 +3671,8 @@ def _build_csv_headers(horizon_names: list[str]) -> list[str]:
                 f"{horizon_name}_confidence",
                 f"{horizon_name}_coverage",
                 f"{horizon_name}_setup",
+                f"{horizon_name}_risk_adjusted_score",
+                f"{horizon_name}_risk_tier",
             ]
         )
 
@@ -3107,6 +3694,7 @@ def _build_csv_rows(
         csv_row.extend(
             [
                 str(prediction.get("scoring_profile", "")),
+                str(prediction.get("manager_action_signal", "")),
                 str(row.get("market_cap_basic", "")),
                 str(row.get("close", "")),
                 str(row.get("Perf.5D", "")),
@@ -3123,6 +3711,12 @@ def _build_csv_rows(
                 str(derived.get("gap_severity", "")),
                 str(derived.get("event_intensity", "")),
                 str(derived.get("trend_alignment", "")),
+                str(derived.get("price_target_upside_average", "")),
+                str(derived.get("price_target_upside_median", "")),
+                str(derived.get("price_target_downside_floor", "")),
+                str(derived.get("price_target_dispersion", "")),
+                str(derived.get("book_value_discount", "")),
+                str(derived.get("beta_adjusted_atrp", "")),
             ]
         )
 
@@ -3138,6 +3732,8 @@ def _build_csv_rows(
                     str(horizon.get("confidence", "")),
                     str(horizon.get("coverage", "")),
                     str(horizon.get("setup", "")),
+                    str(horizon.get("risk_adjusted_score", "")),
+                    str(horizon.get("risk_tier", "")),
                 ]
             )
 
@@ -3281,6 +3877,7 @@ def _log_horizon_section(
         (
             f"{'Ticker':<12} {'Company':<28} {'Industry':<26} {'MCap':>10} {'Float%':>8} {'Score':>8} {'Dir':<12} {'Conf':>6} "
             f"{'Attn':>8} {'Event':>8} {'Mom':>8} {'Trend':>8} {'Qual':>8} {'Value':>8} {'Safe':>8} {'Scale':>8} {'STSafe':>8} {'Setup':<28}"
+            f" {'RAdj':>8} {'Risk':<14} {'Action':<24}"
         ),
     )
     log_to_file(log_file, "-" * 160)
@@ -3305,7 +3902,8 @@ def _log_horizon_section(
                 f"{str(horizon['direction']):<12} {_format_confidence(horizon['confidence']):>6} "
                 f"{_format_score(components['attention']):>8} {_format_score(components['event']):>8} {_format_score(components['momentum']):>8} "
                 f"{_format_score(components['trend']):>8} {_format_score(components['quality']):>8} {_format_score(components['valuation']):>8} "
-                f"{_format_score(components['safety']):>8} {_format_score(components.get('scale')):>8} {_format_multiple(prediction['derived'].get('short_term_cash_coverage')):>8} {str(horizon['setup'])[:28]:<28}"
+                f"{_format_score(components['safety']):>8} {_format_score(components.get('scale')):>8} {_format_multiple(prediction['derived'].get('short_term_cash_coverage')):>8} {str(horizon['setup'])[:28]:<28} "
+                f"{_format_score(horizon.get('risk_adjusted_score')):>8} {str(horizon.get('risk_tier'))[:14]:<14} {str(prediction.get('manager_action_signal'))[:24]:<24}"
             ),
         )
 
@@ -3333,7 +3931,8 @@ def _log_horizon_section(
                 f"{str(horizon['direction']):<12} {_format_confidence(horizon['confidence']):>6} "
                 f"{_format_score(components['attention']):>8} {_format_score(components['event']):>8} {_format_score(components['momentum']):>8} "
                 f"{_format_score(components['trend']):>8} {_format_score(components['quality']):>8} {_format_score(components['valuation']):>8} "
-                f"{_format_score(components['safety']):>8} {_format_score(components.get('scale')):>8} {_format_multiple(prediction['derived'].get('short_term_cash_coverage')):>8} {str(horizon['setup'])[:28]:<28}"
+                f"{_format_score(components['safety']):>8} {_format_score(components.get('scale')):>8} {_format_multiple(prediction['derived'].get('short_term_cash_coverage')):>8} {str(horizon['setup'])[:28]:<28} "
+                f"{_format_score(horizon.get('risk_adjusted_score')):>8} {str(horizon.get('risk_tier'))[:14]:<14} {str(prediction.get('manager_action_signal'))[:24]:<24}"
             ),
         )
 
@@ -3910,6 +4509,7 @@ def run_move_prediction_profile_suite(
             "value_recovery",
             "fragility_short",
             "asymmetric_value",
+            "deep_value_momentum",
             "early_momentum_inflection",
             "forward_edge_active",
             "sector_relative_outperformer",
@@ -3972,14 +4572,24 @@ def run_move_prediction_profile_suite_by_industry(
 # ──────────────────────────────────────────────────────────────────────────────
 
 CONSENSUS_PROFILE_WEIGHTS: dict[str, float] = {
-    "breakout_long": 0.10,
-    "early_momentum_inflection": 0.10,
-    "quality_value_compounder": 0.18,
-    "sector_relative_outperformer": 0.15,
-    "forward_edge_active": 0.15,
-    "asymmetric_value": 0.12,
-    "value_recovery": 0.10,
-    "fragility_short": 0.10,
+    # Empirically strongest predictor for 1-month performance — highest weight
+    "breakout_long": 0.22,
+    # Second-best for catching nascent moves early
+    "early_momentum_inflection": 0.13,
+    # Forward earnings quality — solid but slower horizon
+    "quality_value_compounder": 0.12,
+    # Sector-relative setups — reduced; market-relative is less nimble
+    "sector_relative_outperformer": 0.10,
+    # Forward estimate revisions — strong complementary signal
+    "forward_edge_active": 0.12,
+    # Overlooked fundamentals (redesigned to filter ETFs)
+    "asymmetric_value": 0.10,
+    # Active fundamental recovery — requires actual turn confirmation
+    "value_recovery": 0.09,
+    # New: value + catalyst intersection profile
+    "deep_value_momentum": 0.05,
+    # Short/fragility hedge — inverted in consensus (score = -score)
+    "fragility_short": 0.07,
 }
 
 MINIMUM_COVERAGE_FOR_CONSENSUS = 0.40
@@ -4019,7 +4629,7 @@ def _build_consensus_scores(
         company = _get_company_name(row)
         market_cap = _coerce_numeric(row.get("market_cap_basic"))
 
-        profile_scores: dict[str, dict[str, dict[str, float | None]]] = {}
+        profile_scores: dict[str, dict[str, dict[str, Any]]] = {}
         profile_components: dict[str, dict[str, float | None]] = {}
 
         for profile_name in profile_names:
@@ -4112,6 +4722,16 @@ def _build_consensus_scores(
                 else None
             )
 
+        for horizon_data in consensus_horizons.values():
+            horizon_data["risk_adjusted_score"] = _risk_adjusted_score(
+                horizon_data.get("score"), consensus_components
+            )
+            horizon_data["risk_tier"] = _risk_tier(consensus_components)
+
+        manager_action_signal = _manager_action_signal(
+            consensus_horizons, consensus_components
+        )
+
         consensus_rows.append(
             {
                 "row": row,
@@ -4121,6 +4741,7 @@ def _build_consensus_scores(
                 "horizons": consensus_horizons,
                 "components": consensus_components,
                 "profile_scores": profile_scores,
+                "manager_action_signal": manager_action_signal,
             }
         )
 
@@ -4193,7 +4814,7 @@ def _log_consensus_aggregator_report(
         log_to_file(
             log_file,
             f"{'Rank':<6} {'Ticker':<12} {'Company':<28} {'Score':>8} {'Dir':<12} "
-            f"{'Conf':>6} {'Agree':>7} {'Opinions':>9} "
+            f"{'RAdj':>8} {'Risk':<14} {'Action':<24} {'Conf':>6} {'Agree':>7} {'Opinions':>9} "
             f"{'MCap':>14} {'Perf.W':>8} {'Perf.1M':>8} {'Perf.YTD':>8}",
         )
         log_to_file(log_file, "-" * 160)
@@ -4208,6 +4829,9 @@ def _log_consensus_aggregator_report(
                 f"{(consensus_row['company'] or 'N/A')[:27]:<28} "
                 f"{_format_score(horizon_data['score']):>8} "
                 f"{horizon_data['direction']:<12} "
+                f"{_format_score(horizon_data.get('risk_adjusted_score')):>8} "
+                f"{str(horizon_data.get('risk_tier'))[:14]:<14} "
+                f"{str(consensus_row.get('manager_action_signal'))[:24]:<24} "
                 f"{_format_confidence(horizon_data['confidence']):>6} "
                 f"{horizon_data['agreement_ratio']:.0%}{'':<3} "
                 f"{horizon_data['opinions']:>9} "
@@ -4223,7 +4847,7 @@ def _log_consensus_aggregator_report(
         log_to_file(
             log_file,
             f"{'Rank':<6} {'Ticker':<12} {'Company':<28} {'Score':>8} {'Dir':<12} "
-            f"{'Conf':>6} {'Agree':>7} {'Opinions':>9} "
+            f"{'RAdj':>8} {'Risk':<14} {'Action':<24} {'Conf':>6} {'Agree':>7} {'Opinions':>9} "
             f"{'MCap':>14} {'Perf.W':>8} {'Perf.1M':>8} {'Perf.YTD':>8}",
         )
         log_to_file(log_file, "-" * 160)
@@ -4237,6 +4861,9 @@ def _log_consensus_aggregator_report(
                 f"{(consensus_row['company'] or 'N/A')[:27]:<28} "
                 f"{_format_score(horizon_data['score']):>8} "
                 f"{horizon_data['direction']:<12} "
+                f"{_format_score(horizon_data.get('risk_adjusted_score')):>8} "
+                f"{str(horizon_data.get('risk_tier'))[:14]:<14} "
+                f"{str(consensus_row.get('manager_action_signal'))[:24]:<24} "
                 f"{_format_confidence(horizon_data['confidence']):>6} "
                 f"{horizon_data['agreement_ratio']:.0%}{'':<3} "
                 f"{horizon_data['opinions']:>9} "
@@ -4289,6 +4916,57 @@ def _log_consensus_aggregator_report(
             )
         log_to_file(log_file, "")
 
+    log_to_file(log_file, "ACTIVE MANAGER SHORTLIST — action signals")
+    log_to_file(log_file, "=" * 160)
+    action_labels = [
+        ("add_long_breakout", "Momentum longs with risk filter"),
+        ("accumulate_value_catalyst", "Value plus catalyst longs"),
+        ("watch_value_reversal", "Cheap names waiting for reversal"),
+        ("hold_quality_long", "Lower-drama quality longs"),
+        ("hedge_or_short", "Short / hedge candidates"),
+        ("avoid_value_trap", "Cheap but structurally risky"),
+    ]
+
+    for action_value, title in action_labels:
+        action_rows = [
+            row
+            for row in consensus_rows
+            if row.get("manager_action_signal") == action_value
+        ]
+        if not action_rows:
+            continue
+
+        action_rows.sort(
+            key=lambda row: abs(
+                row["horizons"].get("weeks", {}).get("risk_adjusted_score") or 0.0
+            ),
+            reverse=True,
+        )
+        log_to_file(log_file, title)
+        log_to_file(log_file, "-" * 160)
+        log_to_file(
+            log_file,
+            f"  {'Ticker':<12} {'Company':<28} {'Industry':<26} {'Weeks':>8} {'RAdj':>8} {'Risk':<14} {'Agree':>7} {'Qual':>8} {'Value':>8} {'Safe':>8}",
+        )
+        for consensus_row in action_rows[:20]:
+            h = consensus_row["horizons"].get("weeks", {})
+            components = consensus_row["components"]
+            row = consensus_row["row"]
+            log_to_file(
+                log_file,
+                f"  {consensus_row['ticker']:<12} "
+                f"{(consensus_row['company'] or '')[:27]:<28} "
+                f"{str(row.get('industry') or '')[:25]:<26} "
+                f"{_format_score(h.get('score')):>8} "
+                f"{_format_score(h.get('risk_adjusted_score')):>8} "
+                f"{str(h.get('risk_tier'))[:14]:<14} "
+                f"{(h.get('agreement_ratio') or 0):>6.0%} "
+                f"{_format_score(components.get('quality')):>8} "
+                f"{_format_score(components.get('valuation')):>8} "
+                f"{_format_score(components.get('safety')):>8}",
+            )
+        log_to_file(log_file, "")
+
 
 def run_consensus_aggregator(
     scan_data: list[dict[str, Any]],
@@ -4333,6 +5011,7 @@ def run_consensus_aggregator(
         "ticker",
         "company",
         "market_cap",
+        "manager_action_signal",
     ]
     for horizon_name in horizon_names:
         csv_headers.extend(
@@ -4342,6 +5021,8 @@ def run_consensus_aggregator(
                 f"consensus_{horizon_name}_confidence",
                 f"consensus_{horizon_name}_agreement",
                 f"consensus_{horizon_name}_opinions",
+                f"consensus_{horizon_name}_risk_adjusted_score",
+                f"consensus_{horizon_name}_risk_tier",
             ]
         )
     for profile_name in profile_names:
@@ -4354,6 +5035,7 @@ def run_consensus_aggregator(
             consensus_row["ticker"],
             consensus_row["company"] or "",
             str(consensus_row["market_cap"] or ""),
+            str(consensus_row.get("manager_action_signal", "")),
         ]
         for horizon_name in horizon_names:
             h = consensus_row["horizons"].get(horizon_name, {})
@@ -4364,6 +5046,8 @@ def run_consensus_aggregator(
                     str(h.get("confidence", "")),
                     str(h.get("agreement_ratio", "")),
                     str(h.get("opinions", "")),
+                    str(h.get("risk_adjusted_score", "")),
+                    str(h.get("risk_tier", "")),
                 ]
             )
         for profile_name in profile_names:
@@ -4408,6 +5092,1057 @@ def run_full_analysis_suite(
 
     result = dict(profile_logs)
     result["_consensus_aggregator"] = consensus_log
+    return result
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# EARNINGS PRIORITY AGGREGATOR — chronological upcoming-earnings ranking
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# This block layers an additional report on top of the standard consensus
+# aggregator output. It re-uses the per-profile scoring already computed by
+# ``_build_consensus_scores`` and re-orders the universe by *upcoming earnings
+# date* (``earnings_release_next_date``) instead of by score magnitude.
+#
+# Goal: surface names whose next earnings release is imminent, so the
+# move-prediction signals can be reviewed in catalyst-time order — earnings
+# are typically a high-volatility event and a strong buy/sell decision
+# trigger. Each row keeps its full per-profile coverage and consensus scores
+# so the user can see *both* "when is the catalyst" and "what does each
+# profile think about the name".
+
+EARNINGS_PRIORITY_BUCKETS: list[tuple[str, int | None]] = [
+    ("This week (≤7 days)", 7),
+    ("Next 8–14 days", 14),
+    ("Next 15–30 days", 30),
+    ("Next 31–60 days", 60),
+    ("Next 61–90 days", 90),
+    ("Beyond 90 days", None),
+]
+
+EARNINGS_PRIORITY_SORT_FLAVOURS: dict[str, str] = {
+    "flavour_marketcap": "Within each exact earnings date, rows are sorted by market cap descending.",
+    "flavour_score": "Within each exact earnings date, rows are sorted by weekly score descending.",
+}
+
+EARNINGS_PRIORITY_SCORE_SORT_HORIZON = "weeks"
+
+
+def _parse_earnings_timestamp(value: Any) -> datetime | None:
+    """Best-effort parser for TradingView earnings date fields.
+
+    TradingView typically returns Unix timestamps (seconds) for ``time`` typed
+    fields, but occasionally returns ISO-8601 strings or millisecond
+    timestamps. Any unparseable / falsy value returns ``None``.
+    """
+    if value is None or value == "":
+        return None
+    # Numeric epoch (seconds or milliseconds)
+    if isinstance(value, (int, float)):
+        epoch = float(value)
+        # Treat very large values as milliseconds.
+        if epoch > 1e12:
+            epoch = epoch / 1000.0
+        try:
+            return datetime.fromtimestamp(epoch, tz=timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return None
+    # String: try ISO-8601, then numeric epoch fallback.
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        # ``fromisoformat`` accepts e.g. "2026-05-01" and "2026-05-01T20:00:00".
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        pass
+    try:
+        return _parse_earnings_timestamp(float(text))
+    except ValueError:
+        return None
+
+
+def _format_earnings_date(parsed_dt: datetime | None) -> str:
+    if parsed_dt is None:
+        return "N/A"
+    return parsed_dt.astimezone(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _days_until(parsed_dt: datetime | None, reference: datetime) -> float | None:
+    if parsed_dt is None:
+        return None
+    delta = parsed_dt - reference
+    return delta.total_seconds() / 86400.0
+
+
+def _build_earnings_priority_entries(
+    consensus_rows: list[dict[str, Any]],
+    reference_time: datetime,
+    include_past_window_days: float = 1.0,
+) -> list[dict[str, Any]]:
+    """Attach parsed earnings metadata to each consensus row and keep only
+    rows with an upcoming earnings date.
+
+    A small ``include_past_window_days`` grace window keeps names whose
+    earnings released within the last day, so post-earnings drift signals
+    are not lost the morning after a release.
+    """
+    entries: list[dict[str, Any]] = []
+    for consensus_row in consensus_rows:
+        row = consensus_row["row"]
+        next_dt = _parse_earnings_timestamp(row.get("earnings_release_next_date"))
+        days_until = _days_until(next_dt, reference_time)
+        if days_until is None:
+            continue
+        if days_until < -include_past_window_days:
+            continue
+
+        last_dt = _parse_earnings_timestamp(row.get("earnings_release_date"))
+        next_calendar = _parse_earnings_timestamp(
+            row.get("earnings_release_next_calendar_date")
+        )
+        next_time_raw = row.get("earnings_release_next_time")
+
+        # Profile coverage: how many profiles produced a usable score
+        # (non-None) on each horizon for this name.
+        profile_scores: dict[str, dict[str, dict[str, Any]]] = consensus_row.get(
+            "profile_scores", {}
+        )
+        coverage_per_horizon: dict[str, int] = {}
+        for horizon_name in DEFAULT_HORIZON_WEIGHTS:
+            covered = 0
+            for profile_name, horizon_map in profile_scores.items():
+                horizon_data = horizon_map.get(horizon_name) or {}
+                if horizon_data.get("score") is not None:
+                    covered += 1
+            coverage_per_horizon[horizon_name] = covered
+
+        entries.append(
+            {
+                "consensus_row": consensus_row,
+                "next_earnings_dt": next_dt,
+                "next_earnings_calendar_dt": next_calendar,
+                "next_earnings_time_raw": next_time_raw,
+                "last_earnings_dt": last_dt,
+                "days_until": days_until,
+                "coverage_per_horizon": coverage_per_horizon,
+                "total_profiles": len(profile_scores) or 1,
+            }
+        )
+
+    entries.sort(key=lambda entry: entry["days_until"])
+    return entries
+
+
+def _bucket_for_days(days_until: float) -> str:
+    days_clamped = max(0.0, days_until)
+    for label, upper in EARNINGS_PRIORITY_BUCKETS:
+        if upper is None or days_clamped <= upper:
+            return label
+    return EARNINGS_PRIORITY_BUCKETS[-1][0]
+
+
+def _earnings_priority_flavour_title_suffix(sort_flavour: str | None) -> str:
+    if sort_flavour is None:
+        return ""
+    if sort_flavour == "flavour_marketcap":
+        return " - grouped by earnings date, market cap within date"
+    if sort_flavour == "flavour_score":
+        return " - grouped by earnings date, weekly score within date"
+    raise ValueError(f"Unsupported earnings-priority sort flavour: {sort_flavour}")
+
+
+def _earnings_priority_flavour_note(
+    sort_flavour: str | None,
+    profile_name: str | None = None,
+) -> str | None:
+    if sort_flavour is None:
+        return None
+    if sort_flavour == "flavour_marketcap":
+        return EARNINGS_PRIORITY_SORT_FLAVOURS[sort_flavour]
+    if sort_flavour == "flavour_score":
+        score_subject = "weekly consensus score"
+        if profile_name is not None:
+            score_subject = f"{profile_name} weekly score"
+        return (
+            "Within each exact earnings date, rows are sorted by "
+            f"{score_subject} descending."
+        )
+    raise ValueError(f"Unsupported earnings-priority sort flavour: {sort_flavour}")
+
+
+def _get_earnings_priority_weekly_score(
+    entry: dict[str, Any],
+    profile_name: str | None = None,
+) -> float | None:
+    if profile_name is None:
+        return _coerce_numeric(
+            (entry["consensus_row"].get("horizons") or {})
+            .get(EARNINGS_PRIORITY_SCORE_SORT_HORIZON, {})
+            .get("score")
+        )
+
+    return _coerce_numeric(
+        (entry["consensus_row"].get("profile_scores") or {})
+        .get(profile_name, {})
+        .get(EARNINGS_PRIORITY_SCORE_SORT_HORIZON, {})
+        .get("score")
+    )
+
+
+def _descending_numeric_sort_key(value: float | None) -> tuple[int, float]:
+    if value is None:
+        return (1, 0.0)
+    return (0, -value)
+
+
+def _sort_earnings_priority_date_group(
+    date_entries: list[dict[str, Any]],
+    sort_flavour: str | None,
+    profile_name: str | None = None,
+) -> list[dict[str, Any]]:
+    if sort_flavour is None:
+        return list(date_entries)
+
+    def _market_cap(entry: dict[str, Any]) -> float | None:
+        return _coerce_numeric(entry["consensus_row"].get("market_cap"))
+
+    def _market_cap_key(entry: dict[str, Any]) -> tuple[int, float, int, float, str]:
+        return (
+            *_descending_numeric_sort_key(_market_cap(entry)),
+            *_descending_numeric_sort_key(
+                _get_earnings_priority_weekly_score(entry, profile_name)
+            ),
+            str(entry["consensus_row"].get("ticker") or ""),
+        )
+
+    def _score_key(entry: dict[str, Any]) -> tuple[int, float, int, float, str]:
+        return (
+            *_descending_numeric_sort_key(
+                _get_earnings_priority_weekly_score(entry, profile_name)
+            ),
+            *_descending_numeric_sort_key(_market_cap(entry)),
+            str(entry["consensus_row"].get("ticker") or ""),
+        )
+
+    if sort_flavour == "flavour_marketcap":
+        return sorted(date_entries, key=_market_cap_key)
+    if sort_flavour == "flavour_score":
+        return sorted(date_entries, key=_score_key)
+    raise ValueError(f"Unsupported earnings-priority sort flavour: {sort_flavour}")
+
+
+def _group_earnings_priority_entries_by_date(
+    entries: list[dict[str, Any]],
+    sort_flavour: str | None = None,
+    profile_name: str | None = None,
+) -> list[tuple[str, list[dict[str, Any]]]]:
+    grouped: collections.OrderedDict[str, list[dict[str, Any]]] = (
+        collections.OrderedDict()
+    )
+    for entry in entries:
+        date_label = _format_earnings_date(entry["next_earnings_dt"])
+        grouped.setdefault(date_label, []).append(entry)
+
+    return [
+        (
+            date_label,
+            _sort_earnings_priority_date_group(
+                date_entries,
+                sort_flavour=sort_flavour,
+                profile_name=profile_name,
+            ),
+        )
+        for date_label, date_entries in grouped.items()
+    ]
+
+
+def _iter_earnings_priority_bucket_groups(
+    entries: list[dict[str, Any]],
+    sort_flavour: str | None = None,
+    profile_name: str | None = None,
+) -> list[tuple[str, list[tuple[str, list[dict[str, Any]]]]]]:
+    bucketed: collections.OrderedDict[str, list[dict[str, Any]]] = (
+        collections.OrderedDict((label, []) for label, _ in EARNINGS_PRIORITY_BUCKETS)
+    )
+    for entry in entries:
+        bucketed[_bucket_for_days(entry["days_until"])].append(entry)
+
+    grouped_buckets: list[tuple[str, list[tuple[str, list[dict[str, Any]]]]]] = []
+    for bucket_label, bucket_entries in bucketed.items():
+        if not bucket_entries:
+            continue
+        grouped_buckets.append(
+            (
+                bucket_label,
+                _group_earnings_priority_entries_by_date(
+                    bucket_entries,
+                    sort_flavour=sort_flavour,
+                    profile_name=profile_name,
+                ),
+            )
+        )
+    return grouped_buckets
+
+
+def _flatten_earnings_priority_entries(
+    entries: list[dict[str, Any]],
+    sort_flavour: str | None = None,
+    profile_name: str | None = None,
+) -> list[dict[str, Any]]:
+    ordered_entries: list[dict[str, Any]] = []
+    for _, date_entries in _group_earnings_priority_entries_by_date(
+        entries,
+        sort_flavour=sort_flavour,
+        profile_name=profile_name,
+    ):
+        ordered_entries.extend(date_entries)
+    return ordered_entries
+
+
+def _log_earnings_priority_report(
+    log_file: Path,
+    entries: list[dict[str, Any]],
+    scan_data_count: int,
+    industries: list[str] | None,
+    min_market_cap_usd: float | None,
+    max_market_cap_usd: float | None,
+    profile_names: list[str],
+    reference_time: datetime,
+    sort_flavour: str | None = None,
+) -> None:
+    _reset_log_file(log_file)
+    log_to_file(
+        log_file,
+        _build_report_title(
+            "TradingView earnings-priority ranking — chronological upcoming catalysts"
+            + _earnings_priority_flavour_title_suffix(sort_flavour)
+        ),
+    )
+    log_to_file(log_file, "=" * 200)
+    log_to_file(
+        log_file,
+        (
+            f"Universe rows scanned: {scan_data_count} | "
+            f"rows with usable upcoming earnings: {len(entries)} | "
+            f"reference time (UTC): {reference_time.strftime('%Y-%m-%d %H:%M')} | "
+            f"industries={industries or 'all'} | "
+            f"min_market_cap={min_market_cap_usd} | max_market_cap={max_market_cap_usd}"
+        ),
+    )
+    log_to_file(
+        log_file,
+        f"Profiles aggregated: {', '.join(profile_names)}",
+    )
+    log_to_file(log_file, "")
+    log_to_file(log_file, "Methodology")
+    log_to_file(log_file, "-" * 200)
+    log_to_file(
+        log_file,
+        "Each row carries the consensus score per horizon (built by the same logic as the consensus aggregator) "
+        "plus the count of profiles that produced a usable score on that horizon ('coverage'). "
+        "Names are ordered chronologically by ``earnings_release_next_date``. "
+        "Use this report to see which signals are about to be tested by an earnings catalyst — strong "
+        "consensus + imminent earnings is a higher-conviction tactical setup than the same score with "
+        "no near-term catalyst.",
+    )
+    sort_note = _earnings_priority_flavour_note(sort_flavour)
+    if sort_note is not None:
+        log_to_file(log_file, sort_note)
+    log_to_file(log_file, "")
+
+    if not entries:
+        log_to_file(log_file, "(no rows with an upcoming earnings date were found)")
+        return
+
+    horizon_names = list(DEFAULT_HORIZON_WEIGHTS.keys())
+
+    # ── Bucketed sections (chronological) ────────────────────────────────
+    for bucket_label, date_groups in _iter_earnings_priority_bucket_groups(
+        entries,
+        sort_flavour=sort_flavour,
+    ):
+        bucket_size = sum(len(date_entries) for _, date_entries in date_groups)
+        log_to_file(log_file, f"BUCKET — {bucket_label} ({bucket_size} names)")
+        log_to_file(log_file, "=" * 200)
+        log_to_file(
+            log_file,
+            f"{'Days':>6} {'Earnings':<11} {'Ticker':<12} {'Company':<28} "
+            f"{'Sector':<22} {'MCap':>14} "
+            f"{'Days/Score':>11} {'Days/Cov':>9} "
+            f"{'Wks/Score':>11} {'Wks/Cov':>9} "
+            f"{'Mos/Score':>11} {'Mos/Cov':>9} "
+            f"{'Yrs/Score':>11} {'Yrs/Cov':>9}",
+        )
+        log_to_file(log_file, "-" * 200)
+        for date_label, date_entries in date_groups:
+            if sort_flavour is not None:
+                log_to_file(
+                    log_file,
+                    f"DATE GROUP: {date_label} ({len(date_entries)} names)",
+                )
+            for entry in date_entries:
+                consensus_row = entry["consensus_row"]
+                row = consensus_row["row"]
+                horizon_cells: list[str] = []
+                for horizon_name in horizon_names:
+                    horizon_data = consensus_row["horizons"].get(horizon_name, {}) or {}
+                    horizon_cells.append(
+                        f"{_format_score(horizon_data.get('score')):>11}"
+                    )
+                    horizon_cells.append(
+                        f"{entry['coverage_per_horizon'].get(horizon_name, 0):>9}"
+                    )
+                log_to_file(
+                    log_file,
+                    f"{entry['days_until']:>6.1f} "
+                    f"{_format_earnings_date(entry['next_earnings_dt']):<11} "
+                    f"{consensus_row['ticker']:<12} "
+                    f"{(consensus_row['company'] or 'N/A')[:27]:<28} "
+                    f"{str(row.get('sector') or 'N/A')[:21]:<22} "
+                    f"{_format_market_cap(consensus_row['market_cap']):>14} "
+                    + " ".join(horizon_cells),
+                )
+        log_to_file(log_file, "")
+
+    # ── High-conviction near-term setups (≤30 days + decisive consensus) ─
+    log_to_file(log_file, "HIGH-CONVICTION NEAR-TERM EARNINGS SETUPS")
+    log_to_file(log_file, "=" * 200)
+    log_to_file(
+        log_file,
+        "Names with an earnings catalyst within 30 days AND |days-horizon consensus| "
+        f">= {DIRECTIONAL_MOVE_SCORE_THRESHOLD:.2f} with at least 3 profile opinions:",
+    )
+    log_to_file(log_file, "-" * 200)
+
+    near_term_strong = [
+        entry
+        for entry in entries
+        if entry["days_until"] <= 30
+        and (entry["consensus_row"]["horizons"].get("days") or {}).get("score")
+        is not None
+        and abs(entry["consensus_row"]["horizons"]["days"].get("score") or 0.0)
+        >= DIRECTIONAL_MOVE_SCORE_THRESHOLD
+        and (entry["consensus_row"]["horizons"]["days"].get("opinions") or 0) >= 3
+    ]
+    near_term_strong = _flatten_earnings_priority_entries(
+        near_term_strong,
+        sort_flavour=sort_flavour,
+    )
+
+    if not near_term_strong:
+        log_to_file(log_file, "  (no qualifying near-term high-conviction names)")
+    else:
+        log_to_file(
+            log_file,
+            f"{'Days':>6} {'Earnings':<11} {'Ticker':<12} {'Company':<28} "
+            f"{'DaysScore':>10} {'Dir':<10} {'Conf':>5} {'Agree':>6} {'Opin':>5}",
+        )
+        log_to_file(log_file, "-" * 200)
+        for date_label, date_entries in _group_earnings_priority_entries_by_date(
+            near_term_strong,
+            sort_flavour=sort_flavour,
+        ):
+            if sort_flavour is not None:
+                log_to_file(
+                    log_file,
+                    f"DATE GROUP: {date_label} ({len(date_entries)} names)",
+                )
+            for entry in date_entries:
+                consensus_row = entry["consensus_row"]
+                horizon_data = consensus_row["horizons"].get("days") or {}
+                log_to_file(
+                    log_file,
+                    f"{entry['days_until']:>6.1f} "
+                    f"{_format_earnings_date(entry['next_earnings_dt']):<11} "
+                    f"{consensus_row['ticker']:<12} "
+                    f"{(consensus_row['company'] or 'N/A')[:27]:<28} "
+                    f"{_format_score(horizon_data.get('score')):>10} "
+                    f"{str(horizon_data.get('direction') or 'N/A'):<10} "
+                    f"{_format_confidence(horizon_data.get('confidence')):>5} "
+                    f"{(horizon_data.get('agreement_ratio') or 0.0):>6.0%} "
+                    f"{(horizon_data.get('opinions') or 0):>5}",
+                )
+    log_to_file(log_file, "")
+
+
+def _log_earnings_priority_report_for_profile(
+    log_file: Path,
+    entries: list[dict[str, Any]],
+    profile_name: str,
+    scan_data_count: int,
+    industries: list[str] | None,
+    min_market_cap_usd: float | None,
+    max_market_cap_usd: float | None,
+    reference_time: datetime,
+    sort_flavour: str | None = None,
+) -> None:
+    """Write a per-profile earnings-priority report.
+
+    Same chronological bucket structure as the consensus earnings-priority
+    report but columns show scores, direction, confidence and coverage
+    sourced exclusively from ``profile_name`` rather than the cross-profile
+    consensus.  A high-conviction near-term section is appended at the end.
+    """
+    _reset_log_file(log_file)
+    log_to_file(
+        log_file,
+        _build_report_title(
+            f"TradingView earnings-priority — profile: {profile_name}"
+            + _earnings_priority_flavour_title_suffix(sort_flavour)
+        ),
+    )
+    log_to_file(log_file, "=" * 220)
+    log_to_file(
+        log_file,
+        (
+            f"Universe rows scanned: {scan_data_count} | "
+            f"rows with usable upcoming earnings: {len(entries)} | "
+            f"reference time (UTC): {reference_time.strftime('%Y-%m-%d %H:%M')} | "
+            f"profile: {profile_name} | "
+            f"industries={industries or 'all'} | "
+            f"min_market_cap={min_market_cap_usd} | max_market_cap={max_market_cap_usd}"
+        ),
+    )
+    log_to_file(log_file, "")
+    log_to_file(log_file, "Methodology")
+    log_to_file(log_file, "-" * 220)
+    log_to_file(
+        log_file,
+        "Names are ordered chronologically by earnings_release_next_date. "
+        "Each row shows this profile's per-horizon score, direction, confidence, and component coverage "
+        "so that upcoming-catalyst names can be reviewed through the lens of a single scoring profile.",
+    )
+    sort_note = _earnings_priority_flavour_note(
+        sort_flavour,
+        profile_name=profile_name,
+    )
+    if sort_note is not None:
+        log_to_file(log_file, sort_note)
+    log_to_file(log_file, "")
+
+    if not entries:
+        log_to_file(log_file, "(no rows with an upcoming earnings date were found)")
+        return
+
+    horizon_names = list(DEFAULT_HORIZON_WEIGHTS.keys())
+
+    # ── Bucketed sections (chronological) ────────────────────────────────
+    for bucket_label, date_groups in _iter_earnings_priority_bucket_groups(
+        entries,
+        sort_flavour=sort_flavour,
+        profile_name=profile_name,
+    ):
+        bucket_size = sum(len(date_entries) for _, date_entries in date_groups)
+        log_to_file(log_file, f"BUCKET — {bucket_label} ({bucket_size} names)")
+        log_to_file(log_file, "=" * 220)
+        # Header: base identity columns + per-horizon (Score Dir Conf Cov)
+        col_header = (
+            f"{'Days':>6} {'Earnings':<11} {'Ticker':<12} {'Company':<28} "
+            f"{'Sector':<22} {'MCap':>14}"
+        )
+        for h_name in horizon_names:
+            lbl = h_name.capitalize()[:3]
+            col_header += f"  {lbl+'/Score':>10} {lbl+'/Dir':<11} {lbl+'/Conf':>7} {lbl+'/Cov':>6}"
+        log_to_file(log_file, col_header)
+        log_to_file(log_file, "-" * 220)
+
+        for date_label, date_entries in date_groups:
+            if sort_flavour is not None:
+                log_to_file(
+                    log_file,
+                    f"DATE GROUP: {date_label} ({len(date_entries)} names)",
+                )
+            for entry in date_entries:
+                consensus_row = entry["consensus_row"]
+                row = consensus_row["row"]
+                profile_horizons = (
+                    consensus_row.get("profile_scores", {}).get(profile_name) or {}
+                )
+                horizon_cells = ""
+                for h_name in horizon_names:
+                    h = profile_horizons.get(h_name) or {}
+                    score = h.get("score")
+                    direction = str(h.get("direction") or "N/A")[:10]
+                    confidence = h.get("confidence")
+                    cov = h.get("coverage")
+                    horizon_cells += (
+                        f"  {_format_score(score):>10} {direction:<11} "
+                        f"{_format_confidence(confidence):>7} "
+                        f"{f'{cov:.0%}' if cov is not None else 'N/A':>6}"
+                    )
+                log_to_file(
+                    log_file,
+                    f"{entry['days_until']:>6.1f} "
+                    f"{_format_earnings_date(entry['next_earnings_dt']):<11} "
+                    f"{consensus_row['ticker']:<12} "
+                    f"{(consensus_row['company'] or 'N/A')[:27]:<28} "
+                    f"{str(row.get('sector') or 'N/A')[:21]:<22} "
+                    f"{_format_market_cap(consensus_row['market_cap']):>14}"
+                    f"{horizon_cells}",
+                )
+        log_to_file(log_file, "")
+
+    # ── High-conviction near-term setups ─────────────────────────────────
+    log_to_file(log_file, "HIGH-CONVICTION NEAR-TERM EARNINGS SETUPS")
+    log_to_file(log_file, "=" * 220)
+    log_to_file(
+        log_file,
+        f"Names with an earnings catalyst within 30 days AND |days-horizon score| "
+        f">= {DIRECTIONAL_MOVE_SCORE_THRESHOLD:.2f}:",
+    )
+    log_to_file(log_file, "-" * 220)
+
+    near_term_strong: list[dict[str, Any]] = []
+    for entry in entries:
+        if entry["days_until"] > 30:
+            continue
+        h = (
+            entry["consensus_row"]
+            .get("profile_scores", {})
+            .get(profile_name, {})
+            .get("days")
+            or {}
+        )
+        score = h.get("score")
+        if score is not None and abs(score) >= DIRECTIONAL_MOVE_SCORE_THRESHOLD:
+            near_term_strong.append(entry)
+    near_term_strong = _flatten_earnings_priority_entries(
+        near_term_strong,
+        sort_flavour=sort_flavour,
+        profile_name=profile_name,
+    )
+
+    if not near_term_strong:
+        log_to_file(log_file, "  (no qualifying near-term high-conviction names)")
+    else:
+        log_to_file(
+            log_file,
+            f"{'Days':>6} {'Earnings':<11} {'Ticker':<12} {'Company':<28} "
+            f"{'DaysScore':>10} {'Dir':<11} {'Conf':>7} {'Cov':>6}",
+        )
+        log_to_file(log_file, "-" * 220)
+        for date_label, date_entries in _group_earnings_priority_entries_by_date(
+            near_term_strong,
+            sort_flavour=sort_flavour,
+            profile_name=profile_name,
+        ):
+            if sort_flavour is not None:
+                log_to_file(
+                    log_file,
+                    f"DATE GROUP: {date_label} ({len(date_entries)} names)",
+                )
+            for entry in date_entries:
+                consensus_row = entry["consensus_row"]
+                h = (
+                    consensus_row.get("profile_scores", {})
+                    .get(profile_name, {})
+                    .get("days")
+                    or {}
+                )
+                cov_val = h.get("coverage")
+                cov_str = f"{cov_val:.0%}" if cov_val is not None else "N/A"
+                log_to_file(
+                    log_file,
+                    f"{entry['days_until']:>6.1f} "
+                    f"{_format_earnings_date(entry['next_earnings_dt']):<11} "
+                    f"{consensus_row['ticker']:<12} "
+                    f"{(consensus_row['company'] or 'N/A')[:27]:<28} "
+                    f"{_format_score(h.get('score')):>10} "
+                    f"{str(h.get('direction') or 'N/A'):<11} "
+                    f"{_format_confidence(h.get('confidence')):>7} "
+                    f"{cov_str:>6}",
+                )
+    log_to_file(log_file, "")
+
+
+def _write_earnings_priority_profile_csv(
+    csv_file: Path,
+    entries: list[dict[str, Any]],
+    profile_name: str,
+    sort_flavour: str | None = None,
+) -> None:
+    """Write the per-profile earnings-priority CSV.
+
+    One row per name (sorted chronologically). Columns cover the full
+    earnings date metadata plus this profile's per-horizon score, direction,
+    confidence, component coverage and setup label.
+    """
+    horizon_names = list(DEFAULT_HORIZON_WEIGHTS.keys())
+    csv_headers: list[str] = [
+        "rank_chronological",
+        "days_until_earnings",
+        "earnings_release_next_date",
+        "earnings_release_next_calendar_date",
+        "earnings_release_next_time",
+        "last_earnings_release_date",
+        "ticker",
+        "company",
+        "sector",
+        "industry",
+        "market_cap",
+        "bucket",
+    ]
+    for h_name in horizon_names:
+        csv_headers.extend(
+            [
+                f"{h_name}_score",
+                f"{h_name}_direction",
+                f"{h_name}_confidence",
+                f"{h_name}_coverage",
+                f"{h_name}_setup",
+            ]
+        )
+
+    ordered_entries = _flatten_earnings_priority_entries(
+        entries,
+        sort_flavour=sort_flavour,
+        profile_name=profile_name,
+    )
+
+    csv_rows: list[list[str]] = []
+    for rank, entry in enumerate(ordered_entries, start=1):
+        consensus_row = entry["consensus_row"]
+        row = consensus_row["row"]
+        profile_horizons = (
+            consensus_row.get("profile_scores", {}).get(profile_name) or {}
+        )
+        csv_row: list[str] = [
+            str(rank),
+            f"{entry['days_until']:.2f}",
+            _format_earnings_date(entry["next_earnings_dt"]),
+            _format_earnings_date(entry["next_earnings_calendar_dt"]),
+            str(entry["next_earnings_time_raw"] or ""),
+            _format_earnings_date(entry["last_earnings_dt"]),
+            consensus_row["ticker"],
+            consensus_row["company"] or "",
+            str(row.get("sector") or ""),
+            str(row.get("industry") or ""),
+            (
+                f"{consensus_row['market_cap']:.0f}"
+                if consensus_row["market_cap"] is not None
+                else ""
+            ),
+            _bucket_for_days(entry["days_until"]),
+        ]
+        for h_name in horizon_names:
+            h = profile_horizons.get(h_name) or {}
+            score = h.get("score")
+            cov = h.get("coverage")
+            csv_row.extend(
+                [
+                    f"{score:.4f}" if score is not None else "",
+                    str(h.get("direction") or ""),
+                    (
+                        f"{h.get('confidence'):.2f}"
+                        if h.get("confidence") is not None
+                        else ""
+                    ),
+                    f"{cov:.4f}" if cov is not None else "",
+                    str(h.get("setup") or ""),
+                ]
+            )
+        csv_rows.append(csv_row)
+
+    log_rows_to_csv(csv_file, csv_headers, csv_rows)
+
+
+def _write_earnings_priority_consensus_csv(
+    csv_file: Path,
+    entries: list[dict[str, Any]],
+    profile_names: list[str],
+    sort_flavour: str | None = None,
+) -> None:
+    horizon_names = list(DEFAULT_HORIZON_WEIGHTS.keys())
+    csv_headers: list[str] = [
+        "rank_chronological",
+        "days_until_earnings",
+        "earnings_release_next_date",
+        "earnings_release_next_calendar_date",
+        "earnings_release_next_time",
+        "last_earnings_release_date",
+        "ticker",
+        "company",
+        "sector",
+        "industry",
+        "market_cap",
+        "bucket",
+    ]
+    for h_name in horizon_names:
+        csv_headers.extend(
+            [
+                f"consensus_{h_name}_score",
+                f"consensus_{h_name}_direction",
+                f"consensus_{h_name}_confidence",
+                f"consensus_{h_name}_agreement_ratio",
+                f"consensus_{h_name}_opinions",
+                f"consensus_{h_name}_profile_coverage",
+            ]
+        )
+    for profile_name in profile_names:
+        for h_name in horizon_names:
+            csv_headers.append(f"{profile_name}__{h_name}_score")
+
+    ordered_entries = _flatten_earnings_priority_entries(
+        entries,
+        sort_flavour=sort_flavour,
+    )
+    csv_rows: list[list[str]] = []
+    for rank, entry in enumerate(ordered_entries, start=1):
+        consensus_row = entry["consensus_row"]
+        row = consensus_row["row"]
+        csv_row: list[str] = [
+            str(rank),
+            f"{entry['days_until']:.2f}",
+            _format_earnings_date(entry["next_earnings_dt"]),
+            _format_earnings_date(entry["next_earnings_calendar_dt"]),
+            str(entry["next_earnings_time_raw"] or ""),
+            _format_earnings_date(entry["last_earnings_dt"]),
+            consensus_row["ticker"],
+            consensus_row["company"] or "",
+            str(row.get("sector") or ""),
+            str(row.get("industry") or ""),
+            (
+                f"{consensus_row['market_cap']:.0f}"
+                if consensus_row["market_cap"] is not None
+                else ""
+            ),
+            _bucket_for_days(entry["days_until"]),
+        ]
+        for h_name in horizon_names:
+            h_data = consensus_row["horizons"].get(h_name) or {}
+            score = h_data.get("score")
+            csv_row.extend(
+                [
+                    f"{score:.4f}" if score is not None else "",
+                    str(h_data.get("direction") or ""),
+                    (
+                        f"{h_data.get('confidence'):.2f}"
+                        if h_data.get("confidence") is not None
+                        else ""
+                    ),
+                    (
+                        f"{h_data.get('agreement_ratio'):.4f}"
+                        if h_data.get("agreement_ratio") is not None
+                        else ""
+                    ),
+                    str(h_data.get("opinions") or 0),
+                    str(entry["coverage_per_horizon"].get(h_name, 0)),
+                ]
+            )
+        for profile_name in profile_names:
+            for h_name in horizon_names:
+                profile_horizon = (
+                    consensus_row.get("profile_scores", {})
+                    .get(profile_name, {})
+                    .get(h_name)
+                    or {}
+                )
+                score = profile_horizon.get("score")
+                csv_row.append(f"{score:.4f}" if score is not None else "")
+        csv_rows.append(csv_row)
+
+    log_rows_to_csv(csv_file, csv_headers, csv_rows)
+
+
+def run_earnings_priority_aggregator(
+    scan_data: list[dict[str, Any]],
+    profile_names: list[str] | None = None,
+    industries: list[str] | str | None = None,
+    min_market_cap_usd: float | None = None,
+    max_market_cap_usd: float | None = None,
+    dedicated_output_dir: Path | None = None,
+    reference_time: datetime | None = None,
+) -> dict[str, Path]:
+    """Run the consensus aggregation, then write a chronologically-ordered
+    earnings-priority report plus one dedicated report per scoring profile.
+
+    All outputs go into ``dedicated_output_dir`` (a single folder that
+    contains only earnings-priority files).  The caller is responsible for
+    creating/choosing that folder.
+
+    Returns the default consensus/profile outputs plus two additional flavour
+    variants for each: ``flavour_marketcap`` and ``flavour_score``. The
+    matching ``.csv`` files live alongside their ``.log`` counterparts.
+
+    ``scan_data`` MUST come from a scan that includes the
+    ``earnings_release_next_date`` column (see
+    ``ApiTradingViewClient.scan_global_market_move_prediction_with_earnings``).
+    Names without a parseable upcoming earnings date are excluded from all
+    reports in this aggregator — they are still covered by the standard
+    consensus aggregator.
+    """
+    industries_normalized = _normalize_industries(industries)
+    if profile_names is None:
+        profile_names = list(CONSENSUS_PROFILE_WEIGHTS.keys())
+
+    # All files go into the dedicated folder, using a fixed slug prefix so
+    # file names within the folder are short and easy to distinguish.
+    def _ep_file(
+        scoring_profile_slug: str,
+        sort_flavour: str | None = None,
+    ) -> Path:
+        effective_profile_slug = scoring_profile_slug
+        if sort_flavour is not None:
+            effective_profile_slug = f"{effective_profile_slug}_{sort_flavour}"
+        return _build_report_file_name(
+            report_slug="tradingview_earnings_priority",
+            industries=industries_normalized,
+            min_market_cap_usd=min_market_cap_usd,
+            max_market_cap_usd=max_market_cap_usd,
+            scoring_profile_name=effective_profile_slug,
+            output_dir=dedicated_output_dir,
+        )
+
+    # ── Build consensus scores (computes per-profile data as a side-effect) ──
+    consensus_rows = _build_consensus_scores(
+        scan_data=scan_data,
+        profile_names=profile_names,
+    )
+
+    reference = reference_time or datetime.now(tz=timezone.utc)
+    entries = _build_earnings_priority_entries(
+        consensus_rows=consensus_rows,
+        reference_time=reference,
+    )
+
+    flavour_variants: list[str | None] = [None, *EARNINGS_PRIORITY_SORT_FLAVOURS]
+
+    # ── Consensus log + CSV ───────────────────────────────────────────────
+    generated: dict[str, Path] = {}
+    for sort_flavour in flavour_variants:
+        consensus_log = _ep_file("consensus", sort_flavour=sort_flavour)
+        _log_earnings_priority_report(
+            log_file=consensus_log,
+            entries=entries,
+            scan_data_count=len(scan_data),
+            industries=industries_normalized,
+            min_market_cap_usd=min_market_cap_usd,
+            max_market_cap_usd=max_market_cap_usd,
+            profile_names=profile_names,
+            reference_time=reference,
+            sort_flavour=sort_flavour,
+        )
+        _write_earnings_priority_consensus_csv(
+            csv_file=consensus_log.with_suffix(".csv"),
+            entries=entries,
+            profile_names=profile_names,
+            sort_flavour=sort_flavour,
+        )
+        result_key = "_consensus"
+        if sort_flavour is not None:
+            result_key = f"consensus_{sort_flavour}"
+        generated[result_key] = consensus_log
+
+    # ── Per-profile log + CSV ─────────────────────────────────────────────
+    for profile_name in profile_names:
+        for sort_flavour in flavour_variants:
+            profile_log = _ep_file(profile_name, sort_flavour=sort_flavour)
+            _log_earnings_priority_report_for_profile(
+                log_file=profile_log,
+                entries=entries,
+                profile_name=profile_name,
+                scan_data_count=len(scan_data),
+                industries=industries_normalized,
+                min_market_cap_usd=min_market_cap_usd,
+                max_market_cap_usd=max_market_cap_usd,
+                reference_time=reference,
+                sort_flavour=sort_flavour,
+            )
+            _write_earnings_priority_profile_csv(
+                csv_file=profile_log.with_suffix(".csv"),
+                entries=entries,
+                profile_name=profile_name,
+                sort_flavour=sort_flavour,
+            )
+            result_key = profile_name
+            if sort_flavour is not None:
+                result_key = f"{profile_name}_{sort_flavour}"
+            generated[result_key] = profile_log
+
+    return generated
+
+
+def run_full_analysis_suite_with_earnings_priority(
+    scan_data: list[dict[str, Any]],
+    industries: list[str] | str | None = None,
+    min_market_cap_usd: float | None = None,
+    max_market_cap_usd: float | None = None,
+    include_blind_spot_sections: bool = False,
+    output_dir: str | Path | None = None,
+    reference_time: datetime | None = None,
+) -> dict[str, Path]:
+    """Variant of :func:`run_full_analysis_suite` that also writes a full set
+    of earnings-priority reports into a dedicated sub-folder.
+
+    The standard per-profile and consensus analysis reports are written to
+    ``output_dir`` exactly as ``run_full_analysis_suite`` would.
+
+    In addition, a separate ``earnings_priority/`` sub-folder is created
+    inside ``output_dir`` (or ``LOG_DIR`` when ``output_dir`` is ``None``)
+    that contains:
+
+    * **consensus** ``.log`` + ``.csv`` — cross-profile earnings ranking
+      (same logic as the normal consensus aggregator, re-sorted by upcoming
+      earnings date chronologically).
+    * **one** ``.log`` + ``.csv`` **per scoring profile** — same chronological
+      view but scores, direction, confidence and coverage come from that
+      individual profile only, so each profile's perspective on the
+      catalyst-ranked universe is self-contained.
+
+    ``scan_data`` should come from
+    ``ApiTradingViewClient.scan_global_market_move_prediction_with_earnings``
+    (which guarantees the earnings columns are present).  Rows without a
+    parseable upcoming earnings date are excluded from the earnings-priority
+    reports only — they remain fully covered by the standard profile and
+    consensus reports.
+
+    Returns a dict with all generated log paths:
+    - Per-profile keys from the standard suite (e.g. ``"breakout_long"``)
+    - ``"_consensus_aggregator"`` — the standard consensus log
+    - ``"_earnings_priority_consensus"`` — earnings-priority consensus log
+        - ``"_earnings_priority_consensus_flavour_marketcap"`` — earnings-priority
+            consensus grouped by earnings date, then sorted by market cap within date
+        - ``"_earnings_priority_consensus_flavour_score"`` — earnings-priority
+            consensus grouped by earnings date, then sorted by weekly score within date
+    - ``"_earnings_priority_<profile_name>"`` — per-profile earnings logs
+        - ``"_earnings_priority_<profile_name>_flavour_marketcap"`` — per-profile
+            earnings logs grouped by earnings date, then sorted by market cap within date
+        - ``"_earnings_priority_<profile_name>_flavour_score"`` — per-profile
+            earnings logs grouped by earnings date, then sorted by weekly score within date
+    """
+    # ── Standard full analysis (all profiles + consensus) ────────────────
+    base_result = run_full_analysis_suite(
+        scan_data=scan_data,
+        industries=industries,
+        min_market_cap_usd=min_market_cap_usd,
+        max_market_cap_usd=max_market_cap_usd,
+        include_blind_spot_sections=include_blind_spot_sections,
+        output_dir=output_dir,
+    )
+
+    # ── Dedicated earnings-priority subfolder ─────────────────────────────
+    base_dir = Path(output_dir) if output_dir is not None else LOG_DIR
+    earnings_priority_dir = base_dir / "earnings_priority"
+    earnings_priority_dir.mkdir(parents=True, exist_ok=True)
+
+    # ── Earnings-priority aggregator (consensus + per-profile) ────────────
+    earnings_logs = run_earnings_priority_aggregator(
+        scan_data=scan_data,
+        industries=industries,
+        min_market_cap_usd=min_market_cap_usd,
+        max_market_cap_usd=max_market_cap_usd,
+        dedicated_output_dir=earnings_priority_dir,
+        reference_time=reference_time,
+    )
+
+    # ── Merge results ─────────────────────────────────────────────────────
+    result = dict(base_result)
+    for key, path in earnings_logs.items():
+        result_key = "_earnings_priority_consensus"
+        if key != "_consensus":
+            result_key = f"_earnings_priority_{key}"
+        result[result_key] = path
     return result
 
 

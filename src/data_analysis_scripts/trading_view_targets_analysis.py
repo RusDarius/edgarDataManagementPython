@@ -9,7 +9,7 @@ Seven independent estimation lenses are blended per horizon:
 =================  ============================================================
 Lens               What it captures
 =================  ============================================================
-multiple           Peer-relative valuation reversion across eight standard
+multiple           Peer-relative valuation reversion across ten standard
                    price-to-fundamental and EV-to-fundamental multiples
                    (P/E, P/S, P/B, P/FCF, P/OCF, EV/Revenue, EV/EBIT,
                    EV/EBITDA, EV/FCF, EV/GP).
@@ -45,6 +45,12 @@ fundamental quality flags (Piotroski / Altman Z / leverage gates).
 A full per-lens contribution table is logged so each blended target can
 be decomposed into its source evidence — every weight in the final
 forecast is observable.
+
+The module also writes a companion ``__lens_cases.csv`` export.  That file
+contains every raw target anchor by lens, horizon, input field snapshot,
+formula summary, raw implied price, blend-used price, lens-fit tags, and
+active-management signal.  Upside outliers may be capped only inside the
+blend; downside anchors are preserved raw so adverse cases remain visible.
 """
 
 from __future__ import annotations
@@ -294,6 +300,37 @@ DEBT_TO_EBITDA_HIGH = 5.0  # over-levered
 STRONG_OPPORTUNITY_THRESHOLD = 25.0  # percent implied upside
 MODERATE_OPPORTUNITY_THRESHOLD = 10.0
 
+# Peer statistics are robust-trimmed only when the peer set is large enough
+# for percentile trimming to be meaningful.  Raw anchor rows remain exported
+# so the analysis never hides the underlying data.
+PEER_MULTIPLE_TRIM_FRACTION = 0.05
+PEER_MULTIPLE_MIN_COUNT_FOR_TRIM = 20
+
+# Upside-only cap used inside the blend.  This prevents a single mechanically
+# huge target from dominating the blended base price while preserving the raw
+# target in the lens-case CSV.  Downside cases are deliberately not capped.
+MAX_UPSIDE_BLEND_MULTIPLE = 4.0
+
+# Active-management risk thresholds used in the new lens-case export and log
+# sections.  They do not suppress rows; they make downside cases easier to see.
+DOWNSIDE_CASE_THRESHOLD = -20.0
+SEVERE_DOWNSIDE_CASE_THRESHOLD = -35.0
+HIGH_LENS_DISPERSION_THRESHOLD = 0.25
+
+# Current-cycle profiling gates.  The intent is to surface risks that have
+# mattered in recent higher-rate / narrower-breadth markets: duration-like
+# valuation risk, balance-sheet stress, liquidity decay, and growth slowdown.
+SMALL_CAP_MARKET_CAP_USD = 2_000_000_000.0
+MID_CAP_MARKET_CAP_USD = 10_000_000_000.0
+LARGE_CAP_MARKET_CAP_USD = 200_000_000_000.0
+HIGH_BETA_THRESHOLD = 1.80
+EXPENSIVE_PRICE_SALES_THRESHOLD = 10.0
+EXPENSIVE_PRICE_EARNINGS_THRESHOLD = 60.0
+LOW_SHAREHOLDER_YIELD_THRESHOLD = 1.0
+REVENUE_DECLINE_RISK_PCT = -10.0
+EBITDA_DECLINE_RISK_PCT = -10.0
+LOW_RELATIVE_VOLUME_THRESHOLD = 0.60
+
 
 # ---------------------------------------------------------------------------
 # Data classes
@@ -394,6 +431,14 @@ def _format_multiple(value: float | None) -> str:
     return f"{value:.2f}x"
 
 
+def _csv_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "1" if value else ""
+    return str(value)
+
+
 def _clamped_growth(value: float | None) -> float | None:
     if value is None:
         return None
@@ -416,6 +461,30 @@ def _weighted_blend(
     return total_value / total_weight
 
 
+def _estimate_price_for_blend(estimate: TargetEstimate, close: float) -> float | None:
+    """Return the price used in the blend after upside-only outlier control.
+
+    The raw estimate remains untouched in ``TargetEstimate`` and is exported
+    to the lens-case CSV.  Only extreme upside contribution is capped inside
+    the blend; downside estimates are intentionally preserved.
+    """
+    price = estimate.implied_price
+    if price is None or price <= 0:
+        return None
+    if close > 0 and price > close * MAX_UPSIDE_BLEND_MULTIPLE:
+        return close * MAX_UPSIDE_BLEND_MULTIPLE
+    return price
+
+
+def _estimate_blend_adjustment(estimate: TargetEstimate, close: float) -> str:
+    price = estimate.implied_price
+    if price is None or price <= 0 or close <= 0:
+        return ""
+    if price > close * MAX_UPSIDE_BLEND_MULTIPLE:
+        return "upside_capped_for_blend_raw_case_retained"
+    return ""
+
+
 def _percentile(sorted_values: list[float], pct: float) -> float:
     if not sorted_values:
         return 0.0
@@ -428,6 +497,157 @@ def _percentile(sorted_values: list[float], pct: float) -> float:
     )
 
 
+def _market_cap_bucket(market_cap: float | None) -> str:
+    if market_cap is None:
+        return "unknown"
+    if market_cap >= LARGE_CAP_MARKET_CAP_USD:
+        return "mega_cap"
+    if market_cap >= MID_CAP_MARKET_CAP_USD:
+        return "large_cap"
+    if market_cap >= SMALL_CAP_MARKET_CAP_USD:
+        return "mid_cap"
+    if market_cap >= 300_000_000.0:
+        return "small_cap"
+    return "micro_cap"
+
+
+def _build_company_profile(
+    row: dict[str, Any],
+    quality_flags: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Classify a name for active-manager filtering and lens suitability."""
+    market_cap = _coerce_numeric(row.get("market_cap_basic"))
+    revenue_growth = _coerce_numeric(row.get("total_revenue_yoy_growth_ttm"))
+    ebitda_growth = _coerce_numeric(row.get("ebitda_yoy_growth_ttm"))
+    net_income_growth = _coerce_numeric(row.get("net_income_yoy_growth_ttm"))
+    operating_margin = _coerce_numeric(row.get("operating_margin"))
+    free_cash_flow_margin = _coerce_numeric(row.get("free_cash_flow_margin_ttm"))
+    price_sales = _coerce_numeric(row.get("price_sales_current"))
+    price_earnings = _coerce_numeric(row.get("price_earnings_ttm"))
+    price_book = _coerce_numeric(row.get("price_book_fq"))
+    price_free_cash_flow = _coerce_numeric(row.get("price_free_cash_flow_ttm"))
+    dividend_yield = _coerce_numeric(
+        row.get("dividends_yield_current")
+    ) or _coerce_numeric(row.get("dividend_yield_recent"))
+    buyback_yield = _coerce_numeric(row.get("buyback_yield"))
+    total_shareholder_yield = (dividend_yield or 0.0) + (buyback_yield or 0.0)
+    perf_1m = _coerce_numeric(row.get("Perf.1M"))
+    perf_6m = _coerce_numeric(row.get("Perf.6M"))
+    rsi = _coerce_numeric(row.get("RSI"))
+    quality_bias = (quality_flags or {}).get("quality_bias", 0)
+    cycle_flags = list((quality_flags or {}).get("cycle_flags", []) or [])
+
+    style_tags: list[str] = []
+    if (
+        quality_bias
+        and quality_bias > 0
+        and revenue_growth is not None
+        and revenue_growth >= 8
+    ):
+        style_tags.append("quality_compounder")
+    if (
+        revenue_growth is not None
+        and revenue_growth >= 15
+        and (operating_margin is None or operating_margin >= 0)
+    ):
+        style_tags.append("profitable_or_scaling_growth")
+    if (
+        (price_earnings is not None and 0 < price_earnings <= 12)
+        or (price_book is not None and 0 < price_book <= 1.2)
+        or (price_free_cash_flow is not None and 0 < price_free_cash_flow <= 12)
+    ):
+        style_tags.append("value_reversion")
+    if total_shareholder_yield >= 4.0:
+        style_tags.append("income_or_buyback_yield")
+    if perf_6m is not None and perf_6m >= 20 and (rsi is None or rsi >= 50):
+        style_tags.append("momentum_leader")
+    if (perf_1m is not None and perf_1m <= -15) or (rsi is not None and rsi <= 35):
+        style_tags.append("oversold_recovery_candidate")
+    if (price_sales is not None and price_sales >= EXPENSIVE_PRICE_SALES_THRESHOLD) or (
+        price_earnings is not None
+        and price_earnings >= EXPENSIVE_PRICE_EARNINGS_THRESHOLD
+    ):
+        style_tags.append("expensive_duration_growth")
+    if quality_bias and quality_bias < 0:
+        style_tags.append("fragile_balance_sheet_or_quality")
+    if not style_tags:
+        style_tags.append("balanced_core")
+
+    deterioration_inputs = [revenue_growth, ebitda_growth, net_income_growth]
+    has_deterioration = any(
+        value is not None and value <= REVENUE_DECLINE_RISK_PCT
+        for value in deterioration_inputs
+    )
+    if has_deterioration and "fundamental_deterioration" not in cycle_flags:
+        cycle_flags.append("fundamental_deterioration")
+
+    if (
+        operating_margin is not None
+        and operating_margin < 0
+        and free_cash_flow_margin is not None
+        and free_cash_flow_margin < 0
+        and "unprofitable_cash_burn" not in cycle_flags
+    ):
+        cycle_flags.append("unprofitable_cash_burn")
+
+    return {
+        "market_cap_bucket": _market_cap_bucket(market_cap),
+        "investment_style_profile": "|".join(style_tags[:5]),
+        "cycle_risk_flags": "|".join(cycle_flags),
+    }
+
+
+def _estimate_case_role(estimate: TargetEstimate) -> str:
+    label = estimate.label.lower()
+    if "bear" in label or label.endswith("_low") or "_low" in label:
+        return "bear_or_downside_case"
+    if "bull" in label or label.endswith("_high") or "_high" in label:
+        return "bull_or_upside_case"
+    if "base" in label or "median" in label or "average" in label:
+        return "base_case"
+    if "1y" in label:
+        return "long_horizon_anchor"
+    return "single_anchor_case"
+
+
+def _estimate_horizon_scope(estimate: TargetEstimate) -> str:
+    label = estimate.label.lower()
+    if "near" in label:
+        return "near_term"
+    if "medium" in label or "med" in label:
+        return "medium_term"
+    if "long" in label or "1y" in label:
+        return "long_term"
+    return "all_horizons"
+
+
+def _estimate_formula_summary(estimate: TargetEstimate) -> str:
+    label = estimate.label
+    if estimate.lens == "multiple":
+        return "close * peer_median_multiple / company_multiple"
+    if estimate.lens == "technical":
+        return "percentile or median of horizon-specific technical anchors"
+    if estimate.lens == "trajectory" and label.startswith("eps_proj"):
+        return "projected EPS * current_or_peer_P/E, discounted on long horizon"
+    if estimate.lens == "trajectory" and label.startswith("rev_proj"):
+        return "projected revenue * current_or_peer_P/S, converted through market cap"
+    if estimate.lens == "trajectory" and label.startswith("ebitda_proj"):
+        return "projected EBITDA * current_or_peer_EV/EBITDA less net debt"
+    if estimate.lens == "range":
+        return "close pulled toward range midpoint by extremity * horizon pull"
+    if estimate.lens == "analyst":
+        return "TradingView analyst target used directly with rating-scaled confidence"
+    if estimate.lens == "book_value" and label == "graham_number":
+        return "sqrt(22.5 * EPS * book value per share)"
+    if estimate.lens == "book_value":
+        return "book value per share * peer median P/B"
+    if estimate.lens == "yield_dcf" and label == "gordon_ddm":
+        return "next annual dividend / (cost of equity - dividend growth)"
+    if estimate.lens == "yield_dcf":
+        return "shareholder-yield dollars / cost of equity"
+    return "lens-specific target anchor"
+
+
 # ---------------------------------------------------------------------------
 # Peer statistics builder
 # ---------------------------------------------------------------------------
@@ -436,9 +656,12 @@ def _percentile(sorted_values: list[float], pct: float) -> float:
 def _build_peer_multiple_stats(
     scan_data: list[dict[str, Any]],
 ) -> dict[str, dict[str, float | None]]:
-    """Compute peer-group statistics for each valuation multiple field.
+    """Compute robust peer-group statistics for each valuation multiple field.
 
-    Returns a dict keyed by field_name with keys: median, p25, p75, mean, count.
+    Positive multiples are sorted and, when enough peers are available, the
+    top/bottom 5% are removed before computing the median and percentiles.
+    This controls peer-set data glitches without hiding the raw row-level
+    evidence, which is still exported in the lens-case CSV.
     """
     stats: dict[str, dict[str, float | None]] = {}
     for field_name, _label in MULTIPLE_FIELDS:
@@ -454,15 +677,30 @@ def _build_peer_multiple_stats(
                 "p75": None,
                 "mean": None,
                 "count": 0,
+                "raw_count": 0,
+                "trimmed_count": 0,
+                "min": None,
+                "max": None,
             }
             continue
         sorted_vals = sorted(raw_values)
+        trimmed_vals = sorted_vals
+        trimmed_count = 0
+        if len(sorted_vals) >= PEER_MULTIPLE_MIN_COUNT_FOR_TRIM:
+            trim_each_side = int(len(sorted_vals) * PEER_MULTIPLE_TRIM_FRACTION)
+            if trim_each_side > 0 and len(sorted_vals) > trim_each_side * 2:
+                trimmed_vals = sorted_vals[trim_each_side:-trim_each_side]
+                trimmed_count = len(sorted_vals) - len(trimmed_vals)
         stats[field_name] = {
-            "median": median(sorted_vals),
-            "p25": _percentile(sorted_vals, 0.25),
-            "p75": _percentile(sorted_vals, 0.75),
-            "mean": sum(sorted_vals) / len(sorted_vals),
-            "count": len(sorted_vals),
+            "median": median(trimmed_vals),
+            "p25": _percentile(trimmed_vals, 0.25),
+            "p75": _percentile(trimmed_vals, 0.75),
+            "mean": sum(trimmed_vals) / len(trimmed_vals),
+            "count": len(trimmed_vals),
+            "raw_count": len(sorted_vals),
+            "trimmed_count": trimmed_count,
+            "min": sorted_vals[0],
+            "max": sorted_vals[-1],
         }
     return stats
 
@@ -1011,14 +1249,32 @@ def _build_quality_flags(row: dict[str, Any]) -> dict[str, Any]:
       * ``debt_to_ebitda`` -- raw leverage ratio or ``None``
       * ``quality_bias`` -- ``+2`` strong, ``-2`` weak, ``0`` neutral.
         Used by the blender to tighten or widen the bear / bull bands.
+      * ``cycle_risk_bias`` -- downside-only bias from current-cycle risks
+        (duration valuation, deterioration, liquidity decay, cash burn).
       * ``flags`` -- list of human-readable tags for the report.
     """
     piotroski = _coerce_numeric(row.get("piotroski_f_score_ttm"))
     altman = _coerce_numeric(row.get("altman_z_score_ttm"))
     debt_ebitda = _coerce_numeric(row.get("total_debt_to_ebitda_fq"))
+    beta = _coerce_numeric(row.get("beta_1_year"))
+    market_cap = _coerce_numeric(row.get("market_cap_basic"))
+    price_sales = _coerce_numeric(row.get("price_sales_current"))
+    price_earnings = _coerce_numeric(row.get("price_earnings_ttm"))
+    dividend_yield = _coerce_numeric(
+        row.get("dividends_yield_current")
+    ) or _coerce_numeric(row.get("dividend_yield_recent"))
+    buyback_yield = _coerce_numeric(row.get("buyback_yield"))
+    revenue_growth = _coerce_numeric(row.get("total_revenue_yoy_growth_ttm"))
+    ebitda_growth = _coerce_numeric(row.get("ebitda_yoy_growth_ttm"))
+    net_income_growth = _coerce_numeric(row.get("net_income_yoy_growth_ttm"))
+    operating_margin = _coerce_numeric(row.get("operating_margin"))
+    free_cash_flow_margin = _coerce_numeric(row.get("free_cash_flow_margin_ttm"))
+    relative_volume = _coerce_numeric(row.get("relative_volume_10d_calc"))
 
     flags: list[str] = []
+    cycle_flags: list[str] = []
     bias = 0
+    cycle_risk_bias = 0
     if piotroski is not None:
         if piotroski >= PIOTROSKI_STRONG:
             flags.append("piotroski_strong")
@@ -1037,12 +1293,57 @@ def _build_quality_flags(row: dict[str, Any]) -> dict[str, Any]:
         flags.append("over_levered")
         bias -= 1
 
+    total_shareholder_yield = (dividend_yield or 0.0) + (buyback_yield or 0.0)
+    high_valuation = (
+        price_sales is not None and price_sales >= EXPENSIVE_PRICE_SALES_THRESHOLD
+    ) or (
+        price_earnings is not None
+        and price_earnings >= EXPENSIVE_PRICE_EARNINGS_THRESHOLD
+    )
+    if (
+        beta is not None
+        and beta >= HIGH_BETA_THRESHOLD
+        and high_valuation
+        and total_shareholder_yield < LOW_SHAREHOLDER_YIELD_THRESHOLD
+    ):
+        cycle_flags.append("duration_valuation_risk")
+        cycle_risk_bias -= 1
+
+    if revenue_growth is not None and revenue_growth <= REVENUE_DECLINE_RISK_PCT:
+        if (
+            ebitda_growth is None
+            or ebitda_growth <= EBITDA_DECLINE_RISK_PCT
+            or (net_income_growth is not None and net_income_growth < 0)
+        ):
+            cycle_flags.append("fundamental_deterioration")
+            cycle_risk_bias -= 1
+
+    if (
+        operating_margin is not None
+        and operating_margin < 0
+        and free_cash_flow_margin is not None
+        and free_cash_flow_margin < 0
+    ):
+        cycle_flags.append("unprofitable_cash_burn")
+        cycle_risk_bias -= 1
+
+    if (
+        market_cap is not None
+        and market_cap < SMALL_CAP_MARKET_CAP_USD
+        and relative_volume is not None
+        and relative_volume < LOW_RELATIVE_VOLUME_THRESHOLD
+    ):
+        cycle_flags.append("small_cap_liquidity_decay")
+        cycle_risk_bias -= 1
+
     return {
         "piotroski": piotroski,
         "altman_z": altman,
         "debt_to_ebitda": debt_ebitda,
         "quality_bias": _clamp(bias, -2, 2),
-        "flags": flags,
+        "cycle_risk_bias": _clamp(cycle_risk_bias, -4, 0),
+        "cycle_flags": cycle_flags,
+        "flags": flags + cycle_flags,
     }
 
 
@@ -1315,7 +1616,10 @@ def _blend_horizon_target(
         if not estimates:
             return None
         return _weighted_blend(
-            [(e.implied_price, e.confidence_weight) for e in estimates]
+            [
+                (_estimate_price_for_blend(e, close), e.confidence_weight)
+                for e in estimates
+            ]
         )
 
     # Filter estimates by horizon tag for technical / trajectory / range
@@ -1415,13 +1719,22 @@ def _blend_horizon_target(
     bull_adj = SCENARIO_MULTIPLIERS["bull"]
     bull_adj += _clamp((momentum_score + trend_score) * 0.02, -0.05, 0.08)
 
-    # Quality flags: tighten bear band when fundamentals are strong, widen
-    # bear and tighten bull when fundamentals are weak.  Each unit of
-    # ``quality_bias`` shifts the bear band by ~3pp.
+    # Quality flags: strong fundamentals tighten the bear band, while weak
+    # fundamentals explicitly widen downside and reduce the bull case.  This
+    # is intentionally asymmetric so bad cases are not softened away.
     quality_bias = (quality_flags or {}).get("quality_bias", 0)
-    if quality_bias:
-        bear_adj += _clamp(quality_bias * 0.03, -0.06, 0.06)
-        bull_adj += _clamp(quality_bias * 0.015, -0.03, 0.03)
+    if quality_bias and quality_bias > 0:
+        bear_adj += _clamp(quality_bias * 0.03, 0.0, 0.06)
+    elif quality_bias and quality_bias < 0:
+        bear_adj += _clamp(quality_bias * 0.035, -0.08, 0.0)
+        bull_adj += _clamp(quality_bias * 0.02, -0.05, 0.0)
+
+    # Current-cycle risks (duration-like valuation, deteriorating growth,
+    # cash burn, liquidity decay) are downside-only modifiers.
+    cycle_risk_bias = (quality_flags or {}).get("cycle_risk_bias", 0)
+    if cycle_risk_bias and cycle_risk_bias < 0:
+        bear_adj += _clamp(cycle_risk_bias * 0.025, -0.10, 0.0)
+        bull_adj += _clamp(cycle_risk_bias * 0.015, -0.06, 0.0)
 
     # Lens dispersion widens both bands proportionally.
     if lens_dispersion is not None:
@@ -1707,14 +2020,16 @@ def _log_methodology(log_file: Path) -> None:
         "This report estimates forward price targets using SEVEN independent lenses blended per horizon. "
         "Each lens contributes evidence from a different angle (peer valuation, tape, fundamentals, range, "
         "analyst consensus, book value, dividend yield); the blender weights them per horizon and tilts the "
-        "scenario bands using component scores, fundamental quality flags, lens dispersion, and analyst spread.",
+        "scenario bands using component scores, fundamental quality flags, current-cycle risk flags, "
+        "lens dispersion, and analyst spread.",
     )
     log_to_file(log_file, "")
     log_to_file(
         log_file,
         "Lens 1 -- Multiple-anchored: peer-median reversion across ten standard valuation multiples "
         "(P/E TTM, P/S, P/B, P/FCF, P/OCF, EV/Revenue, EV/EBIT, EV/EBITDA, EV/FCF, EV/GP). "
-        "implied_price = current_price * (peer_median / company_multiple). Confidence saturates at ~20 peers.",
+        "implied_price = current_price * (peer_median / company_multiple). Peer medians use a 5% robust trim "
+        "when at least 20 peers are available. Confidence saturates at ~20 peers.",
     )
     log_to_file(log_file, "")
     log_to_file(
@@ -1784,7 +2099,8 @@ def _log_methodology(log_file: Path) -> None:
         f"Scenario bands: bear={SCENARIO_MULTIPLIERS['bear']:.0%}, "
         f"bull={SCENARIO_MULTIPLIERS['bull']:.0%}, then adjusted by:\n"
         f"  - component scores  (quality+safety -> tighter bear; momentum+trend -> wider bull)\n"
-        f"  - quality_bias      (Piotroski/Altman/Debt-EBITDA: each unit shifts bear ~3pp, bull ~1.5pp)\n"
+        f"  - quality_bias      (strong fundamentals lift bear; weak fundamentals lower bear and bull)\n"
+        f"  - cycle_risk_bias   (duration valuation, deterioration, cash burn, liquidity decay lower bear/bull)\n"
         f"  - lens dispersion   (max-min lens spread / base * 0.15, capped at +-10pp)\n"
         f"  - analyst spread    (analyst high-low / base * 0.10, capped at +-8pp)",
     )
@@ -1804,6 +2120,11 @@ def _log_methodology(log_file: Path) -> None:
         f"Moderate Overvaluation <= -{MODERATE_OPPORTUNITY_THRESHOLD:.0f}% | "
         f"Strong Overvaluation <= -{STRONG_OPPORTUNITY_THRESHOLD:.0f}%.",
     )
+    log_to_file(
+        log_file,
+        f"Blend outlier control: raw upside anchors above {MAX_UPSIDE_BLEND_MULTIPLE:.1f}x close are capped only "
+        "for blended-price contribution and are still exported raw in the lens-case CSV. Downside anchors are not capped.",
+    )
     log_to_file(log_file, "")
 
 
@@ -1815,15 +2136,19 @@ def _log_peer_multiple_summary(
     log_to_file(log_file, "-" * 160)
     log_to_file(
         log_file,
-        f"{'Multiple':<20} {'Count':>8} {'P25':>12} {'Median':>12} {'P75':>12} {'Mean':>12}",
+        f"{'Multiple':<20} {'Raw':>8} {'Used':>8} {'Trim':>8} "
+        f"{'P25':>12} {'Median':>12} {'P75':>12} {'Mean':>12}",
     )
-    log_to_file(log_file, "-" * 80)
+    log_to_file(log_file, "-" * 104)
     for field_name, label in MULTIPLE_FIELDS:
         stats = peer_multiple_stats.get(field_name, {})
         count = stats.get("count") or 0
+        raw_count = stats.get("raw_count") or count
+        trimmed_count = stats.get("trimmed_count") or 0
         log_to_file(
             log_file,
-            f"{label:<20} {count:>8} {_format_multiple(stats.get('p25')):>12} "
+            f"{label:<20} {raw_count:>8} {count:>8} {trimmed_count:>8} "
+            f"{_format_multiple(stats.get('p25')):>12} "
             f"{_format_multiple(stats.get('median')):>12} {_format_multiple(stats.get('p75')):>12} "
             f"{_format_multiple(stats.get('mean')):>12}",
         )
@@ -2161,23 +2486,30 @@ def _log_quality_flags_section(
     )
     log_to_file(log_file, "-" * 160)
 
-    flagged = [r for r in results if (r.quality_flags or {}).get("quality_bias")]
+    flagged = [
+        r
+        for r in results
+        if (r.quality_flags or {}).get("quality_bias")
+        or (r.quality_flags or {}).get("cycle_risk_bias")
+    ]
     if not flagged:
-        log_to_file(log_file, "  no companies triggered quality flags")
+        log_to_file(log_file, "  no companies triggered quality or cycle-risk flags")
         log_to_file(log_file, "")
         return
 
     strongest = sorted(
         flagged, key=lambda r: r.quality_flags.get("quality_bias", 0), reverse=True
     )[:TOP_SECTION_ROWS]
-    weakest = sorted(flagged, key=lambda r: r.quality_flags.get("quality_bias", 0))[
-        :TOP_SECTION_ROWS
-    ]
+    weakest = sorted(
+        flagged,
+        key=lambda r: r.quality_flags.get("quality_bias", 0)
+        + r.quality_flags.get("cycle_risk_bias", 0),
+    )[:TOP_SECTION_ROWS]
 
     header = (
         f"{'Ticker':<12} {'Company':<24} "
         f"{'Piotroski':>10} {'Altman Z':>10} {'D/EBITDA':>10} "
-        f"{'Bias':>6} {'Flags':<40}"
+        f"{'Bias':>6} {'Cycle':>6} {'Flags':<40}"
     )
 
     log_to_file(log_file, "Strongest quality (positive bias tightens bear band):")
@@ -2192,6 +2524,7 @@ def _log_quality_flags_section(
             f"{_format_score(qf.get('altman_z')):>10} "
             f"{_format_score(qf.get('debt_to_ebitda')):>10} "
             f"{qf.get('quality_bias', 0):>+6} "
+            f"{qf.get('cycle_risk_bias', 0):>+6} "
             f"{('|'.join(qf.get('flags', []) or []))[:40]:<40}",
         )
 
@@ -2208,8 +2541,627 @@ def _log_quality_flags_section(
             f"{_format_score(qf.get('altman_z')):>10} "
             f"{_format_score(qf.get('debt_to_ebitda')):>10} "
             f"{qf.get('quality_bias', 0):>+6} "
+            f"{qf.get('cycle_risk_bias', 0):>+6} "
             f"{('|'.join(qf.get('flags', []) or []))[:40]:<40}",
         )
+    log_to_file(log_file, "")
+
+
+def _target_estimate_input_values(
+    result: CompanyTargetResult,
+    estimate: TargetEstimate,
+    peer_multiple_stats: dict[str, dict[str, float | None]],
+) -> dict[str, Any]:
+    """Return the raw inputs used by one target case."""
+    row = result.raw_row
+    inputs: dict[str, Any] = {
+        "close": result.close,
+        "market_cap_basic": result.market_cap,
+    }
+
+    def add_fields(field_names: list[str]) -> None:
+        for field_name in field_names:
+            inputs[field_name] = row.get(field_name)
+
+    if estimate.lens == "multiple":
+        multiple_field = next(
+            (
+                field_name
+                for field_name, label in MULTIPLE_FIELDS
+                if label == estimate.label
+            ),
+            None,
+        )
+        if multiple_field:
+            add_fields([multiple_field])
+            stats = peer_multiple_stats.get(multiple_field, {})
+            inputs[f"peer_median_{multiple_field}"] = stats.get("median")
+            inputs[f"peer_used_count_{multiple_field}"] = stats.get("count")
+            inputs[f"peer_trimmed_count_{multiple_field}"] = stats.get("trimmed_count")
+    elif estimate.lens == "technical":
+        scope = _estimate_horizon_scope(estimate)
+        technical_fields = {
+            "near_term": [
+                "SMA10",
+                "SMA20",
+                "EMA10",
+                "EMA20",
+                "BB.upper",
+                "BB.lower",
+                "Pivot.M.Classic.Middle",
+                "Pivot.M.Camarilla.S1",
+                "Pivot.M.Camarilla.S2",
+                "Pivot.M.Camarilla.R1",
+                "Pivot.M.Camarilla.R2",
+                "High.1M",
+                "Low.1M",
+                "VWAP",
+            ],
+            "medium_term": [
+                "SMA30",
+                "SMA50",
+                "EMA30",
+                "EMA50",
+                "VWMA",
+                "High.3M",
+                "Low.3M",
+                "High.6M",
+                "Low.6M",
+            ],
+            "long_term": [
+                "SMA200",
+                "EMA200",
+                "price_52_week_high",
+                "price_52_week_low",
+            ],
+        }
+        add_fields(technical_fields.get(scope, TECHNICAL_ANCHOR_FIELDS))
+    elif estimate.lens == "trajectory":
+        add_fields(
+            [
+                "earnings_per_share_forecast_next_fq",
+                "earnings_per_share_fq",
+                "earnings_per_share_diluted_yoy_growth_ttm",
+                "total_revenue_yoy_growth_ttm",
+                "ebitda_yoy_growth_ttm",
+                "net_income_yoy_growth_ttm",
+                "free_cash_flow_yoy_growth_ttm",
+                "sustainable_growth_rate_ttm",
+                "total_revenue",
+                "ebitda",
+                "net_debt",
+                "price_earnings_ttm",
+                "price_sales_current",
+                "enterprise_value_ebitda_ttm",
+            ]
+        )
+        inputs["cost_of_equity"] = result.cost_of_equity
+    elif estimate.lens == "range":
+        if "near" in estimate.label:
+            add_fields(["Low.6M", "High.6M"])
+        else:
+            add_fields(["price_52_week_low", "price_52_week_high"])
+    elif estimate.lens == "analyst":
+        add_fields(
+            [
+                "price_target_low",
+                "price_target_median",
+                "price_target_average",
+                "price_target_high",
+                "price_target_1y",
+                "AnalystRating",
+            ]
+        )
+    elif estimate.lens == "book_value":
+        add_fields(
+            [
+                "book_value_per_share_fq",
+                "earnings_per_share_diluted_ttm",
+                "earnings_per_share_basic_ttm",
+                "last_annual_eps",
+                "price_book_fq",
+            ]
+        )
+        stats = peer_multiple_stats.get("price_book_fq", {})
+        inputs["peer_median_price_book_fq"] = stats.get("median")
+    elif estimate.lens == "yield_dcf":
+        add_fields(
+            [
+                "dividends_per_share_fq",
+                "dividends_yield_current",
+                "dividend_yield_recent",
+                "buyback_yield",
+                "dps_common_stock_prim_issue_yoy_growth_fy",
+                "beta_1_year",
+                "beta_3_year",
+                "beta_5_year",
+            ]
+        )
+        inputs["cost_of_equity"] = result.cost_of_equity
+
+    return inputs
+
+
+def _target_case_lens_suitability(
+    result: CompanyTargetResult,
+    estimate: TargetEstimate,
+    peer_multiple_stats: dict[str, dict[str, float | None]],
+) -> dict[str, str]:
+    row = result.raw_row
+    profile = _build_company_profile(row, result.quality_flags)
+    profile_tags = profile["investment_style_profile"].split("|")
+    market_cap_bucket = profile["market_cap_bucket"]
+    industry = str(result.industry or "").lower()
+    relative_volume = _coerce_numeric(row.get("relative_volume_10d_calc"))
+    price_book = _coerce_numeric(row.get("price_book_fq"))
+    dividend_yield = _coerce_numeric(
+        row.get("dividends_yield_current")
+    ) or _coerce_numeric(row.get("dividend_yield_recent"))
+    buyback_yield = _coerce_numeric(row.get("buyback_yield"))
+    total_shareholder_yield = (dividend_yield or 0.0) + (buyback_yield or 0.0)
+    lens_fit = "medium"
+    tags: list[str] = []
+
+    if estimate.lens == "technical":
+        if (
+            "momentum_leader" in profile_tags
+            or "oversold_recovery_candidate" in profile_tags
+        ):
+            lens_fit = "high"
+            tags.append("tape_state_informative")
+        if (
+            relative_volume is not None
+            and relative_volume < LOW_RELATIVE_VOLUME_THRESHOLD
+        ):
+            lens_fit = "caution"
+            tags.append("weak_volume_confirmation")
+    elif estimate.lens == "multiple":
+        multiple_field = next(
+            (
+                field_name
+                for field_name, label in MULTIPLE_FIELDS
+                if label == estimate.label
+            ),
+            None,
+        )
+        peer_count = (
+            peer_multiple_stats.get(multiple_field, {}).get("count")
+            if multiple_field
+            else 0
+        )
+        if peer_count and peer_count >= 10:
+            lens_fit = "high"
+            tags.append("adequate_peer_count")
+        if (
+            "expensive_duration_growth" in profile_tags
+            or "fragile_balance_sheet_or_quality" in profile_tags
+        ):
+            tags.append("valuation_risk_relevant")
+        if peer_count and peer_count < 5:
+            lens_fit = "caution"
+            tags.append("thin_peer_multiple_set")
+    elif estimate.lens == "trajectory":
+        if (
+            "quality_compounder" in profile_tags
+            or "profitable_or_scaling_growth" in profile_tags
+        ):
+            lens_fit = "high"
+            tags.append("growth_path_matters")
+        if "fundamental_deterioration" in profile["cycle_risk_flags"]:
+            tags.append("deterioration_makes_downside_important")
+    elif estimate.lens == "range":
+        if (
+            "momentum_leader" in profile_tags
+            or "oversold_recovery_candidate" in profile_tags
+        ):
+            lens_fit = "high"
+            tags.append("range_extremity_relevant")
+    elif estimate.lens == "analyst":
+        if market_cap_bucket in {"mega_cap", "large_cap", "mid_cap"}:
+            lens_fit = "high"
+            tags.append("likely_better_street_coverage")
+        if result.analyst_summary.get("analyst_base_upside_pct") is None:
+            lens_fit = "caution"
+            tags.append("analyst_base_missing")
+    elif estimate.lens == "book_value":
+        asset_heavy = any(
+            token in industry
+            for token in ["bank", "financial", "insurance", "reit", "real estate"]
+        )
+        if asset_heavy or (price_book is not None and price_book <= 1.5):
+            lens_fit = "high"
+            tags.append("asset_value_relevant")
+        elif "expensive_duration_growth" in profile_tags:
+            lens_fit = "low"
+            tags.append("book_value_less_relevant_for_duration_growth")
+    elif estimate.lens == "yield_dcf":
+        if total_shareholder_yield >= 4.0:
+            lens_fit = "high"
+            tags.append("shareholder_yield_relevant")
+        else:
+            lens_fit = "low"
+            tags.append("low_or_no_yield")
+
+    if not tags:
+        tags.append("general_cross_check")
+    return {"lens_fit": lens_fit, "lens_fit_tags": "|".join(tags)}
+
+
+def _target_case_management_signal(
+    estimate: TargetEstimate,
+    horizon_target: HorizonTarget,
+    blend_adjustment: str,
+    lens_fit: str,
+) -> str:
+    upside = estimate.implied_upside_pct
+    if upside is not None and upside <= SEVERE_DOWNSIDE_CASE_THRESHOLD:
+        return "severe_downside_review_first"
+    if upside is not None and upside <= DOWNSIDE_CASE_THRESHOLD:
+        return "downside_risk_watch"
+    if blend_adjustment:
+        return "raw_upside_outlier_research_only"
+    if (
+        horizon_target.lens_dispersion is not None
+        and horizon_target.lens_dispersion >= HIGH_LENS_DISPERSION_THRESHOLD
+    ):
+        return "size_with_caution_lens_disagreement"
+    if (
+        upside is not None
+        and upside >= STRONG_OPPORTUNITY_THRESHOLD
+        and lens_fit == "high"
+    ):
+        return "candidate_add_on_confirmation"
+    if upside is not None and upside >= MODERATE_OPPORTUNITY_THRESHOLD:
+        return "constructive_monitor"
+    return "monitor"
+
+
+def _build_lens_case_records(
+    results: list[CompanyTargetResult],
+    peer_multiple_stats: dict[str, dict[str, float | None]],
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for result in results:
+        row = result.raw_row
+        profile = _build_company_profile(row, result.quality_flags)
+        for horizon in TARGET_HORIZONS:
+            horizon_target = result.horizon_targets[horizon]
+            configured_weights = DEFAULT_LENS_WEIGHTS[horizon]
+            for estimate in horizon_target.lens_estimates:
+                close = result.close or 0.0
+                blend_price = _estimate_price_for_blend(estimate, close)
+                blend_adjustment = _estimate_blend_adjustment(estimate, close)
+                input_values = _target_estimate_input_values(
+                    result, estimate, peer_multiple_stats
+                )
+                suitability = _target_case_lens_suitability(
+                    result, estimate, peer_multiple_stats
+                )
+                management_signal = _target_case_management_signal(
+                    estimate,
+                    horizon_target,
+                    blend_adjustment,
+                    suitability["lens_fit"],
+                )
+                raw_upside = estimate.implied_upside_pct
+                records.append(
+                    {
+                        "symbol": result.symbol,
+                        "Company": result.company_name,
+                        "industry": result.industry,
+                        "sector": row.get("sector") or "",
+                        "exchange": row.get("exchange") or "",
+                        "market": row.get("market") or "",
+                        "market_cap_basic": result.market_cap,
+                        "market_cap_bucket": profile["market_cap_bucket"],
+                        "investment_style_profile": profile["investment_style_profile"],
+                        "cycle_risk_flags": profile["cycle_risk_flags"],
+                        "horizon": horizon,
+                        "horizon_label": TARGET_HORIZON_LABELS.get(horizon, horizon),
+                        "estimate_scope": _estimate_horizon_scope(estimate),
+                        "lens": estimate.lens,
+                        "lens_label": estimate.label,
+                        "case_role": _estimate_case_role(estimate),
+                        "formula_summary": _estimate_formula_summary(estimate),
+                        "input_fields": "|".join(input_values.keys()),
+                        "input_values_json": json.dumps(
+                            input_values,
+                            ensure_ascii=True,
+                            default=str,
+                            sort_keys=True,
+                        ),
+                        "close": result.close,
+                        "implied_price_raw": estimate.implied_price,
+                        "blend_price_used": blend_price,
+                        "blend_adjustment": blend_adjustment,
+                        "implied_upside_pct_raw": raw_upside,
+                        "case_confidence_weight": estimate.confidence_weight,
+                        "configured_lens_weight": configured_weights.get(
+                            estimate.lens, 0.0
+                        ),
+                        "lens_global_confidence": LENS_GLOBAL_CONFIDENCE.get(
+                            estimate.lens, 1.0
+                        ),
+                        "aggregated_lens_price": horizon_target.lens_prices.get(
+                            estimate.lens
+                        ),
+                        "blended_bear_price": horizon_target.bear_price,
+                        "blended_base_price": horizon_target.base_price,
+                        "blended_bull_price": horizon_target.bull_price,
+                        "blended_base_upside_pct": horizon_target.base_upside_pct,
+                        "lens_dispersion": horizon_target.lens_dispersion,
+                        "opportunity_score": horizon_target.opportunity_score,
+                        "opportunity_label": horizon_target.opportunity_label,
+                        "downside_case_flag": bool(
+                            raw_upside is not None
+                            and raw_upside <= DOWNSIDE_CASE_THRESHOLD
+                        ),
+                        "severe_downside_flag": bool(
+                            raw_upside is not None
+                            and raw_upside <= SEVERE_DOWNSIDE_CASE_THRESHOLD
+                        ),
+                        "lens_fit": suitability["lens_fit"],
+                        "lens_fit_tags": suitability["lens_fit_tags"],
+                        "management_signal": management_signal,
+                    }
+                )
+    return records
+
+
+def _build_lens_case_csv_headers() -> list[str]:
+    return [
+        "symbol",
+        "Company",
+        "industry",
+        "sector",
+        "exchange",
+        "market",
+        "market_cap_basic",
+        "market_cap_bucket",
+        "investment_style_profile",
+        "cycle_risk_flags",
+        "horizon",
+        "horizon_label",
+        "estimate_scope",
+        "lens",
+        "lens_label",
+        "case_role",
+        "formula_summary",
+        "input_fields",
+        "input_values_json",
+        "close",
+        "implied_price_raw",
+        "blend_price_used",
+        "blend_adjustment",
+        "implied_upside_pct_raw",
+        "case_confidence_weight",
+        "configured_lens_weight",
+        "lens_global_confidence",
+        "aggregated_lens_price",
+        "blended_bear_price",
+        "blended_base_price",
+        "blended_bull_price",
+        "blended_base_upside_pct",
+        "lens_dispersion",
+        "opportunity_score",
+        "opportunity_label",
+        "downside_case_flag",
+        "severe_downside_flag",
+        "lens_fit",
+        "lens_fit_tags",
+        "management_signal",
+    ]
+
+
+def _build_lens_case_csv_rows(
+    records: list[dict[str, Any]], headers: list[str]
+) -> list[list[str]]:
+    return [
+        [_csv_value(record.get(header)) for header in headers] for record in records
+    ]
+
+
+def _log_target_input_reference(log_file: Path) -> None:
+    """Document target-price inputs in the main log."""
+    log_to_file(log_file, "Target input reference and raw case export")
+    log_to_file(log_file, "-" * 160)
+    log_to_file(
+        log_file,
+        "The companion __lens_cases.csv file exports every raw target anchor by lens, horizon, ticker, "
+        "input fields, input values, raw implied price, blend-used price, fit tags, and active-management signal.",
+    )
+    log_to_file(
+        log_file,
+        f"Upside outlier control: if a raw anchor is above {MAX_UPSIDE_BLEND_MULTIPLE:.1f}x close, "
+        "only its contribution to the blended base is capped; the raw target remains visible in the case CSV. "
+        "Downside anchors are not capped.",
+    )
+    log_to_file(log_file, "")
+    rows = [
+        (
+            "multiple",
+            "close, company multiple, robust-trimmed peer median/count",
+            "close * peer_median / company_multiple",
+            "Best when peer set is broad and company fundamentals are comparable; important downside signal when company multiple is rich vs peers.",
+        ),
+        (
+            "technical",
+            "SMA/EMA/VWAP/VWMA, Bollinger, pivots, 1M/3M/6M/52W ranges",
+            "horizon-specific percentile envelope",
+            "Best for entry/exit timing, overbought/oversold states, and active position sizing around tape structure.",
+        ),
+        (
+            "trajectory",
+            "EPS/revenue/EBITDA base, growth rates, SGR cap, current/peer multiples, CAPM k",
+            "project fundamentals forward; discount long horizon",
+            "Best for compounders and cyclical recoveries; deterioration flags make downside cases especially important.",
+        ),
+        (
+            "range",
+            "6M and 52W high/low, close position inside range",
+            "pull close toward midpoint by extremity * horizon strength",
+            "Useful for mean reversion, extended winners, and oversold recovery candidates.",
+        ),
+        (
+            "analyst",
+            "price_target_low/median/average/high/1y and AnalystRating",
+            "street target used directly with rating-scaled confidence",
+            "Most useful on liquid covered names; disagreement widens scenario bands.",
+        ),
+        (
+            "book_value",
+            "BVPS, EPS, peer P/B median",
+            "Graham number and peer P/B applied to BVPS",
+            "Best for asset-heavy, financial, REIT, insurance, and deep-value balance-sheet cases.",
+        ),
+        (
+            "yield_dcf",
+            "DPS, dividend yield, buyback yield, dividend growth, beta-derived CAPM k",
+            "Gordon DDM and shareholder-yield reversion",
+            "Best for income and buyback names; low/no-yield names are marked low fit.",
+        ),
+    ]
+    log_to_file(
+        log_file,
+        f"{'Lens':<14} {'Inputs':<52} {'Formula':<48} {'Use / risk note'}",
+    )
+    log_to_file(log_file, "-" * 160)
+    for lens, inputs, formula, note in rows:
+        log_to_file(
+            log_file,
+            f"{lens:<14} {inputs[:52]:<52} {formula[:48]:<48} {note}",
+        )
+    log_to_file(log_file, "")
+
+
+def _log_active_management_case_summary(
+    log_file: Path,
+    lens_case_csv_file: Path,
+    records: list[dict[str, Any]],
+    results: list[CompanyTargetResult],
+) -> None:
+    """Summarise lens cases that matter for active risk management."""
+    log_to_file(log_file, "Active-management lens case summary")
+    log_to_file(log_file, "-" * 160)
+
+    lens_counts = {lens: 0 for lens in LENS_ORDER}
+    cycle_flag_counts: dict[str, int] = {}
+    for record in records:
+        lens = str(record.get("lens") or "")
+        if lens in lens_counts:
+            lens_counts[lens] += 1
+        for flag in str(record.get("cycle_risk_flags") or "").split("|"):
+            if flag:
+                cycle_flag_counts[flag] = cycle_flag_counts.get(flag, 0) + 1
+
+    downside_count = sum(1 for record in records if record.get("downside_case_flag"))
+    severe_downside_count = sum(
+        1 for record in records if record.get("severe_downside_flag")
+    )
+    capped_count = sum(1 for record in records if record.get("blend_adjustment"))
+    lens_count_text = ", ".join(
+        f"{LENS_LABELS.get(lens, lens)}={count}" for lens, count in lens_counts.items()
+    )
+    log_to_file(log_file, f"Lens-case CSV exported to: {lens_case_csv_file}")
+    log_to_file(log_file, f"Rows by lens: {lens_count_text}")
+    log_to_file(
+        log_file,
+        f"Downside cases <= {DOWNSIDE_CASE_THRESHOLD:.0f}%: {downside_count} | "
+        f"severe <= {SEVERE_DOWNSIDE_CASE_THRESHOLD:.0f}%: {severe_downside_count} | "
+        f"raw upside anchors capped only for blend: {capped_count}",
+    )
+    if cycle_flag_counts:
+        flag_text = ", ".join(
+            f"{flag}={count}"
+            for flag, count in sorted(
+                cycle_flag_counts.items(), key=lambda item: item[1], reverse=True
+            )[:10]
+        )
+        log_to_file(log_file, f"Current-cycle risk flags: {flag_text}")
+    else:
+        log_to_file(log_file, "Current-cycle risk flags: none triggered")
+    log_to_file(log_file, "")
+
+    numeric_records = [
+        record
+        for record in records
+        if isinstance(record.get("implied_upside_pct_raw"), (int, float))
+    ]
+    worst_records = sorted(
+        numeric_records, key=lambda record: float(record["implied_upside_pct_raw"])
+    )
+    unique_worst: list[dict[str, Any]] = []
+    seen_keys: set[tuple[str, str, str]] = set()
+    for record in worst_records:
+        key = (
+            str(record.get("symbol") or ""),
+            str(record.get("lens") or ""),
+            str(record.get("lens_label") or ""),
+        )
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        unique_worst.append(record)
+        if len(unique_worst) >= 15:
+            break
+
+    log_to_file(log_file, "Worst raw downside lens cases (raw anchors, not capped)")
+    if unique_worst:
+        log_to_file(
+            log_file,
+            f"{'Ticker':<12} {'Horizon':<12} {'Lens':<12} {'Case':<24} "
+            f"{'RawTarget':>10} {'Upside':>10} {'Fit':<8} {'Signal':<32}",
+        )
+        log_to_file(log_file, "-" * 160)
+        for record in unique_worst:
+            log_to_file(
+                log_file,
+                f"{str(record.get('symbol') or ''):<12} "
+                f"{str(record.get('horizon') or ''):<12} "
+                f"{str(record.get('lens') or ''):<12} "
+                f"{str(record.get('lens_label') or '')[:24]:<24} "
+                f"{_format_price(record.get('implied_price_raw')):>10} "
+                f"{_format_percent(record.get('implied_upside_pct_raw')):>10} "
+                f"{str(record.get('lens_fit') or ''):<8} "
+                f"{str(record.get('management_signal') or '')[:32]:<32}",
+            )
+    else:
+        log_to_file(log_file, "  none")
+    log_to_file(log_file, "")
+
+    high_dispersion_rows: list[
+        tuple[float, CompanyTargetResult, str, HorizonTarget]
+    ] = []
+    for result in results:
+        for horizon in TARGET_HORIZONS:
+            horizon_target = result.horizon_targets[horizon]
+            if (
+                horizon_target.lens_dispersion is not None
+                and horizon_target.lens_dispersion >= HIGH_LENS_DISPERSION_THRESHOLD
+            ):
+                high_dispersion_rows.append(
+                    (horizon_target.lens_dispersion, result, horizon, horizon_target)
+                )
+    high_dispersion_rows.sort(key=lambda item: item[0], reverse=True)
+
+    log_to_file(log_file, "High lens-dispersion names (size with caution)")
+    if high_dispersion_rows:
+        log_to_file(
+            log_file,
+            f"{'Ticker':<12} {'Horizon':<12} {'Disp':>8} {'BaseUpside':>12} "
+            f"{'Label':<24} {'RiskFlags':<48}",
+        )
+        log_to_file(log_file, "-" * 160)
+        for dispersion, result, horizon, horizon_target in high_dispersion_rows[:20]:
+            risk_flags = "|".join(result.quality_flags.get("flags", []) or [])
+            log_to_file(
+                log_file,
+                f"{result.symbol:<12} {horizon:<12} {dispersion:>8.2f} "
+                f"{_format_percent(horizon_target.base_upside_pct):>12} "
+                f"{horizon_target.opportunity_label[:24]:<24} {risk_flags[:48]:<48}",
+            )
+    else:
+        log_to_file(log_file, "  none")
     log_to_file(log_file, "")
 
 
@@ -2228,6 +3180,9 @@ def _build_csv_headers() -> list[str]:
         "exchange",
         "market",
         "market_cap_basic",
+        "market_cap_bucket",
+        "investment_style_profile",
+        "cycle_risk_flags",
         "close",
         "cost_of_equity",
     ]
@@ -2288,6 +3243,7 @@ def _build_csv_headers() -> list[str]:
             "altman_z_score",
             "debt_to_ebitda",
             "quality_bias",
+            "cycle_risk_bias",
             "quality_flags",
         ]
     )
@@ -2296,6 +3252,7 @@ def _build_csv_headers() -> list[str]:
 
 def _build_csv_row(result: CompanyTargetResult) -> list[str]:
     row = result.raw_row
+    company_profile = _build_company_profile(row, result.quality_flags)
     csv_row = [
         result.symbol,
         result.company_name,
@@ -2304,6 +3261,9 @@ def _build_csv_row(result: CompanyTargetResult) -> list[str]:
         str(row.get("exchange") or ""),
         str(row.get("market") or ""),
         str(result.market_cap or ""),
+        company_profile["market_cap_bucket"],
+        company_profile["investment_style_profile"],
+        company_profile["cycle_risk_flags"],
         str(result.close or ""),
         str(result.cost_of_equity or ""),
     ]
@@ -2355,6 +3315,7 @@ def _build_csv_row(result: CompanyTargetResult) -> list[str]:
             str(qf.get("altman_z") or ""),
             str(qf.get("debt_to_ebitda") or ""),
             str(qf.get("quality_bias") or ""),
+            str(qf.get("cycle_risk_bias") or ""),
             "|".join(qf.get("flags", []) or []),
         ]
     )
@@ -2403,6 +3364,7 @@ def analyze_targets_scan(
         output_dir=resolved_output_dir,
     )
     csv_file = log_file.with_suffix(".csv")
+    lens_case_csv_file = log_file.with_name(f"{log_file.stem}__lens_cases.csv")
 
     _reset_log_file(log_file)
 
@@ -2445,9 +3407,15 @@ def analyze_targets_scan(
     )
     log_to_file(log_file, "")
 
+    lens_case_records = _build_lens_case_records(results, peer_multiple_stats)
+
     # Report sections.
     _log_methodology(log_file)
+    _log_target_input_reference(log_file)
     _log_peer_multiple_summary(log_file, peer_multiple_stats)
+    _log_active_management_case_summary(
+        log_file, lens_case_csv_file, lens_case_records, results
+    )
 
     for horizon in TARGET_HORIZONS:
         _log_horizon_targets_section(log_file, results, horizon)
@@ -2464,7 +3432,12 @@ def analyze_targets_scan(
     csv_rows = [_build_csv_row(r) for r in results]
     log_rows_to_csv(csv_file, csv_headers, csv_rows)
 
+    lens_case_headers = _build_lens_case_csv_headers()
+    lens_case_rows = _build_lens_case_csv_rows(lens_case_records, lens_case_headers)
+    log_rows_to_csv(lens_case_csv_file, lens_case_headers, lens_case_rows)
+
     log_to_file(log_file, f"CSV exported to {csv_file}")
+    log_to_file(log_file, f"Lens-case CSV exported to {lens_case_csv_file}")
     log_to_file(log_file, "")
 
     return log_file

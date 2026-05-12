@@ -63,6 +63,11 @@ for example `2026-04-22 marketClose`.
 > (one row per snapshot). Use the **summary** CSVs when you want a *single
 > bottom-line per symbol*.
 
+> **Why `*__history.csv` gets very large.** History files are row-dense by design:
+> one row per `(profile, symbol, snapshot)`. Progression files are row-sparse:
+> one row per `(profile, symbol)` with snapshot values spread across columns.
+> Over many days/sessions, history grows much faster and can exceed 200MB.
+
 ---
 
 ## 1. Progression CSVs (the "trajectory" view)
@@ -159,8 +164,19 @@ Group of columns:
   `name`, `exchange`, `country`, `sector`, `industry`, `market`,
   `profile_snapshot_index` (1-based snapshot number for this profile),
   `snapshot_index_for_symbol` (1-based snapshot number where this symbol was
-  seen), `snapshots_seen_for_symbol`, `snapshot_date`, `snapshot_session`,
-  `snapshot_label`, `source_file`.
+  seen), `snapshots_seen_for_symbol`, `trading_sessions_seen_for_symbol`,
+  `profile_trading_session_count`,
+  `trading_session_presence_ratio_for_symbol`, `snapshot_date`,
+  `snapshot_session`, `snapshot_label`, `source_file`.
+
+  - `snapshots_seen_for_symbol` counts rows for the symbol timeline (file-level
+    observations; can include repeated exports for the same session).
+  - `trading_sessions_seen_for_symbol` counts **unique** snapshot labels
+    (`YYYY-MM-DD <session>`) where the symbol appears.
+  - `profile_trading_session_count` is the total unique sessions available for
+    the profile.
+  - `trading_session_presence_ratio_for_symbol` is
+    `trading_sessions_seen_for_symbol / profile_trading_session_count`.
 
 - **Price-snapshot block.**
   - `market_cap_basic`, `close` — exported as-is for this snapshot.
@@ -207,6 +223,10 @@ Group of columns:
   - `snapshots_seen` — how many snapshots actually contained this symbol.
   - `profile_snapshot_count` — total snapshots available for this profile.
   - `presence_ratio` — `snapshots_seen / profile_snapshot_count`.
+  - `trading_sessions_seen` — unique sessions where the symbol appears.
+  - `profile_trading_session_count` — total unique sessions for the profile.
+  - `trading_session_presence_ratio` —
+    `trading_sessions_seen / profile_trading_session_count`.
   - `first_snapshot_date` / `_session` / `_label` and the matching `last_*`
     fields, plus `total_snapshot_span_days` between them.
 

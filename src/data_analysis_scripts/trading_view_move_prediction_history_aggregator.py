@@ -10,7 +10,6 @@ from typing import Any, Iterable, Sequence
 
 from generic_utils.log_to_files_util import log_rows_to_csv, log_to_file
 
-
 PROFILE_CSV_PREFIX = "tradingview_move_prediction__"
 RAW_CSV_SUFFIX = "__raw_data.csv"
 DEFAULT_OUTPUT_FOLDER_FORMAT = "%d_%m_%Y__%H_%M_%S"
@@ -54,6 +53,9 @@ HISTORY_HEADERS = [
     "profile_snapshot_index",
     "snapshot_index_for_symbol",
     "snapshots_seen_for_symbol",
+    "trading_sessions_seen_for_symbol",
+    "profile_trading_session_count",
+    "trading_session_presence_ratio_for_symbol",
     "snapshot_date",
     "snapshot_session",
     "snapshot_label",
@@ -88,6 +90,9 @@ SUMMARY_HEADERS = [
     "snapshots_seen",
     "profile_snapshot_count",
     "presence_ratio",
+    "trading_sessions_seen",
+    "profile_trading_session_count",
+    "trading_session_presence_ratio",
     "first_snapshot_date",
     "first_snapshot_session",
     "first_snapshot_label",
@@ -173,6 +178,18 @@ PRICE_PROGRESSION_AGGREGATE_BASE_HEADERS = [
 ]
 
 SNAPSHOT_COLUMN_PREFIX = "snap__"
+PRICE_SNAPSHOT_COLUMN_PREFIX = "price__snap__"
+
+# Price summary fields appended to score progression rows (shared identity fields
+# like symbol/company_name/sector/industry are already present via the score row).
+PRICE_EXTRA_BASE_HEADERS = [
+    "first_close",
+    "last_close",
+    "close_return_pct_total",
+    "max_close",
+    "min_close",
+    "max_drawdown_pct",
+]
 
 
 for horizon_name in TRACKED_HORIZONS:
@@ -274,8 +291,10 @@ def aggregate_move_prediction_history(
     manifest_rows: list[dict[str, Any]] = []
     all_history_rows: list[dict[str, Any]] = []
     all_summary_rows: list[dict[str, Any]] = []
-    all_price_progression_rows: list[dict[str, Any]] = []
     profile_outputs: dict[str, dict[str, Any]] = {}
+    # Collects per-profile score rows keyed by profile_name -> horizon_name for the
+    # cross-profile comparison file built after all profiles are processed.
+    all_profile_score_rows: dict[str, dict[str, list[dict[str, Any]]]] = {}
 
     snapshots_by_profile: dict[str, list[SnapshotFileData]] = defaultdict(list)
     for snapshot in snapshot_files:
@@ -295,6 +314,9 @@ def aggregate_move_prediction_history(
         profile_snapshot_columns = [
             _snapshot_column_key(label) for label in profile_snapshot_labels
         ]
+        profile_price_snapshot_columns = [
+            _price_snapshot_column_key(label) for label in profile_snapshot_labels
+        ]
 
         history_rows, summary_rows = _build_profile_outputs(
             profile_name=profile_name,
@@ -310,22 +332,14 @@ def aggregate_move_prediction_history(
         manifest_rows.extend(_build_manifest_rows(profile_snapshots))
         all_history_rows.extend(history_rows)
         all_summary_rows.extend(summary_rows)
-        all_price_progression_rows.extend(price_progression_rows)
 
         history_csv = output_root / f"profile_{profile_name}__history.csv"
         summary_csv = output_root / f"profile_{profile_name}__summary.csv"
-        price_progression_csv = (
-            output_root / f"profile_{profile_name}__price_progression.csv"
-        )
         _write_dict_rows_to_csv(history_csv, HISTORY_HEADERS, history_rows)
         _write_dict_rows_to_csv(summary_csv, SUMMARY_HEADERS, summary_rows)
-        _write_dict_rows_to_csv(
-            price_progression_csv,
-            PRICE_PROGRESSION_BASE_HEADERS + profile_snapshot_columns,
-            price_progression_rows,
-        )
 
         score_progression_csv_by_horizon: dict[str, Path] = {}
+        profile_score_rows_by_horizon: dict[str, list[dict[str, Any]]] = {}
         for horizon_name in TRACKED_HORIZONS:
             score_rows = _build_score_progression_rows(
                 profile_name=profile_name,
@@ -333,23 +347,33 @@ def aggregate_move_prediction_history(
                 horizon_name=horizon_name,
                 include_profile_column=True,
             )
+            combined_rows = _build_combined_score_price_rows(
+                score_rows=score_rows,
+                price_rows=price_progression_rows,
+                snapshot_labels=profile_snapshot_labels,
+            )
             score_progression_csv = (
                 output_root
                 / f"profile_{profile_name}__score_progression__{horizon_name}.csv"
             )
             _write_dict_rows_to_csv(
                 score_progression_csv,
-                SCORE_PROGRESSION_BASE_HEADERS + profile_snapshot_columns,
-                score_rows,
+                SCORE_PROGRESSION_BASE_HEADERS
+                + PRICE_EXTRA_BASE_HEADERS
+                + profile_snapshot_columns
+                + profile_price_snapshot_columns,
+                combined_rows,
             )
             score_progression_csv_by_horizon[horizon_name] = score_progression_csv
+            profile_score_rows_by_horizon[horizon_name] = score_rows
 
+        all_profile_score_rows[profile_name] = profile_score_rows_by_horizon
         profile_outputs[profile_name] = {
             "history_csv": history_csv,
             "summary_csv": summary_csv,
             "score_progression_csv_by_horizon": score_progression_csv_by_horizon,
-            "price_progression_csv": price_progression_csv,
             "snapshot_count": len(profile_snapshots),
+            "trading_session_count": len(profile_snapshot_labels),
             "symbol_count": len(summary_rows),
         }
 
@@ -386,15 +410,19 @@ def aggregate_move_prediction_history(
     manifest_csv = output_root / "_aggregation_manifest.csv"
     all_history_csv = output_root / "_all_profiles_history.csv"
     all_summary_csv = output_root / "_all_profiles_summary.csv"
-    all_price_progression_csv = output_root / "_all_profiles_price_progression.csv"
+    cross_comparison_csv = output_root / "_all_profiles_cross_comparison.csv"
     overview_log = output_root / "_aggregation_overview.log"
 
+    # Aggregate price progression (profile-agnostic, used for cross-comparison)
     aggregate_price_progression_rows = _build_price_progression_rows(
         profile_name=None,
         snapshots=snapshot_files,
         snapshot_labels=aggregate_snapshot_labels,
         include_profile_column=False,
     )
+    aggregate_price_snapshot_columns = [
+        _price_snapshot_column_key(label) for label in aggregate_snapshot_labels
+    ]
 
     all_score_progression_csv_by_horizon: dict[str, Path] = {}
     for horizon_name in TRACKED_HORIZONS:
@@ -419,32 +447,40 @@ def aggregate_move_prediction_history(
                 str(row.get("symbol") or ""),
             )
         )
+        combined_aggregate_rows = _build_combined_score_price_rows(
+            score_rows=aggregate_score_rows,
+            price_rows=aggregate_price_progression_rows,
+            snapshot_labels=aggregate_snapshot_labels,
+        )
         all_score_progression_csv = (
             output_root / f"_all_profiles_score_progression__{horizon_name}.csv"
         )
         _write_dict_rows_to_csv(
             all_score_progression_csv,
-            SCORE_PROGRESSION_BASE_HEADERS + aggregate_snapshot_columns,
-            aggregate_score_rows,
+            SCORE_PROGRESSION_BASE_HEADERS
+            + PRICE_EXTRA_BASE_HEADERS
+            + aggregate_snapshot_columns
+            + aggregate_price_snapshot_columns,
+            combined_aggregate_rows,
         )
         all_score_progression_csv_by_horizon[horizon_name] = all_score_progression_csv
 
-    all_price_progression_rows.sort(
-        key=lambda row: (
-            str(row.get("profile_name") or ""),
-            -(_coerce_float(row.get("close_return_pct_total")) or float("-inf")),
-            str(row.get("symbol") or ""),
-        )
+    # Cross-profile comparison: one row per symbol, all profiles side-by-side
+    sorted_profile_names = sorted(snapshots_by_profile.keys())
+    cross_comparison_rows = _build_cross_profile_comparison_rows(
+        all_profile_score_rows=all_profile_score_rows,
+        aggregate_price_rows=aggregate_price_progression_rows,
+        profile_names=sorted_profile_names,
+    )
+    _write_dict_rows_to_csv(
+        cross_comparison_csv,
+        _build_cross_comparison_headers(sorted_profile_names),
+        cross_comparison_rows,
     )
 
     _write_dict_rows_to_csv(manifest_csv, MANIFEST_HEADERS, manifest_rows)
     _write_dict_rows_to_csv(all_history_csv, HISTORY_HEADERS, all_history_rows)
     _write_dict_rows_to_csv(all_summary_csv, SUMMARY_HEADERS, all_summary_rows)
-    _write_dict_rows_to_csv(
-        all_price_progression_csv,
-        PRICE_PROGRESSION_AGGREGATE_BASE_HEADERS + aggregate_snapshot_columns,
-        aggregate_price_progression_rows,
-    )
     _write_overview_log(
         overview_log=overview_log,
         input_paths=_normalize_input_paths(input_paths),
@@ -458,7 +494,7 @@ def aggregate_move_prediction_history(
         "history_csv": all_history_csv,
         "summary_csv": all_summary_csv,
         "score_progression_csv_by_horizon": all_score_progression_csv_by_horizon,
-        "price_progression_csv": all_price_progression_csv,
+        "cross_comparison_csv": cross_comparison_csv,
         "overview_log": overview_log,
         "profiles": profile_outputs,
     }
@@ -578,6 +614,8 @@ def _build_profile_outputs(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     timelines: dict[str, list[dict[str, Any]]] = defaultdict(list)
     profile_snapshot_count = len(profile_snapshots)
+    profile_snapshot_labels = _ordered_unique_snapshot_labels(profile_snapshots)
+    profile_trading_session_count = len(profile_snapshot_labels)
 
     for profile_snapshot_index, snapshot in enumerate(profile_snapshots, start=1):
         for row in snapshot.rows:
@@ -633,13 +671,17 @@ def _build_profile_outputs(
 
     for symbol in sorted(timelines):
         timeline = sorted(timelines[symbol], key=lambda row: row["_sort_key"])
-        _finalize_history_timeline(timeline)
+        _finalize_history_timeline(
+            timeline=timeline,
+            profile_trading_session_count=profile_trading_session_count,
+        )
         history_rows.extend(timeline)
         summary_rows.append(
             _build_symbol_summary_row(
                 profile_name=profile_name,
                 timeline=timeline,
                 profile_snapshot_count=profile_snapshot_count,
+                profile_trading_session_count=profile_trading_session_count,
             )
         )
 
@@ -657,13 +699,34 @@ def _build_profile_outputs(
     return history_rows, summary_rows
 
 
-def _finalize_history_timeline(timeline: list[dict[str, Any]]) -> None:
+def _finalize_history_timeline(
+    timeline: list[dict[str, Any]],
+    profile_trading_session_count: int,
+) -> None:
     previous_row: dict[str, Any] | None = None
     total_snapshots = len(timeline)
+    trading_sessions_seen_for_symbol = len(
+        {
+            snapshot_label
+            for row in timeline
+            if (snapshot_label := _normalize_text(row.get("snapshot_label")))
+            is not None
+        }
+    )
+    trading_session_presence_ratio_for_symbol = (
+        trading_sessions_seen_for_symbol / profile_trading_session_count
+        if profile_trading_session_count
+        else None
+    )
 
     for snapshot_index, row in enumerate(timeline, start=1):
         row["snapshot_index_for_symbol"] = snapshot_index
         row["snapshots_seen_for_symbol"] = total_snapshots
+        row["trading_sessions_seen_for_symbol"] = trading_sessions_seen_for_symbol
+        row["profile_trading_session_count"] = profile_trading_session_count
+        row["trading_session_presence_ratio_for_symbol"] = (
+            trading_session_presence_ratio_for_symbol
+        )
 
         if previous_row is None:
             row["close_return_pct_vs_previous_snapshot"] = None
@@ -700,12 +763,21 @@ def _build_symbol_summary_row(
     profile_name: str,
     timeline: list[dict[str, Any]],
     profile_snapshot_count: int,
+    profile_trading_session_count: int,
 ) -> dict[str, Any]:
     first_row = timeline[0]
     last_row = timeline[-1]
 
     first_close = _first_non_null_value(timeline, "close")
     last_close = _last_non_null_value(timeline, "close")
+    trading_sessions_seen = len(
+        {
+            snapshot_label
+            for row in timeline
+            if (snapshot_label := _normalize_text(row.get("snapshot_label")))
+            is not None
+        }
+    )
     summary_row: dict[str, Any] = {
         "profile_name": profile_name,
         "symbol": last_row.get("symbol") or "",
@@ -722,6 +794,15 @@ def _build_symbol_summary_row(
         "profile_snapshot_count": profile_snapshot_count,
         "presence_ratio": (
             len(timeline) / profile_snapshot_count if profile_snapshot_count else None
+        ),
+        "trading_sessions_seen": trading_sessions_seen,
+        "profile_trading_session_count": profile_trading_session_count,
+        "trading_session_presence_ratio": (
+            (
+                trading_sessions_seen / profile_trading_session_count
+                if profile_trading_session_count
+                else None
+            )
         ),
         "first_snapshot_date": first_row.get("snapshot_date") or "",
         "first_snapshot_session": first_row.get("snapshot_session") or "",
@@ -818,6 +899,10 @@ def _ordered_unique_snapshot_labels(
 
 def _snapshot_column_key(snapshot_label: str) -> str:
     return SNAPSHOT_COLUMN_PREFIX + snapshot_label.replace(" ", "__")
+
+
+def _price_snapshot_column_key(snapshot_label: str) -> str:
+    return PRICE_SNAPSHOT_COLUMN_PREFIX + snapshot_label.replace(" ", "__")
 
 
 def _max_drawdown_pct(values: list[float]) -> float | None:
@@ -1022,6 +1107,160 @@ def _build_price_progression_rows(
     return finalized_rows
 
 
+def _build_combined_score_price_rows(
+    score_rows: list[dict[str, Any]],
+    price_rows: list[dict[str, Any]],
+    snapshot_labels: list[str],
+) -> list[dict[str, Any]]:
+    """Merge score progression rows with price data for the same symbols.
+
+    Price snapshot columns are stored under PRICE_SNAPSHOT_COLUMN_PREFIX so they
+    sit alongside score snapshot columns without name collisions.
+    """
+    price_by_symbol: dict[str, dict[str, Any]] = {
+        row["symbol"]: row for row in price_rows
+    }
+
+    merged: list[dict[str, Any]] = []
+    for score_row in score_rows:
+        symbol = score_row["symbol"]
+        price_row = price_by_symbol.get(symbol, {})
+        combined = dict(score_row)
+
+        for field in PRICE_EXTRA_BASE_HEADERS:
+            combined[field] = price_row.get(field)
+
+        for label in snapshot_labels:
+            price_col = _price_snapshot_column_key(label)
+            score_col = _snapshot_column_key(label)
+            combined[price_col] = price_row.get(score_col)
+
+        merged.append(combined)
+
+    return merged
+
+
+def _build_cross_comparison_headers(profile_names: list[str]) -> list[str]:
+    """Return column headers for the cross-profile comparison file."""
+    headers = [
+        "symbol",
+        "company_name",
+        "sector",
+        "industry",
+        "first_close",
+        "last_close",
+        "close_return_pct_total",
+        "max_close",
+        "min_close",
+        "max_drawdown_pct",
+    ]
+    for horizon_name in TRACKED_HORIZONS:
+        for profile_name in profile_names:
+            prefix = f"{profile_name}__{horizon_name}__"
+            headers.extend(
+                [
+                    prefix + "last_score",
+                    prefix + "last_rank",
+                    prefix + "avg_score",
+                    prefix + "score_delta_total",
+                    prefix + "rank_improvement_total",
+                ]
+            )
+    return headers
+
+
+def _build_cross_profile_comparison_rows(
+    all_profile_score_rows: dict[str, dict[str, list[dict[str, Any]]]],
+    aggregate_price_rows: list[dict[str, Any]],
+    profile_names: list[str],
+) -> list[dict[str, Any]]:
+    """Build a cross-profile comparison table.
+
+    One row per symbol showing price performance (profile-agnostic) plus score
+    and rank metrics from every profile for every horizon, so profiles can be
+    compared side-by-side on both dimensions.
+
+    Args:
+        all_profile_score_rows: dict[profile_name][horizon_name] -> score rows.
+        aggregate_price_rows: aggregate price progression rows (no profile column).
+        profile_names: ordered list of profile names for consistent column layout.
+    """
+    price_by_symbol: dict[str, dict[str, Any]] = {
+        row["symbol"]: row for row in aggregate_price_rows
+    }
+
+    # Build symbol -> profile_name -> horizon_name -> score_row index
+    score_index: dict[str, dict[str, dict[str, dict[str, Any]]]] = {}
+    for profile_name, score_rows_by_horizon in all_profile_score_rows.items():
+        for horizon_name, score_rows in score_rows_by_horizon.items():
+            for row in score_rows:
+                symbol = row["symbol"]
+                score_index.setdefault(symbol, {}).setdefault(profile_name, {})[
+                    horizon_name
+                ] = row
+
+    all_symbols: set[str] = set(price_by_symbol.keys()) | set(score_index.keys())
+
+    comparison_rows: list[dict[str, Any]] = []
+    for symbol in sorted(all_symbols):
+        price_row = price_by_symbol.get(symbol, {})
+        company_name = str(price_row.get("company_name") or "")
+        sector = str(price_row.get("sector") or "")
+        industry = str(price_row.get("industry") or "")
+        # Fall back to any score row for identity metadata when missing from price
+        if not (company_name and sector and industry):
+            for profile_data in score_index.get(symbol, {}).values():
+                for horizon_row in profile_data.values():
+                    company_name = company_name or str(
+                        horizon_row.get("company_name") or ""
+                    )
+                    sector = sector or str(horizon_row.get("sector") or "")
+                    industry = industry or str(horizon_row.get("industry") or "")
+                    if company_name and sector and industry:
+                        break
+                if company_name and sector and industry:
+                    break
+
+        row: dict[str, Any] = {
+            "symbol": symbol,
+            "company_name": company_name,
+            "sector": sector,
+            "industry": industry,
+            "first_close": price_row.get("first_close"),
+            "last_close": price_row.get("last_close"),
+            "close_return_pct_total": price_row.get("close_return_pct_total"),
+            "max_close": price_row.get("max_close"),
+            "min_close": price_row.get("min_close"),
+            "max_drawdown_pct": price_row.get("max_drawdown_pct"),
+        }
+
+        for horizon_name in TRACKED_HORIZONS:
+            for profile_name in profile_names:
+                score_row = (
+                    score_index.get(symbol, {})
+                    .get(profile_name, {})
+                    .get(horizon_name, {})
+                )
+                prefix = f"{profile_name}__{horizon_name}__"
+                row[prefix + "last_score"] = score_row.get("last_score")
+                row[prefix + "last_rank"] = score_row.get("last_rank")
+                row[prefix + "avg_score"] = score_row.get("avg_score")
+                row[prefix + "score_delta_total"] = score_row.get("score_delta_total")
+                row[prefix + "rank_improvement_total"] = score_row.get(
+                    "rank_improvement_total"
+                )
+
+        comparison_rows.append(row)
+
+    comparison_rows.sort(
+        key=lambda r: (
+            -(_coerce_float(r.get("close_return_pct_total")) or float("-inf")),
+            str(r.get("symbol") or ""),
+        )
+    )
+    return comparison_rows
+
+
 def _build_manifest_rows(
     profile_snapshots: list[SnapshotFileData],
 ) -> list[dict[str, Any]]:
@@ -1061,6 +1300,9 @@ def _write_overview_log(
         key=lambda snapshot: snapshot.metadata.sort_key,
     )
     unique_symbols = set()
+    unique_snapshot_labels = {
+        snapshot.metadata.snapshot_label for snapshot in snapshot_files
+    }
     for snapshot in snapshot_files:
         for row in snapshot.rows:
             symbol = _normalize_text(row.get("symbol"))
@@ -1080,6 +1322,7 @@ def _write_overview_log(
         overview_log,
         (
             f"Processed snapshot files: {len(snapshot_files)} | "
+            f"Unique trading sessions: {len(unique_snapshot_labels)} | "
             f"Profiles: {len(profile_outputs)} | "
             f"Profile-symbol timelines: {len(unique_symbols)}"
         ),
@@ -1123,11 +1366,11 @@ def _write_overview_log(
             overview_log,
             (
                 f"{profile_name}: snapshots={profile_data['snapshot_count']} | "
+                f"trading_sessions={profile_data['trading_session_count']} | "
                 f"symbols={profile_data['symbol_count']} | "
                 f"history={Path(profile_data['history_csv']).name} | "
                 f"summary={Path(profile_data['summary_csv']).name} | "
-                f"score_progression=[{score_files_text}] | "
-                f"price_progression={Path(profile_data['price_progression_csv']).name}"
+                f"score_progression=[{score_files_text}]"
             ),
         )
 

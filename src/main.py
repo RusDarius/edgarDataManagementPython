@@ -27,6 +27,7 @@ from data_analysis_scripts.trading_view_priceperf_analysis import (
 )
 from data_analysis_scripts.trading_view_move_prediction_analysis import (
     run_full_analysis_suite,
+    run_full_analysis_suite_with_earnings_priority,
     run_move_prediction_profile_suite,
     run_move_prediction_scan,
 )
@@ -56,7 +57,6 @@ from portofolio_integration_analysis.portfolio_tracker import PortfolioTracker
 from portofolio_integration_analysis.portfolio_analysis_output import (
     export_portfolio_analysis,
 )
-
 
 USER_AGENT = "Barnnabass daniOO7XbX@gmail.com"
 TRADINGVIEW_API_CLIENT = ApiTradingViewClient(user_agent=USER_AGENT)
@@ -173,6 +173,19 @@ def run_move_prediction_history_aggregation_example() -> dict[str, object]:
         "17_04_2026",
         "20_04_2026",
         "21_04_2026",
+        "22_04_2026",
+        "23_04_2026",
+        "24_04_2026",
+        "27_04_2026",
+        "28_04_2026",
+        "29_04_2026",
+        "30_04_2026",
+        "01_05_2026",
+        "04_05_2026",
+        "05_05_2026",
+        "06_05_2026",
+        "07_05_2026",
+        "08_05_2026",
     ]
 
     input_paths = build_move_prediction_history_inputs_from_folder_names(
@@ -182,7 +195,7 @@ def run_move_prediction_history_aggregation_example() -> dict[str, object]:
     output_dir = (
         history_root
         / "history_aggregations"
-        / "all_in_universe_min1bil__30_03_2026__21_04_2026"
+        / "all_in_universe_min1bil__30_03_2026__08_05_2026"
     )
 
     aggregation_result = run_move_prediction_history_aggregation(
@@ -249,32 +262,45 @@ def main():
     #     industries=[TRADING_VIEW_INDUSTRIES.HOTELS_RESORTS_CRUISE_LINES],
     # )
 
-    # run_full_analysis_suite(
-    #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-    #         min_market_cap_usd=1_000_000_000,
-    #         markets=PREFERRED_MARKETS,
-    #     ).get("data", []),
-    #     min_market_cap_usd=1_000_000_000,
-    #     include_blind_spot_sections=True,
-    # )
+    run_full_analysis_suite(
+        scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+            min_market_cap_usd=1_000_000_000,
+            markets=PREFERRED_MARKETS,
+        ).get("data", []),
+        min_market_cap_usd=1_000_000_000,
+        include_blind_spot_sections=True,
+    )
 
-    # run_targets_scan(
-    #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-    #         min_market_cap_usd=1_000_000_000,
-    #         markets=PREFERRED_MARKETS,
-    #     ).get("data", []),
-    #     min_market_cap_usd=1_000_000_000,
-    # )
+    # Earnings-priority variant: same per-profile + consensus analysis as the
+    # standard full analysis suite, plus an extra report ordering names
+    # chronologically by upcoming earnings (catalyst-time view). Uses the
+    # earnings-enriched scan so the next-earnings columns are populated.
+    run_full_analysis_suite_with_earnings_priority(
+        scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction_with_earnings(
+            min_market_cap_usd=1_000_000_000,
+            markets=PREFERRED_MARKETS,
+        ).get(
+            "data", []
+        ),
+        min_market_cap_usd=1_000_000_000,
+        include_blind_spot_sections=True,
+    )
 
-    # run_cross_scanner_aggregate(
-    #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-    #         min_market_cap_usd=1_000_000_000,
-    #         markets=PREFERRED_MARKETS,
-    #     ).get("data", []),
-    #     min_market_cap_usd=1_000_000_000,
-    # )
+    run_targets_scan(
+        scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+            min_market_cap_usd=1_000_000_000,
+            markets=PREFERRED_MARKETS,
+        ).get("data", []),
+        min_market_cap_usd=1_000_000_000,
+    )
 
-    # run_move_prediction_history_aggregation_example()
+    run_cross_scanner_aggregate(
+        scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+            min_market_cap_usd=1_000_000_000,
+            markets=PREFERRED_MARKETS,
+        ).get("data", []),
+        min_market_cap_usd=1_000_000_000,
+    )
 
     # Aggregate progression across selected dated result folders.
     # Pass only the dated folder names under AllInUniverse_min1bil.
@@ -285,21 +311,21 @@ def main():
     # print(f"TradingView all-fields export written to: {exported_file}")
     # split_csv_by_rows(
     #     input_csv=Path(
-    #         "d:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/24_04_2026/tradingview_global_all_tdfields_24_04_2026.csv"
+    #         "d:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/11_05_2026/tradingview_global_all_tdfields_11_05_2026.csv"
     #     )
     # )
 
-    # 1. Pull new articles from sitemap into the feed
-    gather_result = gather_sherwood_markets_feed()
-    print(
-        f"New: {gather_result['new_articles']}, Total: {gather_result['total_articles']}"
-    )
+    # # 1. Pull new articles from sitemap into the feed
+    # gather_result = gather_sherwood_markets_feed()
+    # print(
+    #     f"New: {gather_result['new_articles']}, Total: {gather_result['total_articles']}"
+    # )
 
-    # 2. Fetch full body text for articles missing it & write .log dump
-    scan_result = fetch_and_log_full_articles(max_articles=20)
-    print(
-        f"Fetched: {scan_result['articles_fetched']}, Log: {scan_result['session_log']}"
-    )
+    # # 2. Fetch full body text for articles missing it & write .log dump
+    # scan_result = fetch_and_log_full_articles(max_articles=20)
+    # print(
+    #     f"Fetched: {scan_result['articles_fetched']}, Log: {scan_result['session_log']}"
+    # )
 
     # print(len(get_bvb_tickers_filtered()))
 

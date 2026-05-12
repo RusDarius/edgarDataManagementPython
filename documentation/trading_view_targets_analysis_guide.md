@@ -38,7 +38,7 @@ analyst targets, book value, SGR, Piotroski, dividends, Camarilla pivots)
    _blend_horizon_target           -> bear / base / bull per horizon
         |
         v
-   Report generation (.log + .csv)
+     Report generation (.log + blended .csv + raw __lens_cases.csv)
 ```
 
 ### Relationship to the Prediction Module
@@ -71,6 +71,8 @@ Formula:
 implied_price = current_price * (peer_median_multiple / company_multiple)
 ```
 Confidence saturates at ~20 peers (`min(1.0, peer_count / 20)`). Negative or missing multiples are silently skipped.
+
+Peer multiple distributions are now robust-trimmed when at least 20 valid peers are available: the top and bottom 5% of positive peer multiples are removed before computing the median / quartiles / mean. The raw company multiple is still exported in the lens-case CSV, so the model avoids peer-set glitches without hiding extreme company evidence.
 
 ### Lens 2 -- Technical Envelope
 
@@ -185,9 +187,28 @@ Starting from `bear=0.85, bull=1.18`, the blender adjusts:
 | Source | Effect |
 |---|---|
 | Component scores | Quality+Safety tightens bear; Momentum+Trend widens bull |
-| Quality bias | +1 unit -> ~3pp tighter bear, ~1.5pp tighter bull; -1 unit -> reverse |
+| Quality bias | Strong fundamentals lift/tighten the bear case; weak fundamentals lower the bear case and reduce the bull case |
+| Current-cycle risk bias | Duration valuation risk, deterioration, cash burn, and liquidity decay lower bear and bull assumptions |
 | Lens dispersion | `dispersion * 0.15` added to both ways (cap +/-10pp) |
 | Analyst spread | `(high - low) / base * 0.10` added to both ways (cap +/-8pp) |
+
+### Downside-Preserving Outlier Control
+
+Raw lens anchors above `MAX_UPSIDE_BLEND_MULTIPLE * close` (default: 4.0x close) are capped **only for blended base-price contribution**. The raw implied price remains in `__lens_cases.csv` with `blend_adjustment=upside_capped_for_blend_raw_case_retained`.
+
+Downside anchors are **not capped**. The intent is to prevent a single mechanical upside outlier from dominating the blend while keeping bad cases fully visible for risk management.
+
+---
+
+## Active-Manager Profiling
+
+Each company is tagged with context that helps decide which lenses deserve more trust for a current or future position:
+
+- `market_cap_bucket`: mega / large / mid / small / micro
+- `investment_style_profile`: examples include `quality_compounder`, `profitable_or_scaling_growth`, `value_reversion`, `income_or_buyback_yield`, `momentum_leader`, `oversold_recovery_candidate`, `expensive_duration_growth`, and `fragile_balance_sheet_or_quality`
+- `cycle_risk_flags`: downside-relevant flags for the current market cycle, including `duration_valuation_risk`, `fundamental_deterioration`, `unprofitable_cash_burn`, and `small_cap_liquidity_decay`
+
+The cycle-risk flags feed `cycle_risk_bias`, which is a downside-only scenario modifier. This is deliberately conservative: bad cycle evidence lowers the bear and bull scenarios instead of being averaged away.
 
 ### Opportunity score
 
@@ -209,27 +230,49 @@ opportunity_score = base_upside_% * (0.6 + 0.4 * lens_coverage)
 
 ### Log File Sections
 
-1. **Methodology** -- all seven lenses, weight matrix, CAPM/SGR/quality thresholds, scenario-band rules
-2. **Peer-group valuation multiple distribution** -- P25/median/P75/mean for each of the ten multiples
-3. **Per-horizon target estimates** -- top opportunities and most overvalued
-4. **Lens decomposition per horizon** -- per-lens implied price for each top name (direct transparency on how much each lens drove the blend)
-5. **Valuation multiple comparison vs peers**
-6. **Consensus targets** (all horizons agree)
-7. **Analyst-vs-Model divergence** -- long-term blended base vs analyst median, flagged when delta >= 30pp
-8. **Fundamental quality flags** -- strongest (positive bias) and weakest (negative bias) names
-9. **Target-quality overlay** -- medium-term upside cross-referenced with component scores
+1. **Methodology** -- all seven lenses, weight matrix, CAPM/SGR/quality/cycle-risk thresholds, scenario-band rules, and upside-only blend cap
+2. **Target input reference and raw case export** -- for each lens: input fields, formula, when it is useful, and how raw cases are exported
+3. **Peer-group valuation multiple distribution** -- raw count / used count / trimmed count plus P25/median/P75/mean for each multiple
+4. **Active-management lens case summary** -- lens-case CSV path, row counts by lens, downside case counts, severe downside counts, upside anchors capped for blend, current-cycle flag counts, worst raw downside anchors, and high-dispersion names
+5. **Per-horizon target estimates** -- top opportunities and most overvalued
+6. **Lens decomposition per horizon** -- per-lens implied price for each top name (direct transparency on how much each lens drove the blend)
+7. **Valuation multiple comparison vs peers**
+8. **Consensus targets** (all horizons agree)
+9. **Analyst-vs-Model divergence** -- long-term blended base vs analyst median, flagged when delta >= 30pp
+10. **Fundamental quality flags** -- strongest and weakest quality/cycle-risk names
+11. **Target-quality overlay** -- medium-term upside cross-referenced with component scores
 
-### CSV Output
+### Blended CSV Output
 
-Per row:
+The standard `.csv` remains one row per company. Per row:
 
 - Identity fields (symbol, company, industry, sector, exchange, market), close, market cap
+- `market_cap_bucket`, `investment_style_profile`, `cycle_risk_flags`
 - **`cost_of_equity`** (per-name CAPM rate used for discounting)
 - Per-horizon: bear/base/bull price, upside %, opportunity score+label, coverage, **`lens_dispersion`**, and a **per-lens implied price** column for each of the seven lenses
 - Company vs peer median for all ten multiples
 - All eight component scores
 - Analyst snapshot: low/median/average/high/1y/rating/base-upside-pct
-- Quality flags: piotroski, altman_z, debt_to_ebitda, quality_bias, flag-list
+- Quality flags: piotroski, altman_z, debt_to_ebitda, quality_bias, cycle_risk_bias, flag-list
+
+### Lens-Case CSV Output
+
+Every report now also writes a companion file named:
+
+```
+<report_name>__lens_cases.csv
+```
+
+This file is one row per raw lens target case per horizon. It is designed for active management, filtering, and post-analysis. Key columns:
+
+- Identity and context: symbol, company, industry, sector, exchange, market, close, market cap, `market_cap_bucket`, `investment_style_profile`, `cycle_risk_flags`
+- Case identity: `horizon`, `estimate_scope`, `lens`, `lens_label`, `case_role`
+- Method transparency: `formula_summary`, `input_fields`, `input_values_json`
+- Target evidence: `implied_price_raw`, `implied_upside_pct_raw`, `case_confidence_weight`
+- Blend transparency: `blend_price_used`, `blend_adjustment`, `configured_lens_weight`, `lens_global_confidence`, `aggregated_lens_price`, blended bear/base/bull prices, `lens_dispersion`
+- Risk management: `downside_case_flag`, `severe_downside_flag`, `lens_fit`, `lens_fit_tags`, `management_signal`
+
+Downside rows are intentionally preserved. Upside rows that exceed the blend cap remain visible in raw form and are explicitly marked in `blend_adjustment`.
 
 ---
 
@@ -282,6 +325,8 @@ logs = run_targets_scan_by_industry(
 |---|---|---|
 | `MAX_GROWTH_RATE` / `MIN_GROWTH_RATE` | +2.00 / -0.80 | Hard growth clamp |
 | `SUSTAINABLE_GROWTH_CAP_MULTIPLIER` | 1.50 | Soft SGR cap on trajectory growth |
+| `PEER_MULTIPLE_TRIM_FRACTION` / `PEER_MULTIPLE_MIN_COUNT_FOR_TRIM` | 5% / 20 peers | Robust peer multiple trimming threshold |
+| `MAX_UPSIDE_BLEND_MULTIPLE` | 4.0x close | Upside-only cap for blended contribution; raw target is retained |
 | `DEFAULT_RISK_FREE_RATE` | 0.045 | CAPM risk-free |
 | `DEFAULT_EQUITY_RISK_PREMIUM` | 0.055 | CAPM ERP |
 | `MIN_DISCOUNT_RATE` / `MAX_DISCOUNT_RATE` | 0.06 / 0.20 | CAPM k clamp |
@@ -290,6 +335,8 @@ logs = run_targets_scan_by_industry(
 | `DEBT_TO_EBITDA_HIGH` | 5.0 | Over-leverage threshold |
 | `SCENARIO_MULTIPLIERS` | bear=0.85 / bull=1.18 | Base scenario band width |
 | `STRONG_OPPORTUNITY_THRESHOLD` / `MODERATE_OPPORTUNITY_THRESHOLD` | 25 / 10 | Label thresholds |
+| `DOWNSIDE_CASE_THRESHOLD` / `SEVERE_DOWNSIDE_CASE_THRESHOLD` | -20 / -35 | Lens-case downside flags |
+| `HIGH_LENS_DISPERSION_THRESHOLD` | 0.25 | Active-management caution threshold |
 | `DEFAULT_LENS_WEIGHTS` | (table above) | Per-horizon lens blend |
 | `LENS_GLOBAL_CONFIDENCE` | tech 1.0, mult 1.0, traj 0.95, range 0.85, analyst 1.0, book 0.80, yield 0.75 | Global down-weighting per lens |
 | `ANALYST_DIVERGENCE_THRESHOLD_PCT` (cross-scanner) | 30.0 | Model-vs-street alert threshold |

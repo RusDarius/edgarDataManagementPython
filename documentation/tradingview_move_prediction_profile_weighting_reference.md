@@ -20,6 +20,19 @@ The root causes were:
 
 This reference documents the revised scoring model and the updated profile behavior.
 
+## May 2026 Active-Manager Update
+
+The latest model pass shifted the suite from a pure score/rank engine toward an active-manager decision tool. The goal is to better separate operating-company value from passive-vehicle cheapness, make value signals horizon-aware, and present the risk behind every recommendation.
+
+Key changes:
+
+- Added `deep_value_momentum`, a value-plus-catalyst profile that requires both deep valuation support and early technical reversal evidence.
+- Re-tuned `asymmetric_value` so it still finds overlooked value, but now requires stronger operating-company evidence: forward EPS growth, Piotroski F-score, sustainable growth, EV/FCF, target upside/downside, book value discount, and harsher missing-quality penalties.
+- Re-tuned `value_recovery` to make `stoch_rsi_crossover` and `short_trend_emergence` true entry triggers rather than background signals.
+- Added risk-adjusted scoring, risk tiers, and `manager_action_signal` labels such as `add_long_breakout`, `accumulate_value_catalyst`, `watch_value_reversal`, `hedge_or_short`, and `avoid_value_trap`.
+- Rebalanced consensus toward empirically stronger tactical profiles: `breakout_long=0.22`, `early_momentum_inflection=0.13`, and `forward_edge_active=0.12`, while keeping value and fragility lenses in the blend.
+- The move-prediction TradingView payload now requests `type` and `typespecs` and removes the fund/investment-trust branch from the move-prediction universe so fund-like structures do not dominate operating-company screens.
+
 ## Score Flow
 
 The move-prediction model works in six layers.
@@ -44,7 +57,7 @@ If `MAD` is `0` or missing, the fallback is a simpler sign comparison versus the
 
 ### 3. Component score construction
 
-Signals are grouped into seven components:
+Signals are grouped into eight components:
 
 - `attention`
 - `event`
@@ -53,6 +66,7 @@ Signals are grouped into seven components:
 - `quality`
 - `valuation`
 - `safety`
+- `scale`
 
 Each component starts as a weighted average of its included signals.
 
@@ -79,7 +93,7 @@ This is how one profile can reward upside momentum while another punishes downsi
 
 ### 5. Horizon score construction
 
-Each horizon score is a weighted average of the seven components.
+Each horizon score is a weighted average of the eight components.
 
 ```text
 horizon_score = sum(component_value_j * component_weight_j) / sum(used_component_weights)
@@ -191,6 +205,10 @@ Trend uses direct binary alignment fields, not robust normalization.
 | `close_vs_ema30` | derived | `+1` if `close >= EMA30`, else `-1` | 0.00 (extended) | above 30-day EMA |
 | `short_trend_emergence` | derived average of six short-term MA comparisons | average of `+1/-1` values | 0.00 (extended) | more short-term MAs crossed above |
 | `pivot_distance` | derived as `(close - Pivot.M.Classic.Middle) / close` | robust normalized | 0.00 (extended) | stock above monthly pivot = support confirmation |
+| `close_vs_camarilla_s1` | derived as `(close - Pivot.M.Camarilla.S1) / close` | robust normalized | 0.00 (extended) | stock above monthly Camarilla support S1 |
+| `close_vs_camarilla_s2` | derived as `(close - Pivot.M.Camarilla.S2) / close` | robust normalized | 0.00 (extended) | stock above deeper monthly Camarilla support S2 |
+| `close_vs_camarilla_r1` | derived as `(close - Pivot.M.Camarilla.R1) / close` | robust normalized | 0.00 (extended) | stock clearing monthly Camarilla resistance R1 |
+| `close_vs_camarilla_r2` | derived as `(close - Pivot.M.Camarilla.R2) / close` | robust normalized | 0.00 (extended) | stock clearing stronger monthly Camarilla resistance R2 |
 
 ### Quality Component
 
@@ -217,6 +235,10 @@ Trend uses direct binary alignment fields, not robust normalization.
 | `revenue_per_employee` | derived as `total_revenue / number_of_employees` | robust normalized | 0.00 (extended) | higher operational efficiency per head |
 | `earnings_per_share_diluted_yoy_growth_ttm` | raw | robust normalized | 0.00 (extended) | stronger diluted EPS growth trajectory |
 | `gross_profit_margin_fy` | raw | robust normalized | 0.00 (extended) | better annual gross profit margin stability |
+| `sustainable_growth_rate_ttm` | raw | robust normalized | 0.00 (extended) | higher internally sustainable growth |
+| `piotroski_f_score_ttm` | raw | robust normalized | 0.00 (extended) | stronger accounting quality and balance-sheet health |
+| `dividend_yield_recent` | raw | robust normalized | 0.00 (extended) | recent income return support |
+| `dps_common_stock_prim_issue_yoy_growth_fy` | raw | robust normalized | 0.00 (extended) | dividend growth support |
 
 ### Valuation Component
 
@@ -236,6 +258,12 @@ Valuation uses `invert=True` and `positive_only=True` for all included fields. T
 | `earnings_yield` | raw | robust normalized | 0.00 (extended) | higher earnings yield = cheaper stock |
 | `distance_from_52w_high` | derived as `(close - price_52_week_high) / abs(price_52_week_high)` | robust normalized, then inverted | 0.00 (extended) | further below 52-week peak = deeper discount |
 | `range_position_52w` | derived as `(close - price_52_week_low) / (price_52_week_high - price_52_week_low)` | robust normalized, then inverted | 0.00 (extended) | lower in 52-week range = more upside room |
+| `enterprise_value_to_free_cash_flow_ttm` | raw | robust normalized, then inverted, positive-only | 0.00 (extended) | lower EV/FCF = better cash-flow value |
+| `enterprise_value_to_gross_profit_ttm` | raw | robust normalized, then inverted, positive-only | 0.00 (extended) | lower EV/gross profit = better gross-profit value |
+| `price_target_upside_average` | derived as `(price_target_average - close) / close` | robust normalized | 0.00 (extended) | higher analyst average target upside |
+| `price_target_upside_median` | derived as `(price_target_median - close) / close` | robust normalized | 0.00 (extended) | higher median target upside with less outlier sensitivity |
+| `price_target_downside_floor` | derived as `(price_target_low - close) / close` | robust normalized | 0.00 (extended) | better downside floor from lowest target |
+| `book_value_discount` | derived as `(book_value_per_share_fq - close) / close` | robust normalized | 0.00 (extended) | larger discount to book value |
 
 ### Safety Component
 
@@ -254,6 +282,9 @@ Valuation uses `invert=True` and `positive_only=True` for all included fields. T
 | `debt_to_revenue_ttm` | raw | robust normalized, then inverted | 1.00 | lower leverage burden is better |
 | `net_debt` | raw | robust normalized, then inverted | 1.00 | lower net debt is better |
 | `beta_1_year` | raw | robust normalized, then inverted | 1.00 | lower volatility is safer |
+| `total_debt_to_ebitda_fq` | raw | robust normalized, then inverted, positive-only | 0.00 (extended) | lower debt burden vs EBITDA |
+| `beta_adjusted_atrp` | derived as `ATRP * beta_1_year` | robust normalized, then inverted, positive-only | 0.00 (extended) | lower volatility after beta adjustment |
+| `price_target_dispersion` | derived as `(price_target_high - price_target_low) / close` | robust normalized, then inverted, positive-only | 0.00 (extended) | lower analyst target disagreement = cleaner risk picture |
 
 ## Default Horizon Weights
 
@@ -268,7 +299,7 @@ These weights are the starting map for profiles that inherit specific horizons. 
 
 ## Profile Design Framework
 
-The 8 profiles are organized into three investment ideas:
+The 9 profiles are organized into three investment ideas:
 
 ### Idea 1 — Trend Following (where the market is moving)
 - **breakout_long**: confirmed upside continuation — volume-driven tactical momentum
@@ -282,6 +313,7 @@ The 8 profiles are organized into three investment ideas:
 ### Idea 3 — Overlooked Fundamentals (unrewarded quality and hedging)
 - **asymmetric_value**: quality NOT rewarded by the market — inverted momentum bias to surface mispricing
 - **value_recovery**: turnaround with sequential improvement — QoQ dominates YoY
+- **deep_value_momentum**: aggressive value plus catalyst — deep discount with early reversal confirmation
 - **fragility_short**: structurally fragile names for short/hedge baskets — all biases inverted to amplify negatives
 
 ### Removed profiles
@@ -592,8 +624,8 @@ Idea: **Overlooked Fundamentals** — quality NOT rewarded by the market
 Intent:
 
 - surface deep value discounts with asymmetric upside potential
-- momentum bias INVERTED (positive=0.75x, negative=0.55x) — poor recent performance HELPS, since it indicates the market hasn't rewarded the quality
-- combine traditional multiples with forward-looking signals: distance_from_52w_high=1.50 (highest valuation signal), earnings_yield=1.40
+- momentum bias mildly inverted (positive=0.82x, negative=0.62x) — poor recent performance is forgiven, but not aggressively rewarded
+- combine traditional multiples with operating-company value anchors: earnings_yield=1.40, range_position_52w=1.35, book_value_discount=1.30, EV/FCF=1.35, target upside/downside, and distance_from_52w_high=1.25
 - maintain a strong safety floor across all horizons to avoid value traps
 - amplify the penalty for low attention so passive low-volume vehicles face a meaningful drag
 
@@ -610,18 +642,18 @@ Intent:
 
 | Component | Override details |
 | --- | --- |
-| `momentum` | `change=0.20`, `Perf.5D=0.20`, `Perf.W=0.25`, `Perf.1M=0.40`, `Perf.3M=1.00`, `Perf.6M=1.05`, `Perf.YTD=0.90`, `Perf.Y=0.60`, `ROC=0.40`, `Mom=0.45`, `macd_spread=0.35`, `rsi_centered=0.15`, `rsi7_centered=0.05` |
+| `momentum` | `change=0.20`, `Perf.5D=0.20`, `Perf.W=0.25`, `Perf.1M=0.40`, `Perf.3M=1.00`, `Perf.6M=1.05`, `Perf.YTD=0.90`, `Perf.Y=0.60`, `ROC=0.40`, `Mom=0.45`, `macd_spread=0.35`, `rsi_centered=0.20`, `rsi7_centered=0.10`, `stoch_rsi_centered=0.65`, `stoch_rsi_crossover=1.10` |
 | `trend` | `close_vs_sma200=1.25`, `close_vs_ema200=1.25`, `trend_alignment=1.10`, `close_vs_sma50=0.75`, `close_vs_ema50=0.75`, `close_vs_vwap=0.40`, `close_vs_vwma=0.50` |
-| `quality` | `return_on_invested_capital=1.35`, `free_cash_flow_margin_ttm=1.35`, `free_cash_flow_yoy_growth_ttm=1.30`, `operating_margin=1.20`, `buyback_yield=1.15`, `return_on_equity=1.10`, `after_tax_margin=1.05` |
-| `valuation` | `distance_from_52w_high=1.50`, `earnings_yield=1.40`, `range_position_52w=1.35`, `price_book_fq=1.15`, `price_free_cash_flow_ttm=1.20`, `price_earnings_growth_ttm=1.15`, `enterprise_value_ebitda_ttm=1.10` |
-| `safety` | `altman_z_score_ttm=1.30`, `debt_to_equity=1.25`, `debt_to_revenue_ttm=1.20`, `short_term_cash_coverage=1.15`, `net_debt=1.15`, `beta_1_year=0.75` |
+| `quality` | `eps_forward_growth=1.45`, `return_on_invested_capital=1.35`, `free_cash_flow_margin_ttm=1.35`, `piotroski_f_score_ttm=1.35`, `free_cash_flow_yoy_growth_ttm=1.30`, `operating_margin=1.20`, `buyback_yield=1.15`, `sustainable_growth_rate_ttm=1.05` |
+| `valuation` | `earnings_yield=1.40`, `range_position_52w=1.35`, `enterprise_value_to_free_cash_flow_ttm=1.35`, `book_value_discount=1.30`, `distance_from_52w_high=1.25`, `price_target_downside_floor=1.20`, `price_target_upside_median=1.10`, `price_target_upside_average=1.05` |
+| `safety` | `altman_z_score_ttm=1.30`, `debt_to_equity=1.25`, `total_debt_to_ebitda_fq=1.25`, `debt_to_revenue_ttm=1.20`, `net_debt=1.20`, `price_target_dispersion=0.80`, `beta_adjusted_atrp=0.75` |
 
 #### Directional bias overrides
 
 | Component | Positive multiplier | Negative multiplier |
 | --- | ---: | ---: |
 | `attention` | 0.75 | 1.40 |
-| `momentum` | 0.75 | 0.55 |
+| `momentum` | 0.82 | 0.62 |
 | `trend` | 1.00 | 0.80 |
 | `quality` | 1.20 | 1.25 |
 | `valuation` | 1.35 | 1.00 |
@@ -629,19 +661,19 @@ Intent:
 
 Interpretation:
 
-- **momentum bias is uniquely inverted** — positive momentum at 0.75x and negative at 0.55x means poor recent performance actually HELPS the score. This is the key mechanism for surfacing "overlooked" quality.
+- **momentum bias is mildly inverted** — positive momentum at 0.82x and negative at 0.62x means poor recent performance is forgiven, but the profile no longer over-rewards stagnant passive vehicles.
 - valuation positive at 1.35x amplifies deep value discount evidence
 - safety negative at 1.35x acts as the value-trap guard — balance-sheet deterioration kills the score
-- distance_from_52w_high=1.50 is the highest valuation signal — further below peak = stronger signal
+- forward EPS growth, Piotroski F-score, EV/FCF, book-value discount, and target downside floor are now the operating-company filters
 
 #### Missing-component fallback scores
 
 | Horizon | Fallbacks |
 | --- | --- |
-| `days` | `attention=-0.45`, `valuation=-0.90`, `quality=-0.60`, `safety=-0.65` |
-| `weeks` | `attention=-0.35`, `valuation=-1.00`, `quality=-0.70`, `safety=-0.75` |
-| `months` | `attention=-0.25`, `valuation=-1.10`, `quality=-0.80`, `safety=-0.85` |
-| `years` | `valuation=-1.20`, `quality=-0.90`, `safety=-0.95` |
+| `days` | `attention=-0.45`, `valuation=-0.90`, `quality=-1.00`, `safety=-0.65` |
+| `weeks` | `attention=-0.35`, `valuation=-1.00`, `quality=-1.10`, `safety=-0.75` |
+| `months` | `attention=-0.25`, `valuation=-1.10`, `quality=-1.20`, `safety=-0.85` |
+| `years` | `valuation=-1.20`, `quality=-1.30`, `safety=-0.95` |
 
 ### 7. `value_recovery`
 
@@ -651,8 +683,8 @@ Intent:
 
 - reward cheap names with improving fundamentals and solvency
 - QoQ growth dominates YoY (1.20–1.35 vs 0.85–1.10) to detect sequential turnaround
-- eps_forward_growth=1.40 — forward-looking recovery conviction
-- stoch_rsi_crossover=0.65 dampened — recovery turn detection, not aggressive
+- eps_forward_growth=1.50 — forward-looking recovery conviction
+- stoch_rsi_crossover=1.35 and short_trend_emergence=1.20 — recovery turn detection is now a primary entry trigger
 - momentum negative bias at 0.60x — recent weakness is forgiven (turnaround candidates often look ugly)
 - tolerate imperfect short-term momentum while requiring valuation and safety evidence
 
@@ -669,11 +701,11 @@ Intent:
 
 | Component | Override details |
 | --- | --- |
-| `momentum` | `change=0.30`, `Perf.5D=0.25`, `Perf.W=0.30`, `Perf.1M=0.45`, `Perf.3M=1.15`, `Perf.YTD=1.00`, `Perf.Y=0.80`, `ROC=0.45`, `Mom=0.50`, `macd_spread=0.40`, `rsi_centered=0.20`, `rsi7_centered=0.10`, `stoch_rsi_crossover=0.65` |
-| `trend` | `close_vs_sma200=1.10`, `close_vs_ema200=1.10`, `pivot_distance=1.10`, `trend_alignment=1.05`, `close_vs_sma50=0.85`, `close_vs_ema50=0.85`, `close_vs_vwap=0.50`, `close_vs_vwma=0.60`, `short_trend_emergence=0.75` |
-| `quality` | `free_cash_flow_qoq_growth_fq=1.35`, `net_income_qoq_growth_fq=1.30`, `ebitda_qoq_growth_fq=1.25`, `total_revenue_qoq_growth_fq=1.25`, `eps_forward_growth=1.40`, `free_cash_flow_margin_ttm=1.20`, `operating_margin=1.10`, `return_on_invested_capital=1.05` (YoY at 0.85–1.10) |
-| `valuation` | `price_earnings_growth_ttm=1.25`, `earnings_yield=1.25`, `price_book_fq=1.25`, `enterprise_value_ebitda_ttm=1.20`, `distance_from_52w_high=1.20`, `price_earnings_ttm=1.10` |
-| `safety` | `altman_z_score_ttm=1.25`, `net_debt=1.20`, `debt_to_equity=1.20`, `short_term_cash_coverage=1.15`, `debt_to_revenue_ttm=1.10` |
+| `momentum` | `change=0.30`, `Perf.5D=0.25`, `Perf.W=0.30`, `Perf.1M=0.45`, `Perf.3M=1.15`, `Perf.YTD=1.00`, `Perf.Y=0.80`, `ROC=0.45`, `Mom=0.50`, `macd_spread=0.40`, `stoch_rsi_centered=0.55`, `stoch_rsi_crossover=1.35` |
+| `trend` | `close_vs_sma200=1.10`, `close_vs_ema200=1.10`, `pivot_distance=1.10`, `trend_alignment=1.05`, `short_trend_emergence=1.20`, `close_vs_sma50=0.85`, `close_vs_ema50=0.85`, `close_vs_vwap=0.50`, `close_vs_vwma=0.60` |
+| `quality` | `eps_forward_growth=1.50`, `free_cash_flow_qoq_growth_fq=1.35`, `net_income_qoq_growth_fq=1.30`, `ebitda_qoq_growth_fq=1.25`, `total_revenue_qoq_growth_fq=1.25`, `piotroski_f_score_ttm=1.20`, `free_cash_flow_margin_ttm=1.20`, `sustainable_growth_rate_ttm=1.10`, `operating_margin=1.10` (YoY at 0.85–1.10) |
+| `valuation` | `price_earnings_growth_ttm=1.25`, `earnings_yield=1.25`, `price_book_fq=1.25`, `price_target_upside_average=1.20`, `price_target_upside_median=1.20`, `enterprise_value_ebitda_ttm=1.20`, `enterprise_value_to_free_cash_flow_ttm=1.15`, `book_value_discount=1.10` |
+| `safety` | `altman_z_score_ttm=1.25`, `total_debt_to_ebitda_fq=1.25`, `net_debt=1.20`, `debt_to_equity=1.20`, `short_term_cash_coverage=1.15`, `debt_to_revenue_ttm=1.10`, `price_target_dispersion=0.65` |
 
 #### Directional bias overrides
 
@@ -701,7 +733,66 @@ Interpretation:
 | `months` | `attention=-0.20`, `valuation=-1.05`, `quality=-0.75`, `safety=-0.85` |
 | `years` | `valuation=-1.15`, `quality=-0.85`, `safety=-0.95` |
 
-### 8. `fragility_short`
+### 8. `deep_value_momentum`
+
+Idea: **Overlooked Fundamentals** — aggressive value plus catalyst
+
+Intent:
+
+- require deep valuation support and a real catalyst/reversal signal before ranking value names highly
+- combine accounting value, cash-flow value, analyst target upside, and downside-floor evidence
+- make sequential quality improvement a gate, not an afterthought
+- use momentum and trend positively, unlike `asymmetric_value`, because this profile wants proof that value is starting to wake up
+- keep value-trap controls active through debt/EBITDA, Piotroski F-score, beta-adjusted ATRP, and target dispersion
+
+#### Horizon weights
+
+| Horizon | Attention | Event | Momentum | Trend | Quality | Valuation | Safety |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `days` | 0.07 | 0.03 | 0.22 | 0.22 | 0.16 | 0.22 | 0.08 |
+| `weeks` | 0.05 | 0.03 | 0.16 | 0.22 | 0.22 | 0.24 | 0.08 |
+| `months` | 0.03 | 0.02 | 0.10 | 0.16 | 0.28 | 0.28 | 0.13 |
+| `years` | 0.02 | 0.01 | 0.05 | 0.10 | 0.32 | 0.32 | 0.18 |
+
+#### Signal weight overrides
+
+| Component | Override details |
+| --- | --- |
+| `attention` | `volume_trend=1.35`, `relative_volume_10d_calc=1.10`, `float_turnover=1.05`, `dollar_turnover_intensity=1.00`, `intraday_momentum=0.80` |
+| `momentum` | `stoch_rsi_crossover=1.55`, `aroon_spread=1.35`, `adx_directional_spread=1.30`, `stoch_rsi_centered=1.10`, `macd_spread=0.90`, recent performance active but long trailing performance muted |
+| `trend` | `short_trend_emergence=1.40`, short MAs and EMAs at 1.00-1.10, Camarilla support/resistance distances active, long MAs damped to 0.50 |
+| `quality` | `eps_forward_growth=1.55`, `free_cash_flow_qoq_growth_fq=1.40`, `net_income_qoq_growth_fq=1.30`, `ebitda_qoq_growth_fq=1.25`, `piotroski_f_score_ttm=1.25`, `sustainable_growth_rate_ttm=1.15` |
+| `valuation` | `earnings_yield=1.40`, `price_book_fq=1.35`, `enterprise_value_ebitda_ttm=1.30`, `enterprise_value_to_free_cash_flow_ttm=1.30`, `price_target_upside_median=1.30`, `price_target_upside_average=1.25`, `book_value_discount=1.25`, `price_target_downside_floor=1.15` |
+| `safety` | `total_debt_to_ebitda_fq=1.20`, `altman_z_score_ttm=1.20`, `debt_to_equity=1.15`, `net_debt=1.15`, `beta_adjusted_atrp=0.85`, `price_target_dispersion=0.70` |
+
+#### Directional bias overrides
+
+| Component | Positive multiplier | Negative multiplier |
+| --- | ---: | ---: |
+| `attention` | 0.90 | 1.20 |
+| `momentum` | 1.35 | 0.70 |
+| `trend` | 1.30 | 0.75 |
+| `quality` | 1.20 | 1.20 |
+| `valuation` | 1.30 | 1.10 |
+| `safety` | 1.10 | 1.30 |
+
+Interpretation:
+
+- this profile is the active-manager bridge between value and momentum: it does not buy cheapness without reversal confirmation, and it does not buy reversal without value support
+- `stoch_rsi_crossover=1.55` and `short_trend_emergence=1.40` are the catalyst pair
+- `eps_forward_growth=1.55`, sequential FCF/net income/EBITDA improvement, and Piotroski F-score filter out passive vehicles and weak operating companies
+- valuation is intentionally broad: book value, earnings yield, EV/FCF, EV/EBITDA, target upside, and downside floor all contribute
+
+#### Missing-component fallback scores
+
+| Horizon | Fallbacks |
+| --- | --- |
+| `days` | `attention=-0.30`, `quality=-1.00`, `valuation=-0.85`, `safety=-0.60` |
+| `weeks` | `attention=-0.25`, `quality=-1.10`, `valuation=-0.95`, `safety=-0.70` |
+| `months` | `attention=-0.15`, `quality=-1.20`, `valuation=-1.05`, `safety=-0.80` |
+| `years` | `quality=-1.30`, `valuation=-1.15`, `safety=-0.90` |
+
+### 9. `fragility_short`
 
 Idea: **Hedging** — identifies structurally fragile names for short/hedge baskets
 
@@ -836,9 +927,9 @@ Use `asymmetric_value`.
 
 You should expect the leaders to have:
 
-- deep value discount: distance_from_52w_high=1.50, earnings_yield=1.40, range_position_52w=1.35
-- quality NOT rewarded by the market: momentum bias is INVERTED (+0.75x/−0.55x) so poor performance HELPS
-- robust fundamental floor: ROIC=1.35, FCF margin=1.35, buyback_yield=1.15
+- deep value discount: earnings_yield=1.40, range_position_52w=1.35, EV/FCF=1.35, book_value_discount=1.30, and distance_from_52w_high=1.25
+- quality NOT rewarded by the market: momentum bias is mildly inverted (+0.82x/−0.62x), so weakness is forgiven without blindly rewarding stagnant names
+- robust operating-company floor: ROIC=1.35, FCF margin=1.35, forward EPS growth=1.45, Piotroski F-score=1.35, EV/FCF=1.35, and book_value_discount=1.30
 - strong safety to avoid value traps: safety negative at −1.35x
 
 This profile is built for active decisions where you believe the market over-discounted the name.
@@ -849,11 +940,25 @@ Use `value_recovery`.
 
 You should expect the leaders to have:
 
-- cheaper valuation with PEG=1.25, earnings_yield=1.25, price_book=1.25
+- cheaper valuation with PEG=1.25, earnings_yield=1.25, price_book=1.25, target upside, EV/FCF, and book-value discount
 - sequential improvement: QoQ growth dominates YoY (1.20–1.35 vs 0.85–1.10)
-- forward recovery conviction: eps_forward_growth=1.40
+- forward recovery conviction: eps_forward_growth=1.50
+- entry trigger confirmation: stoch_rsi_crossover=1.35 and short_trend_emergence=1.20
 - recent weakness forgiven: momentum negative bias at 0.60x (most forgiving long profile)
 - balance-sheet repair: Altman Z=1.25, net_debt=1.20, debt_to_equity=1.20
+
+### If you want aggressive value with a catalyst
+
+Use `deep_value_momentum`.
+
+You should expect the leaders to have:
+
+- valuation support from multiple sources: earnings yield, P/B, EV/EBITDA, EV/FCF, target upside, downside floor, and book value discount
+- early technical reversal evidence: stoch_rsi_crossover=1.55 and short_trend_emergence=1.40
+- improving operating quality: forward EPS growth, sequential FCF/net income/EBITDA improvement, Piotroski F-score, and sustainable growth
+- risk controls: debt/EBITDA, beta-adjusted ATRP, target dispersion, and balance-sheet safety
+
+This is the profile to use when you want value-driven but aggressive positioning: cheap enough to matter, but already starting to move.
 
 ### If you want short-fragility candidates
 
@@ -869,7 +974,7 @@ You should expect the leaders to have:
 
 ## Consensus Aggregator
 
-The consensus aggregator (`run_consensus_aggregator`) runs all 8 profiles against the same scan data and produces a meta-ranking based on cross-profile agreement.
+The consensus aggregator (`run_consensus_aggregator`) runs all 9 profiles against the same scan data and produces a meta-ranking based on cross-profile agreement.
 
 ### How it works
 
@@ -884,14 +989,15 @@ The consensus aggregator (`run_consensus_aggregator`) runs all 8 profiles agains
 
 | Profile | Consensus weight | Rationale |
 | --- | ---: | --- |
-| `quality_value_compounder` | 0.18 | Broadest fundamental coverage |
-| `sector_relative_outperformer` | 0.15 | Efficiency and durability focus |
-| `forward_edge_active` | 0.15 | Forward-looking quality improvement |
-| `asymmetric_value` | 0.12 | Mispricing detection |
-| `breakout_long` | 0.10 | Tactical momentum confirmation |
-| `early_momentum_inflection` | 0.10 | Early trend detection |
-| `value_recovery` | 0.10 | Turnaround and rerating |
-| `fragility_short` | 0.10 | Short-side / hedge signal |
+| `breakout_long` | 0.22 | Empirically strongest near-term predictor; tactical momentum confirmation |
+| `early_momentum_inflection` | 0.13 | Nascent move and pre-breakout detection |
+| `quality_value_compounder` | 0.12 | Durable quality and fundamental ballast |
+| `forward_edge_active` | 0.12 | Forward-looking quality improvement |
+| `sector_relative_outperformer` | 0.10 | Efficiency, durability, and relative strength |
+| `asymmetric_value` | 0.10 | Mispricing detection with operating-company filters |
+| `value_recovery` | 0.09 | Turnaround and rerating with reversal confirmation |
+| `fragility_short` | 0.07 | Short-side / hedge signal, sign-inverted in consensus |
+| `deep_value_momentum` | 0.05 | Value plus catalyst intersection |
 
 ### Confidence calculation
 
@@ -905,8 +1011,9 @@ Consensus confidence combines:
 ### Output
 
 The aggregator produces:
-- A ranked report per horizon showing consensus score, direction, confidence, agreement ratio, and opinions
+- A ranked report per horizon showing consensus score, risk-adjusted score, risk tier, manager action signal, direction, confidence, agreement ratio, and opinions
 - A "high conviction" section listing names where 5+ profiles agree on direction with ≥60% agreement
+- An active-manager shortlist grouped by action signal (`add_long_breakout`, `accumulate_value_catalyst`, `watch_value_reversal`, `hold_quality_long`, `hedge_or_short`, `avoid_value_trap`)
 - A CSV file with consensus scores plus all individual profile scores for further analysis
 
 ### When to use
@@ -951,6 +1058,7 @@ Current profile confidence parameters:
 | `forward_edge_active` | 1.03 | 0.00 |
 | `asymmetric_value` | 1.02 | 0.00 |
 | `value_recovery` | 1.00 | 0.00 |
+| `deep_value_momentum` | 1.05 | 0.00 |
 | `fragility_short` | 1.07 | 0.00 |
 
 These are secondary to score construction. The main ranking differentiation comes from:
@@ -962,7 +1070,7 @@ These are secondary to score construction. The main ranking differentiation come
 
 ## Summary
 
-The revised preset logic organizes 8 profiles into three investment ideas with sharply differentiated scoring.
+The revised preset logic organizes 9 profiles into three investment ideas with sharply differentiated scoring.
 
 ### Trend Following
 - `breakout_long` is purely tactical — quality=0.00 at days, momentum bias +1.40x/−0.65x (most aggressive upside), ADX directional spread=1.50, volume_trend=1.40 for confirmation.
@@ -974,22 +1082,24 @@ The revised preset logic organizes 8 profiles into three investment ideas with s
 - `forward_edge_active` is most forward-looking — eps_forward_growth=1.75 (highest single signal), QoQ dominates YoY, short_trend_emergence=1.65, attention most inverted at 0.50x/1.50x.
 
 ### Overlooked Fundamentals and Hedging
-- `asymmetric_value` has uniquely inverted momentum bias (+0.75x/−0.55x) — poor performance HELPS. distance_from_52w_high=1.50, earnings_yield=1.40, safety negative at −1.35x for value-trap guard.
-- `value_recovery` forgives weakness most (momentum negative at 0.60x), QoQ dominates YoY (1.20–1.35 vs 0.85–1.10), eps_forward_growth=1.40.
+- `asymmetric_value` has mildly inverted momentum bias (+0.82x/−0.62x) — weakness is forgiven, but operating-company evidence now matters more: earnings_yield=1.40, EV/FCF=1.35, book_value_discount=1.30, Piotroski F-score=1.35, and safety negative at −1.35x for value-trap guard.
+- `value_recovery` forgives weakness most (momentum negative at 0.60x), QoQ dominates YoY (1.20–1.35 vs 0.85–1.10), eps_forward_growth=1.50, and stoch_rsi_crossover=1.35 is the recovery trigger.
+- `deep_value_momentum` requires both value and reversal confirmation — stoch_rsi_crossover=1.55, short_trend_emergence=1.40, eps_forward_growth=1.55, earnings_yield=1.40, and EV/FCF=1.30.
 - `fragility_short` inverts all directional biases to amplify negatives — safety=0.57 at years (highest single weight), safety bias −1.45x (most aggressive), beta NOT inverted.
 
 ### Removed profiles
 - `balanced` and `backtest_period_ladder` were removed. Backward-compatible aliases map them to `quality_value_compounder` and `sector_relative_outperformer` respectively.
 
 ### Consensus aggregator
-- `run_consensus_aggregator` runs all 8 profiles and produces a weighted meta-ranking per horizon.
+- `run_consensus_aggregator` runs all 9 profiles and produces a weighted meta-ranking per horizon.
 - `fragility_short` scores are sign-inverted before aggregation.
 - High-conviction names (5+ profiles agreeing with ≥60% agreement ratio) are highlighted.
+- Risk-adjusted scores, risk tiers, and manager action signals are exported in logs and CSVs.
 - `run_full_analysis_suite` runs individual profiles plus the consensus aggregator together.
 
-## Extended Signal System (March 30, 2026 — expanded April 5, 2026)
+## Extended Signal System (March 30, 2026 — expanded April 5, 2026 and May 2026)
 
-Extended signals were added to the component signal map behind a backward-compatible gating system. The April 5 expansion added seven more signals and eight new raw scan fields.
+Extended signals were added to the component signal map behind a backward-compatible gating system. The April 5 expansion added seven more signals and eight new raw scan fields. The May 2026 active-manager expansion added analyst target, book-value, EV/cash-flow, Piotroski, debt/EBITDA, volatility-adjusted risk, and Camarilla pivot signals.
 
 ### How it works
 
@@ -1001,6 +1111,7 @@ Signals in the `EXTENDED_SIGNALS` set default to weight `0.00` when a profile do
 - `forward_edge_active` activates volume trend, Stoch RSI crossover, intraday momentum, and forward quality signals
 - `sector_relative_outperformer` activates all efficiency, capital return, and accumulation signals
 - `breakout_long` now activates volume trend and intraday momentum for tactical confirmation
+- `deep_value_momentum` activates the value plus catalyst signal stack: target upside/downside, book value discount, EV/FCF, Piotroski F-score, sustainable growth, debt/EBITDA, beta-adjusted ATRP, and Camarilla distances
 - any future or custom profile can opt into arbitrary subsets of the extended signals
 
 ### Extended signal list
@@ -1022,6 +1133,10 @@ Signals in the `EXTENDED_SIGNALS` set default to weight `0.00` when a profile do
 | `close_vs_ema30` | trend | derived (`+1/-1`) | above/below 30-day EMA |
 | `short_trend_emergence` | trend | derived (avg of 6 short-term MAs) | early trend forming |
 | `pivot_distance` | trend | derived (`(close - Pivot.M.Classic.Middle) / close`) | stock above monthly pivot = support confirmation |
+| `close_vs_camarilla_s1` | trend | derived (`(close - Pivot.M.Camarilla.S1) / close`) | distance above monthly Camarilla support S1 |
+| `close_vs_camarilla_s2` | trend | derived (`(close - Pivot.M.Camarilla.S2) / close`) | distance above deeper monthly Camarilla support S2 |
+| `close_vs_camarilla_r1` | trend | derived (`(close - Pivot.M.Camarilla.R1) / close`) | distance above monthly Camarilla resistance R1 |
+| `close_vs_camarilla_r2` | trend | derived (`(close - Pivot.M.Camarilla.R2) / close`) | distance above stronger monthly Camarilla resistance R2 |
 | `bb_squeeze` | attention | derived (`(BB.upper - BB.lower) / close`, inverted) | band compression = coiled energy |
 | `range_compression` | attention | derived (`(High.3M - Low.3M) / close`, inverted) | coiled 3-month range |
 | `volatility_contraction` | attention | derived (`Volatility.D / Volatility.M`, inverted) | daily-vs-monthly vol contraction |
@@ -1030,6 +1145,12 @@ Signals in the `EXTENDED_SIGNALS` set default to weight `0.00` when a profile do
 | `earnings_yield` | valuation | raw | earnings-to-price yield (higher = cheaper) |
 | `distance_from_52w_high` | valuation | derived (`(close - 52w_high) / abs(52w_high)`, inverted) | discount from peak |
 | `range_position_52w` | valuation | derived (`(close - 52w_low) / (52w_high - 52w_low)`, inverted) | position in 52-week range |
+| `enterprise_value_to_free_cash_flow_ttm` | valuation | raw, inverted positive-only | EV/FCF cash-flow value |
+| `enterprise_value_to_gross_profit_ttm` | valuation | raw, inverted positive-only | EV/gross-profit value |
+| `price_target_upside_average` | valuation | derived (`(price_target_average - close) / close`) | average analyst target upside |
+| `price_target_upside_median` | valuation | derived (`(price_target_median - close) / close`) | median analyst target upside |
+| `price_target_downside_floor` | valuation | derived (`(price_target_low - close) / close`) | lowest-target downside floor |
+| `book_value_discount` | valuation | derived (`(book_value_per_share_fq - close) / close`) | discount to book value |
 | `free_cash_flow_margin_ttm` | quality | raw | cash generation quality |
 | `buyback_yield` | quality | raw | shareholder return via buybacks |
 | `dividends_yield_current` | quality | raw | income return |
@@ -1037,13 +1158,24 @@ Signals in the `EXTENDED_SIGNALS` set default to weight `0.00` when a profile do
 | `revenue_per_employee` | quality | derived (`total_revenue / number_of_employees`) | operational efficiency per head |
 | `earnings_per_share_diluted_yoy_growth_ttm` | quality | raw | diluted EPS growth trajectory |
 | `gross_profit_margin_fy` | quality | raw | annual gross margin stability |
+| `sustainable_growth_rate_ttm` | quality | raw | internally sustainable growth |
+| `piotroski_f_score_ttm` | quality | raw | accounting quality and financial strength |
+| `dividend_yield_recent` | quality | raw | recent dividend yield |
+| `dps_common_stock_prim_issue_yoy_growth_fy` | quality | raw | dividend per share growth |
+| `total_debt_to_ebitda_fq` | safety | raw, inverted positive-only | leverage burden vs EBITDA |
+| `beta_adjusted_atrp` | safety | derived (`ATRP * beta_1_year`) | volatility adjusted by beta |
+| `price_target_dispersion` | safety | derived (`(price_target_high - price_target_low) / close`, inverted positive-only) | analyst disagreement / uncertainty |
 | `eps_surprise_percent_fq` | event | raw | earnings surprise history |
 
-### New raw fields added to scan payload (April 5, 2026)
+### New raw fields added to scan payload (April 5, 2026 and May 2026)
 
 The following columns were added to the TradingView scan payload (`GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD`):
 
 `average_volume_30d_calc`, `Stoch.RSI.D`, `change_from_open`, `earnings_per_share_diluted_yoy_growth_ttm`, `ebitda`, `net_income`, `Pivot.M.Classic.Middle`, `gross_profit_margin_fy`
+
+May 2026 active-manager expansion:
+
+`price_target_average`, `price_target_median`, `price_target_high`, `price_target_low`, `price_target_1y`, `book_value_per_share_fq`, `sustainable_growth_rate_ttm`, `piotroski_f_score_ttm`, `dividend_yield_recent`, `dividends_per_share_fq`, `dps_common_stock_prim_issue_yoy_growth_fy`, `enterprise_value_to_free_cash_flow_ttm`, `enterprise_value_to_gross_profit_ttm`, `total_debt_to_ebitda_fq`, `Pivot.M.Camarilla.S1`, `Pivot.M.Camarilla.S2`, `Pivot.M.Camarilla.R1`, `Pivot.M.Camarilla.R2`, `type`, `typespecs`
 
 These were added for:
 
@@ -1054,6 +1186,10 @@ These were added for:
 - **Raw financials**: `ebitda` and `net_income` added for future derived ratios and efficiency calculations.
 - **Monthly pivot point**: `Pivot.M.Classic.Middle` enables `pivot_distance` for support/resistance confirmation.
 - **Gross margin stability**: `gross_profit_margin_fy` adds annual gross profit margin as a quality floor signal.
+- **Forward value anchors**: analyst target upside/downside and dispersion add a street-implied fair-value layer.
+- **Operating-company filters**: Piotroski F-score, sustainable growth, debt/EBITDA, EV/FCF, and EV/gross-profit help distinguish real operating companies from passive vehicles with optically cheap multiples.
+- **Risk-adjusted volatility**: `beta_adjusted_atrp` penalizes volatile names where high beta and high ATRP combine.
+- **Camarilla pivot distances**: monthly support/resistance distances provide short-horizon entry context for reversal/value-catalyst profiles.
 
 ## Anti-Concentration Tuning (March 30, 2026)
 
@@ -1190,24 +1326,23 @@ This profile targets risk-adjusted outperformance on the weeks-to-months timesca
 
 These are data-layer and scan-level enhancements that could further improve forward-edge detection and outperformance identification. They require either new TradingView fields, external data sources, or architectural changes.
 
-**Previously suggested items now implemented (April 5, 2026):**
+**Previously suggested items now implemented:**
 
 - ~~Multi-timeframe relative volume~~: Implemented as `volume_trend` (10d/30d avg volume ratio) using `average_volume_30d_calc`. Detects sustained accumulation vs one-day spikes. Activated in `breakout_long`, `early_momentum_inflection`, `forward_edge_active`, and `sector_relative_outperformer`.
 - ~~Revenue estimate revisions~~: Partially addressed. `earnings_per_share_diluted_yoy_growth_ttm` now added as a diluted EPS growth signal. `eps_forward_growth` (forecast vs actual EPS) was already implemented. True revenue estimate revision tracking would require historical estimate snapshots not available from TradingView scan.
+- ~~Analyst price target delta~~: Implemented through derived `price_target_upside_average`, `price_target_upside_median`, `price_target_downside_floor`, and `price_target_dispersion` using fetched price target fields.
 
 **Remaining suggested items:**
 
-1. **Analyst price target delta** (`price_target_1y_delta`): Available in TradingView field catalog. Measures percentage upside/downside to consensus analyst target. Could be added to the valuation component as a forward-looking anchor. Currently not fetched in the scan payload.
+1. **Insider and institutional flow signals**: Fields like institutional ownership changes and insider buying/selling are not currently available from TradingView scan but could be sourced from SEC Form 4 filings (already available in the EDGAR database). High insider buying + low attention + emerging trend = strongest forward edge.
 
-2. **Insider and institutional flow signals**: Fields like institutional ownership changes and insider buying/selling are not currently available from TradingView scan but could be sourced from SEC Form 4 filings (already available in the EDGAR database). High insider buying + low attention + emerging trend = strongest forward edge.
+2. **Industry-relative scoring**: The current model normalizes against the entire scan universe. Computing signals relative to industry peers (e.g., "this stock's momentum rank within its industry") would separate genuine sector-relative leadership from broad market moves. The `sector_relative_outperformer` profile partially addresses this through efficiency metrics (revenue per employee) but does not yet normalize against peer groups.
 
-3. **Industry-relative scoring**: The current model normalizes against the entire scan universe. Computing signals relative to industry peers (e.g., "this stock's momentum rank within its industry") would separate genuine sector-relative leadership from broad market moves. The `sector_relative_outperformer` profile partially addresses this through efficiency metrics (revenue per employee) but does not yet normalize against peer groups.
+3. **Earnings calendar proximity weighting**: Stocks approaching earnings within 2-4 weeks often exhibit pre-earnings drift (positive historical surprise -> upward drift). The model currently penalizes confidence near earnings but doesn't reward the drift pattern.
 
-4. **Earnings calendar proximity weighting**: Stocks approaching earnings within 2-4 weeks often exhibit pre-earnings drift (positive historical surprise -> upward drift). The model currently penalizes confidence near earnings but doesn't reward the drift pattern.
+4. **Short interest ratio**: Not available in standard TradingView scan but could be sourced from FINRA/exchange data. High short interest + positive momentum inflection = short squeeze candidate.
 
-5. **Short interest ratio**: Not available in standard TradingView scan but could be sourced from FINRA/exchange data. High short interest + positive momentum inflection = short squeeze candidate.
-
-6. **Options-implied volatility**: IV percentile or IV rank could replace or supplement Bollinger Band squeeze as a more market-informed volatility contraction measure. Not available from TradingView scan.
+5. **Options-implied volatility**: IV percentile or IV rank could replace or supplement Bollinger Band squeeze as a more market-informed volatility contraction measure. Not available from TradingView scan.
 
 **New suggestions (April 5, 2026):**
 
@@ -1225,6 +1360,6 @@ These are data-layer and scan-level enhancements that could further improve forw
 
 13. **Revenue efficiency composite**: Combine `revenue_per_employee` with a new `ebitda_per_employee` (derived from `ebitda / number_of_employees`) to create a composite operational efficiency score. This would separate companies that generate high revenue per head AND retain most of it as operating profit from distribution/logistics companies that have high revenue per head but thin margins.
 
-14. ~~**Cross-profile consensus layer**~~: **Implemented** as `run_consensus_aggregator`. Runs all 8 profiles against the same scan data, produces weighted consensus scores per horizon, identifies high-conviction names where 5+ profiles agree on direction with ≥60% agreement ratio. Output includes ranked report per horizon plus CSV with all individual profile scores.
+14. ~~**Cross-profile consensus layer**~~: **Implemented** as `run_consensus_aggregator`. Runs all 9 profiles against the same scan data, produces weighted consensus scores per horizon, identifies high-conviction names where 5+ profiles agree on direction with ≥60% agreement ratio. Output includes ranked report per horizon plus CSV with all individual profile scores, risk-adjusted scores, risk tiers, and manager action signals.
 
 15. **Temporal stability scoring**: Track whether a name's component scores are stable across consecutive runs (requires storing historical scores). A name that consistently scores well across multiple days has more reliable support than a one-day spike. This would be a confidence multiplier rather than a ranking signal.
