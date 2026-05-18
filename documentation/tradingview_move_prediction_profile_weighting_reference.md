@@ -27,11 +27,13 @@ The latest model pass shifted the suite from a pure score/rank engine toward an 
 Key changes:
 
 - Added `deep_value_momentum`, a value-plus-catalyst profile that requires both deep valuation support and early technical reversal evidence.
+- Added `durable_value_compounder`, a quality-led value investing profile for months/years positioning where durable cash generation must be available at disciplined valuation anchors.
 - Re-tuned `asymmetric_value` so it still finds overlooked value, but now requires stronger operating-company evidence: forward EPS growth, Piotroski F-score, sustainable growth, EV/FCF, target upside/downside, book value discount, and harsher missing-quality penalties.
 - Re-tuned `value_recovery` to make `stoch_rsi_crossover` and `short_trend_emergence` true entry triggers rather than background signals.
 - Added risk-adjusted scoring, risk tiers, and `manager_action_signal` labels such as `add_long_breakout`, `accumulate_value_catalyst`, `watch_value_reversal`, `hedge_or_short`, and `avoid_value_trap`.
-- Rebalanced consensus toward empirically stronger tactical profiles: `breakout_long=0.22`, `early_momentum_inflection=0.13`, and `forward_edge_active=0.12`, while keeping value and fragility lenses in the blend.
+- Rebalanced consensus toward empirically stronger tactical profiles while adding the durable value lens: `breakout_long=0.20`, `early_momentum_inflection=0.12`, `forward_edge_active=0.11`, and `durable_value_compounder=0.09`.
 - The move-prediction TradingView payload now requests `type` and `typespecs` and removes the fund/investment-trust branch from the move-prediction universe so fund-like structures do not dominate operating-company screens.
+- Added `run_full_analysis_suite_from_raw_csv_folders` for replaying the current model over saved `tradingview_global_all_tdfields_*.csv` daily exports.
 
 ## Score Flow
 
@@ -299,7 +301,7 @@ These weights are the starting map for profiles that inherit specific horizons. 
 
 ## Profile Design Framework
 
-The 9 profiles are organized into three investment ideas:
+The 10 profiles are organized into three investment ideas:
 
 ### Idea 1 — Trend Following (where the market is moving)
 - **breakout_long**: confirmed upside continuation — volume-driven tactical momentum
@@ -307,6 +309,7 @@ The 9 profiles are organized into three investment ideas:
 
 ### Idea 2 — Real Quality Identification (ahead of time)
 - **quality_value_compounder**: durable quality identification — persistent profitability and capital discipline
+- **durable_value_compounder**: quality-led value investing — durable cash generators at attractive value anchors
 - **sector_relative_outperformer**: best-in-class operators by relative strength — efficiency and accumulation
 - **forward_edge_active**: forward-looking "what is getting better?" — QoQ improvement and emerging trend
 
@@ -447,7 +450,8 @@ Intent:
 - stop tactical excitement from dominating the leaderboard
 - explicitly penalize names with sparse fundamental support (heaviest missing-component penalties)
 - attention inverted (0.70x/1.50x) — low-volume names face strongest anti-concentration drag
-- activate all extended quality signals (ROIC=1.40, FCF margin, buyback yield, revenue per employee)
+- activate all extended quality signals (ROIC=1.40, FCF margin, sustainable growth, Piotroski F-score, revenue per employee)
+- explicitly zero `scale` so the profile ranks strong earners and balance sheets, not simply large companies
 
 #### Horizon weights
 
@@ -458,33 +462,36 @@ Intent:
 | `months` | 0.02 | 0.01 | 0.04 | 0.12 | 0.36 | 0.20 | 0.25 |
 | `years` | 0.01 | 0.00 | 0.01 | 0.06 | 0.42 | 0.24 | 0.26 |
 
+`scale=0.00` is explicitly set for every horizon to avoid inherited size bias.
+
 #### Signal weight overrides
 
 | Component | Override details |
 | --- | --- |
-| `momentum` | `change=0.10`, `Perf.5D=0.10`, `Perf.W=0.15`, `Perf.1M=0.30`, `Perf.3M=1.00`, `Perf.YTD=1.05`, `Perf.Y=1.25`, `ROC=0.30`, `Mom=0.35`, `macd_spread=0.25`, `rsi_centered=0.15`, `rsi7_centered=0.05` |
+| `momentum` | `change=0.10`, `Perf.5D=0.10`, `Perf.W=0.15`, `Perf.1M=0.30`, `Perf.3M=0.80`, `Perf.6M=0.90`, `Perf.YTD=1.05`, `Perf.Y=1.25`, `ROC=0.30`, `Mom=0.35`, `macd_spread=0.25`, `rsi_centered=0.15`, `rsi7_centered=0.05` |
 | `trend` | `close_vs_sma200=1.40`, `close_vs_ema200=1.40`, `trend_alignment=1.25`, `close_vs_sma50=0.80`, `close_vs_ema50=0.80`, `close_vs_vwap=0.20`, `close_vs_vwma=0.30` |
-| `quality` | `return_on_invested_capital=1.40`, `operating_margin=1.30`, `free_cash_flow_margin_ttm=1.25`, `free_cash_flow_yoy_growth_ttm=1.25`, `ebitda_yoy_growth_ttm=1.20`, `return_on_equity=1.15`, `total_revenue_yoy_growth_ttm=1.15`, `earnings_per_share_diluted_yoy_growth_ttm=1.15`, `after_tax_margin=1.10`, `gross_margin=1.10`, `gross_profit_margin_fy=1.10`, `revenue_per_employee=1.10`, `return_on_assets=1.05`, `buyback_yield=0.90` |
+| `quality` | `return_on_invested_capital=1.40`, `operating_margin=1.35`, `free_cash_flow_margin_ttm=1.35`, `piotroski_f_score_ttm=1.35`, `free_cash_flow_yoy_growth_ttm=1.30`, `sustainable_growth_rate_ttm=1.30`, `ebitda_yoy_growth_ttm=1.20`, `earnings_per_share_diluted_yoy_growth_ttm=1.20`, `gross_profit_margin_fy=1.20`, `revenue_per_employee=1.20`, `return_on_equity=1.15`, `total_revenue_yoy_growth_ttm=1.15`, `after_tax_margin=1.15`, `gross_margin=1.15`, `return_on_assets=1.10`, `buyback_yield=0.90` |
 | `valuation` | `price_free_cash_flow_ttm=1.25`, `price_earnings_growth_ttm=1.20`, `enterprise_value_ebitda_ttm=1.15`, `price_earnings_ttm=1.10`, `price_to_cash_f_operating_activities_ttm=1.10` |
-| `safety` | `altman_z_score_ttm=1.25`, `debt_to_equity=1.25`, `debt_to_revenue_ttm=1.20`, `short_term_cash_coverage=1.15`, `net_debt=1.15`, `beta_1_year=0.70` |
+| `safety` | `total_debt_to_ebitda_fq=1.35`, `altman_z_score_ttm=1.30`, `debt_to_equity=1.30`, `debt_to_revenue_ttm=1.25`, `short_term_cash_coverage=1.25`, `net_debt=1.15`, `price_target_dispersion=0.70`, `beta_1_year=0.70` |
 
 #### Directional bias overrides
 
 | Component | Positive multiplier | Negative multiplier |
 | --- | ---: | ---: |
 | `attention` | 0.70 | 1.50 |
-| `momentum` | 1.00 | 0.90 |
+| `momentum` | 1.00 | 0.95 |
 | `trend` | 1.05 | 1.15 |
-| `quality` | 1.25 | 1.35 |
-| `valuation` | 1.20 | 1.20 |
-| `safety` | 1.18 | 1.30 |
+| `quality` | 1.28 | 1.38 |
+| `valuation` | 1.10 | 1.25 |
+| `safety` | 1.20 | 1.35 |
 
 Interpretation:
 
 - **attention bias 0.70x/1.50x is the most aggressive anti-concentration lever** — low-volume names have negative attention amplified by 50%
-- quality negative at 1.35x — durable profitability failure is heavily punished
+- quality negative at 1.38x — durable profitability failure is heavily punished
 - ROIC=1.40 is the highest quality signal weight — capital discipline is the primary quality filter
 - short-term momentum nearly zeroed (change=0.10, rsi7=0.05) — noise elimination
+- FCF margin, sustainable growth, and Piotroski F-score are now explicit durability checks
 - missing quality at years fallback of −1.30 is the heaviest in the system
 
 #### Missing-component fallback scores
@@ -496,7 +503,67 @@ Interpretation:
 | `months` | `attention=-0.30`, `quality=-1.20`, `valuation=-0.95`, `safety=-0.90` |
 | `years` | `attention=-0.20`, `quality=-1.30`, `valuation=-1.05`, `safety=-1.00` |
 
-### 4. `sector_relative_outperformer`
+### 4. `durable_value_compounder`
+
+Idea: **Quality-Led Value Investing** — durable performers at disciplined prices
+
+Intent:
+
+- identify operating companies that combine quality, value, and safety for months/years positioning
+- require visible value support, unlike `quality_value_compounder`, which can justify premium valuations
+- avoid relying on tactical reversal, unlike `deep_value_momentum`
+- use all current value-oriented scan inputs: FCF yield, operating cash-flow yield, EV/FCF, Graham-value gap, tangible-book gap, cash-per-share gap, Piotroski, sustainable growth, interest cover, Zmijewski, and debt/EBITDA
+- explicitly zero `scale` so size does not become a proxy for quality
+
+#### Horizon weights
+
+| Horizon | Attention | Event | Momentum | Trend | Quality | Valuation | Safety |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `days` | 0.02 | 0.00 | 0.02 | 0.08 | 0.34 | 0.34 | 0.20 |
+| `weeks` | 0.02 | 0.00 | 0.03 | 0.08 | 0.34 | 0.33 | 0.20 |
+| `months` | 0.01 | 0.00 | 0.02 | 0.07 | 0.36 | 0.36 | 0.18 |
+| `years` | 0.00 | 0.00 | 0.01 | 0.04 | 0.38 | 0.38 | 0.19 |
+
+`scale=0.00` is explicitly set for every horizon.
+
+#### Signal weight overrides
+
+| Component | Override details |
+| --- | --- |
+| `momentum` | Short-term price signals are nearly invisible; `Perf.Y=0.45` and `Perf.5Y=0.55` are retained as long-duration proof of performer status. |
+| `trend` | Long averages and support anchors are modest confirmation only: `close_vs_sma200=0.85`, `close_vs_ema200=0.85`, `trend_alignment=0.70`, Camarilla support/resistance at 0.25-0.55. |
+| `quality` | `piotroski_f_score_ttm=1.50`, `return_on_invested_capital=1.45`, `free_cash_flow_margin_ttm=1.45`, `return_on_capital_employed_fy=1.40`, `sustainable_growth_rate_ttm=1.35`, `operating_margin_ttm=1.35`, `free_cash_flow_cagr_5y=1.35`, `sloan_ratio_ttm=1.15` inverted. |
+| `valuation` | `enterprise_value_to_free_cash_flow_ttm=1.55`, `free_cash_flow_yield=1.55`, `earnings_yield=1.50`, `price_free_cash_flow_ttm=1.45`, `graham_value_gap=1.40`, `tangible_book_value_gap=1.35`, `book_value_discount=1.30`, `price_target_downside_floor=1.25`, `ncavps_ratio_current/fq=1.10`. |
+| `safety` | `altman_z_score_ttm=1.35`, `total_debt_to_ebitda_fq=1.35`, `net_debt_to_ebitda_fq=1.35`, `interst_cover_ttm=1.25`, `zmijewski_score_ttm=1.25` inverted, cash-to-debt/liability coverage 1.05-1.20. |
+
+#### Directional bias overrides
+
+| Component | Positive multiplier | Negative multiplier |
+| --- | ---: | ---: |
+| `attention` | 0.55 | 1.20 |
+| `momentum` | 0.80 | 0.55 |
+| `trend` | 0.90 | 0.75 |
+| `quality` | 1.35 | 1.45 |
+| `valuation` | 1.45 | 1.20 |
+| `safety` | 1.25 | 1.45 |
+
+Interpretation:
+
+- quality and valuation are co-primary at 67-76% combined horizon weight
+- momentum weakness is forgiven, but poor quality or safety is not
+- valuation positive at 1.45x makes cheap durable cash generation the main upside driver
+- missing quality/valuation evidence is heavily penalized so sparse-data names cannot rank on a single cheap multiple
+
+#### Missing-component fallback scores
+
+| Horizon | Fallbacks |
+| --- | --- |
+| `days` | `attention=-0.35`, `quality=-1.15`, `valuation=-1.15`, `safety=-0.80` |
+| `weeks` | `attention=-0.30`, `quality=-1.20`, `valuation=-1.25`, `safety=-0.90` |
+| `months` | `attention=-0.20`, `quality=-1.30`, `valuation=-1.35`, `safety=-1.00` |
+| `years` | `quality=-1.40`, `valuation=-1.45`, `safety=-1.10` |
+
+### 5. `sector_relative_outperformer`
 
 Idea: **Real Quality** — best-in-class operators by relative strength
 
@@ -555,7 +622,7 @@ Interpretation:
 | `months` | `attention=-0.25`, `quality=-1.10`, `valuation=-0.90`, `safety=-0.90` |
 | `years` | `quality=-1.20`, `valuation=-1.00`, `safety=-0.95` |
 
-### 5. `forward_edge_active`
+### 6. `forward_edge_active`
 
 Idea: **Real Quality** — forward-looking "what is getting better?"
 
@@ -617,65 +684,69 @@ Interpretation:
 | `months` | `quality=-0.90`, `safety=-0.90`, `valuation=-0.60` |
 | `years` | `quality=-1.00`, `safety=-1.00`, `valuation=-0.80` |
 
-### 6. `asymmetric_value`
+### 7. `asymmetric_value`
 
 Idea: **Overlooked Fundamentals** — quality NOT rewarded by the market
 
 Intent:
 
-- surface deep value discounts with asymmetric upside potential
-- momentum bias mildly inverted (positive=0.82x, negative=0.62x) — poor recent performance is forgiven, but not aggressively rewarded
-- combine traditional multiples with operating-company value anchors: earnings_yield=1.40, range_position_52w=1.35, book_value_discount=1.30, EV/FCF=1.35, target upside/downside, and distance_from_52w_high=1.25
+- surface low-valuation companies with asymmetric upside potential
+- combine traditional multiples with operating-company value anchors: earnings_yield=1.55, EV/FCF=1.50, book_value_discount=1.40, target upside/downside, and peer-revenue value gap
+- require unrecognized or overlooked fundamentals through cash-flow quality, ROIC, Piotroski F-score, and forward EPS growth
+- keep momentum and trend as small recovery hints, not as primary rank drivers
 - maintain a strong safety floor across all horizons to avoid value traps
-- amplify the penalty for low attention so passive low-volume vehicles face a meaningful drag
+- explicitly zero `scale` so size does not substitute for mispricing evidence
 
 #### Horizon weights
 
 | Horizon | Attention | Event | Momentum | Trend | Quality | Valuation | Safety |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `days` | 0.04 | 0.02 | 0.05 | 0.12 | 0.22 | 0.33 | 0.22 |
-| `weeks` | 0.04 | 0.02 | 0.06 | 0.12 | 0.24 | 0.30 | 0.22 |
-| `months` | 0.03 | 0.02 | 0.04 | 0.10 | 0.28 | 0.32 | 0.21 |
-| `years` | 0.02 | 0.01 | 0.02 | 0.06 | 0.30 | 0.36 | 0.23 |
+| `days` | 0.04 | 0.01 | 0.03 | 0.07 | 0.23 | 0.38 | 0.24 |
+| `weeks` | 0.03 | 0.02 | 0.04 | 0.06 | 0.25 | 0.37 | 0.23 |
+| `months` | 0.03 | 0.01 | 0.02 | 0.04 | 0.28 | 0.39 | 0.23 |
+| `years` | 0.01 | 0.00 | 0.01 | 0.02 | 0.31 | 0.40 | 0.25 |
+
+`scale=0.00` is explicitly set for every horizon to prevent inherited size tilt.
 
 #### Signal weight overrides
 
 | Component | Override details |
 | --- | --- |
-| `momentum` | `change=0.20`, `Perf.5D=0.20`, `Perf.W=0.25`, `Perf.1M=0.40`, `Perf.3M=1.00`, `Perf.6M=1.05`, `Perf.YTD=0.90`, `Perf.Y=0.60`, `ROC=0.40`, `Mom=0.45`, `macd_spread=0.35`, `rsi_centered=0.20`, `rsi7_centered=0.10`, `stoch_rsi_centered=0.65`, `stoch_rsi_crossover=1.10` |
-| `trend` | `close_vs_sma200=1.25`, `close_vs_ema200=1.25`, `trend_alignment=1.10`, `close_vs_sma50=0.75`, `close_vs_ema50=0.75`, `close_vs_vwap=0.40`, `close_vs_vwma=0.50` |
-| `quality` | `eps_forward_growth=1.45`, `return_on_invested_capital=1.35`, `free_cash_flow_margin_ttm=1.35`, `piotroski_f_score_ttm=1.35`, `free_cash_flow_yoy_growth_ttm=1.30`, `operating_margin=1.20`, `buyback_yield=1.15`, `sustainable_growth_rate_ttm=1.05` |
-| `valuation` | `earnings_yield=1.40`, `range_position_52w=1.35`, `enterprise_value_to_free_cash_flow_ttm=1.35`, `book_value_discount=1.30`, `distance_from_52w_high=1.25`, `price_target_downside_floor=1.20`, `price_target_upside_median=1.10`, `price_target_upside_average=1.05` |
-| `safety` | `altman_z_score_ttm=1.30`, `debt_to_equity=1.25`, `total_debt_to_ebitda_fq=1.25`, `debt_to_revenue_ttm=1.20`, `net_debt=1.20`, `price_target_dispersion=0.80`, `beta_adjusted_atrp=0.75` |
+| `momentum` | `stoch_rsi_crossover=1.15`, `Perf.3M=0.80`, `Perf.6M=0.70`, `Perf.YTD=0.65`, `Perf.Y=0.50`, `change=0.12`, `Perf.5D=0.15`, `Perf.W=0.20`, `Perf.1M=0.30` |
+| `trend` | `close_vs_sma200=0.90`, `close_vs_ema200=0.90`, `short_trend_emergence=0.85`, `pivot_distance=0.80`, `trend_alignment=0.75`, `close_vs_sma50=0.60`, `close_vs_ema50=0.60` |
+| `quality` | `eps_forward_growth=1.55`, `free_cash_flow_margin_ttm=1.45`, `return_on_invested_capital=1.40`, `piotroski_f_score_ttm=1.40`, `free_cash_flow_yoy_growth_ttm=1.40`, `operating_margin=1.25`, `revenue_per_employee=1.25`, `earnings_per_share_diluted_yoy_growth_ttm=1.20`, `buyback_yield=1.20`, `sustainable_growth_rate_ttm=1.15` |
+| `valuation` | `earnings_yield=1.55`, `enterprise_value_to_free_cash_flow_ttm=1.50`, `book_value_discount=1.40`, `price_free_cash_flow_ttm=1.40`, `range_position_52w=1.35`, `price_target_upside_median=1.35`, `peer_revenue_value_gap=1.35`, `price_book_fq=1.30`, `distance_from_52w_high=1.30`, `price_target_downside_floor=1.30`, `price_target_upside_average=1.25` |
+| `safety` | `altman_z_score_ttm=1.35`, `total_debt_to_ebitda_fq=1.35`, `short_term_cash_coverage=1.30`, `debt_to_equity=1.30`, `debt_to_revenue_ttm=1.25`, `net_debt=1.25`, `price_target_dispersion=0.90`, `beta_adjusted_atrp=0.85` |
 
 #### Directional bias overrides
 
 | Component | Positive multiplier | Negative multiplier |
 | --- | ---: | ---: |
-| `attention` | 0.75 | 1.40 |
-| `momentum` | 0.82 | 0.62 |
-| `trend` | 1.00 | 0.80 |
-| `quality` | 1.20 | 1.25 |
-| `valuation` | 1.35 | 1.00 |
-| `safety` | 1.12 | 1.35 |
+| `attention` | 0.65 | 1.45 |
+| `momentum` | 0.70 | 0.45 |
+| `trend` | 0.90 | 0.70 |
+| `quality` | 1.22 | 1.35 |
+| `valuation` | 1.45 | 1.10 |
+| `safety` | 1.15 | 1.40 |
 
 Interpretation:
 
-- **momentum bias is mildly inverted** — positive momentum at 0.82x and negative at 0.62x means poor recent performance is forgiven, but the profile no longer over-rewards stagnant passive vehicles.
-- valuation positive at 1.35x amplifies deep value discount evidence
-- safety negative at 1.35x acts as the value-trap guard — balance-sheet deterioration kills the score
-- forward EPS growth, Piotroski F-score, EV/FCF, book-value discount, and target downside floor are now the operating-company filters
+- valuation positive at 1.45x is the primary amplifier — deep discount evidence is the profile's center of gravity
+- peer_revenue_value_gap rewards companies whose revenue share exceeds market-cap share inside the current scan universe, especially industry scans
+- momentum positive at 0.70x and negative at 0.45x means weak tape is forgiven but never becomes the thesis by itself
+- safety negative at 1.40x acts as the value-trap guard — balance-sheet deterioration kills the score
+- forward EPS growth, Piotroski F-score, FCF margin/growth, EV/FCF, book-value discount, and target upside/downside are the operating-company filters
 
 #### Missing-component fallback scores
 
 | Horizon | Fallbacks |
 | --- | --- |
-| `days` | `attention=-0.45`, `valuation=-0.90`, `quality=-1.00`, `safety=-0.65` |
-| `weeks` | `attention=-0.35`, `valuation=-1.00`, `quality=-1.10`, `safety=-0.75` |
-| `months` | `attention=-0.25`, `valuation=-1.10`, `quality=-1.20`, `safety=-0.85` |
-| `years` | `valuation=-1.20`, `quality=-1.30`, `safety=-0.95` |
+| `days` | `attention=-0.45`, `valuation=-1.10`, `quality=-1.05`, `safety=-0.75` |
+| `weeks` | `attention=-0.35`, `valuation=-1.20`, `quality=-1.15`, `safety=-0.85` |
+| `months` | `attention=-0.25`, `valuation=-1.30`, `quality=-1.25`, `safety=-0.95` |
+| `years` | `valuation=-1.35`, `quality=-1.35`, `safety=-1.05` |
 
-### 7. `value_recovery`
+### 8. `value_recovery`
 
 Idea: **Overlooked Fundamentals** — turnaround with sequential improvement
 
@@ -733,7 +804,7 @@ Interpretation:
 | `months` | `attention=-0.20`, `valuation=-1.05`, `quality=-0.75`, `safety=-0.85` |
 | `years` | `valuation=-1.15`, `quality=-0.85`, `safety=-0.95` |
 
-### 8. `deep_value_momentum`
+### 9. `deep_value_momentum`
 
 Idea: **Overlooked Fundamentals** — aggressive value plus catalyst
 
@@ -792,7 +863,7 @@ Interpretation:
 | `months` | `attention=-0.15`, `quality=-1.20`, `valuation=-1.05`, `safety=-0.80` |
 | `years` | `quality=-1.30`, `valuation=-1.15`, `safety=-0.90` |
 
-### 9. `fragility_short`
+### 10. `fragility_short`
 
 Idea: **Hedging** — identifies structurally fragile names for short/hedge baskets
 
@@ -974,7 +1045,7 @@ You should expect the leaders to have:
 
 ## Consensus Aggregator
 
-The consensus aggregator (`run_consensus_aggregator`) runs all 9 profiles against the same scan data and produces a meta-ranking based on cross-profile agreement.
+The consensus aggregator (`run_consensus_aggregator`) runs all 10 profiles against the same scan data and produces a meta-ranking based on cross-profile agreement.
 
 ### How it works
 
@@ -989,13 +1060,14 @@ The consensus aggregator (`run_consensus_aggregator`) runs all 9 profiles agains
 
 | Profile | Consensus weight | Rationale |
 | --- | ---: | --- |
-| `breakout_long` | 0.22 | Empirically strongest near-term predictor; tactical momentum confirmation |
-| `early_momentum_inflection` | 0.13 | Nascent move and pre-breakout detection |
-| `quality_value_compounder` | 0.12 | Durable quality and fundamental ballast |
-| `forward_edge_active` | 0.12 | Forward-looking quality improvement |
-| `sector_relative_outperformer` | 0.10 | Efficiency, durability, and relative strength |
-| `asymmetric_value` | 0.10 | Mispricing detection with operating-company filters |
-| `value_recovery` | 0.09 | Turnaround and rerating with reversal confirmation |
+| `breakout_long` | 0.20 | Empirically strongest near-term predictor; tactical momentum confirmation |
+| `early_momentum_inflection` | 0.12 | Nascent move and pre-breakout detection |
+| `forward_edge_active` | 0.11 | Forward-looking quality improvement |
+| `quality_value_compounder` | 0.10 | Durable quality and fundamental ballast |
+| `durable_value_compounder` | 0.09 | Quality-led value investing for months/years positioning |
+| `sector_relative_outperformer` | 0.09 | Efficiency, durability, and relative strength |
+| `asymmetric_value` | 0.09 | Mispricing detection with operating-company filters |
+| `value_recovery` | 0.08 | Turnaround and rerating with reversal confirmation |
 | `fragility_short` | 0.07 | Short-side / hedge signal, sign-inverted in consensus |
 | `deep_value_momentum` | 0.05 | Value plus catalyst intersection |
 
@@ -1054,6 +1126,7 @@ Current profile confidence parameters:
 | `breakout_long` | 1.07 | 0.00 |
 | `early_momentum_inflection` | 1.05 | 0.00 |
 | `quality_value_compounder` | 1.02 | 0.00 |
+| `durable_value_compounder` | 1.04 | 0.00 |
 | `sector_relative_outperformer` | 1.02 | 0.00 |
 | `forward_edge_active` | 1.03 | 0.00 |
 | `asymmetric_value` | 1.02 | 0.00 |
@@ -1070,19 +1143,20 @@ These are secondary to score construction. The main ranking differentiation come
 
 ## Summary
 
-The revised preset logic organizes 9 profiles into three investment ideas with sharply differentiated scoring.
+The revised preset logic organizes 10 profiles into three investment ideas with sharply differentiated scoring.
 
 ### Trend Following
 - `breakout_long` is purely tactical — quality=0.00 at days, momentum bias +1.40x/−0.65x (most aggressive upside), ADX directional spread=1.50, volume_trend=1.40 for confirmation.
 - `early_momentum_inflection` catches nascent moves — aroon_spread=1.65 (highest momentum signal), bb_squeeze=1.55, range_compression=1.50 for coiled energy, Perf.Y=0.10 to eliminate established runs.
 
 ### Real Quality Identification
-- `quality_value_compounder` is fundamentally strict with quality=42% at years, ROIC=1.40, attention inverted 0.70x/1.50x, and the heaviest missing-quality penalties (−1.30 at years).
+- `quality_value_compounder` is fundamentally strict with quality=42% at years, ROIC=1.40, FCF margin=1.35, Piotroski F-score=1.35, attention inverted 0.70x/1.50x, scale explicitly zeroed, and the heaviest missing-quality penalties (−1.30 at years).
+- `durable_value_compounder` is quality-led value: quality+valuation=0.67-0.76 across horizons, Piotroski=1.50, ROIC=1.45, EV/FCF=1.55, FCF yield=1.55, Graham gap=1.40, safety negative=1.45x, and scale explicitly zeroed.
 - `sector_relative_outperformer` rewards efficiency — revenue_per_employee=1.30, volume_trend=1.50 (highest in system for accumulation), Perf.Y=1.30, quality bias +1.30x/−1.35x.
 - `forward_edge_active` is most forward-looking — eps_forward_growth=1.75 (highest single signal), QoQ dominates YoY, short_trend_emergence=1.65, attention most inverted at 0.50x/1.50x.
 
 ### Overlooked Fundamentals and Hedging
-- `asymmetric_value` has mildly inverted momentum bias (+0.82x/−0.62x) — weakness is forgiven, but operating-company evidence now matters more: earnings_yield=1.40, EV/FCF=1.35, book_value_discount=1.30, Piotroski F-score=1.35, and safety negative at −1.35x for value-trap guard.
+- `asymmetric_value` is now value-dominant: valuation=0.38-0.40 across horizons, earnings_yield=1.55, EV/FCF=1.50, book_value_discount=1.40, peer_revenue_value_gap=1.35, momentum damped to +0.70x/−0.45x, scale explicitly zeroed, and safety negative at −1.40x for value-trap guard.
 - `value_recovery` forgives weakness most (momentum negative at 0.60x), QoQ dominates YoY (1.20–1.35 vs 0.85–1.10), eps_forward_growth=1.50, and stoch_rsi_crossover=1.35 is the recovery trigger.
 - `deep_value_momentum` requires both value and reversal confirmation — stoch_rsi_crossover=1.55, short_trend_emergence=1.40, eps_forward_growth=1.55, earnings_yield=1.40, and EV/FCF=1.30.
 - `fragility_short` inverts all directional biases to amplify negatives — safety=0.57 at years (highest single weight), safety bias −1.45x (most aggressive), beta NOT inverted.

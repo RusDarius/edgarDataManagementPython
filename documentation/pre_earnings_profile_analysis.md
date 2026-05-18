@@ -207,22 +207,22 @@ The **default weights** apply when a profile does not override them. Profiles ov
 
 ### 3.7 `asymmetric_value` — Overlooked Fundamentals
 
-**What it does:** Market-disconnect detector. Strong quality + cheap valuation where the market has NOT rewarded it. Momentum bias INVERTED — poor recent performance reduces penalty.
+**What it does:** Market-disconnect detector. Strong quality + cheap valuation where the market has NOT rewarded it. Value dominates the score; momentum is only a small recovery hint.
 
 **Horizon component weights:**
 
 | Component | Days | Weeks | Months | Years |
 |-----------|------|-------|--------|-------|
-| attention | 0.04 | 0.04 | 0.03 | 0.02 |
-| event | 0.02 | 0.02 | 0.02 | 0.01 |
-| momentum | 0.05 | 0.06 | 0.04 | 0.02 |
-| trend | 0.12 | 0.12 | 0.10 | 0.06 |
-| quality | 0.22 | 0.24 | 0.28 | 0.30 |
-| valuation | **0.33** | **0.30** | **0.32** | **0.36** |
-| safety | 0.22 | 0.22 | 0.21 | 0.23 |
+| attention | 0.04 | 0.03 | 0.03 | 0.01 |
+| event | 0.01 | 0.02 | 0.01 | 0.00 |
+| momentum | 0.03 | 0.04 | 0.02 | 0.01 |
+| trend | 0.07 | 0.06 | 0.04 | 0.02 |
+| quality | 0.23 | 0.25 | 0.28 | 0.31 |
+| valuation | **0.38** | **0.37** | **0.39** | **0.40** |
+| safety | 0.24 | 0.23 | 0.23 | 0.25 |
 
-**Top valuation weights:** `distance_from_52w_high` = 1.50, `earnings_yield` = 1.40, `range_position_52w` = 1.35.  
-**Momentum bias:** positive ×0.75, negative ×0.55 — uniquely suppresses both directions. Crowd-contrarian.
+**Top valuation weights:** `earnings_yield` = 1.55, `enterprise_value_to_free_cash_flow_ttm` = 1.50, `book_value_discount` = 1.40, `price_target_upside_median` = 1.35, `peer_revenue_value_gap` = 1.35.  
+**Momentum bias:** positive ×0.70, negative ×0.45 — weak tape is forgiven, but cheapness and durable fundamentals carry the thesis.
 
 ---
 
