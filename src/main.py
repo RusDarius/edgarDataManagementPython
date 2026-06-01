@@ -27,6 +27,7 @@ from data_analysis_scripts.trading_view_priceperf_analysis import (
 )
 from data_analysis_scripts.trading_view_move_prediction_analysis import (
     run_full_analysis_suite,
+    run_full_analysis_suite_duckdb,
     run_full_analysis_suite_from_raw_csv_folders,
     run_full_analysis_suite_with_earnings_priority,
     run_move_prediction_profile_suite,
@@ -189,6 +190,18 @@ def run_move_prediction_history_aggregation_example() -> dict[str, object]:
         "08_05_2026",
         "11_05_2026",
         "12_05_2026",
+        "13_05_2026",
+        "14_05_2026",
+        "15_05_2026",
+        "18_05_2026",
+        "19_05_2026",
+        "20_05_2026",
+        "21_05_2026",
+        "22_05_2026",
+        "26_05_2026",
+        "27_05_2026",
+        "28_05_2026",
+        "29_05_2026",
     ]
 
     input_paths = build_move_prediction_history_inputs_from_folder_names(
@@ -198,7 +211,7 @@ def run_move_prediction_history_aggregation_example() -> dict[str, object]:
     output_dir = (
         history_root
         / "history_aggregations"
-        / "all_in_universe_min1bil__30_03_2026__12_05_2026"
+        / "all_in_universe_min1bil__30_03_2026__29_05_2026"
     )
 
     aggregation_result = run_move_prediction_history_aggregation(
@@ -278,7 +291,7 @@ def main():
     #     include_blind_spot_sections=False,
     # )
 
-    run_full_analysis_suite(
+    run_full_analysis_suite_duckdb(
         scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
             min_market_cap_usd=1_000_000_000,
             markets=PREFERRED_MARKETS,
@@ -287,36 +300,56 @@ def main():
         include_blind_spot_sections=True,
     )
 
-    # Earnings-priority variant: same per-profile + consensus analysis as the
-    # standard full analysis suite, plus an extra report ordering names
-    # chronologically by upcoming earnings (catalyst-time view). Uses the
-    # earnings-enriched scan so the next-earnings columns are populated.
-    run_full_analysis_suite_with_earnings_priority(
-        scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction_with_earnings(
-            min_market_cap_usd=1_000_000_000,
-            markets=PREFERRED_MARKETS,
-        ).get(
-            "data", []
-        ),
-        min_market_cap_usd=1_000_000_000,
-        include_blind_spot_sections=True,
-    )
+    # run_full_analysis_suite(
+    #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+    #         industries=[TRADING_VIEW_INDUSTRIES.INFORMATION_TECHNOLOGY_SERVICES],
+    #         min_market_cap_usd=1_000_000_000,
+    #         markets=PREFERRED_MARKETS,
+    #     ).get("data", []),
+    #     min_market_cap_usd=1_000_000_000,
+    #     include_blind_spot_sections=True,
+    #     industries=[TRADING_VIEW_INDUSTRIES.INFORMATION_TECHNOLOGY_SERVICES],
+    # )
 
-    run_targets_scan(
-        scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-            min_market_cap_usd=1_000_000_000,
-            markets=PREFERRED_MARKETS,
-        ).get("data", []),
-        min_market_cap_usd=1_000_000_000,
-    )
+    # run_full_analysis_suite(
+    #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+    #         min_market_cap_usd=1_000_000_000,
+    #         markets=PREFERRED_MARKETS,
+    #     ).get("data", []),
+    #     min_market_cap_usd=1_000_000_000,
+    #     include_blind_spot_sections=True,
+    # )
 
-    run_cross_scanner_aggregate(
-        scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-            min_market_cap_usd=1_000_000_000,
-            markets=PREFERRED_MARKETS,
-        ).get("data", []),
-        min_market_cap_usd=1_000_000_000,
-    )
+    # # Earnings-priority variant: same per-profile + consensus analysis as the
+    # # standard full analysis suite, plus an extra report ordering names
+    # # chronologically by upcoming earnings (catalyst-time view). Uses the
+    # # earnings-enriched scan so the next-earnings columns are populated.
+    # run_full_analysis_suite_with_earnings_priority(
+    #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction_with_earnings(
+    #         min_market_cap_usd=1_000_000_000,
+    #         markets=PREFERRED_MARKETS,
+    #     ).get(
+    #         "data", []
+    #     ),
+    #     min_market_cap_usd=1_000_000_000,
+    #     include_blind_spot_sections=True,
+    # )
+
+    # run_targets_scan(
+    #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+    #         min_market_cap_usd=1_000_000_000,
+    #         markets=PREFERRED_MARKETS,
+    #     ).get("data", []),
+    #     min_market_cap_usd=1_000_000_000,
+    # )
+
+    # run_cross_scanner_aggregate(
+    #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+    #         min_market_cap_usd=1_000_000_000,
+    #         markets=PREFERRED_MARKETS,
+    #     ).get("data", []),
+    #     min_market_cap_usd=1_000_000_000,
+    # )
 
     # Aggregate progression across selected dated result folders.
     # Pass only the dated folder names under AllInUniverse_min1bil.
@@ -327,7 +360,7 @@ def main():
     # print(f"TradingView all-fields export written to: {exported_file}")
     # split_csv_by_rows(
     #     input_csv=Path(
-    #         "d:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/15_05_2026/tradingview_global_all_tdfields_15_05_2026.csv"
+    #         "d:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/22_05_2026/tradingview_global_all_tdfields_22_05_2026.csv"
     #     )
     # )
 

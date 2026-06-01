@@ -1437,3 +1437,74 @@ These are data-layer and scan-level enhancements that could further improve forw
 14. ~~**Cross-profile consensus layer**~~: **Implemented** as `run_consensus_aggregator`. Runs all 9 profiles against the same scan data, produces weighted consensus scores per horizon, identifies high-conviction names where 5+ profiles agree on direction with ≥60% agreement ratio. Output includes ranked report per horizon plus CSV with all individual profile scores, risk-adjusted scores, risk tiers, and manager action signals.
 
 15. **Temporal stability scoring**: Track whether a name's component scores are stable across consecutive runs (requires storing historical scores). A name that consistently scores well across multiple days has more reliable support than a one-day spike. This would be a confidence multiplier rather than a ranking signal.
+
+## May 2026 Practical Addendum — Profile Coverage And Relativity
+
+This section is intentionally short and operational. It answers two recurring questions:
+
+1. Which fields are actually active per profile (coverage)?
+2. Are scores in `run_full_analysis_suite` relative to peers, broad market, or both?
+
+### A. Profile coverage footprint (active non-zero signals)
+
+The suite currently has **159 total candidate signals** across all components. A signal is counted as "active" for a profile when its effective weight is strictly greater than `0.0`.
+
+| Profile | Attention | Event | Momentum | Trend | Quality | Valuation | Safety | Scale | Total active |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `breakout_long` | 10/10 | 6/6 | 21/21 | 16/20 | 14/39 | 9/33 | 9/24 | 6/6 | 91/159 |
+| `early_momentum_inflection` | 10/10 | 6/6 | 21/21 | 16/20 | 14/39 | 9/33 | 9/24 | 6/6 | 91/159 |
+| `quality_value_compounder` | 5/10 | 5/6 | 16/21 | 8/20 | 25/39 | 14/33 | 12/24 | 6/6 | 91/159 |
+| `durable_value_compounder` | 6/10 | 5/6 | 16/21 | 12/20 | 39/39 | 31/33 | 24/24 | 6/6 | 139/159 |
+| `sector_relative_outperformer` | 7/10 | 5/6 | 16/21 | 8/20 | 21/39 | 10/33 | 9/24 | 6/6 | 82/159 |
+| `forward_edge_active` | 10/10 | 6/6 | 21/21 | 16/20 | 21/39 | 12/33 | 9/24 | 6/6 | 101/159 |
+| `asymmetric_value` | 5/10 | 5/6 | 18/21 | 9/20 | 25/39 | 19/33 | 12/24 | 6/6 | 99/159 |
+| `value_recovery` | 5/10 | 5/6 | 17/21 | 9/20 | 24/39 | 18/33 | 12/24 | 6/6 | 96/159 |
+| `deep_value_momentum` | 7/10 | 5/6 | 21/21 | 18/20 | 24/39 | 18/33 | 12/24 | 6/6 | 111/159 |
+| `fragility_short` | 7/10 | 6/6 | 20/21 | 13/20 | 19/39 | 13/33 | 11/24 | 6/6 | 95/159 |
+
+How to read this quickly:
+
+- `durable_value_compounder` is the broadest fundamental profile (very high quality/valuation/safety coverage).
+- `sector_relative_outperformer` is intentionally selective (lowest total active footprint).
+- `breakout_long` and `early_momentum_inflection` are tactical: they fully activate attention/event/momentum while keeping many deep-fundamental signals inactive.
+
+For exact field weights per profile, use the per-profile sections above:
+
+- "Signal weight overrides" gives every explicit override.
+- Any field not listed there uses default logic (`1.0` for standard signals, `0.0` for extended signals).
+
+### B. What `run_full_analysis_suite` is relative to
+
+`run_full_analysis_suite` is **universe-relative** by design.
+
+For each run, robust signals are normalized from the rows passed into that run:
+
+1. Per-field median and MAD are computed on the provided `scan_data` only.
+2. Raw/derived values become robust signals relative to that run's distribution.
+3. Component and horizon scores are built from those run-relative signals.
+
+Implication: if you pass all stocks, each score is relative to the all-stock universe in that run. If you pass one industry, each score is relative to that industry's peers in that run.
+
+### C. Where true peer-relative behavior exists today
+
+Current peer-relative signals already present:
+
+- `_peer_market_cap_share` and `_peer_revenue_share` are computed from the **current run universe totals**.
+- `peer_revenue_value_gap = _peer_revenue_share - _peer_market_cap_share` is therefore relative to the names in that run.
+
+This means peer-relative valuation behavior is strongest when the run universe is already a coherent peer set (industry/sector scope).
+
+### D. Should you run all stocks or per-industry?
+
+Use this rule:
+
+- **All-stocks scan**: best for global opportunity discovery and broad ranking.
+- **Per-industry scan**: best when you want strict comparability among business-model peers.
+
+Recommended workflow for production:
+
+1. Run broad `run_full_analysis_suite` for discovery.
+2. Re-run shortlisted sectors with `run_full_analysis_suite_by_industry` for peer-pure ranking.
+3. Use `_cross_industry_aggregate` output to compare top names across sector winners.
+
+If your objective is explicitly "best relative to peers", prefer the per-industry pathway as the primary ranking layer.

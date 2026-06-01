@@ -298,6 +298,8 @@ DERIVED_PROFILE_FIELDS = [
     "price_target_dispersion",
     "book_value_discount",
     "peer_revenue_value_gap",
+    "industry_revenue_value_gap",
+    "operating_turnaround_score",
     "beta_adjusted_atrp",
     "close_vs_camarilla_s1",
     "close_vs_camarilla_s2",
@@ -355,6 +357,11 @@ EXTENDED_SIGNALS: frozenset[str] = frozenset(
         "price_target_dispersion",
         "book_value_discount",
         "peer_revenue_value_gap",
+        "industry_revenue_value_gap",
+        "operating_turnaround_score",
+        "low_relative_volume",
+        "low_float_turnover",
+        "low_dollar_turnover_intensity",
         "sustainable_growth_rate_ttm",
         "piotroski_f_score_ttm",
         "dividend_yield_recent",
@@ -1738,47 +1745,46 @@ PRESET_SCORING_PROFILES = {
     "asymmetric_value": ScoringProfile(
         name="asymmetric_value",
         description=(
-            "Overlooked fundamentals profile that surfaces names where strong "
-            "quality and cheap valuation have NOT been rewarded by market "
-            "performance. The key mechanism: valuation signals dominate the "
-            "profile while quality and safety act as gates. It rewards low "
-            "multiples, peer-revenue value gaps, book/cash-flow support, street "
-            "upside, and predictable future cash-flow evidence, while tactical "
-            "momentum is only a small recovery hint. This creates a focused "
-            "market-disconnect detector for quality companies the crowd has "
-            "overlooked or punished unfairly. Safety is the primary value-trap "
-            "filter: names with weak balance sheets cannot make the leaderboard "
-            "regardless of cheapness."
+            "Overlooked stock profile for operating companies where fundamentals "
+            "or industry-relative economics are better than the market price "
+            "implies. The key mechanism: quality and valuation are co-primary, "
+            "with explicit low-attention and industry revenue-value gap signals. "
+            "It should find either great fundamentals at a modest price or a "
+            "large discount to cash flow, book value, Graham value, analyst fair "
+            "value, and industry revenue share. Tactical momentum is muted so "
+            "recent price chase does not dominate. Safety remains the value-trap "
+            "filter: weak balance sheets cannot make the leaderboard on cheapness "
+            "alone."
         ),
         horizon_weights={
             "days": {
-                "attention": 0.04,
+                "attention": 0.03,
                 "event": 0.01,
-                "momentum": 0.03,
-                "trend": 0.07,
-                "quality": 0.23,
-                "valuation": 0.38,
-                "safety": 0.24,
+                "momentum": 0.02,
+                "trend": 0.05,
+                "quality": 0.33,
+                "valuation": 0.37,
+                "safety": 0.19,
                 "scale": 0.00,
             },
             "weeks": {
                 "attention": 0.03,
-                "event": 0.02,
-                "momentum": 0.04,
-                "trend": 0.06,
-                "quality": 0.25,
+                "event": 0.01,
+                "momentum": 0.02,
+                "trend": 0.05,
+                "quality": 0.34,
                 "valuation": 0.37,
-                "safety": 0.23,
+                "safety": 0.18,
                 "scale": 0.00,
             },
             "months": {
-                "attention": 0.03,
+                "attention": 0.02,
                 "event": 0.01,
-                "momentum": 0.02,
-                "trend": 0.04,
-                "quality": 0.28,
+                "momentum": 0.01,
+                "trend": 0.03,
+                "quality": 0.36,
                 "valuation": 0.39,
-                "safety": 0.23,
+                "safety": 0.18,
                 "scale": 0.00,
             },
             "years": {
@@ -1786,22 +1792,33 @@ PRESET_SCORING_PROFILES = {
                 "event": 0.00,
                 "momentum": 0.01,
                 "trend": 0.02,
-                "quality": 0.31,
-                "valuation": 0.40,
-                "safety": 0.25,
+                "quality": 0.38,
+                "valuation": 0.39,
+                "safety": 0.19,
                 "scale": 0.00,
             },
         },
         component_signal_weights={
+            "attention": {
+                "low_relative_volume": 1.20,
+                "low_float_turnover": 0.95,
+                "low_dollar_turnover_intensity": 0.95,
+                "relative_volume_10d_calc": 0.15,
+                "float_turnover": 0.10,
+                "dollar_turnover_intensity": 0.10,
+                "Value.Traded": 0.10,
+                "AvgValue.Traded_10d": 0.10,
+                "volume_trend": 0.35,
+            },
             "momentum": {
                 "change": 0.12,
                 "Perf.5D": 0.15,
-                "Perf.W": 0.20,
-                "Perf.1M": 0.30,
-                "Perf.3M": 0.80,
-                "Perf.6M": 0.70,
-                "Perf.YTD": 0.65,
-                "Perf.Y": 0.50,
+                "Perf.W": 0.15,
+                "Perf.1M": 0.18,
+                "Perf.3M": 0.30,
+                "Perf.6M": 0.25,
+                "Perf.YTD": 0.20,
+                "Perf.Y": 0.15,
                 "ROC": 0.35,
                 "Mom": 0.35,
                 "macd_spread": 0.30,
@@ -1825,52 +1842,69 @@ PRESET_SCORING_PROFILES = {
                 "short_trend_emergence": 0.85,
             },
             "quality": {
-                "total_revenue_yoy_growth_ttm": 1.15,
+                "total_revenue_yoy_growth_ttm": 1.20,
                 "total_revenue_qoq_growth_fq": 0.95,
-                "ebitda_yoy_growth_ttm": 1.20,
+                "ebitda_yoy_growth_ttm": 1.25,
                 "ebitda_qoq_growth_fq": 1.00,
-                "net_income_yoy_growth_ttm": 1.15,
+                "net_income_yoy_growth_ttm": 1.20,
                 "net_income_qoq_growth_fq": 0.95,
-                "free_cash_flow_yoy_growth_ttm": 1.40,
+                "free_cash_flow_yoy_growth_ttm": 1.50,
                 "free_cash_flow_qoq_growth_fq": 1.15,
                 "gross_margin": 1.15,
                 "operating_margin": 1.25,
                 "after_tax_margin": 1.10,
                 "return_on_assets": 1.10,
                 "return_on_equity": 1.15,
-                "return_on_invested_capital": 1.40,
-                "free_cash_flow_margin_ttm": 1.45,
-                "buyback_yield": 1.20,
-                "dividends_yield_current": 1.00,
-                "eps_forward_growth": 1.55,
-                "revenue_per_employee": 1.25,
+                "return_on_invested_capital": 1.55,
+                "free_cash_flow_margin_ttm": 1.60,
+                "buyback_yield": 0.85,
+                "dividends_yield_current": 0.60,
+                "eps_forward_growth": 1.35,
+                "revenue_per_employee": 1.35,
                 "earnings_per_share_diluted_yoy_growth_ttm": 1.20,
-                "gross_profit_margin_fy": 1.10,
-                "sustainable_growth_rate_ttm": 1.15,
-                "piotroski_f_score_ttm": 1.40,
-                "dividend_yield_recent": 0.90,
-                "dps_common_stock_prim_issue_yoy_growth_fy": 0.80,
+                "gross_profit_margin_fy": 1.25,
+                "sustainable_growth_rate_ttm": 1.45,
+                "piotroski_f_score_ttm": 1.65,
+                "dividend_yield_recent": 0.55,
+                "dps_common_stock_prim_issue_yoy_growth_fy": 0.45,
+                "free_cash_flow_cagr_5y": 1.45,
+                "net_income_cagr_5y": 1.35,
+                "gross_margin_ttm": 1.25,
+                "operating_margin_ttm": 1.50,
+                "net_margin_ttm": 1.35,
+                "ebitda_margin_ttm": 1.25,
+                "return_on_capital_employed_fy": 1.45,
+                "return_on_common_equity_ttm": 1.25,
+                "sloan_ratio_ttm": 1.10,
             },
             "valuation": {
                 "price_earnings_ttm": 1.25,
                 "price_earnings_growth_ttm": 1.25,
                 "price_sales_current": 1.15,
                 "price_book_fq": 1.30,
-                "price_free_cash_flow_ttm": 1.40,
+                "price_free_cash_flow_ttm": 1.55,
                 "price_to_cash_f_operating_activities_ttm": 1.25,
                 "enterprise_value_to_revenue_ttm": 1.15,
                 "enterprise_value_to_ebit_ttm": 1.15,
                 "enterprise_value_ebitda_ttm": 1.25,
-                "earnings_yield": 1.55,
+                "earnings_yield": 1.65,
                 "distance_from_52w_high": 1.30,
                 "range_position_52w": 1.35,
-                "enterprise_value_to_free_cash_flow_ttm": 1.50,
+                "enterprise_value_to_free_cash_flow_ttm": 1.65,
                 "enterprise_value_to_gross_profit_ttm": 1.15,
                 "price_target_upside_average": 1.25,
                 "price_target_upside_median": 1.35,
                 "price_target_downside_floor": 1.30,
-                "book_value_discount": 1.40,
-                "peer_revenue_value_gap": 1.35,
+                "book_value_discount": 1.50,
+                "peer_revenue_value_gap": 1.30,
+                "industry_revenue_value_gap": 1.65,
+                "graham_value_gap": 1.45,
+                "tangible_book_value_gap": 1.35,
+                "free_cash_flow_yield": 1.60,
+                "operating_cash_flow_yield": 1.45,
+                "ebit_yield_ev": 1.35,
+                "gross_profit_yield_ev": 1.30,
+                "net_cash_to_market_cap": 0.95,
             },
             "safety": {
                 "current_ratio": 1.15,
@@ -1889,19 +1923,19 @@ PRESET_SCORING_PROFILES = {
         },
         component_directional_bias={
             "attention": DirectionalBias(
-                positive_multiplier=0.65, negative_multiplier=1.45
+                positive_multiplier=1.15, negative_multiplier=0.70
             ),
             "momentum": DirectionalBias(
-                positive_multiplier=0.70, negative_multiplier=0.45
+                positive_multiplier=0.55, negative_multiplier=0.45
             ),
             "trend": DirectionalBias(
                 positive_multiplier=0.90, negative_multiplier=0.70
             ),
             "quality": DirectionalBias(
-                positive_multiplier=1.22, negative_multiplier=1.35
+                positive_multiplier=1.35, negative_multiplier=1.45
             ),
             "valuation": DirectionalBias(
-                positive_multiplier=1.45, negative_multiplier=1.10
+                positive_multiplier=1.50, negative_multiplier=1.20
             ),
             "safety": DirectionalBias(
                 positive_multiplier=1.15, negative_multiplier=1.40
@@ -1909,158 +1943,179 @@ PRESET_SCORING_PROFILES = {
         },
         missing_component_scores_by_horizon={
             "days": {
-                "attention": -0.45,
-                "valuation": -1.10,
-                "quality": -1.05,
+                "attention": -0.20,
+                "valuation": -1.20,
+                "quality": -1.25,
                 "safety": -0.75,
             },
             "weeks": {
-                "attention": -0.35,
-                "valuation": -1.20,
-                "quality": -1.15,
+                "attention": -0.15,
+                "valuation": -1.30,
+                "quality": -1.35,
                 "safety": -0.85,
             },
             "months": {
-                "attention": -0.25,
-                "valuation": -1.30,
-                "quality": -1.25,
+                "attention": -0.10,
+                "valuation": -1.40,
+                "quality": -1.45,
                 "safety": -0.95,
             },
             "years": {
-                "valuation": -1.35,
-                "quality": -1.35,
+                "valuation": -1.45,
+                "quality": -1.55,
                 "safety": -1.05,
             },
         },
         intro_metric_notes=[
-            "Overlooked fundamentals profile — finds cheap operating quality with asymmetric upside the market has NOT rewarded.",
-            "Value is now the dominant lens: horizon valuation weights rise to 0.38/0.37/0.39/0.40 while tactical momentum and trend fall sharply. This keeps the profile focused on valuation disconnect, not price chase.",
-            "Core value anchors: earnings_yield=1.55, EV/FCF=1.50, book_value_discount=1.40, price_free_cash_flow=1.40, price_book=1.30, target upside median=1.35, target downside floor=1.30.",
-            "Peer-relative cheapness added: peer_revenue_value_gap=1.35 rewards companies whose revenue share exceeds market-cap share inside the current scan universe, especially industry scans.",
-            "Forward cash-flow quality gate: eps_forward_growth=1.55, FCF_margin=1.45, FCF_growth=1.40, ROIC=1.40, Piotroski F-score=1.40. Cheapness must come with operating strength and future cash-flow visibility.",
-            "Momentum is a small recovery hint only: positive=0.70x, negative=0.45x and low horizon weights. Weak price action is forgiven, not treated as a standalone reason to buy.",
-            "Scale is explicitly zeroed so large companies do not rank just for size; relative value must come from valuation, quality, and safety evidence.",
-            "Safety is the value-trap filter: altman_z_score=1.35, debt/EBITDA=1.35, short-term cash coverage=1.30, negative safety bias=1.40x. Weak balance sheets block cheap names.",
-            "Missing valuation/quality evidence is punished more heavily. Asymmetry requires visible discount plus durable fundamentals, not sparse data.",
+            "Overlooked stock profile — finds durable operating quality or industry-relative economics that are not reflected in price.",
+            "Quality and valuation are co-primary: combined horizon weight is 0.70+ across horizons while momentum/trend are deliberately muted.",
+            "Low-attention signal is explicit: low_relative_volume, low_float_turnover, and low_dollar_turnover_intensity define overlooked status without letting generic volume chase dominate.",
+            "Industry-relative cheapness added: industry_revenue_value_gap=1.65 rewards companies whose industry revenue share exceeds their industry market-cap share.",
+            "Core value anchors strengthened: earnings_yield=1.65, EV/FCF=1.65, FCF yield=1.60, book_value_discount=1.50, Graham gap=1.45, and target upside median=1.35.",
+            "Fundamental gate is stricter: Piotroski=1.65, FCF margin=1.60, ROIC=1.55, operating_margin_ttm=1.50, sustainable growth=1.45, and FCF CAGR=1.45.",
+            "Momentum is almost invisible; this profile should not compete with breakout or inflection models for recent winners.",
+            "Safety remains the value-trap filter. Missing quality/valuation evidence is punished heavily so sparse-data funds and passive vehicles do not rank on accounting cheapness alone.",
         ],
         confidence_multiplier=1.02,
     ),
     "value_recovery": ScoringProfile(
         name="value_recovery",
         description=(
-            "Recovery trajectory profile that targets turnaround candidates where "
-            "cheap valuation and SEQUENTIAL fundamental improvement combine. The "
-            "key differentiator from asymmetric_value: this profile rewards names "
-            "that are actively IMPROVING (QoQ metrics prioritized), not just "
-            "statically cheap. Forward EPS growth expectations confirm the recovery "
-            "thesis. Stoch RSI crosses detect the oversold-to-recovery technical "
-            "turn. Noise reduction: momentum is damped so recent weakness does not "
-            "penalize recovering names, but negative quality IS penalized — the "
-            "profile requires evidence that the turn is real."
+            "Operating turnaround profile for companies where sequential metrics "
+            "are actively inflecting from a depressed base. The key differentiator "
+            "from asymmetric_value: this profile requires recovery evidence, not "
+            "just static cheapness. The model prioritizes QoQ revenue, EBITDA, net "
+            "income, FCF, EPS-forward, and surprise evidence through an operating "
+            "turnaround composite, then asks whether valuation still offers a "
+            "discount and whether the tape is beginning to confirm the turn. "
+            "Momentum history is damped so recent weakness is forgiven, but weak or "
+            "missing operating quality is penalized heavily."
         ),
         horizon_weights={
             "days": {
-                "attention": 0.06,
-                "event": 0.04,
-                "momentum": 0.04,
-                "trend": 0.12,
-                "quality": 0.24,
-                "valuation": 0.26,
-                "safety": 0.24,
+                "attention": 0.04,
+                "event": 0.05,
+                "momentum": 0.06,
+                "trend": 0.16,
+                "quality": 0.34,
+                "valuation": 0.22,
+                "safety": 0.13,
             },
             "weeks": {
-                "attention": 0.06,
+                "attention": 0.04,
                 "event": 0.04,
-                "momentum": 0.06,
-                "trend": 0.14,
-                "quality": 0.22,
-                "valuation": 0.25,
-                "safety": 0.23,
+                "momentum": 0.07,
+                "trend": 0.18,
+                "quality": 0.34,
+                "valuation": 0.22,
+                "safety": 0.11,
             },
             "months": {
-                "attention": 0.04,
+                "attention": 0.03,
                 "event": 0.03,
                 "momentum": 0.05,
-                "trend": 0.14,
-                "quality": 0.28,
-                "valuation": 0.26,
-                "safety": 0.20,
+                "trend": 0.17,
+                "quality": 0.38,
+                "valuation": 0.24,
+                "safety": 0.10,
             },
             "years": {
-                "attention": 0.02,
+                "attention": 0.01,
                 "event": 0.01,
-                "momentum": 0.01,
-                "trend": 0.07,
-                "quality": 0.30,
-                "valuation": 0.32,
-                "safety": 0.27,
+                "momentum": 0.02,
+                "trend": 0.10,
+                "quality": 0.40,
+                "valuation": 0.28,
+                "safety": 0.18,
             },
         },
         component_signal_weights={
+            "attention": {
+                "relative_volume_10d_calc": 0.40,
+                "float_turnover": 0.35,
+                "dollar_turnover_intensity": 0.35,
+                "Value.Traded": 0.20,
+                "AvgValue.Traded_10d": 0.20,
+                "volume_trend": 0.75,
+                "intraday_momentum": 0.45,
+            },
             "momentum": {
-                "change": 0.35,
+                "change": 0.45,
                 "Perf.5D": 0.25,
-                "Perf.W": 0.30,
-                "Perf.1M": 0.50,
-                "Perf.3M": 1.15,
-                "Perf.YTD": 1.00,
-                "Perf.Y": 0.70,
-                "ROC": 0.50,
-                "Mom": 0.55,
-                "macd_spread": 0.45,
+                "Perf.W": 0.35,
+                "Perf.1M": 0.35,
+                "Perf.3M": 0.45,
+                "Perf.6M": 0.15,
+                "Perf.YTD": 0.20,
+                "Perf.Y": 0.05,
+                "ROC": 0.70,
+                "Mom": 0.70,
+                "macd_spread": 0.70,
                 "Recommend.All": 0.65,
                 "Recommend.MA": 0.55,
                 "Recommend.Other": 0.65,
                 "rsi_centered": 0.20,
                 "rsi7_centered": 0.12,
                 "stoch_rsi_centered": 0.55,
-                "stoch_rsi_crossover": 1.35,
+                "stoch_rsi_crossover": 1.55,
+                "aroon_spread": 0.95,
+                "adx_directional_spread": 0.85,
             },
             "valuation": {
                 "price_earnings_ttm": 1.15,
                 "price_earnings_growth_ttm": 1.25,
                 "price_book_fq": 1.25,
                 "price_sales_current": 1.10,
-                "price_free_cash_flow_ttm": 1.10,
+                "price_free_cash_flow_ttm": 1.20,
                 "price_to_cash_f_operating_activities_ttm": 1.00,
                 "enterprise_value_to_revenue_ttm": 1.10,
-                "enterprise_value_to_ebit_ttm": 1.00,
-                "enterprise_value_ebitda_ttm": 1.20,
-                "earnings_yield": 1.25,
+                "enterprise_value_to_ebit_ttm": 1.10,
+                "enterprise_value_ebitda_ttm": 1.25,
+                "earnings_yield": 1.35,
                 "distance_from_52w_high": 1.20,
-                "range_position_52w": 1.10,
-                "enterprise_value_to_free_cash_flow_ttm": 1.15,
-                "enterprise_value_to_gross_profit_ttm": 0.90,
+                "range_position_52w": 1.20,
+                "enterprise_value_to_free_cash_flow_ttm": 1.25,
+                "enterprise_value_to_gross_profit_ttm": 1.05,
                 "price_target_upside_average": 1.20,
-                "price_target_upside_median": 1.20,
-                "price_target_downside_floor": 1.00,
-                "book_value_discount": 1.10,
+                "price_target_upside_median": 1.30,
+                "price_target_downside_floor": 1.15,
+                "book_value_discount": 1.20,
+                "graham_value_gap": 1.20,
+                "tangible_book_value_gap": 1.15,
+                "free_cash_flow_yield": 1.20,
+                "operating_cash_flow_yield": 1.15,
+                "industry_revenue_value_gap": 0.90,
             },
             "quality": {
-                "total_revenue_yoy_growth_ttm": 0.85,
-                "total_revenue_qoq_growth_fq": 1.25,
-                "ebitda_yoy_growth_ttm": 0.90,
-                "ebitda_qoq_growth_fq": 1.20,
-                "net_income_yoy_growth_ttm": 0.95,
-                "net_income_qoq_growth_fq": 1.30,
-                "free_cash_flow_yoy_growth_ttm": 1.10,
-                "free_cash_flow_qoq_growth_fq": 1.35,
+                "operating_turnaround_score": 1.75,
+                "total_revenue_yoy_growth_ttm": 0.75,
+                "total_revenue_qoq_growth_fq": 1.45,
+                "ebitda_yoy_growth_ttm": 0.80,
+                "ebitda_qoq_growth_fq": 1.55,
+                "net_income_yoy_growth_ttm": 0.85,
+                "net_income_qoq_growth_fq": 1.60,
+                "free_cash_flow_yoy_growth_ttm": 1.00,
+                "free_cash_flow_qoq_growth_fq": 1.65,
                 "gross_margin": 0.90,
-                "operating_margin": 1.10,
+                "operating_margin": 1.15,
                 "after_tax_margin": 1.00,
                 "return_on_assets": 0.90,
                 "return_on_equity": 0.95,
-                "return_on_invested_capital": 1.10,
-                "free_cash_flow_margin_ttm": 1.20,
-                "buyback_yield": 0.65,
-                "dividends_yield_current": 0.55,
-                "eps_forward_growth": 1.50,
+                "return_on_invested_capital": 1.20,
+                "free_cash_flow_margin_ttm": 1.30,
+                "buyback_yield": 0.45,
+                "dividends_yield_current": 0.35,
+                "eps_forward_growth": 1.65,
                 "revenue_per_employee": 0.80,
                 "earnings_per_share_diluted_yoy_growth_ttm": 1.00,
                 "gross_profit_margin_fy": 0.85,
-                "sustainable_growth_rate_ttm": 1.10,
-                "piotroski_f_score_ttm": 1.20,
-                "dps_common_stock_prim_issue_yoy_growth_fy": 0.50,
+                "sustainable_growth_rate_ttm": 1.15,
+                "piotroski_f_score_ttm": 1.35,
+                "operating_margin_ttm": 1.10,
+                "net_margin_ttm": 1.05,
+                "asset_turnover_current": 0.95,
+                "sloan_ratio_ttm": 1.10,
+                "dps_common_stock_prim_issue_yoy_growth_fy": 0.35,
             },
             "safety": {
                 "current_ratio": 1.05,
@@ -2072,78 +2127,88 @@ PRESET_SCORING_PROFILES = {
                 "debt_to_revenue_ttm": 1.15,
                 "net_debt": 1.20,
                 "beta_1_year": 0.80,
-                "total_debt_to_ebitda_fq": 1.25,
+                "total_debt_to_ebitda_fq": 1.40,
+                "total_debt_to_ebitda_fy": 1.25,
+                "net_debt_to_ebitda_fq": 1.35,
+                "net_debt_to_ebitda_fy": 1.20,
+                "interst_cover_ttm": 1.20,
+                "zmijewski_score_ttm": 1.20,
                 "beta_adjusted_atrp": 0.75,
                 "price_target_dispersion": 0.65,
             },
             "trend": {
+                "close_vs_sma10": 1.20,
+                "close_vs_sma20": 1.15,
+                "close_vs_sma30": 1.05,
                 "close_vs_sma50": 0.85,
                 "close_vs_sma200": 1.10,
+                "close_vs_ema10": 1.20,
+                "close_vs_ema20": 1.15,
+                "close_vs_ema30": 1.05,
                 "close_vs_ema50": 0.85,
                 "close_vs_ema200": 1.10,
                 "close_vs_vwap": 0.55,
                 "close_vs_vwma": 0.70,
-                "trend_alignment": 1.05,
+                "trend_alignment": 0.85,
                 "pivot_distance": 1.10,
-                "short_trend_emergence": 1.20,
+                "short_trend_emergence": 1.45,
+                "bb_position": 0.95,
             },
         },
         component_directional_bias={
             "attention": DirectionalBias(
-                positive_multiplier=0.82, negative_multiplier=1.32
+                positive_multiplier=0.65, negative_multiplier=1.10
             ),
             "momentum": DirectionalBias(
-                positive_multiplier=0.85, negative_multiplier=0.60
+                positive_multiplier=1.20, negative_multiplier=0.35
             ),
             "trend": DirectionalBias(
-                positive_multiplier=1.08, negative_multiplier=0.85
+                positive_multiplier=1.25, negative_multiplier=0.75
             ),
             "valuation": DirectionalBias(
-                positive_multiplier=1.30, negative_multiplier=1.12
+                positive_multiplier=1.25, negative_multiplier=1.10
             ),
             "quality": DirectionalBias(
-                positive_multiplier=1.18, negative_multiplier=1.18
+                positive_multiplier=1.30, negative_multiplier=1.40
             ),
             "safety": DirectionalBias(
-                positive_multiplier=1.18, negative_multiplier=1.20
+                positive_multiplier=1.15, negative_multiplier=1.40
             ),
         },
         missing_component_scores_by_horizon={
             "days": {
-                "attention": -0.40,
-                "valuation": -0.85,
-                "quality": -0.55,
-                "safety": -0.65,
+                "attention": -0.25,
+                "valuation": -0.95,
+                "quality": -1.25,
+                "safety": -0.80,
             },
             "weeks": {
-                "attention": -0.30,
-                "valuation": -0.95,
-                "quality": -0.65,
-                "safety": -0.75,
-            },
-            "months": {
                 "attention": -0.20,
                 "valuation": -1.05,
-                "quality": -0.75,
-                "safety": -0.85,
+                "quality": -1.35,
+                "safety": -0.90,
+            },
+            "months": {
+                "attention": -0.15,
+                "valuation": -1.15,
+                "quality": -1.45,
+                "safety": -1.00,
             },
             "years": {
-                "valuation": -1.15,
-                "quality": -0.85,
-                "safety": -0.95,
+                "valuation": -1.25,
+                "quality": -1.55,
+                "safety": -1.10,
             },
         },
         intro_metric_notes=[
-            "Recovery trajectory profile — rewards active IMPROVEMENT, not static cheapness.",
-            "QoQ growth dominates YoY: QoQ=1.20-1.35 vs YoY=0.85-1.10. Sequential positive inflection is the recovery signal.",
-            "Forward recovery conviction: eps_forward_growth=1.50 (highest in system). Analyst revision toward positive EPS confirms the recovery thesis.",
-            "Street-value confirmation added: target upside average/median=1.20, target downside floor=1.00, book_value_discount=1.10. Recovery candidates need upside support and a tolerable downside floor.",
-            "Value-trap controls strengthened with Piotroski F-score=1.20 and debt/EBITDA=1.25.",
-            "Technical recovery detection: stoch_rsi_crossover=1.35 (raised from 0.65) is the PRIMARY entry trigger — oversold-to-recovery momentum crossover at the start of the move.",
-            "Trend reversal confirmation: short_trend_emergence=1.20 (raised from 0.75) — detects first meaningful break above compressed price action.",
-            "Momentum bias inverted for downside: negative=0.60x so recent poor performance does not dominate rankings. Recovering names need room to breathe.",
-            "Valuation discount detection: distance_from_52w_high=1.20, price_book=1.25 (tangible asset value relevant for recovery plays), enterprise_value_ebitda=1.20.",
-            "Quality directional bias symmetrical: positive=1.18x, negative=1.18x. Equally rewards improving quality and punishes deteriorating quality — the turn must be real.",
+            "Operating turnaround profile — rewards active recovery evidence, not static cheapness.",
+            "New operating_turnaround_score=1.75 combines QoQ revenue, EBITDA, net income, FCF, EPS surprise, and forward EPS growth evidence. At least two metrics are required for the composite.",
+            "QoQ growth dominates YoY: revenue=1.45, EBITDA=1.55, net income=1.60, and FCF=1.65. This targets names where the income statement and cash flow are actually turning.",
+            "Forward recovery conviction is explicit: eps_forward_growth=1.65. A turnaround without forward EPS improvement should not rank highly.",
+            "Early reversal confirmation strengthened: stoch_rsi_crossover=1.55, short_trend_emergence=1.45, and short moving average fields are active. The profile wants the first proof of tape repair, not a mature breakout.",
+            "Trailing momentum is damped hard: Perf.Y=0.05, Perf.YTD=0.20, Perf.6M=0.15. Recent historical underperformance is allowed; fresh improvement is what matters.",
+            "Valuation remains required but secondary to the turn: earnings_yield=1.35, target upside median=1.30, EV/FCF=1.25, price_book=1.25, Graham gap=1.20.",
+            "Passive and quality-overlap filters are stronger: missing quality penalty reaches -1.55, and safety deterioration is amplified 1.40x. Funds with no operating turn evidence should fall out of top ranks.",
         ],
     ),
     # ──────────────────────────────────────────────────────────────────────────
@@ -2836,22 +2901,34 @@ def _serialize_csv_value(value: Any) -> str:
     return str(value)
 
 
+def _collect_raw_scan_field_names(scan_data: list[dict[str, Any]]) -> list[str]:
+    field_names: list[str] = []
+    seen_fields: set[str] = set()
+    for row in scan_data:
+        for key in row.keys():
+            if key == "symbol" or key in seen_fields:
+                continue
+            seen_fields.add(key)
+            field_names.append(key)
+    return field_names
+
+
 def _build_raw_csv_headers(scan_data: list[dict[str, Any]]) -> list[str]:
     if not scan_data:
         return ["symbol", "Company"]
 
-    first_row = scan_data[0]
     headers = ["symbol", "Company"]
-    headers.extend(key for key in first_row.keys() if key != "symbol")
+    headers.extend(_collect_raw_scan_field_names(scan_data))
     return headers
 
 
 def _build_raw_csv_rows(scan_data: list[dict[str, Any]]) -> list[list[str]]:
+    field_names = _collect_raw_scan_field_names(scan_data)
     rows: list[list[str]] = []
     for row in scan_data:
         csv_row = [_serialize_csv_value(row.get("symbol")), _get_company_name(row)]
         csv_row.extend(
-            _serialize_csv_value(value) for key, value in row.items() if key != "symbol"
+            _serialize_csv_value(row.get(field_name)) for field_name in field_names
         )
         rows.append(csv_row)
     return rows
@@ -2957,6 +3034,8 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
     beta_1_year = _coerce_numeric(row.get("beta_1_year"))
     peer_market_cap_share = _coerce_numeric(row.get("_peer_market_cap_share"))
     peer_revenue_share = _coerce_numeric(row.get("_peer_revenue_share"))
+    industry_market_cap_share = _coerce_numeric(row.get("_industry_market_cap_share"))
+    industry_revenue_share = _coerce_numeric(row.get("_industry_revenue_share"))
     camarilla_s1 = _coerce_numeric(row.get("Pivot.M.Camarilla.S1"))
     camarilla_s2 = _coerce_numeric(row.get("Pivot.M.Camarilla.S2"))
     camarilla_r1 = _coerce_numeric(row.get("Pivot.M.Camarilla.R1"))
@@ -3086,6 +3165,34 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
     ):
         eps_forward_growth = (eps_forecast_next_fq - eps_actual_fq) / abs(eps_actual_fq)
 
+    def _bounded_percent_signal(value: float | None) -> float | None:
+        if value is None:
+            return None
+        return _clamp(value / 50.0, -3.0, 3.0)
+
+    turnaround_inputs = [
+        _bounded_percent_signal(
+            _coerce_numeric(row.get("total_revenue_qoq_growth_fq"))
+        ),
+        _bounded_percent_signal(_coerce_numeric(row.get("ebitda_qoq_growth_fq"))),
+        _bounded_percent_signal(_coerce_numeric(row.get("net_income_qoq_growth_fq"))),
+        _bounded_percent_signal(
+            _coerce_numeric(row.get("free_cash_flow_qoq_growth_fq"))
+        ),
+        _bounded_percent_signal(eps_surprise_pct),
+        _bounded_percent_signal(
+            eps_forward_growth * 100.0 if eps_forward_growth is not None else None
+        ),
+    ]
+    valid_turnaround_inputs = [
+        value for value in turnaround_inputs if value is not None
+    ]
+    operating_turnaround_score = (
+        sum(valid_turnaround_inputs) / len(valid_turnaround_inputs)
+        if len(valid_turnaround_inputs) >= 2
+        else None
+    )
+
     stoch_rsi_centered: float | None = (
         None if stoch_rsi_k is None else stoch_rsi_k - 50.0
     )
@@ -3153,6 +3260,10 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
     peer_revenue_value_gap: float | None = None
     if peer_revenue_share is not None and peer_market_cap_share is not None:
         peer_revenue_value_gap = peer_revenue_share - peer_market_cap_share
+
+    industry_revenue_value_gap: float | None = None
+    if industry_revenue_share is not None and industry_market_cap_share is not None:
+        industry_revenue_value_gap = industry_revenue_share - industry_market_cap_share
 
     beta_adjusted_atrp: float | None = None
     if atrp is not None:
@@ -3231,6 +3342,8 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
         "price_target_dispersion": price_target_dispersion,
         "book_value_discount": book_value_discount,
         "peer_revenue_value_gap": peer_revenue_value_gap,
+        "industry_revenue_value_gap": industry_revenue_value_gap,
+        "operating_turnaround_score": operating_turnaround_score,
         "beta_adjusted_atrp": beta_adjusted_atrp,
         "close_vs_camarilla_s1": _pivot_distance(camarilla_s1),
         "close_vs_camarilla_s2": _pivot_distance(camarilla_s2),
@@ -3305,14 +3418,40 @@ def _enrich_with_peer_metrics(scan_data: list[dict[str, Any]]) -> None:
         _coerce_numeric(row.get("total_revenue")) or 0 for row in scan_data
     )
 
+    def _industry_key(row: dict[str, Any]) -> tuple[str, str]:
+        return (
+            str(row.get("sector") or "").strip(),
+            str(row.get("industry") or "").strip(),
+        )
+
+    industry_totals: dict[tuple[str, str], dict[str, float]] = collections.defaultdict(
+        lambda: {"market_cap": 0.0, "revenue": 0.0}
+    )
+    for row in scan_data:
+        industry_totals[_industry_key(row)]["market_cap"] += (
+            _coerce_numeric(row.get("market_cap_basic")) or 0.0
+        )
+        industry_totals[_industry_key(row)]["revenue"] += (
+            _coerce_numeric(row.get("total_revenue")) or 0.0
+        )
+
     for row in scan_data:
         mcap = _coerce_numeric(row.get("market_cap_basic"))
         rev = _coerce_numeric(row.get("total_revenue"))
+        industry_total = industry_totals[_industry_key(row)]
+        industry_market_cap = industry_total["market_cap"]
+        industry_revenue = industry_total["revenue"]
         row["_peer_market_cap_share"] = (
             (mcap / total_market_cap * 100) if mcap and total_market_cap else None
         )
         row["_peer_revenue_share"] = (
             (rev / total_revenue * 100) if rev and total_revenue else None
+        )
+        row["_industry_market_cap_share"] = (
+            (mcap / industry_market_cap * 100) if mcap and industry_market_cap else None
+        )
+        row["_industry_revenue_share"] = (
+            (rev / industry_revenue * 100) if rev and industry_revenue else None
         )
 
 
@@ -3473,6 +3612,15 @@ def _build_component_signal_map(
             "volume_trend": _derived_signal(derived_row, profiles, "volume_trend"),
             "intraday_momentum": _derived_signal(
                 derived_row, profiles, "intraday_momentum"
+            ),
+            "low_relative_volume": _field_signal(
+                row, profiles, "relative_volume_10d_calc", invert=True
+            ),
+            "low_float_turnover": _derived_signal(
+                derived_row, profiles, "float_turnover", invert=True
+            ),
+            "low_dollar_turnover_intensity": _derived_signal(
+                derived_row, profiles, "dollar_turnover_intensity", invert=True
             ),
         },
         "event": {
@@ -3644,6 +3792,9 @@ def _build_component_signal_map(
             "sloan_ratio_ttm": _field_signal(
                 row, profiles, "sloan_ratio_ttm", invert=True
             ),
+            "operating_turnaround_score": _derived_signal(
+                derived_row, profiles, "operating_turnaround_score"
+            ),
         },
         "valuation": {
             "price_earnings_ttm": _field_signal(
@@ -3732,6 +3883,9 @@ def _build_component_signal_map(
             ),
             "peer_revenue_value_gap": _derived_signal(
                 derived_row, profiles, "peer_revenue_value_gap"
+            ),
+            "industry_revenue_value_gap": _derived_signal(
+                derived_row, profiles, "industry_revenue_value_gap"
             ),
             "price_earnings_forward_fy": _field_signal(
                 row,
@@ -5607,6 +5761,71 @@ def _log_consensus_aggregator_report(
         log_to_file(log_file, "")
 
 
+def _build_consensus_csv_headers(
+    profile_names: list[str], horizon_names: list[str]
+) -> list[str]:
+    csv_headers = [
+        "ticker",
+        "company",
+        "market_cap",
+        "manager_action_signal",
+    ]
+    for horizon_name in horizon_names:
+        csv_headers.extend(
+            [
+                f"consensus_{horizon_name}_score",
+                f"consensus_{horizon_name}_direction",
+                f"consensus_{horizon_name}_confidence",
+                f"consensus_{horizon_name}_agreement",
+                f"consensus_{horizon_name}_opinions",
+                f"consensus_{horizon_name}_risk_adjusted_score",
+                f"consensus_{horizon_name}_risk_tier",
+            ]
+        )
+    for profile_name in profile_names:
+        for horizon_name in horizon_names:
+            csv_headers.append(f"{profile_name}_{horizon_name}_score")
+    return csv_headers
+
+
+def _build_consensus_csv_rows(
+    consensus_rows: list[dict[str, Any]],
+    profile_names: list[str],
+    horizon_names: list[str],
+) -> list[list[str]]:
+    csv_rows: list[list[str]] = []
+    for consensus_row in consensus_rows:
+        csv_row = [
+            consensus_row["ticker"],
+            consensus_row["company"] or "",
+            str(consensus_row["market_cap"] or ""),
+            str(consensus_row.get("manager_action_signal", "")),
+        ]
+        for horizon_name in horizon_names:
+            h = consensus_row["horizons"].get(horizon_name, {})
+            csv_row.extend(
+                [
+                    str(h.get("score", "")),
+                    str(h.get("direction", "")),
+                    str(h.get("confidence", "")),
+                    str(h.get("agreement_ratio", "")),
+                    str(h.get("opinions", "")),
+                    str(h.get("risk_adjusted_score", "")),
+                    str(h.get("risk_tier", "")),
+                ]
+            )
+        for profile_name in profile_names:
+            for horizon_name in horizon_names:
+                profile_horizon = (
+                    consensus_row["profile_scores"]
+                    .get(profile_name, {})
+                    .get(horizon_name, {})
+                )
+                csv_row.append(str(profile_horizon.get("score", "")))
+        csv_rows.append(csv_row)
+    return csv_rows
+
+
 def run_consensus_aggregator(
     scan_data: list[dict[str, Any]],
     profile_names: list[str] | None = None,
@@ -5646,58 +5865,12 @@ def run_consensus_aggregator(
 
     csv_file = log_file.with_suffix(".csv")
     horizon_names = list(DEFAULT_HORIZON_WEIGHTS.keys())
-    csv_headers = [
-        "ticker",
-        "company",
-        "market_cap",
-        "manager_action_signal",
-    ]
-    for horizon_name in horizon_names:
-        csv_headers.extend(
-            [
-                f"consensus_{horizon_name}_score",
-                f"consensus_{horizon_name}_direction",
-                f"consensus_{horizon_name}_confidence",
-                f"consensus_{horizon_name}_agreement",
-                f"consensus_{horizon_name}_opinions",
-                f"consensus_{horizon_name}_risk_adjusted_score",
-                f"consensus_{horizon_name}_risk_tier",
-            ]
-        )
-    for profile_name in profile_names:
-        for horizon_name in horizon_names:
-            csv_headers.append(f"{profile_name}_{horizon_name}_score")
-
-    csv_rows: list[list[str]] = []
-    for consensus_row in consensus_rows:
-        csv_row = [
-            consensus_row["ticker"],
-            consensus_row["company"] or "",
-            str(consensus_row["market_cap"] or ""),
-            str(consensus_row.get("manager_action_signal", "")),
-        ]
-        for horizon_name in horizon_names:
-            h = consensus_row["horizons"].get(horizon_name, {})
-            csv_row.extend(
-                [
-                    str(h.get("score", "")),
-                    str(h.get("direction", "")),
-                    str(h.get("confidence", "")),
-                    str(h.get("agreement_ratio", "")),
-                    str(h.get("opinions", "")),
-                    str(h.get("risk_adjusted_score", "")),
-                    str(h.get("risk_tier", "")),
-                ]
-            )
-        for profile_name in profile_names:
-            for horizon_name in horizon_names:
-                profile_horizon = (
-                    consensus_row["profile_scores"]
-                    .get(profile_name, {})
-                    .get(horizon_name, {})
-                )
-                csv_row.append(str(profile_horizon.get("score", "")))
-        csv_rows.append(csv_row)
+    csv_headers = _build_consensus_csv_headers(profile_names, horizon_names)
+    csv_rows = _build_consensus_csv_rows(
+        consensus_rows,
+        profile_names,
+        horizon_names,
+    )
 
     log_rows_to_csv(csv_file, csv_headers, csv_rows)
 
@@ -5734,6 +5907,628 @@ def run_full_analysis_suite(
 
     result = dict(profile_logs)
     result["_consensus_aggregator"] = consensus_log
+    return result
+
+
+@dataclass(frozen=True)
+class DuckDBWeeklyStorageLayout:
+    period_dir: Path
+    run_output_dir: Path
+    database_path: Path
+    parquet_dir: Path
+
+
+def _build_duckdb_run_id(
+    run_label: str | None = None,
+    reference_time: datetime | None = None,
+) -> str:
+    if run_label:
+        slugified_label = _slugify(run_label)
+        if slugified_label:
+            return slugified_label
+    reference_time = reference_time or datetime.now(tz=timezone.utc)
+    timestamp = reference_time.strftime("%Y%m%d_%H%M%S")
+    return f"move_prediction_{timestamp}"
+
+
+def _build_duckdb_weekly_storage_layout(
+    run_id: str,
+    created_at_utc: datetime,
+    output_dir: str | Path | None = None,
+    database_path: str | Path | None = None,
+    parquet_dir: str | Path | None = None,
+) -> DuckDBWeeklyStorageLayout:
+    base_output_dir = (
+        Path(output_dir) if output_dir is not None else LOG_DIR / "duckdb_runs"
+    )
+    iso_calendar = created_at_utc.isocalendar()
+    iso_year = iso_calendar.year
+    iso_week = iso_calendar.week
+    period_dir = base_output_dir / f"iso_year={iso_year}" / f"week={iso_week:02d}"
+    run_output_dir = period_dir / "runs" / run_id
+    resolved_database_path = (
+        Path(database_path)
+        if database_path is not None
+        else period_dir / f"move_prediction_{iso_year}_W{iso_week:02d}.duckdb"
+    )
+    resolved_parquet_dir = (
+        Path(parquet_dir) if parquet_dir is not None else period_dir / "parquet"
+    )
+    return DuckDBWeeklyStorageLayout(
+        period_dir=period_dir,
+        run_output_dir=run_output_dir,
+        database_path=resolved_database_path,
+        parquet_dir=resolved_parquet_dir,
+    )
+
+
+def _prediction_base_record(
+    run_id: str,
+    profile_name: str,
+    row_number: int,
+    prediction: dict[str, Any],
+) -> dict[str, Any]:
+    row = prediction["row"]
+    return {
+        "run_id": run_id,
+        "profile_name": profile_name,
+        "row_number": row_number,
+        "symbol": _get_symbol_name(row),
+        "company": _get_company_name(row),
+        "sector": str(row.get("sector") or ""),
+        "industry": str(row.get("industry") or ""),
+        "market_cap_basic": _coerce_numeric(row.get("market_cap_basic")),
+        "close": _coerce_numeric(row.get("close")),
+        "manager_action_signal": prediction.get("manager_action_signal"),
+    }
+
+
+def _build_profile_component_records(
+    run_id: str,
+    profile_name: str,
+    prediction_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for row_number, prediction in enumerate(prediction_rows, start=1):
+        record = _prediction_base_record(run_id, profile_name, row_number, prediction)
+        components = prediction["components"]
+        for component_name in COMPONENT_ORDER:
+            record[component_name] = components.get(component_name)
+        records.append(record)
+    return records
+
+
+def _build_profile_horizon_records(
+    run_id: str,
+    profile_name: str,
+    prediction_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for row_number, prediction in enumerate(prediction_rows, start=1):
+        base_record = _prediction_base_record(
+            run_id, profile_name, row_number, prediction
+        )
+        for horizon_name, horizon in prediction["horizons"].items():
+            record = dict(base_record)
+            record.update(
+                {
+                    "horizon_name": horizon_name,
+                    "score": horizon.get("score"),
+                    "direction": horizon.get("direction"),
+                    "confidence": horizon.get("confidence"),
+                    "coverage": horizon.get("coverage"),
+                    "setup": horizon.get("setup"),
+                    "risk_adjusted_score": horizon.get("risk_adjusted_score"),
+                    "risk_tier": horizon.get("risk_tier"),
+                }
+            )
+            records.append(record)
+    return records
+
+
+def _build_profile_performance_tracking_records(
+    run_id: str,
+    profile_name: str,
+    prediction_rows: list[dict[str, Any]],
+    scoring_profile: ScoringProfile,
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    tracking_periods = _resolve_performance_tracking_periods(scoring_profile)
+    for horizon_name, period_fields in tracking_periods.items():
+        for perf_field in period_fields:
+            period_label = PERFORMANCE_TRACKING_LABELS.get(perf_field, perf_field)
+            for row_number, prediction in enumerate(prediction_rows, start=1):
+                row = prediction["row"]
+                score = prediction["horizons"].get(horizon_name, {}).get("score")
+                performance_value = _coerce_numeric(row.get(perf_field))
+                if score is None or performance_value is None:
+                    continue
+                records.append(
+                    {
+                        "run_id": run_id,
+                        "profile_name": profile_name,
+                        "row_number": row_number,
+                        "symbol": _get_symbol_name(row),
+                        "company": _get_company_name(row),
+                        "sector": str(row.get("sector") or ""),
+                        "industry": str(row.get("industry") or ""),
+                        "horizon_name": horizon_name,
+                        "performance_field": perf_field,
+                        "performance_label": period_label,
+                        "score": score,
+                        "performance_value": performance_value,
+                        "direction": prediction["horizons"]
+                        .get(horizon_name, {})
+                        .get("direction"),
+                        "manager_action_signal": prediction.get(
+                            "manager_action_signal"
+                        ),
+                    }
+                )
+    return records
+
+
+def _consensus_base_record(
+    run_id: str,
+    row_number: int,
+    consensus_row: dict[str, Any],
+) -> dict[str, Any]:
+    row = consensus_row["row"]
+    return {
+        "run_id": run_id,
+        "row_number": row_number,
+        "symbol": consensus_row["ticker"],
+        "company": consensus_row["company"] or "",
+        "sector": str(row.get("sector") or ""),
+        "industry": str(row.get("industry") or ""),
+        "market_cap": consensus_row.get("market_cap"),
+        "manager_action_signal": consensus_row.get("manager_action_signal"),
+    }
+
+
+def _build_consensus_component_records(
+    run_id: str,
+    consensus_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for row_number, consensus_row in enumerate(consensus_rows, start=1):
+        record = _consensus_base_record(run_id, row_number, consensus_row)
+        components = consensus_row["components"]
+        for component_name in COMPONENT_ORDER:
+            record[component_name] = components.get(component_name)
+        records.append(record)
+    return records
+
+
+def _build_consensus_horizon_records(
+    run_id: str,
+    consensus_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for row_number, consensus_row in enumerate(consensus_rows, start=1):
+        base_record = _consensus_base_record(run_id, row_number, consensus_row)
+        for horizon_name, horizon in consensus_row["horizons"].items():
+            record = dict(base_record)
+            record.update(
+                {
+                    "horizon_name": horizon_name,
+                    "score": horizon.get("score"),
+                    "direction": horizon.get("direction"),
+                    "confidence": horizon.get("confidence"),
+                    "agreement_ratio": horizon.get("agreement_ratio"),
+                    "opinions": horizon.get("opinions"),
+                    "risk_adjusted_score": horizon.get("risk_adjusted_score"),
+                    "risk_tier": horizon.get("risk_tier"),
+                }
+            )
+            records.append(record)
+    return records
+
+
+def _build_consensus_profile_horizon_records(
+    run_id: str,
+    consensus_rows: list[dict[str, Any]],
+    profile_names: list[str],
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for row_number, consensus_row in enumerate(consensus_rows, start=1):
+        base_record = _consensus_base_record(run_id, row_number, consensus_row)
+        for profile_name in profile_names:
+            profile_horizons = consensus_row.get("profile_scores", {}).get(
+                profile_name,
+                {},
+            )
+            for horizon_name, horizon in profile_horizons.items():
+                record = dict(base_record)
+                record.update(
+                    {
+                        "profile_name": profile_name,
+                        "horizon_name": horizon_name,
+                        "score": horizon.get("score"),
+                        "direction": horizon.get("direction"),
+                        "confidence": horizon.get("confidence"),
+                        "coverage": horizon.get("coverage"),
+                        "setup": horizon.get("setup"),
+                        "risk_adjusted_score": horizon.get("risk_adjusted_score"),
+                        "risk_tier": horizon.get("risk_tier"),
+                    }
+                )
+                records.append(record)
+    return records
+
+
+def _analyze_move_prediction_scan_duckdb(
+    scan_data: list[dict[str, Any]],
+    duckdb_store: Any,
+    run_id: str,
+    industries: list[str] | str | None = None,
+    min_market_cap_usd: float | None = None,
+    max_market_cap_usd: float | None = None,
+    scoring_profile: str | ScoringProfile | None = None,
+    include_blind_spot_sections: bool = True,
+    output_dir: str | Path | None = None,
+) -> Path:
+    industries = _normalize_industries(industries)
+    resolved_profile = resolve_move_prediction_scoring_profile(scoring_profile)
+    horizon_names = list(_resolve_horizon_weights(resolved_profile).keys())
+    resolved_output_dir = Path(output_dir) if output_dir is not None else None
+    log_file = _build_log_file_name(
+        industries,
+        min_market_cap_usd,
+        max_market_cap_usd,
+        scoring_profile_name=resolved_profile.name,
+        output_dir=resolved_output_dir,
+    )
+    _reset_log_file(log_file)
+
+    log_to_file(log_file, _build_report_title("TradingView move prediction scan"))
+    log_to_file(log_file, "=" * 160)
+    log_to_file(
+        log_file,
+        (
+            f"Rows returned: {len(scan_data)} | industries={industries or 'all'} | "
+            f"min_market_cap_usd={min_market_cap_usd} | max_market_cap_usd={max_market_cap_usd} | "
+            f"scoring_profile={resolved_profile.name} | tabular_storage=duckdb"
+        ),
+    )
+    log_to_file(log_file, "Sorted by query on relative_volume_10d_calc descending.")
+    log_to_file(log_file, "")
+
+    duckdb_store.register_report(
+        run_id=run_id,
+        report_key=resolved_profile.name,
+        report_type="profile_log",
+        profile_name=resolved_profile.name,
+        file_path=log_file,
+    )
+
+    if not scan_data:
+        log_to_file(log_file, "No rows returned for this scan.")
+        return log_file
+
+    _enrich_with_peer_metrics(scan_data)
+    derived_metrics = [_build_derived_metrics(row) for row in scan_data]
+    profiles = _build_metric_profiles(scan_data, derived_metrics)
+    prediction_rows = _build_prediction_rows(
+        scan_data,
+        profiles,
+        derived_metrics,
+        resolved_profile,
+    )
+
+    duckdb_store.append_tabular_output(
+        "profile_prediction_rows",
+        _build_csv_headers(horizon_names),
+        _build_csv_rows(prediction_rows, horizon_names),
+        context={"run_id": run_id, "profile_name": resolved_profile.name},
+    )
+    duckdb_store.append_profile_components(
+        _build_profile_component_records(
+            run_id,
+            resolved_profile.name,
+            prediction_rows,
+        )
+    )
+    duckdb_store.append_profile_horizon_scores(
+        _build_profile_horizon_records(
+            run_id,
+            resolved_profile.name,
+            prediction_rows,
+        )
+    )
+    duckdb_store.append_profile_performance_tracking(
+        _build_profile_performance_tracking_records(
+            run_id,
+            resolved_profile.name,
+            prediction_rows,
+            resolved_profile,
+        )
+    )
+
+    _log_methodology(log_file, resolved_profile)
+    _log_scoring_profile_details(log_file, resolved_profile)
+    for horizon_name in horizon_names:
+        _log_horizon_section(log_file, prediction_rows, horizon_name)
+    _log_consensus_section(log_file, prediction_rows)
+    if include_blind_spot_sections:
+        _log_blind_spot_sections(log_file, prediction_rows)
+
+    tracking_log_file = _build_tracking_log_file_name(
+        industries,
+        min_market_cap_usd,
+        max_market_cap_usd,
+        scoring_profile_name=resolved_profile.name,
+        output_dir=resolved_output_dir,
+    )
+    _log_performance_tracking_analysis(
+        log_file=tracking_log_file,
+        prediction_rows=prediction_rows,
+        scoring_profile=resolved_profile,
+        scan_data_count=len(scan_data),
+        industries=industries,
+        min_market_cap_usd=min_market_cap_usd,
+        max_market_cap_usd=max_market_cap_usd,
+    )
+    duckdb_store.register_report(
+        run_id=run_id,
+        report_key=f"{resolved_profile.name}_tracking",
+        report_type="profile_tracking_log",
+        profile_name=resolved_profile.name,
+        file_path=tracking_log_file,
+    )
+    return log_file
+
+
+def _run_consensus_aggregator_duckdb(
+    scan_data: list[dict[str, Any]],
+    duckdb_store: Any,
+    run_id: str,
+    profile_names: list[str],
+    industries: list[str] | str | None = None,
+    min_market_cap_usd: float | None = None,
+    max_market_cap_usd: float | None = None,
+    output_dir: str | Path | None = None,
+) -> Path:
+    industries = _normalize_industries(industries)
+    resolved_output_dir = Path(output_dir) if output_dir is not None else None
+    log_file = _build_report_file_name(
+        report_slug="tradingview_consensus_aggregator",
+        industries=industries,
+        min_market_cap_usd=min_market_cap_usd,
+        max_market_cap_usd=max_market_cap_usd,
+        scoring_profile_name="consensus",
+        output_dir=resolved_output_dir,
+    )
+
+    consensus_rows = _build_consensus_scores(
+        scan_data=scan_data,
+        profile_names=profile_names,
+    )
+
+    _log_consensus_aggregator_report(
+        log_file=log_file,
+        consensus_rows=consensus_rows,
+        scan_data_count=len(scan_data),
+        industries=industries,
+        min_market_cap_usd=min_market_cap_usd,
+        max_market_cap_usd=max_market_cap_usd,
+        profile_names=profile_names,
+    )
+
+    horizon_names = list(DEFAULT_HORIZON_WEIGHTS.keys())
+    duckdb_store.append_tabular_output(
+        "consensus_rows",
+        _build_consensus_csv_headers(profile_names, horizon_names),
+        _build_consensus_csv_rows(consensus_rows, profile_names, horizon_names),
+        context={"run_id": run_id},
+    )
+    duckdb_store.append_consensus_components(
+        _build_consensus_component_records(run_id, consensus_rows)
+    )
+    duckdb_store.append_consensus_horizon_scores(
+        _build_consensus_horizon_records(run_id, consensus_rows)
+    )
+    duckdb_store.append_consensus_profile_horizon_scores(
+        _build_consensus_profile_horizon_records(run_id, consensus_rows, profile_names)
+    )
+    duckdb_store.register_report(
+        run_id=run_id,
+        report_key="_consensus_aggregator",
+        report_type="consensus_log",
+        profile_name="consensus",
+        file_path=log_file,
+    )
+    return log_file
+
+
+def _log_duckdb_run_overview(
+    overview_log: Path,
+    run_id: str,
+    storage_period_dir: Path,
+    run_output_dir: Path,
+    database_path: Path,
+    parquet_dir: Path | None,
+    generated_logs: dict[str, Path],
+    parquet_exports: dict[str, Path],
+) -> None:
+    _reset_log_file(overview_log)
+    log_to_file(overview_log, _build_report_title("DuckDB move-prediction run"))
+    log_to_file(overview_log, "=" * 160)
+    log_to_file(overview_log, f"Run id: {run_id}")
+    log_to_file(overview_log, f"Storage period directory: {storage_period_dir}")
+    log_to_file(overview_log, f"Run report directory: {run_output_dir}")
+    log_to_file(overview_log, f"DuckDB database: {database_path}")
+    log_to_file(overview_log, f"Parquet directory: {parquet_dir or 'disabled'}")
+    log_to_file(overview_log, "")
+    log_to_file(overview_log, "Generated reports")
+    log_to_file(overview_log, "-" * 160)
+    for report_key, report_path in generated_logs.items():
+        log_to_file(overview_log, f"{report_key}: {report_path}")
+    log_to_file(overview_log, "")
+    log_to_file(overview_log, "Parquet exports")
+    log_to_file(overview_log, "-" * 160)
+    if not parquet_exports:
+        log_to_file(overview_log, "disabled")
+    for table_name, parquet_path in parquet_exports.items():
+        log_to_file(overview_log, f"{table_name}: {parquet_path}")
+
+
+def run_full_analysis_suite_duckdb(
+    scan_data: list[dict[str, Any]],
+    profile_names: list[str] | None = None,
+    industries: list[str] | str | None = None,
+    min_market_cap_usd: float | None = None,
+    max_market_cap_usd: float | None = None,
+    include_blind_spot_sections: bool = False,
+    output_dir: str | Path | None = None,
+    database_path: str | Path | None = None,
+    parquet_dir: str | Path | None = None,
+    run_label: str | None = None,
+    export_parquet: bool = True,
+    create_indexes: bool = False,
+) -> dict[str, Any]:
+    """DuckDB-backed variant of :func:`run_full_analysis_suite`.
+
+    Text ``.log`` reports are still written for human review in a run-specific
+    folder. Tabular data is appended into an ISO-week DuckDB database under
+    ``iso_year=YYYY/week=WW`` with consolidated Parquet mirrors generated by
+    default for that week. Index creation is optional because the narrow
+    analytical tables are already query-friendly for normal weekly run sizes.
+    """
+    from db.trading_view_move_prediction_duckdb import MovePredictionDuckDBStore
+
+    created_at_utc = datetime.now(tz=timezone.utc)
+    run_id = _build_duckdb_run_id(run_label, created_at_utc)
+    resolved_profiles = list(profile_names or DEFAULT_MOVE_PREDICTION_PROFILE_SUITE)
+    industries_normalized = _normalize_industries(industries)
+
+    storage_layout = _build_duckdb_weekly_storage_layout(
+        run_id=run_id,
+        created_at_utc=created_at_utc,
+        output_dir=output_dir,
+        database_path=database_path,
+        parquet_dir=parquet_dir,
+    )
+    storage_layout.run_output_dir.mkdir(parents=True, exist_ok=True)
+    storage_layout.database_path.parent.mkdir(parents=True, exist_ok=True)
+    if export_parquet:
+        storage_layout.parquet_dir.mkdir(parents=True, exist_ok=True)
+
+    generated_logs: dict[str, Path] = {}
+    parquet_exports: dict[str, Path] = {}
+
+    with MovePredictionDuckDBStore(
+        database_path=storage_layout.database_path,
+        parquet_dir=storage_layout.parquet_dir if export_parquet else None,
+    ) as duckdb_store:
+        duckdb_store.begin_transaction()
+        try:
+            duckdb_store.drop_analysis_indexes()
+            duckdb_store.delete_run_data(run_id)
+            duckdb_store.register_run(
+                run_id=run_id,
+                created_at_utc=created_at_utc,
+                suite_name="tradingview_move_prediction_full_analysis_duckdb",
+                scan_data_count=len(scan_data),
+                profile_names=resolved_profiles,
+                industries=industries_normalized,
+                min_market_cap_usd=min_market_cap_usd,
+                max_market_cap_usd=max_market_cap_usd,
+                include_blind_spot_sections=include_blind_spot_sections,
+                notes=(
+                    "Week-level DuckDB/Parquet storage path for move-prediction "
+                    "suite. Reports remain isolated per run."
+                ),
+            )
+
+            duckdb_store.append_tabular_output(
+                "raw_scan_rows",
+                _build_raw_csv_headers(scan_data),
+                _build_raw_csv_rows(scan_data),
+                context={"run_id": run_id},
+            )
+
+            for profile_name in resolved_profiles:
+                generated_logs[profile_name] = _analyze_move_prediction_scan_duckdb(
+                    scan_data=scan_data,
+                    duckdb_store=duckdb_store,
+                    run_id=run_id,
+                    industries=industries_normalized,
+                    min_market_cap_usd=min_market_cap_usd,
+                    max_market_cap_usd=max_market_cap_usd,
+                    scoring_profile=profile_name,
+                    include_blind_spot_sections=include_blind_spot_sections,
+                    output_dir=storage_layout.run_output_dir,
+                )
+
+            consensus_log = _run_consensus_aggregator_duckdb(
+                scan_data=scan_data,
+                duckdb_store=duckdb_store,
+                run_id=run_id,
+                profile_names=resolved_profiles,
+                industries=industries_normalized,
+                min_market_cap_usd=min_market_cap_usd,
+                max_market_cap_usd=max_market_cap_usd,
+                output_dir=storage_layout.run_output_dir,
+            )
+            generated_logs["_consensus_aggregator"] = consensus_log
+        except Exception:
+            duckdb_store.rollback()
+            raise
+        else:
+            duckdb_store.commit()
+
+        if create_indexes or export_parquet:
+            duckdb_store.close()
+            duckdb_store.open()
+
+        if create_indexes:
+            duckdb_store.create_analysis_indexes()
+        if export_parquet:
+            parquet_exports = duckdb_store.export_tables_to_parquet(
+                run_id=run_id,
+                parquet_dir=storage_layout.parquet_dir,
+            )
+
+        overview_log = storage_layout.run_output_dir / "_duckdb_run_overview.log"
+        _log_duckdb_run_overview(
+            overview_log=overview_log,
+            run_id=run_id,
+            storage_period_dir=storage_layout.period_dir,
+            run_output_dir=storage_layout.run_output_dir,
+            database_path=storage_layout.database_path,
+            parquet_dir=storage_layout.parquet_dir if export_parquet else None,
+            generated_logs=generated_logs,
+            parquet_exports=parquet_exports,
+        )
+        duckdb_store.register_report(
+            run_id=run_id,
+            report_key="_duckdb_run_overview",
+            report_type="duckdb_overview_log",
+            file_path=overview_log,
+        )
+        if export_parquet:
+            parquet_exports.update(
+                duckdb_store.export_tables_to_parquet(
+                    run_id=run_id,
+                    parquet_dir=storage_layout.parquet_dir,
+                    table_names=["generated_reports"],
+                )
+            )
+
+    result: dict[str, Any] = dict(generated_logs)
+    result["_duckdb_database"] = storage_layout.database_path
+    result["_duckdb_parquet_dir"] = (
+        storage_layout.parquet_dir if export_parquet else None
+    )
+    result["_duckdb_run_id"] = run_id
+    result["_duckdb_week_dir"] = storage_layout.period_dir
+    result["_duckdb_period_dir"] = storage_layout.period_dir
+    result["_duckdb_run_output_dir"] = storage_layout.run_output_dir
+    result["_duckdb_overview_log"] = (
+        storage_layout.run_output_dir / "_duckdb_run_overview.log"
+    )
+    result["_duckdb_parquet_exports"] = parquet_exports
     return result
 
 
