@@ -2,14 +2,19 @@ from __future__ import annotations
 
 import csv
 import collections
-from dataclasses import dataclass, field
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+import hashlib
 import json
 import math
+import os
 from pathlib import Path
+import subprocess
 from statistics import median
 import sys
 from typing import Any, Mapping
+import uuid
 
 from data_analysis_scripts._shared_analysis_utils import (
     build_report_title as _build_report_title,
@@ -32,6 +37,10 @@ RAW_MARKET_DATA_DIR = Path(
 )
 BACKSCAN_OUTPUT_DIR = LOG_DIR / "raw_csv_backscan"
 BACKSCAN_RAW_CSV_GLOB = "tradingview_global_all_tdfields_*.csv"
+
+PROFILE_CONFIG_SCHEMA_VERSION = "move_prediction_profile_config_v1"
+API_REQUEST_PROVENANCE_SCHEMA_VERSION = "tradingview_api_request_provenance_v1"
+CODE_VERSION_SCHEMA_VERSION = "move_prediction_code_version_v1"
 
 TOP_SECTION_ROWS = 30
 
@@ -2791,6 +2800,131 @@ def _resolve_horizon_weights(
         resolved_weights.setdefault(horizon_name, {})
         resolved_weights[horizon_name].update(component_weights)
     return resolved_weights
+
+
+def _canonical_json_dump(value: Any) -> str:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+
+
+def _sha256_json(value: Any) -> str:
+    return hashlib.sha256(_canonical_json_dump(value).encode("utf-8")).hexdigest()
+
+
+def _build_profile_config_snapshot(
+    scoring_profile: str | ScoringProfile,
+) -> dict[str, str]:
+    resolved_profile = resolve_move_prediction_scoring_profile(scoring_profile)
+    config = asdict(resolved_profile)
+    config["schema_version"] = PROFILE_CONFIG_SCHEMA_VERSION
+    config["component_order"] = list(COMPONENT_ORDER)
+    config["default_horizon_weights"] = DEFAULT_HORIZON_WEIGHTS
+    config["resolved_horizon_weights"] = _resolve_horizon_weights(resolved_profile)
+    config["resolved_performance_tracking_periods"] = (
+        _resolve_performance_tracking_periods(resolved_profile)
+    )
+    config["strong_move_score_threshold"] = STRONG_MOVE_SCORE_THRESHOLD
+    config["directional_move_score_threshold"] = DIRECTIONAL_MOVE_SCORE_THRESHOLD
+    config["consensus_profile_weight"] = CONSENSUS_PROFILE_WEIGHTS.get(
+        resolved_profile.name
+    )
+    return {
+        "profile_name": resolved_profile.name,
+        "profile_config_schema_version": PROFILE_CONFIG_SCHEMA_VERSION,
+        "profile_config_hash": _sha256_json(config),
+        "profile_config_json": _canonical_json_dump(config),
+    }
+
+
+def _build_profile_config_snapshots(
+    profile_names: list[str],
+) -> list[dict[str, str]]:
+    return [
+        _build_profile_config_snapshot(profile_name) for profile_name in profile_names
+    ]
+
+
+def _extract_duckdb_scan_input(
+    scan_input: list[dict[str, Any]] | Mapping[str, Any],
+    api_request_metadata: Mapping[str, Any] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    metadata: dict[str, Any] = dict(api_request_metadata or {})
+    if isinstance(scan_input, collections.abc.Mapping):
+        rows = scan_input.get("data") or scan_input.get("rows") or []
+        response_metadata = {
+            key: value
+            for key, value in scan_input.items()
+            if key not in {"data", "rows", "raw_data"}
+        }
+        for key, value in response_metadata.items():
+            metadata.setdefault(key, value)
+        metadata.setdefault("scan_input_type", "tradingview_response_payload")
+    else:
+        rows = scan_input
+        metadata.setdefault("scan_input_type", "mapped_scan_rows")
+
+    metadata.setdefault("schema_version", API_REQUEST_PROVENANCE_SCHEMA_VERSION)
+    metadata.setdefault("captured_at_utc", datetime.now(tz=timezone.utc).isoformat())
+    return list(rows or []), metadata
+
+
+def _run_git_command(repo_root: Path, args: list[str]) -> str | None:
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(repo_root), *args],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except Exception:
+        return None
+    if completed.returncode != 0:
+        return None
+    return completed.stdout.strip()
+
+
+def _hash_source_file(path: Path, repo_root: Path) -> dict[str, Any]:
+    try:
+        file_bytes = path.read_bytes()
+    except OSError:
+        return {"path": str(path), "sha256": None, "size_bytes": None}
+
+    try:
+        relative_path = path.relative_to(repo_root)
+    except ValueError:
+        relative_path = path
+    return {
+        "path": relative_path.as_posix(),
+        "sha256": hashlib.sha256(file_bytes).hexdigest(),
+        "size_bytes": len(file_bytes),
+    }
+
+
+def _collect_code_version_metadata() -> dict[str, Any]:
+    repo_root = Path(__file__).resolve().parents[2]
+    status_short = _run_git_command(repo_root, ["status", "--short"])
+    source_paths = [
+        Path(__file__).resolve(),
+        repo_root / "src" / "db" / "trading_view_move_prediction_duckdb.py",
+        repo_root / "src" / "data_loaders" / "api_tradingview_client.py",
+    ]
+    return {
+        "schema_version": CODE_VERSION_SCHEMA_VERSION,
+        "python_version": sys.version.split()[0],
+        "git": {
+            "commit": _run_git_command(repo_root, ["rev-parse", "HEAD"]),
+            "branch": _run_git_command(repo_root, ["branch", "--show-current"]),
+            "dirty": bool(status_short),
+            "status_short": status_short or "",
+        },
+        "source_files": [_hash_source_file(path, repo_root) for path in source_paths],
+    }
 
 
 def _build_report_file_name(
@@ -5922,13 +6056,47 @@ def _build_duckdb_run_id(
     run_label: str | None = None,
     reference_time: datetime | None = None,
 ) -> str:
+    reference_time = reference_time or datetime.now(tz=timezone.utc)
+    if reference_time.tzinfo is None:
+        reference_time = reference_time.replace(tzinfo=timezone.utc)
+    reference_time = reference_time.astimezone(timezone.utc)
+    timestamp = reference_time.strftime("%Y%m%d_%H%M")
+    unique_suffix = uuid.uuid4().hex[:8]
+
     if run_label:
         slugified_label = _slugify(run_label)
         if slugified_label:
-            return slugified_label
-    reference_time = reference_time or datetime.now(tz=timezone.utc)
-    timestamp = reference_time.strftime("%Y%m%d_%H%M%S")
-    return f"move_prediction_{timestamp}"
+            return f"{slugified_label}_{timestamp}_utc_{unique_suffix}"
+
+    return f"move_prediction_{timestamp}_utc_{unique_suffix}"
+
+
+@contextmanager
+def _duckdb_weekly_writer_lock(database_path: Path):
+    lock_path = database_path.with_name(f"{database_path.name}.write.lock")
+    lock_acquired = False
+    try:
+        lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        lock_acquired = True
+        with os.fdopen(lock_fd, "w", encoding="utf-8") as lock_file:
+            lock_file.write(
+                _canonical_json_dump(
+                    {
+                        "database_path": str(database_path),
+                        "created_at_utc": datetime.now(tz=timezone.utc).isoformat(),
+                        "process_id": os.getpid(),
+                    }
+                )
+            )
+        yield lock_path
+    except FileExistsError as exc:
+        raise RuntimeError(
+            f"DuckDB weekly writer lock already exists: {lock_path}. "
+            "Only one writer should update a weekly move-prediction database at a time."
+        ) from exc
+    finally:
+        if lock_acquired:
+            lock_path.unlink(missing_ok=True)
 
 
 def _build_duckdb_weekly_storage_layout(
@@ -5938,6 +6106,9 @@ def _build_duckdb_weekly_storage_layout(
     database_path: str | Path | None = None,
     parquet_dir: str | Path | None = None,
 ) -> DuckDBWeeklyStorageLayout:
+    if created_at_utc.tzinfo is None:
+        created_at_utc = created_at_utc.replace(tzinfo=timezone.utc)
+    created_at_utc = created_at_utc.astimezone(timezone.utc)
     base_output_dir = (
         Path(output_dir) if output_dir is not None else LOG_DIR / "duckdb_runs"
     )
@@ -6374,7 +6545,7 @@ def _log_duckdb_run_overview(
 
 
 def run_full_analysis_suite_duckdb(
-    scan_data: list[dict[str, Any]],
+    scan_data: list[dict[str, Any]] | Mapping[str, Any],
     profile_names: list[str] | None = None,
     industries: list[str] | str | None = None,
     min_market_cap_usd: float | None = None,
@@ -6384,6 +6555,7 @@ def run_full_analysis_suite_duckdb(
     database_path: str | Path | None = None,
     parquet_dir: str | Path | None = None,
     run_label: str | None = None,
+    api_request_metadata: Mapping[str, Any] | None = None,
     export_parquet: bool = True,
     create_indexes: bool = False,
 ) -> dict[str, Any]:
@@ -6399,7 +6571,21 @@ def run_full_analysis_suite_duckdb(
 
     created_at_utc = datetime.now(tz=timezone.utc)
     run_id = _build_duckdb_run_id(run_label, created_at_utc)
-    resolved_profiles = list(profile_names or DEFAULT_MOVE_PREDICTION_PROFILE_SUITE)
+    run_id_generated = not bool(_slugify(run_label) if run_label else None)
+    scan_rows, resolved_api_request_metadata = _extract_duckdb_scan_input(
+        scan_data,
+        api_request_metadata=api_request_metadata,
+    )
+    resolved_profiles = [
+        resolve_move_prediction_scoring_profile(profile_name).name
+        for profile_name in list(profile_names or DEFAULT_MOVE_PREDICTION_PROFILE_SUITE)
+    ]
+    profile_config_snapshots = _build_profile_config_snapshots(resolved_profiles)
+    profile_config_hashes = {
+        snapshot["profile_name"]: snapshot["profile_config_hash"]
+        for snapshot in profile_config_snapshots
+    }
+    code_version_metadata = _collect_code_version_metadata()
     industries_normalized = _normalize_industries(industries)
 
     storage_layout = _build_duckdb_weekly_storage_layout(
@@ -6417,104 +6603,120 @@ def run_full_analysis_suite_duckdb(
     generated_logs: dict[str, Path] = {}
     parquet_exports: dict[str, Path] = {}
 
-    with MovePredictionDuckDBStore(
-        database_path=storage_layout.database_path,
-        parquet_dir=storage_layout.parquet_dir if export_parquet else None,
-    ) as duckdb_store:
-        duckdb_store.begin_transaction()
-        try:
-            duckdb_store.drop_analysis_indexes()
-            duckdb_store.delete_run_data(run_id)
-            duckdb_store.register_run(
-                run_id=run_id,
-                created_at_utc=created_at_utc,
-                suite_name="tradingview_move_prediction_full_analysis_duckdb",
-                scan_data_count=len(scan_data),
-                profile_names=resolved_profiles,
-                industries=industries_normalized,
-                min_market_cap_usd=min_market_cap_usd,
-                max_market_cap_usd=max_market_cap_usd,
-                include_blind_spot_sections=include_blind_spot_sections,
-                notes=(
-                    "Week-level DuckDB/Parquet storage path for move-prediction "
-                    "suite. Reports remain isolated per run."
-                ),
-            )
-
-            duckdb_store.append_tabular_output(
-                "raw_scan_rows",
-                _build_raw_csv_headers(scan_data),
-                _build_raw_csv_rows(scan_data),
-                context={"run_id": run_id},
-            )
-
-            for profile_name in resolved_profiles:
-                generated_logs[profile_name] = _analyze_move_prediction_scan_duckdb(
-                    scan_data=scan_data,
-                    duckdb_store=duckdb_store,
+    with _duckdb_weekly_writer_lock(storage_layout.database_path):
+        with MovePredictionDuckDBStore(
+            database_path=storage_layout.database_path,
+            parquet_dir=storage_layout.parquet_dir if export_parquet else None,
+        ) as duckdb_store:
+            duckdb_store.begin_transaction()
+            try:
+                duckdb_store.drop_analysis_indexes()
+                duckdb_store.delete_run_data(run_id)
+                duckdb_store.register_run(
                     run_id=run_id,
+                    created_at_utc=created_at_utc,
+                    suite_name="tradingview_move_prediction_full_analysis_duckdb",
+                    scan_data_count=len(scan_rows),
+                    profile_names=resolved_profiles,
                     industries=industries_normalized,
                     min_market_cap_usd=min_market_cap_usd,
                     max_market_cap_usd=max_market_cap_usd,
-                    scoring_profile=profile_name,
                     include_blind_spot_sections=include_blind_spot_sections,
+                    profile_config_hashes=profile_config_hashes,
+                    api_request_metadata=resolved_api_request_metadata,
+                    code_version_metadata=code_version_metadata,
+                    run_label=run_label,
+                    run_id_generated=run_id_generated,
+                    notes=(
+                        "Week-level DuckDB/Parquet storage path for move-prediction "
+                        "suite. Reports remain isolated per run."
+                    ),
+                )
+                duckdb_store.append_profile_config_snapshots(
+                    [
+                        {
+                            "run_id": run_id,
+                            **snapshot,
+                            "captured_at_utc": created_at_utc,
+                        }
+                        for snapshot in profile_config_snapshots
+                    ]
+                )
+
+                duckdb_store.append_tabular_output(
+                    "raw_scan_rows",
+                    _build_raw_csv_headers(scan_rows),
+                    _build_raw_csv_rows(scan_rows),
+                    context={"run_id": run_id},
+                )
+
+                for profile_name in resolved_profiles:
+                    generated_logs[profile_name] = _analyze_move_prediction_scan_duckdb(
+                        scan_data=scan_rows,
+                        duckdb_store=duckdb_store,
+                        run_id=run_id,
+                        industries=industries_normalized,
+                        min_market_cap_usd=min_market_cap_usd,
+                        max_market_cap_usd=max_market_cap_usd,
+                        scoring_profile=profile_name,
+                        include_blind_spot_sections=include_blind_spot_sections,
+                        output_dir=storage_layout.run_output_dir,
+                    )
+
+                consensus_log = _run_consensus_aggregator_duckdb(
+                    scan_data=scan_rows,
+                    duckdb_store=duckdb_store,
+                    run_id=run_id,
+                    profile_names=resolved_profiles,
+                    industries=industries_normalized,
+                    min_market_cap_usd=min_market_cap_usd,
+                    max_market_cap_usd=max_market_cap_usd,
                     output_dir=storage_layout.run_output_dir,
                 )
+                generated_logs["_consensus_aggregator"] = consensus_log
+            except Exception:
+                duckdb_store.rollback()
+                raise
+            else:
+                duckdb_store.commit()
 
-            consensus_log = _run_consensus_aggregator_duckdb(
-                scan_data=scan_data,
-                duckdb_store=duckdb_store,
-                run_id=run_id,
-                profile_names=resolved_profiles,
-                industries=industries_normalized,
-                min_market_cap_usd=min_market_cap_usd,
-                max_market_cap_usd=max_market_cap_usd,
-                output_dir=storage_layout.run_output_dir,
-            )
-            generated_logs["_consensus_aggregator"] = consensus_log
-        except Exception:
-            duckdb_store.rollback()
-            raise
-        else:
-            duckdb_store.commit()
+            if create_indexes or export_parquet:
+                duckdb_store.close()
+                duckdb_store.open()
 
-        if create_indexes or export_parquet:
-            duckdb_store.close()
-            duckdb_store.open()
-
-        if create_indexes:
-            duckdb_store.create_analysis_indexes()
-        if export_parquet:
-            parquet_exports = duckdb_store.export_tables_to_parquet(
-                run_id=run_id,
-                parquet_dir=storage_layout.parquet_dir,
-            )
-
-        overview_log = storage_layout.run_output_dir / "_duckdb_run_overview.log"
-        _log_duckdb_run_overview(
-            overview_log=overview_log,
-            run_id=run_id,
-            storage_period_dir=storage_layout.period_dir,
-            run_output_dir=storage_layout.run_output_dir,
-            database_path=storage_layout.database_path,
-            parquet_dir=storage_layout.parquet_dir if export_parquet else None,
-            generated_logs=generated_logs,
-            parquet_exports=parquet_exports,
-        )
-        duckdb_store.register_report(
-            run_id=run_id,
-            report_key="_duckdb_run_overview",
-            report_type="duckdb_overview_log",
-            file_path=overview_log,
-        )
-        if export_parquet:
-            parquet_exports.update(
-                duckdb_store.export_tables_to_parquet(
+            if create_indexes:
+                duckdb_store.create_analysis_indexes()
+            if export_parquet:
+                parquet_exports = duckdb_store.export_tables_to_parquet(
                     run_id=run_id,
                     parquet_dir=storage_layout.parquet_dir,
-                    table_names=["generated_reports"],
                 )
+
+            overview_log = storage_layout.run_output_dir / "_duckdb_run_overview.log"
+            _log_duckdb_run_overview(
+                overview_log=overview_log,
+                run_id=run_id,
+                storage_period_dir=storage_layout.period_dir,
+                run_output_dir=storage_layout.run_output_dir,
+                database_path=storage_layout.database_path,
+                parquet_dir=storage_layout.parquet_dir if export_parquet else None,
+                generated_logs=generated_logs,
+                parquet_exports=parquet_exports,
             )
+            duckdb_store.register_report(
+                run_id=run_id,
+                report_key="_duckdb_run_overview",
+                report_type="duckdb_overview_log",
+                file_path=overview_log,
+            )
+            if export_parquet:
+                parquet_exports.update(
+                    duckdb_store.export_tables_to_parquet(
+                        run_id=run_id,
+                        parquet_dir=storage_layout.parquet_dir,
+                        table_names=["generated_reports"],
+                    )
+                )
 
     result: dict[str, Any] = dict(generated_logs)
     result["_duckdb_database"] = storage_layout.database_path
@@ -6522,6 +6724,8 @@ def run_full_analysis_suite_duckdb(
         storage_layout.parquet_dir if export_parquet else None
     )
     result["_duckdb_run_id"] = run_id
+    result["_duckdb_profile_config_hashes"] = profile_config_hashes
+    result["_duckdb_code_version"] = code_version_metadata
     result["_duckdb_week_dir"] = storage_layout.period_dir
     result["_duckdb_period_dir"] = storage_layout.period_dir
     result["_duckdb_run_output_dir"] = storage_layout.run_output_dir
@@ -7199,12 +7403,19 @@ def _write_earnings_priority_profile_csv(
     profile_name: str,
     sort_flavour: str | None = None,
 ) -> None:
-    """Write the per-profile earnings-priority CSV.
+    """Write the per-profile earnings-priority CSV."""
+    log_rows_to_csv(
+        csv_file,
+        _build_earnings_priority_profile_csv_headers(),
+        _build_earnings_priority_profile_csv_rows(
+            entries,
+            profile_name,
+            sort_flavour=sort_flavour,
+        ),
+    )
 
-    One row per name (sorted chronologically). Columns cover the full
-    earnings date metadata plus this profile's per-horizon score, direction,
-    confidence, component coverage and setup label.
-    """
+
+def _build_earnings_priority_profile_csv_headers() -> list[str]:
     horizon_names = list(DEFAULT_HORIZON_WEIGHTS.keys())
     csv_headers: list[str] = [
         "rank_chronological",
@@ -7230,6 +7441,15 @@ def _write_earnings_priority_profile_csv(
                 f"{h_name}_setup",
             ]
         )
+    return csv_headers
+
+
+def _build_earnings_priority_profile_csv_rows(
+    entries: list[dict[str, Any]],
+    profile_name: str,
+    sort_flavour: str | None = None,
+) -> list[list[str]]:
+    horizon_names = list(DEFAULT_HORIZON_WEIGHTS.keys())
 
     ordered_entries = _flatten_earnings_priority_entries(
         entries,
@@ -7280,8 +7500,7 @@ def _write_earnings_priority_profile_csv(
                 ]
             )
         csv_rows.append(csv_row)
-
-    log_rows_to_csv(csv_file, csv_headers, csv_rows)
+    return csv_rows
 
 
 def _write_earnings_priority_consensus_csv(
@@ -7290,6 +7509,20 @@ def _write_earnings_priority_consensus_csv(
     profile_names: list[str],
     sort_flavour: str | None = None,
 ) -> None:
+    log_rows_to_csv(
+        csv_file,
+        _build_earnings_priority_consensus_csv_headers(profile_names),
+        _build_earnings_priority_consensus_csv_rows(
+            entries,
+            profile_names,
+            sort_flavour=sort_flavour,
+        ),
+    )
+
+
+def _build_earnings_priority_consensus_csv_headers(
+    profile_names: list[str],
+) -> list[str]:
     horizon_names = list(DEFAULT_HORIZON_WEIGHTS.keys())
     csv_headers: list[str] = [
         "rank_chronological",
@@ -7319,7 +7552,15 @@ def _write_earnings_priority_consensus_csv(
     for profile_name in profile_names:
         for h_name in horizon_names:
             csv_headers.append(f"{profile_name}__{h_name}_score")
+    return csv_headers
 
+
+def _build_earnings_priority_consensus_csv_rows(
+    entries: list[dict[str, Any]],
+    profile_names: list[str],
+    sort_flavour: str | None = None,
+) -> list[list[str]]:
+    horizon_names = list(DEFAULT_HORIZON_WEIGHTS.keys())
     ordered_entries = _flatten_earnings_priority_entries(
         entries,
         sort_flavour=sort_flavour,
@@ -7378,8 +7619,137 @@ def _write_earnings_priority_consensus_csv(
                 score = profile_horizon.get("score")
                 csv_row.append(f"{score:.4f}" if score is not None else "")
         csv_rows.append(csv_row)
+    return csv_rows
 
-    log_rows_to_csv(csv_file, csv_headers, csv_rows)
+
+def _run_earnings_priority_aggregator_duckdb(
+    scan_data: list[dict[str, Any]],
+    duckdb_store: Any,
+    run_id: str,
+    profile_names: list[str],
+    industries: list[str] | str | None = None,
+    min_market_cap_usd: float | None = None,
+    max_market_cap_usd: float | None = None,
+    output_dir: str | Path | None = None,
+    reference_time: datetime | None = None,
+) -> dict[str, Path]:
+    industries_normalized = _normalize_industries(industries)
+    dedicated_output_dir = Path(output_dir) if output_dir is not None else None
+
+    def _ep_file(
+        scoring_profile_slug: str,
+        sort_flavour: str | None = None,
+    ) -> Path:
+        effective_profile_slug = scoring_profile_slug
+        if sort_flavour is not None:
+            effective_profile_slug = f"{effective_profile_slug}_{sort_flavour}"
+        return _build_report_file_name(
+            report_slug="tradingview_earnings_priority",
+            industries=industries_normalized,
+            min_market_cap_usd=min_market_cap_usd,
+            max_market_cap_usd=max_market_cap_usd,
+            scoring_profile_name=effective_profile_slug,
+            output_dir=dedicated_output_dir,
+        )
+
+    consensus_rows = _build_consensus_scores(
+        scan_data=scan_data,
+        profile_names=profile_names,
+    )
+    reference = reference_time or datetime.now(tz=timezone.utc)
+    entries = _build_earnings_priority_entries(
+        consensus_rows=consensus_rows,
+        reference_time=reference,
+    )
+
+    flavour_variants: list[str | None] = [None, *EARNINGS_PRIORITY_SORT_FLAVOURS]
+    generated: dict[str, Path] = {}
+
+    for sort_flavour in flavour_variants:
+        sort_flavour_value = sort_flavour or "default"
+        consensus_log = _ep_file("consensus", sort_flavour=sort_flavour)
+        _log_earnings_priority_report(
+            log_file=consensus_log,
+            entries=entries,
+            scan_data_count=len(scan_data),
+            industries=industries_normalized,
+            min_market_cap_usd=min_market_cap_usd,
+            max_market_cap_usd=max_market_cap_usd,
+            profile_names=profile_names,
+            reference_time=reference,
+            sort_flavour=sort_flavour,
+        )
+        duckdb_store.append_tabular_output(
+            "earnings_priority_consensus_rows",
+            _build_earnings_priority_consensus_csv_headers(profile_names),
+            _build_earnings_priority_consensus_csv_rows(
+                entries,
+                profile_names,
+                sort_flavour=sort_flavour,
+            ),
+            context={
+                "run_id": run_id,
+                "sort_flavour": sort_flavour_value,
+            },
+        )
+        result_key = "_consensus"
+        report_key = "_earnings_priority_consensus"
+        if sort_flavour is not None:
+            result_key = f"consensus_{sort_flavour}"
+            report_key = f"{report_key}_{sort_flavour}"
+        duckdb_store.register_report(
+            run_id=run_id,
+            report_key=report_key,
+            report_type="earnings_priority_consensus_log",
+            profile_name="consensus",
+            file_path=consensus_log,
+        )
+        generated[result_key] = consensus_log
+
+    for profile_name in profile_names:
+        for sort_flavour in flavour_variants:
+            sort_flavour_value = sort_flavour or "default"
+            profile_log = _ep_file(profile_name, sort_flavour=sort_flavour)
+            _log_earnings_priority_report_for_profile(
+                log_file=profile_log,
+                entries=entries,
+                profile_name=profile_name,
+                scan_data_count=len(scan_data),
+                industries=industries_normalized,
+                min_market_cap_usd=min_market_cap_usd,
+                max_market_cap_usd=max_market_cap_usd,
+                reference_time=reference,
+                sort_flavour=sort_flavour,
+            )
+            duckdb_store.append_tabular_output(
+                "earnings_priority_profile_rows",
+                _build_earnings_priority_profile_csv_headers(),
+                _build_earnings_priority_profile_csv_rows(
+                    entries,
+                    profile_name,
+                    sort_flavour=sort_flavour,
+                ),
+                context={
+                    "run_id": run_id,
+                    "profile_name": profile_name,
+                    "sort_flavour": sort_flavour_value,
+                },
+            )
+            result_key = profile_name
+            report_key = f"_earnings_priority_{profile_name}"
+            if sort_flavour is not None:
+                result_key = f"{profile_name}_{sort_flavour}"
+                report_key = f"{report_key}_{sort_flavour}"
+            duckdb_store.register_report(
+                run_id=run_id,
+                report_key=report_key,
+                report_type="earnings_priority_profile_log",
+                profile_name=profile_name,
+                file_path=profile_log,
+            )
+            generated[result_key] = profile_log
+
+    return generated
 
 
 def run_earnings_priority_aggregator(
@@ -7583,6 +7953,145 @@ def run_full_analysis_suite_with_earnings_priority(
         if key != "_consensus":
             result_key = f"_earnings_priority_{key}"
         result[result_key] = path
+    return result
+
+
+def run_full_analysis_suite_with_earnings_priority_duckdb(
+    scan_data: list[dict[str, Any]] | Mapping[str, Any],
+    profile_names: list[str] | None = None,
+    industries: list[str] | str | None = None,
+    min_market_cap_usd: float | None = None,
+    max_market_cap_usd: float | None = None,
+    include_blind_spot_sections: bool = False,
+    output_dir: str | Path | None = None,
+    database_path: str | Path | None = None,
+    parquet_dir: str | Path | None = None,
+    run_label: str | None = None,
+    api_request_metadata: Mapping[str, Any] | None = None,
+    reference_time: datetime | None = None,
+    export_parquet: bool = True,
+    create_indexes: bool = False,
+    base_result: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """DuckDB-backed variant of :func:`run_full_analysis_suite_with_earnings_priority`.
+
+    The base profile and consensus suite reuses the existing weekly DuckDB
+    storage path. Earnings-priority outputs are added as weekly DuckDB tables
+    plus per-run `.log` reports under `earnings_priority/` inside the run
+    output directory.
+
+    If ``base_result`` is provided, it must be a result returned by
+    :func:`run_full_analysis_suite_duckdb` and the base suite will not run
+    again. This avoids duplicate profile/consensus logs and table writes when
+    chaining both functions together.
+    """
+    from db.trading_view_move_prediction_duckdb import MovePredictionDuckDBStore
+
+    if base_result is None:
+        base_result = run_full_analysis_suite_duckdb(
+            scan_data=scan_data,
+            profile_names=profile_names,
+            industries=industries,
+            min_market_cap_usd=min_market_cap_usd,
+            max_market_cap_usd=max_market_cap_usd,
+            include_blind_spot_sections=include_blind_spot_sections,
+            output_dir=output_dir,
+            database_path=database_path,
+            parquet_dir=parquet_dir,
+            run_label=run_label,
+            api_request_metadata=api_request_metadata,
+            export_parquet=export_parquet,
+            create_indexes=create_indexes,
+        )
+    else:
+        required_keys = (
+            "_duckdb_database",
+            "_duckdb_run_id",
+            "_duckdb_run_output_dir",
+            "_duckdb_parquet_dir",
+            "_duckdb_period_dir",
+            "_duckdb_overview_log",
+        )
+        missing_keys = [key for key in required_keys if key not in base_result]
+        if missing_keys:
+            missing = ", ".join(missing_keys)
+            raise ValueError(
+                "base_result must be a run_full_analysis_suite_duckdb result; "
+                f"missing keys: {missing}"
+            )
+
+    database_path_resolved = base_result["_duckdb_database"]
+    run_id = base_result["_duckdb_run_id"]
+    run_output_dir = base_result["_duckdb_run_output_dir"]
+    parquet_dir_resolved = base_result["_duckdb_parquet_dir"]
+    period_dir = base_result["_duckdb_period_dir"]
+
+    scan_rows, _ = _extract_duckdb_scan_input(
+        scan_data,
+        api_request_metadata=api_request_metadata,
+    )
+    resolved_profiles = [
+        resolve_move_prediction_scoring_profile(profile_name).name
+        for profile_name in list(profile_names or DEFAULT_MOVE_PREDICTION_PROFILE_SUITE)
+    ]
+
+    earnings_priority_dir = run_output_dir / "earnings_priority"
+    earnings_priority_dir.mkdir(parents=True, exist_ok=True)
+
+    with MovePredictionDuckDBStore(
+        database_path=database_path_resolved,
+        parquet_dir=parquet_dir_resolved if export_parquet else None,
+    ) as duckdb_store:
+        duckdb_store.begin_transaction()
+        try:
+            earnings_logs = _run_earnings_priority_aggregator_duckdb(
+                scan_data=scan_rows,
+                duckdb_store=duckdb_store,
+                run_id=run_id,
+                profile_names=resolved_profiles,
+                industries=industries,
+                min_market_cap_usd=min_market_cap_usd,
+                max_market_cap_usd=max_market_cap_usd,
+                output_dir=earnings_priority_dir,
+                reference_time=reference_time,
+            )
+        except Exception:
+            duckdb_store.rollback()
+            raise
+        else:
+            duckdb_store.commit()
+
+        parquet_exports = dict(base_result.get("_duckdb_parquet_exports") or {})
+        if export_parquet:
+            parquet_exports = duckdb_store.export_tables_to_parquet(
+                run_id=run_id,
+                parquet_dir=parquet_dir_resolved,
+            )
+
+    overview_generated_logs = {
+        key: value
+        for key, value in base_result.items()
+        if isinstance(value, Path) and not key.startswith("_duckdb")
+    }
+    result: dict[str, Any] = dict(base_result)
+    for key, path in earnings_logs.items():
+        result_key = "_earnings_priority_consensus"
+        if key != "_consensus":
+            result_key = f"_earnings_priority_{key}"
+        result[result_key] = path
+        overview_generated_logs[result_key] = path
+
+    _log_duckdb_run_overview(
+        overview_log=result["_duckdb_overview_log"],
+        run_id=run_id,
+        storage_period_dir=period_dir,
+        run_output_dir=run_output_dir,
+        database_path=database_path_resolved,
+        parquet_dir=parquet_dir_resolved if export_parquet else None,
+        generated_logs=overview_generated_logs,
+        parquet_exports=parquet_exports,
+    )
+    result["_duckdb_parquet_exports"] = parquet_exports
     return result
 
 

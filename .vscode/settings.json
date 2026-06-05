@@ -14,6 +14,30 @@
             "database": "finance_manager_iteration_1",
             "username": "root",
             "password": "!@#4QWEr"
+        },
+        {
+            "previewLimit": 50,
+            "driver": "DuckDB",
+            "databaseFilePath": "${workspaceFolder:edgarDataManagementPython}/logs/tradingview_analysis/prediction_analysis/duckdb_runs/iso_year=2026/week=22/move_prediction_2026_W22.duckdb",
+            "database": "${workspaceFolder:edgarDataManagementPython}/logs/tradingview_analysis/prediction_analysis/duckdb_runs/iso_year=2026/week=22/move_prediction_2026_W22.duckdb",
+            "name": "predict_analysis_week22",
+            "group": "2026"
+        },
+        {
+            "previewLimit": 50,
+            "driver": "DuckDB",
+            "name": "historical_analysis_testrun1",
+            "group": "2026",
+            "databaseFilePath": "${workspaceFolder:edgarDataManagementPython}/logs/tradingview_analysis/prediction_analysis/duckdb_runs/historical_prediction_analysis/runs/history_aggregation_20260604_2227_utc_0987c341/historical_prediction_analysis.duckdb",
+            "database": "${workspaceFolder:edgarDataManagementPython}/logs/tradingview_analysis/prediction_analysis/duckdb_runs/historical_prediction_analysis/runs/history_aggregation_20260604_2227_utc_0987c341/historical_prediction_analysis.duckdb"
+        },
+        {
+            "previewLimit": 50,
+            "driver": "DuckDB",
+            "name": "predict_analysis_week23",
+            "group": "2026",
+            "databaseFilePath": "${workspaceFolder:edgarDataManagementPython}/logs/tradingview_analysis/prediction_analysis/duckdb_runs/iso_year=2026/week=23/move_prediction_2026_W23.duckdb",
+            "database": "${workspaceFolder:edgarDataManagementPython}/logs/tradingview_analysis/prediction_analysis/duckdb_runs/iso_year=2026/week=23/move_prediction_2026_W23.duckdb"
         }
     ],
     "python.analysis.extraPaths": [
@@ -26,5 +50,13 @@
         "editor.formatOnSave": true
     },
     "python.REPL.enableREPLSmartSend": false,
-    "sqltools.useNodeRuntime": false
+    "sqltools.useNodeRuntime": true,
+    "workbench.editorAssociations": {
+        "*.copilotmd": "vscode.markdown.preview.editor",
+        "*.xls": "default",
+        "*.parquet": "duckdb.dataFileViewer",
+        "*.csv": "duckdb.dataFileViewer",
+        "*.tsv": "duckdb.dataFileViewer",
+        "*.xlsx": "duckdb.dataFileViewer"
+    }
 }

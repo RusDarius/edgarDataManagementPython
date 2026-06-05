@@ -1,5 +1,6 @@
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
+import uuid
 
 from constants.trading_view_constants import (
     PREFERRED_MARKETS,
@@ -21,6 +22,7 @@ from data_analysis_scripts.trading_view_cross_scanner_aggregator import (
 )
 from data_analysis_scripts.trading_view_export_all_tdfields import (
     export_all_tradingview_fields,
+    export_all_tradingview_fields_duckdb,
 )
 from data_analysis_scripts.trading_view_priceperf_analysis import (
     analyze_global_price_performance,
@@ -30,11 +32,14 @@ from data_analysis_scripts.trading_view_move_prediction_analysis import (
     run_full_analysis_suite_duckdb,
     run_full_analysis_suite_from_raw_csv_folders,
     run_full_analysis_suite_with_earnings_priority,
+    run_full_analysis_suite_with_earnings_priority_duckdb,
     run_move_prediction_profile_suite,
     run_move_prediction_scan,
 )
 from data_analysis_scripts.trading_view_move_prediction_history_aggregator import (
+    build_move_prediction_history_duckdb_inputs_from_week_folders,
     build_move_prediction_history_inputs_from_folder_names,
+    run_move_prediction_history_aggregation_duckdb,
     run_move_prediction_history_aggregation,
 )
 from data_analysis_scripts.trading_view_safety_check_v1 import run_safety_core_scan
@@ -63,6 +68,17 @@ from portofolio_integration_analysis.portfolio_analysis_output import (
 USER_AGENT = "Barnnabass daniOO7XbX@gmail.com"
 TRADINGVIEW_API_CLIENT = ApiTradingViewClient(user_agent=USER_AGENT)
 BVB_API_CLIENT = ApiBvbClient(user_agent=USER_AGENT)
+
+
+def _build_non_overriding_duckdb_run_label(prefix: str = "market_snapshot") -> str:
+    """Build a human-readable run_label that stays unique across same-day runs.
+
+    DuckDB writer replacement happens only when run_id matches exactly. Because
+    run_label is used as run_id, include UTC minute and a short random suffix to
+    avoid accidental same-day collisions while keeping labels easy to scan.
+    """
+    timestamp_utc = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M")
+    return f"{prefix}_{timestamp_utc}_utc_{uuid.uuid4().hex[:6]}"
 
 
 def run_portfolio_bootstrap_example() -> dict[str, object]:
@@ -232,6 +248,55 @@ def run_move_prediction_history_aggregation_example() -> dict[str, object]:
     return aggregation_result
 
 
+def run_move_prediction_history_aggregation_duckdb_example() -> dict[str, object]:
+    """Example flow for aggregating stored DuckDB move-prediction runs.
+
+    Each folder name below is resolved under the chosen ``iso_year`` root and is
+    expected to contain exactly one weekly ``move_prediction_*.duckdb`` file.
+    The output is a DuckDB-native historical analysis dataset under
+    ``duckdb_runs/historical_prediction_analysis`` plus a human-readable
+    overview log. Legacy CSV duplication is disabled by default.
+    """
+
+    duckdb_history_root = Path(
+        r"D:\FinanceProjects\edgarDataManagementPython\logs\tradingview_analysis\prediction_analysis\duckdb_runs\iso_year=2026"
+    )
+    included_week_folders = [
+        "week=22",
+        "week=23",
+    ]
+
+    input_paths = build_move_prediction_history_duckdb_inputs_from_week_folders(
+        base_dir=duckdb_history_root,
+        folder_names=included_week_folders,
+    )
+    output_root = duckdb_history_root.parent / "historical_prediction_analysis"
+
+    aggregation_result = run_move_prediction_history_aggregation_duckdb(
+        input_paths=input_paths,
+        output_dir=output_root,
+        write_legacy_csv_outputs=False,
+        export_parquet=False,
+        # include_profiles=["breakout_long", "quality_value_compounder"],
+    )
+    print(f"DuckDB history aggregation written to: {aggregation_result['output_dir']}")
+    print(f"Analysis run id: {aggregation_result['analysis_run_id']}")
+    print(f"Analysis DuckDB: {aggregation_result['analysis_database']}")
+    print(f"Manifest table: {aggregation_result['manifest_table']}")
+    print(f"Combined history table: {aggregation_result['history_table']}")
+    print(f"Combined summary table: {aggregation_result['summary_table']}")
+    print(f"Overview log: {aggregation_result['overview_log']}")
+    print("Starter views: " + ", ".join(aggregation_result.get("analysis_views") or []))
+
+    breakout_summary_table = (
+        aggregation_result["profiles"].get("breakout_long", {}).get("summary_table")
+    )
+    if breakout_summary_table is not None:
+        print(f"Breakout long summary table: {breakout_summary_table}")
+
+    return aggregation_result
+
+
 # Main entry point for running workflows and data loaders.
 def main():
     base_data_dir = r"D:\FinanceProjects\edgarFinancialStatements"
@@ -291,14 +356,25 @@ def main():
     #     include_blind_spot_sections=False,
     # )
 
-    run_full_analysis_suite_duckdb(
-        scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-            min_market_cap_usd=1_000_000_000,
-            markets=PREFERRED_MARKETS,
-        ).get("data", []),
-        min_market_cap_usd=1_000_000_000,
-        include_blind_spot_sections=True,
-    )
+    # Model Analysis scan with duckdb storage solution
+    # move_prediction_scan_response = (
+    #     TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+    #         min_market_cap_usd=1_000_000_000,
+    #         markets=PREFERRED_MARKETS,
+    #     )
+    # )
+    # base_duckdb_result = run_full_analysis_suite_duckdb(
+    #     scan_data=move_prediction_scan_response,
+    #     min_market_cap_usd=1_000_000_000,
+    #     include_blind_spot_sections=True,
+    # )
+    # run_full_analysis_suite_with_earnings_priority_duckdb(
+    #     scan_data=move_prediction_scan_response,
+    #     min_market_cap_usd=1_000_000_000,
+    #     include_blind_spot_sections=True,
+    #     base_result=base_duckdb_result,
+    # )
+    # export_all_tradingview_fields_duckdb()
 
     # run_full_analysis_suite(
     #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
@@ -311,6 +387,7 @@ def main():
     #     industries=[TRADING_VIEW_INDUSTRIES.INFORMATION_TECHNOLOGY_SERVICES],
     # )
 
+    # # RUN SUITE DAILY BELOW - old CSV format - will try to move to the DuckDB version
     # run_full_analysis_suite(
     #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
     #         min_market_cap_usd=1_000_000_000,
@@ -351,8 +428,10 @@ def main():
     #     min_market_cap_usd=1_000_000_000,
     # )
 
-    # Aggregate progression across selected dated result folders.
-    # Pass only the dated folder names under AllInUniverse_min1bil.
+    # Aggregate stored DuckDB runs across selected weekly databases.
+    # run_move_prediction_history_aggregation_duckdb_example()
+
+    # Legacy CSV-folder aggregation path kept for backward compatibility.
     # run_move_prediction_history_aggregation_example()
 
     # daily use to get all market data for a day

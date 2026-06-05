@@ -1290,6 +1290,26 @@ class ApiTradingViewClient:
         if markets is not None:
             request_payload["markets"] = list(markets)
 
+    @staticmethod
+    def _attach_request_metadata(
+        response_payload: dict[str, Any],
+        request_payload: dict[str, Any],
+        request_url: str,
+        timeout: int,
+    ) -> dict[str, Any]:
+        response_payload["request_payload"] = deepcopy(request_payload)
+        response_payload["request_metadata"] = {
+            "url": request_url,
+            "timeout_seconds": timeout,
+            "markets": list(request_payload.get("markets", [])),
+            "columns": list(request_payload.get("columns", [])),
+            "sort": deepcopy(request_payload.get("sort")),
+            "filter": deepcopy(request_payload.get("filter", [])),
+            "filter2": deepcopy(request_payload.get("filter2")),
+            "range": deepcopy(request_payload.get("range")),
+        }
+        return response_payload
+
     def scan_main_america_market(
         self,
         timeout: int = 30,
@@ -1646,7 +1666,12 @@ class ApiTradingViewClient:
         )
         response.raise_for_status()
 
-        response_payload = response.json()
+        response_payload = self._attach_request_metadata(
+            response.json(),
+            request_payload=request_payload,
+            request_url=TRADINGVIEW_GLOBAL_SCAN_URL,
+            timeout=timeout,
+        )
         if not include_mapped_rows:
             return response_payload
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import math
 import tempfile
@@ -41,16 +42,40 @@ ANALYSIS_INDEX_SPECS = [
 RUN_METADATA_SCHEMA = [
     ("run_id", "VARCHAR"),
     ("created_at_utc", "TIMESTAMP"),
+    ("run_date_utc", "DATE"),
+    ("run_minute_utc", "TIMESTAMP"),
+    ("iso_year", "BIGINT"),
+    ("iso_week", "BIGINT"),
     ("suite_name", "VARCHAR"),
     ("scan_data_count", "BIGINT"),
     ("profile_names_json", "VARCHAR"),
+    ("profile_config_hashes_json", "VARCHAR"),
     ("industries_json", "VARCHAR"),
     ("min_market_cap_usd", "DOUBLE"),
     ("max_market_cap_usd", "DOUBLE"),
     ("include_blind_spot_sections", "BOOLEAN"),
+    ("api_request_json", "VARCHAR"),
+    ("api_request_payload_sha256", "VARCHAR"),
+    ("api_request_markets_json", "VARCHAR"),
+    ("api_request_columns_json", "VARCHAR"),
+    ("code_version_json", "VARCHAR"),
+    ("git_commit", "VARCHAR"),
+    ("git_branch", "VARCHAR"),
+    ("git_dirty", "BOOLEAN"),
+    ("run_label", "VARCHAR"),
+    ("run_id_generated", "BOOLEAN"),
     ("database_path", "VARCHAR"),
     ("parquet_dir", "VARCHAR"),
     ("notes", "VARCHAR"),
+]
+
+PROFILE_CONFIG_SNAPSHOTS_SCHEMA = [
+    ("run_id", "VARCHAR"),
+    ("profile_name", "VARCHAR"),
+    ("profile_config_schema_version", "VARCHAR"),
+    ("profile_config_hash", "VARCHAR"),
+    ("profile_config_json", "VARCHAR"),
+    ("captured_at_utc", "TIMESTAMP"),
 ]
 
 GENERATED_REPORTS_SCHEMA = [
@@ -242,6 +267,26 @@ def _import_duckdb() -> Any:
     return duckdb
 
 
+def _is_duckdb_file_lock_error(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return "cannot open file" in message and (
+        "being used by another process" in message
+        or "already open" in message
+        or "conflicting lock" in message
+    )
+
+
+def _build_duckdb_file_lock_message(database_path: Path, exc: BaseException) -> str:
+    return (
+        f"Cannot open DuckDB database for writing: {database_path}. "
+        "Another process already has this .duckdb file open. DuckDB permits one "
+        "writer process for a database file, and SQLTools, DBeaver, or a DuckDB "
+        "CLI session can keep the lock while it is connected. Disconnect the "
+        "DuckDB connection in SQLTools or close the other process, then rerun "
+        f"the analysis. Original DuckDB error: {exc}"
+    )
+
+
 def _quote_identifier(identifier: str) -> str:
     return '"' + str(identifier).replace('"', '""') + '"'
 
@@ -251,7 +296,17 @@ def _quote_path_literal(path: Path) -> str:
 
 
 def _json_dump(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def _sha256_json(value: Any) -> str:
+    return hashlib.sha256(_json_dump(value).encode("utf-8")).hexdigest()
+
+
+def _ensure_utc_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def _is_blank(value: Any) -> bool:
@@ -367,7 +422,14 @@ class MovePredictionDuckDBStore:
 
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self._duckdb = _import_duckdb()
-        self._conn = self._duckdb.connect(str(self.database_path))
+        try:
+            self._conn = self._duckdb.connect(str(self.database_path))
+        except Exception as exc:
+            if _is_duckdb_file_lock_error(exc):
+                raise RuntimeError(
+                    _build_duckdb_file_lock_message(self.database_path, exc)
+                ) from exc
+            raise
         self.conn.execute("PRAGMA threads=4")
         self.conn.execute("PRAGMA enable_object_cache=true")
         try:
@@ -383,6 +445,9 @@ class MovePredictionDuckDBStore:
 
     def _ensure_base_schema(self) -> None:
         self._create_table_if_absent("run_metadata", RUN_METADATA_SCHEMA)
+        self._create_table_if_absent(
+            "profile_config_snapshots", PROFILE_CONFIG_SNAPSHOTS_SCHEMA
+        )
         self._create_table_if_absent("generated_reports", GENERATED_REPORTS_SCHEMA)
         self._create_table_if_absent("parquet_exports", PARQUET_EXPORTS_SCHEMA)
 
@@ -433,27 +498,92 @@ class MovePredictionDuckDBStore:
         min_market_cap_usd: float | None,
         max_market_cap_usd: float | None,
         include_blind_spot_sections: bool,
+        profile_config_hashes: dict[str, str] | None = None,
+        api_request_metadata: dict[str, Any] | None = None,
+        code_version_metadata: dict[str, Any] | None = None,
+        run_label: str | None = None,
+        run_id_generated: bool = True,
         notes: str = "",
     ) -> None:
+        created_at_utc = _ensure_utc_datetime(created_at_utc)
+        run_minute_utc = created_at_utc.replace(second=0, microsecond=0)
+        iso_calendar = created_at_utc.isocalendar()
+
+        api_request_metadata = dict(api_request_metadata or {})
+        api_request_payload = api_request_metadata.get("request_payload")
+        if not isinstance(api_request_payload, dict):
+            api_request_payload = api_request_metadata.get("payload")
+        if not isinstance(api_request_payload, dict):
+            api_request_payload = None
+
+        request_metadata = api_request_metadata.get("request_metadata")
+        if not isinstance(request_metadata, dict):
+            request_metadata = {}
+
+        request_markets = []
+        request_columns = []
+        if api_request_payload is not None:
+            request_markets = list(api_request_payload.get("markets") or [])
+            request_columns = list(api_request_payload.get("columns") or [])
+        if not request_markets:
+            request_markets = list(request_metadata.get("markets") or [])
+        if not request_columns:
+            request_columns = list(request_metadata.get("columns") or [])
+
+        code_version_metadata = dict(code_version_metadata or {})
+        git_metadata = code_version_metadata.get("git")
+        if not isinstance(git_metadata, dict):
+            git_metadata = {}
+
         self.append_records(
             "run_metadata",
             [
                 {
                     "run_id": run_id,
                     "created_at_utc": created_at_utc,
+                    "run_date_utc": created_at_utc.date(),
+                    "run_minute_utc": run_minute_utc,
+                    "iso_year": iso_calendar.year,
+                    "iso_week": iso_calendar.week,
                     "suite_name": suite_name,
                     "scan_data_count": scan_data_count,
                     "profile_names_json": _json_dump(list(profile_names)),
+                    "profile_config_hashes_json": _json_dump(
+                        dict(profile_config_hashes or {})
+                    ),
                     "industries_json": _json_dump(list(industries or [])),
                     "min_market_cap_usd": min_market_cap_usd,
                     "max_market_cap_usd": max_market_cap_usd,
                     "include_blind_spot_sections": include_blind_spot_sections,
+                    "api_request_json": _json_dump(api_request_metadata),
+                    "api_request_payload_sha256": (
+                        _sha256_json(api_request_payload)
+                        if api_request_payload is not None
+                        else None
+                    ),
+                    "api_request_markets_json": _json_dump(request_markets),
+                    "api_request_columns_json": _json_dump(request_columns),
+                    "code_version_json": _json_dump(code_version_metadata),
+                    "git_commit": git_metadata.get("commit"),
+                    "git_branch": git_metadata.get("branch"),
+                    "git_dirty": git_metadata.get("dirty"),
+                    "run_label": run_label,
+                    "run_id_generated": run_id_generated,
                     "database_path": str(self.database_path),
                     "parquet_dir": str(self.parquet_dir or ""),
                     "notes": notes,
                 }
             ],
             RUN_METADATA_SCHEMA,
+        )
+
+    def append_profile_config_snapshots(
+        self, records: Iterable[dict[str, Any]]
+    ) -> None:
+        self.append_records(
+            "profile_config_snapshots",
+            records,
+            PROFILE_CONFIG_SNAPSHOTS_SCHEMA,
         )
 
     def register_report(
@@ -607,6 +737,28 @@ class MovePredictionDuckDBStore:
                 f"Expected {list(expected_columns)}, found {actual_columns}."
             )
 
+    def _ensure_record_table_schema(
+        self,
+        table_name: str,
+        schema: Sequence[tuple[str, str]],
+    ) -> None:
+        normalized_schema = [
+            (column_name, sql_type.upper()) for column_name, sql_type in schema
+        ]
+        if not self._table_exists(table_name):
+            self._create_table_if_absent(table_name, normalized_schema)
+            return
+
+        existing_columns = set(self._table_columns(table_name))
+        for column_name, sql_type in normalized_schema:
+            if column_name in existing_columns:
+                continue
+            self.conn.execute(
+                f"ALTER TABLE {_quote_identifier(table_name)} "
+                f"ADD COLUMN {_quote_identifier(column_name)} {sql_type}"
+            )
+            existing_columns.add(column_name)
+
     def begin_transaction(self) -> None:
         self.conn.execute("BEGIN TRANSACTION")
 
@@ -659,8 +811,7 @@ class MovePredictionDuckDBStore:
         records: Iterable[dict[str, Any]],
         schema: Sequence[tuple[str, str]],
     ) -> DuckDBTableWriteResult:
-        self._create_table_if_absent(table_name, schema)
-        self._validate_table_columns(table_name, [column for column, _ in schema])
+        self._ensure_record_table_schema(table_name, schema)
 
         columns = [column for column, _ in schema]
         sql_type_by_column = dict(schema)

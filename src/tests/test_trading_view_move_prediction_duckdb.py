@@ -1,4 +1,5 @@
 import csv
+import json
 import unittest
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -6,12 +7,16 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from data_analysis_scripts.trading_view_move_prediction_analysis import (
+    _build_duckdb_run_id,
     _build_duckdb_weekly_storage_layout,
     run_full_analysis_suite,
     run_full_analysis_suite_duckdb,
+    run_full_analysis_suite_with_earnings_priority,
+    run_full_analysis_suite_with_earnings_priority_duckdb,
 )
 from db.trading_view_move_prediction_duckdb import (
     MovePredictionDuckDBStore,
+    _is_duckdb_file_lock_error,
     query_move_prediction_duckdb,
 )
 
@@ -61,6 +66,38 @@ class TestDuckDBWeeklyStorageLayout(unittest.TestCase):
                 expected_period_dir / "move_prediction_2026_W22.duckdb",
             )
             self.assertEqual(layout.parquet_dir, expected_period_dir / "parquet")
+
+    def test_generated_run_ids_use_utc_minute_and_uuid_suffix(self):
+        reference_time = datetime(2026, 5, 31, 14, 30, 45, tzinfo=timezone.utc)
+
+        first_run_id = _build_duckdb_run_id(reference_time=reference_time)
+        second_run_id = _build_duckdb_run_id(reference_time=reference_time)
+
+        self.assertRegex(
+            first_run_id,
+            r"^move_prediction_20260531_1430_utc_[0-9a-f]{8}$",
+        )
+        self.assertNotEqual(first_run_id, second_run_id)
+        labeled_run_id = _build_duckdb_run_id(
+            "Replace Me", reference_time=reference_time
+        )
+        self.assertRegex(
+            labeled_run_id,
+            r"^replace_me_20260531_1430_utc_[0-9a-f]{8}$",
+        )
+
+
+class TestDuckDBOpenErrors(unittest.TestCase):
+    def test_detects_duckdb_file_lock_error(self):
+        lock_error = Exception(
+            'IO Error: Cannot open file "move_prediction_2026_W23.duckdb": '
+            "The process cannot access the file because it is being used by another process. "
+            "File is already open in C:\\Program Files\\nodejs\\node.exe (PID 6572)"
+        )
+        unrelated_error = Exception("IO Error: Cannot open file: no such directory")
+
+        self.assertTrue(_is_duckdb_file_lock_error(lock_error))
+        self.assertFalse(_is_duckdb_file_lock_error(unrelated_error))
 
 
 @unittest.skipUnless(_duckdb_available(), "duckdb not installed")
@@ -247,7 +284,19 @@ class TestRunFullAnalysisSuiteDuckDBTransition(unittest.TestCase):
             "quality_value_compounder",
             "fragility_short",
         ]
-        run_id = "csv_equivalence"
+        run_label = "csv_equivalence"
+        request_payload = {
+            "columns": ["symbol", "name", "close", "market_cap_basic"],
+            "filter": [
+                {
+                    "left": "market_cap_basic",
+                    "operation": "egreater",
+                    "right": 1_000_000_000,
+                }
+            ],
+            "markets": ["america", "europe"],
+            "sort": {"sortBy": "relative_volume_10d_calc", "sortOrder": "desc"},
+        }
 
         with TemporaryDirectory() as legacy_temp_dir, TemporaryDirectory() as duckdb_temp_dir:
             legacy_output_dir = Path(legacy_temp_dir)
@@ -261,17 +310,79 @@ class TestRunFullAnalysisSuiteDuckDBTransition(unittest.TestCase):
                 output_dir=legacy_output_dir,
             )
             duckdb_result = run_full_analysis_suite_duckdb(
-                scan_data=deepcopy(scan_data),
+                scan_data={
+                    "data": deepcopy(scan_data),
+                    "request_payload": deepcopy(request_payload),
+                    "request_metadata": {
+                        "url": "https://scanner.tradingview.com/global/scan?label-product=screener-stock",
+                        "timeout_seconds": 30,
+                    },
+                },
                 profile_names=profile_names,
                 min_market_cap_usd=1_000_000_000,
                 include_blind_spot_sections=False,
                 output_dir=duckdb_output_dir,
-                run_label=run_id,
+                run_label=run_label,
                 export_parquet=True,
                 create_indexes=False,
             )
 
             database_path = duckdb_result["_duckdb_database"]
+            run_id = duckdb_result["_duckdb_run_id"]
+
+            metadata_rows = query_move_prediction_duckdb(
+                database_path,
+                """
+                SELECT
+                    run_label,
+                    run_id_generated,
+                    profile_config_hashes_json,
+                    api_request_json,
+                    api_request_payload_sha256,
+                    api_request_markets_json,
+                    code_version_json
+                FROM run_metadata
+                WHERE run_id = ?
+                """,
+                [run_id],
+            )
+            self.assertEqual(len(metadata_rows), 1)
+            metadata = metadata_rows[0]
+            self.assertEqual(metadata["run_label"], run_label)
+            self.assertFalse(metadata["run_id_generated"])
+            self.assertEqual(
+                json.loads(metadata["api_request_markets_json"]),
+                ["america", "europe"],
+            )
+            api_request_metadata = json.loads(metadata["api_request_json"])
+            self.assertEqual(api_request_metadata["request_payload"], request_payload)
+            self.assertTrue(metadata["api_request_payload_sha256"])
+            self.assertIn("source_files", json.loads(metadata["code_version_json"]))
+
+            profile_hashes = json.loads(metadata["profile_config_hashes_json"])
+            self.assertEqual(sorted(profile_hashes), sorted(profile_names))
+            profile_config_rows = query_move_prediction_duckdb(
+                database_path,
+                """
+                SELECT profile_name, profile_config_hash, profile_config_json
+                FROM profile_config_snapshots
+                WHERE run_id = ?
+                ORDER BY profile_name
+                """,
+                [run_id],
+            )
+            self.assertEqual(len(profile_config_rows), len(profile_names))
+            for profile_config_row in profile_config_rows:
+                self.assertEqual(
+                    profile_hashes[profile_config_row["profile_name"]],
+                    profile_config_row["profile_config_hash"],
+                )
+                config_json = json.loads(profile_config_row["profile_config_json"])
+                self.assertIn("resolved_horizon_weights", config_json)
+                self.assertEqual(
+                    config_json["schema_version"],
+                    "move_prediction_profile_config_v1",
+                )
 
             raw_headers, raw_rows = _read_csv(
                 _single_file(
@@ -425,6 +536,249 @@ class TestRunFullAnalysisSuiteDuckDBTransition(unittest.TestCase):
             finally:
                 conn.close()
             self.assertIn("_duckdb_run_overview", parquet_report_keys)
+
+    def test_earnings_priority_duckdb_preserves_legacy_csv_equivalent_tables(self):
+        reference_time = datetime(2026, 6, 3, 12, 0, tzinfo=timezone.utc)
+        scan_data = [
+            {
+                "symbol": "NASDAQ:AAA",
+                "name": "Alpha Analytics",
+                "sector": "Technology Services",
+                "industry": "Software",
+                "market": "america",
+                "market_cap_basic": 2_500_000_000,
+                "close": 42.5,
+                "relative_volume_10d_calc": 1.35,
+                "Value.Traded": 15_000_000,
+                "Perf.W": 4.2,
+                "Perf.1M": 8.5,
+                "Perf.YTD": 18.0,
+                "Perf.Y": 35.0,
+                "Perf.5Y": 120.0,
+                "change": 1.8,
+                "price_earnings_ttm": 24.0,
+                "total_revenue_yoy_growth_ttm": 14.0,
+                "debt_to_equity": 0.25,
+                "earnings_release_date": "2026-05-01T20:00:00+00:00",
+                "earnings_release_next_date": "2026-06-04T20:00:00+00:00",
+                "earnings_release_next_calendar_date": "2026-06-04",
+                "earnings_release_next_time": "amc",
+            },
+            {
+                "symbol": "NYSE:BBB",
+                "name": "Beta Industrials",
+                "sector": "Industrials",
+                "industry": "Machinery",
+                "market": "america",
+                "market_cap_basic": 4_200_000_000,
+                "close": 88.1,
+                "relative_volume_10d_calc": 0.75,
+                "Value.Traded": 9_000_000,
+                "Perf.W": -1.1,
+                "Perf.1M": 2.4,
+                "Perf.YTD": 6.0,
+                "Perf.Y": 12.0,
+                "Perf.5Y": 55.0,
+                "change": -0.4,
+                "price_earnings_ttm": 16.0,
+                "total_revenue_yoy_growth_ttm": 7.0,
+                "debt_to_equity": 0.55,
+                "earnings_release_date": "2026-05-08T20:00:00+00:00",
+                "earnings_release_next_date": "2026-06-12T20:00:00+00:00",
+                "earnings_release_next_calendar_date": "2026-06-12",
+                "earnings_release_next_time": "bmo",
+            },
+            {
+                "symbol": "NYSE:DDD",
+                "name": "Delta Energy",
+                "sector": "Energy Minerals",
+                "industry": "Oil & Gas Production",
+                "market": "america",
+                "market_cap_basic": 6_100_000_000,
+                "close": 63.2,
+                "relative_volume_10d_calc": 2.1,
+                "Value.Traded": 33_000_000,
+                "Perf.W": 6.8,
+                "Perf.1M": 12.5,
+                "Perf.YTD": 22.0,
+                "Perf.Y": 40.0,
+                "Perf.5Y": 90.0,
+                "change": 2.6,
+                "price_earnings_ttm": 9.0,
+                "total_revenue_yoy_growth_ttm": 18.0,
+                "debt_to_equity": 0.4,
+                "earnings_release_date": "2026-05-20T20:00:00+00:00",
+                "earnings_release_next_date": "2026-07-05T20:00:00+00:00",
+                "earnings_release_next_calendar_date": "2026-07-05",
+                "earnings_release_next_time": "amc",
+            },
+        ]
+        profile_names = [
+            "breakout_long",
+            "quality_value_compounder",
+            "fragility_short",
+        ]
+        request_payload = {
+            "columns": ["symbol", "name", "close", "market_cap_basic"],
+            "filter": [
+                {
+                    "left": "market_cap_basic",
+                    "operation": "egreater",
+                    "right": 1_000_000_000,
+                }
+            ],
+            "markets": ["america"],
+            "sort": {"sortBy": "relative_volume_10d_calc", "sortOrder": "desc"},
+        }
+
+        with TemporaryDirectory() as legacy_temp_dir, TemporaryDirectory() as duckdb_temp_dir:
+            legacy_output_dir = Path(legacy_temp_dir)
+            duckdb_output_dir = Path(duckdb_temp_dir)
+
+            run_full_analysis_suite_with_earnings_priority(
+                scan_data=deepcopy(scan_data),
+                profile_names=profile_names,
+                min_market_cap_usd=1_000_000_000,
+                include_blind_spot_sections=False,
+                output_dir=legacy_output_dir,
+                reference_time=reference_time,
+            )
+            duckdb_result = run_full_analysis_suite_with_earnings_priority_duckdb(
+                scan_data={
+                    "data": deepcopy(scan_data),
+                    "request_payload": deepcopy(request_payload),
+                    "request_metadata": {
+                        "url": "https://scanner.tradingview.com/global/scan?label-product=screener-stock",
+                        "timeout_seconds": 30,
+                    },
+                },
+                profile_names=profile_names,
+                min_market_cap_usd=1_000_000_000,
+                include_blind_spot_sections=False,
+                output_dir=duckdb_output_dir,
+                run_label="earnings_duckdb",
+                reference_time=reference_time,
+                export_parquet=True,
+                create_indexes=False,
+            )
+
+            database_path = duckdb_result["_duckdb_database"]
+            run_id = duckdb_result["_duckdb_run_id"]
+            earnings_output_dir = legacy_output_dir / "earnings_priority"
+
+            consensus_headers, consensus_rows = _read_csv(
+                _single_file(
+                    earnings_output_dir,
+                    "tradingview_earnings_priority__*profile_consensus.csv",
+                )
+            )
+            consensus_count = query_move_prediction_duckdb(
+                database_path,
+                """
+                SELECT COUNT(*) AS row_count
+                FROM earnings_priority_consensus_rows
+                WHERE run_id = ? AND sort_flavour = 'default'
+                """,
+                [run_id],
+            )[0]["row_count"]
+            self.assertEqual(consensus_count, len(consensus_rows))
+
+            profile_headers, profile_rows = _read_csv(
+                _single_file(
+                    earnings_output_dir,
+                    "tradingview_earnings_priority__*profile_breakout_long.csv",
+                )
+            )
+            profile_count = query_move_prediction_duckdb(
+                database_path,
+                """
+                SELECT COUNT(*) AS row_count
+                FROM earnings_priority_profile_rows
+                WHERE run_id = ?
+                  AND profile_name = 'breakout_long'
+                  AND sort_flavour = 'default'
+                """,
+                [run_id],
+            )[0]["row_count"]
+            self.assertEqual(profile_count, len(profile_rows))
+
+            flavour_count = query_move_prediction_duckdb(
+                database_path,
+                """
+                SELECT COUNT(*) AS row_count
+                FROM earnings_priority_consensus_rows
+                WHERE run_id = ? AND sort_flavour = 'flavour_marketcap'
+                """,
+                [run_id],
+            )[0]["row_count"]
+            self.assertEqual(flavour_count, len(consensus_rows))
+
+            import duckdb
+
+            conn = duckdb.connect(str(database_path), read_only=True)
+            try:
+                consensus_columns = [
+                    row[1]
+                    for row in conn.execute(
+                        'PRAGMA table_info("earnings_priority_consensus_rows")'
+                    ).fetchall()
+                ]
+                profile_columns = [
+                    row[1]
+                    for row in conn.execute(
+                        'PRAGMA table_info("earnings_priority_profile_rows")'
+                    ).fetchall()
+                ]
+            finally:
+                conn.close()
+
+            self.assertEqual(
+                consensus_columns,
+                ["run_id", "sort_flavour", "row_number", *consensus_headers],
+            )
+            self.assertEqual(
+                profile_columns,
+                [
+                    "run_id",
+                    "profile_name",
+                    "sort_flavour",
+                    "row_number",
+                    *profile_headers,
+                ],
+            )
+
+            report_keys = query_move_prediction_duckdb(
+                database_path,
+                """
+                SELECT report_key
+                FROM generated_reports
+                WHERE run_id = ?
+                  AND report_key LIKE '_earnings_priority%'
+                ORDER BY report_key
+                """,
+                [run_id],
+            )
+            self.assertEqual(
+                len(report_keys),
+                3 * (1 + len(profile_names)),
+            )
+            self.assertTrue(
+                (
+                    duckdb_result["_duckdb_parquet_dir"]
+                    / "earnings_priority_consensus_rows.parquet"
+                ).exists()
+            )
+            self.assertTrue(
+                (
+                    duckdb_result["_duckdb_parquet_dir"]
+                    / "earnings_priority_profile_rows.parquet"
+                ).exists()
+            )
+            self.assertIn("_earnings_priority_consensus", duckdb_result)
+            self.assertIn(
+                "_earnings_priority_breakout_long_flavour_score",
+                duckdb_result,
+            )
 
 
 if __name__ == "__main__":

@@ -1,0 +1,24 @@
+{
+  "name": "edgardatamanagementpython",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RusDarius/edgarDataManagementPython.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/RusDarius/edgarDataManagementPython/issues"
+  },
+  "homepage": "https://github.com/RusDarius/edgarDataManagementPython#readme",
+  "dependencies": {
+    "duckdb-async": "^1.4.2"
+  }
+}
