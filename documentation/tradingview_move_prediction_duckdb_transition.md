@@ -234,6 +234,44 @@ Windows notes:
 
 On Windows, disconnect GUI/CLI DuckDB sessions before running `run_full_analysis_suite_duckdb` against the same weekly `.duckdb` file. DuckDB allows only one writer process, and SQLTools or DBeaver can keep the database locked while the connection is open even if no query is actively running. If the writer reports that the file is open in `node.exe`, that is usually the SQLTools language server holding the connection.
 
+## Historical CSV Backfill
+
+Use `replay_historical_raw_csvs_into_duckdb_runs` to replay saved all-fields CSV snapshots into the weekly DuckDB layout. This is the migration path for older daily CSV exports under `trading_view_all_fields_data/DD_MM_YYYY/`.
+
+Typical usage:
+
+```python
+from pathlib import Path
+from data_analysis_scripts.trading_view_move_prediction_duckdb_backfill import (
+    replay_historical_raw_csvs_into_duckdb_runs,
+)
+
+backfill_result = replay_historical_raw_csvs_into_duckdb_runs(
+    raw_data_folders_or_csvs=[
+        Path("logs/tradingview_analysis/trading_view_all_fields_data"),
+    ],
+    target_date_labels=["13_04_2026", "14_04_2026", "15_04_2026"],
+    min_market_cap_usd=1_000_000_000,
+    include_earnings_priority=True,
+    parallel_mode=True,
+    max_parallel_workers=3,
+    max_memory_gb=20.0,
+)
+```
+
+Behavior notes:
+
+- By default, dated CSV days that already have a completed backfill run under `prediction_analysis/duckdb_runs` are skipped. Other days in the same ISO week are still processed. Use `force_rerun=True` or a custom `output_dir` to replay into a fresh destination.
+- `parallel_mode=True` uses a two-stage pipeline:
+  - Stage 1: process workers load and filter CSV snapshots in parallel.
+  - Stage 2: DuckDB writes stay serialized within each ISO week, while different weeks can write concurrently.
+- `max_memory_gb` defaults to `20.0` and enforces a live RAM cap using process-tree RSS sampling (`psutil` recommended). With the cap enabled, backfill keeps at most one prepared CSV snapshot and one active DuckDB write in memory and waits until RSS drops before starting more work.
+- If a single day still exceeds the cap during analysis, batch smaller runs with `target_date_labels` (for example 3-10 days at a time) or raise `max_memory_gb` cautiously.
+- `parallel_worker_backend='thread'` keeps the older thread-per-week fallback if process startup overhead is a concern on very small test sets.
+- Progress and per-day timing land in `prediction_analysis/duckdb_backfill/duckdb_backfill_manifest.csv`.
+
+At roughly 5 minutes per historical day, a 30-day replay is on the order of 2.5 hours serially. Parallel mode mainly helps when multiple ISO weeks or multiple days in the same week can overlap CSV preparation with DuckDB analysis.
+
 ## Performance Notes
 
 DuckDB is an analytical database, so the main speed wins come from vectorized execution, column pruning, compression, and Parquet zone maps rather than MySQL-style secondary indexes.

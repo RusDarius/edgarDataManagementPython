@@ -38,6 +38,20 @@
             "group": "2026",
             "databaseFilePath": "${workspaceFolder:edgarDataManagementPython}/logs/tradingview_analysis/prediction_analysis/duckdb_runs/iso_year=2026/week=23/move_prediction_2026_W23.duckdb",
             "database": "${workspaceFolder:edgarDataManagementPython}/logs/tradingview_analysis/prediction_analysis/duckdb_runs/iso_year=2026/week=23/move_prediction_2026_W23.duckdb"
+        },
+        {
+            "previewLimit": 50,
+            "driver": "DuckDB",
+            "name": "all_fields_data_03_06_26",
+            "group": "2026_trading_view_all_fields_min1bil",
+            "database": "${workspaceFolder:edgarDataManagementPython}/logs/tradingview_analysis/trading_view_all_fields_data/03_06_2026/tradingview_all_fields_03_06_2026.duckdb"
+        },
+        {
+            "previewLimit": 50,
+            "driver": "DuckDB",
+            "name": "predict_analysis_week24",
+            "group": "2026",
+            "database": "${workspaceFolder:edgarDataManagementPython}/logs/tradingview_analysis/prediction_analysis/duckdb_runs/iso_year=2026/week=24/move_prediction_2026_W24.duckdb"
         }
     ],
     "python.analysis.extraPaths": [
@@ -58,5 +72,28 @@
         "*.csv": "duckdb.dataFileViewer",
         "*.tsv": "duckdb.dataFileViewer",
         "*.xlsx": "duckdb.dataFileViewer"
-    }
+    },
+    "dbcode.connections": [
+        {
+            "connectionId": "BMRLnR_AEbvopKn-PQzZM",
+            "name": "prediction_analysis_w23",
+            "driver": "duckdb",
+            "connectionType": "socket",
+            "socket": "edgarDataManagementPython/logs/tradingview_analysis/prediction_analysis/duckdb_runs/iso_year=2026/week=23/move_prediction_2026_W23.duckdb",
+            "driverOptions": {
+                "fileSearchPath": "database",
+                "extensions": []
+            },
+            "readOnly": false,
+            "postConnectionSqlType": "inline",
+            "pinnedConnectionTimeout": "0",
+            "introspection": {
+                "progressive": false
+            }
+        }
+    ],
+    "cursorpyright.analysis.extraPaths": [
+        "./src/generic_utils",
+        "./src"
+    ]
 }

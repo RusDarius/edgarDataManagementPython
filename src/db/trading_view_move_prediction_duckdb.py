@@ -5,6 +5,7 @@ import hashlib
 import json
 import math
 import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -295,6 +296,90 @@ def _quote_path_literal(path: Path) -> str:
     return "'" + path.as_posix().replace("'", "''") + "'"
 
 
+def _normalize_duckdb_memory_limit(value: str | int | float | None) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        numeric_value = float(value)
+        if not math.isfinite(numeric_value) or numeric_value <= 0:
+            return None
+        return f"{numeric_value:.2f}GB"
+    normalized = str(value).strip()
+    return normalized or None
+
+
+def _apply_duckdb_connection_settings(
+    conn: Any,
+    *,
+    threads: int | None = None,
+    enable_object_cache: bool = True,
+    preserve_insertion_order: bool | None = False,
+    memory_limit: str | int | float | None = None,
+    temp_directory: str | Path | None = None,
+) -> None:
+    resolved_threads = threads if threads is not None and threads > 0 else 4
+    conn.execute(f"PRAGMA threads={int(resolved_threads)}")
+    conn.execute(
+        "PRAGMA enable_object_cache=true"
+        if enable_object_cache
+        else "PRAGMA enable_object_cache=false"
+    )
+
+    normalized_memory_limit = _normalize_duckdb_memory_limit(memory_limit)
+    if normalized_memory_limit is not None:
+        conn.execute("SET memory_limit = ?", [normalized_memory_limit])
+
+    if temp_directory is not None:
+        resolved_temp_dir = Path(temp_directory)
+        resolved_temp_dir.mkdir(parents=True, exist_ok=True)
+        conn.execute("SET temp_directory = ?", [str(resolved_temp_dir)])
+
+    if preserve_insertion_order is not None:
+        try:
+            conn.execute(
+                "SET preserve_insertion_order="
+                + ("true" if preserve_insertion_order else "false")
+            )
+        except Exception:
+            pass
+
+
+@contextmanager
+def open_move_prediction_duckdb_connection(
+    database_path: str | Path,
+    *,
+    read_only: bool = False,
+    threads: int | None = None,
+    enable_object_cache: bool = True,
+    preserve_insertion_order: bool | None = False,
+    memory_limit: str | int | float | None = None,
+    temp_directory: str | Path | None = None,
+) -> Iterable[Any]:
+    duckdb = _import_duckdb()
+    database_path = Path(database_path)
+    try:
+        conn = duckdb.connect(str(database_path), read_only=read_only)
+    except Exception as exc:
+        if not read_only and _is_duckdb_file_lock_error(exc):
+            raise RuntimeError(
+                _build_duckdb_file_lock_message(database_path, exc)
+            ) from exc
+        raise
+
+    try:
+        _apply_duckdb_connection_settings(
+            conn,
+            threads=threads,
+            enable_object_cache=enable_object_cache,
+            preserve_insertion_order=preserve_insertion_order,
+            memory_limit=memory_limit,
+            temp_directory=temp_directory,
+        )
+        yield conn
+    finally:
+        conn.close()
+
+
 def _json_dump(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
 
@@ -397,9 +482,20 @@ class MovePredictionDuckDBStore:
         self,
         database_path: str | Path,
         parquet_dir: str | Path | None = None,
+        *,
+        threads: int | None = None,
+        enable_object_cache: bool = True,
+        preserve_insertion_order: bool | None = False,
+        memory_limit: str | int | float | None = None,
+        temp_directory: str | Path | None = None,
     ) -> None:
         self.database_path = Path(database_path)
         self.parquet_dir = Path(parquet_dir) if parquet_dir is not None else None
+        self.threads = threads
+        self.enable_object_cache = enable_object_cache
+        self.preserve_insertion_order = preserve_insertion_order
+        self.memory_limit = memory_limit
+        self.temp_directory = Path(temp_directory) if temp_directory is not None else None
         self._duckdb: Any | None = None
         self._conn: Any | None = None
 
@@ -430,12 +526,14 @@ class MovePredictionDuckDBStore:
                     _build_duckdb_file_lock_message(self.database_path, exc)
                 ) from exc
             raise
-        self.conn.execute("PRAGMA threads=4")
-        self.conn.execute("PRAGMA enable_object_cache=true")
-        try:
-            self.conn.execute("SET preserve_insertion_order=false")
-        except Exception:
-            pass
+        _apply_duckdb_connection_settings(
+            self.conn,
+            threads=self.threads,
+            enable_object_cache=self.enable_object_cache,
+            preserve_insertion_order=self.preserve_insertion_order,
+            memory_limit=self.memory_limit,
+            temp_directory=self.temp_directory,
+        )
         self._ensure_base_schema()
 
     def close(self) -> None:
@@ -798,7 +896,7 @@ class MovePredictionDuckDBStore:
             self.conn.execute(
                 f"COPY {_quote_identifier(table_name)} ({columns_sql}) "
                 f"FROM {_quote_path_literal(temporary_path)} "
-                "(FORMAT CSV, HEADER false, NULL '')"
+                "(FORMAT CSV, HEADER false, NULL '', STRICT_MODE false)"
             )
             return row_count
         finally:
@@ -945,6 +1043,29 @@ class MovePredictionDuckDBStore:
             "(FORMAT PARQUET, COMPRESSION ZSTD)"
         )
 
+    def create_or_replace_table_from_query(
+        self,
+        table_name: str,
+        select_sql: str,
+    ) -> None:
+        self.conn.execute(f"DROP TABLE IF EXISTS {_quote_identifier(table_name)}")
+        self.conn.execute(
+            f"CREATE TABLE {_quote_identifier(table_name)} AS {select_sql}"
+        )
+
+    def copy_query_to_csv(
+        self,
+        sql: str,
+        csv_path: str | Path,
+    ) -> Path:
+        resolved_csv_path = Path(csv_path)
+        resolved_csv_path.parent.mkdir(parents=True, exist_ok=True)
+        self.conn.execute(
+            f"COPY ({sql}) TO {_quote_path_literal(resolved_csv_path)} "
+            "(FORMAT CSV, HEADER true)"
+        )
+        return resolved_csv_path
+
     def _row_count(self, table_name: str) -> int:
         result = self.conn.execute(
             f"SELECT COUNT(*) FROM {_quote_identifier(table_name)}"
@@ -957,16 +1078,12 @@ def query_move_prediction_duckdb(
     sql: str,
     parameters: Sequence[Any] | None = None,
 ) -> list[dict[str, Any]]:
-    duckdb = _import_duckdb()
-    conn = duckdb.connect(str(database_path), read_only=True)
-    try:
+    with open_move_prediction_duckdb_connection(database_path, read_only=True) as conn:
         cursor = conn.execute(sql, list(parameters or []))
         if cursor.description is None:
             return []
         columns = [column[0] for column in cursor.description]
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
-    finally:
-        conn.close()
 
 
 def describe_move_prediction_duckdb(database_path: str | Path) -> list[dict[str, Any]]:

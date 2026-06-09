@@ -86,6 +86,55 @@ class TestDuckDBWeeklyStorageLayout(unittest.TestCase):
             r"^replace_me_20260531_1430_utc_[0-9a-f]{8}$",
         )
 
+    def test_reference_time_controls_historical_week_partition(self):
+        reference_time = datetime(2026, 5, 31, 14, 30, tzinfo=timezone.utc)
+        scan_data = [
+            {
+                "symbol": "NASDAQ:AAA",
+                "name": "Alpha Analytics",
+                "sector": "Technology Services",
+                "industry": "Software",
+                "market": "america",
+                "market_cap_basic": 2_500_000_000,
+                "close": 42.5,
+                "relative_volume_10d_calc": 1.35,
+                "Value.Traded": 15_000_000,
+                "Perf.W": 4.2,
+                "Perf.1M": 8.5,
+                "Perf.YTD": 18.0,
+                "Perf.Y": 35.0,
+                "Perf.5Y": 120.0,
+                "change": 1.8,
+                "price_earnings_ttm": 24.0,
+                "total_revenue_yoy_growth_ttm": 14.0,
+                "debt_to_equity": 0.25,
+            }
+        ]
+
+        with TemporaryDirectory() as temp_dir:
+            result = run_full_analysis_suite_duckdb(
+                scan_data=scan_data,
+                profile_names=["breakout_long"],
+                min_market_cap_usd=1_000_000_000,
+                include_blind_spot_sections=False,
+                output_dir=temp_dir,
+                reference_time=reference_time,
+                export_parquet=False,
+                create_indexes=False,
+            )
+
+            self.assertIn("iso_year=2026", str(result["_duckdb_period_dir"]))
+            self.assertIn("week=22", str(result["_duckdb_period_dir"]))
+
+            metadata_rows = query_move_prediction_duckdb(
+                result["_duckdb_database"],
+                "SELECT iso_year, iso_week FROM run_metadata WHERE run_id = ?",
+                [result["_duckdb_run_id"]],
+            )
+            self.assertEqual(len(metadata_rows), 1)
+            self.assertEqual(metadata_rows[0]["iso_year"], 2026)
+            self.assertEqual(metadata_rows[0]["iso_week"], 22)
+
 
 class TestDuckDBOpenErrors(unittest.TestCase):
     def test_detects_duckdb_file_lock_error(self):
@@ -133,6 +182,33 @@ class TestMovePredictionDuckDBStore(unittest.TestCase):
 
                 self.assertEqual(rows[0], ("run_a", "AAA", 1.0, None))
                 self.assertEqual(rows[1], ("run_b", "BBB", 2.0, "late_field"))
+
+    def test_append_tabular_output_handles_embedded_quotes_in_text_fields(self):
+        company_name = 'AO ""UK Kuzbassrazrezugol\'"" ORD'
+        with TemporaryDirectory() as temp_dir:
+            database_path = Path(temp_dir) / "move_prediction_2026_05.duckdb"
+
+            with MovePredictionDuckDBStore(database_path=database_path) as store:
+                store.append_tabular_output(
+                    "raw_scan_rows",
+                    ["symbol", "Company", "close"],
+                    [["RUS:KZRU", company_name, 35.0]],
+                    context={"run_id": "quoted_run"},
+                )
+
+                rows = store.conn.execute(
+                    """
+                    SELECT symbol, Company, close
+                    FROM raw_scan_rows
+                    WHERE run_id = ?
+                    """,
+                    ["quoted_run"],
+                ).fetchall()
+
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(rows[0][0], "RUS:KZRU")
+                self.assertEqual(rows[0][2], 35.0)
+                self.assertIn("Kuzbassrazrezugol", rows[0][1])
 
     def test_delete_run_data_removes_prior_run_rows(self):
         with TemporaryDirectory() as temp_dir:

@@ -36,6 +36,9 @@ from data_analysis_scripts.trading_view_move_prediction_analysis import (
     run_move_prediction_profile_suite,
     run_move_prediction_scan,
 )
+from data_analysis_scripts.trading_view_move_prediction_duckdb_backfill import (
+    replay_historical_raw_csvs_into_duckdb_runs,
+)
 from data_analysis_scripts.trading_view_move_prediction_history_aggregator import (
     build_move_prediction_history_duckdb_inputs_from_week_folders,
     build_move_prediction_history_inputs_from_folder_names,
@@ -252,7 +255,12 @@ def run_move_prediction_history_aggregation_duckdb_example() -> dict[str, object
     """Example flow for aggregating stored DuckDB move-prediction runs.
 
     Each folder name below is resolved under the chosen ``iso_year`` root and is
-    expected to contain exactly one weekly ``move_prediction_*.duckdb`` file.
+    expected to contain exactly one weekly ``move_prediction_YYYY_WWW.duckdb``
+    file. Individual run folders under ``week=WW/runs/`` (live runs such as
+    ``move_prediction_...`` or backfill runs such as
+    ``raw_csv_duckdb_backfill_backfill_...``) are not scanned directly;
+    aggregation reads ``run_metadata`` and ``profile_prediction_rows`` from the
+    weekly database, so mixed run-id naming does not affect the analysis.
     The output is a DuckDB-native historical analysis dataset under
     ``duckdb_runs/historical_prediction_analysis`` plus a human-readable
     overview log. Legacy CSV duplication is disabled by default.
@@ -299,8 +307,6 @@ def run_move_prediction_history_aggregation_duckdb_example() -> dict[str, object
 
 # Main entry point for running workflows and data loaders.
 def main():
-    base_data_dir = r"D:\FinanceProjects\edgarFinancialStatements"
-
     # analyze_global_price_performance(
     #     scan_data=TRADINGVIEW_API_CLIENT.scan_world_market_all_priceperf_metrics().get(
     #         "data", []
@@ -343,9 +349,11 @@ def main():
     #     industries=[TRADING_VIEW_INDUSTRIES.HOTELS_RESORTS_CRUISE_LINES],
     # )
 
-    # Replay the current model against prior all-fields CSV exports. The runner
-    # expects each dated folder to contain tradingview_global_all_tdfields_*.csv
-    # and writes profile/horizon/date snapshots under prediction_analysis/raw_csv_backscan.
+    # Replay the current model against prior all-fields CSV exports (legacy CSV
+    # output path). The runner expects each dated folder to contain
+    # tradingview_global_all_tdfields_*.csv and writes profile/horizon/date
+    # snapshots under prediction_analysis/raw_csv_backscan.
+    #
     # run_full_analysis_suite_from_raw_csv_folders(
     #     raw_data_folders=[
     #         Path(
@@ -356,7 +364,7 @@ def main():
     #     include_blind_spot_sections=False,
     # )
 
-    # Model Analysis scan with duckdb storage solution
+    # # # # Model Analysis scan with duckdb storage solution
     # move_prediction_scan_response = (
     #     TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
     #         min_market_cap_usd=1_000_000_000,
