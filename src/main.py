@@ -24,6 +24,17 @@ from data_analysis_scripts.trading_view_export_all_tdfields import (
     export_all_tradingview_fields,
     export_all_tradingview_fields_duckdb,
 )
+from data_analysis_scripts.trading_view_move_prediction_batch_pattern_analysis import (
+    run_batch_prediction_pattern_analysis,
+)
+from data_analysis_scripts.trading_view_move_prediction_multi_run_pool_aggregator import (
+    run_move_prediction_run_pool_aggregation,
+)
+from data_analysis_scripts.trading_view_move_prediction_pool_analyzer import (
+    analyze_pool_database,
+    export_analysis_reports,
+    run_pool_analysis_from_path,
+)
 from data_analysis_scripts.trading_view_priceperf_analysis import (
     analyze_global_price_performance,
 )
@@ -35,6 +46,18 @@ from data_analysis_scripts.trading_view_move_prediction_analysis import (
     run_full_analysis_suite_with_earnings_priority_duckdb,
     run_move_prediction_profile_suite,
     run_move_prediction_scan,
+)
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+MOVE_PREDICTION_PROFILE_SUITE_BASELINE = (
+    PROJECT_ROOT / "config" / "move_prediction_profiles" / "suites" / "baseline.json"
+)
+MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1 = (
+    PROJECT_ROOT
+    / "config"
+    / "move_prediction_profiles"
+    / "suites"
+    / "active_manager_v1.json"
 )
 from data_analysis_scripts.trading_view_move_prediction_duckdb_backfill import (
     replay_historical_raw_csvs_into_duckdb_runs,
@@ -326,14 +349,6 @@ def main():
     #     },
     # )
 
-    # run_activity_float_attention_scan(
-    #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_activity_float_attention(
-    #         min_market_cap_usd=1_000_000_000,
-    #         markets=PREFERRED_MARKETS,
-    #     ).get("data", []),
-    #     min_market_cap_usd=1_000_000_000,
-    # )
-
     # run_safety_core_scan(
     #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_safety_core(
     #         min_market_cap_usd=1_000_000_000,
@@ -371,16 +386,20 @@ def main():
     #         markets=PREFERRED_MARKETS,
     #     )
     # )
+    # # Default (omit profile_suite_path): built-in 10-profile baseline — unchanged behavior.
+    # # Active-manager pass: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1
     # base_duckdb_result = run_full_analysis_suite_duckdb(
     #     scan_data=move_prediction_scan_response,
     #     min_market_cap_usd=1_000_000_000,
     #     include_blind_spot_sections=True,
+    #     # profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1,
     # )
     # run_full_analysis_suite_with_earnings_priority_duckdb(
     #     scan_data=move_prediction_scan_response,
     #     min_market_cap_usd=1_000_000_000,
     #     include_blind_spot_sections=True,
     #     base_result=base_duckdb_result,
+    #     # profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1,
     # )
     # export_all_tradingview_fields_duckdb()
 
@@ -494,6 +513,56 @@ def main():
 
     # End-to-end example flow:
     # run_portfolio_bootstrap_example()
+
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!! might need to deprecate it since it does not give meaningful results
+    # run batch prediction pattern analysis
+    # result = run_batch_prediction_pattern_analysis(
+    #     iso_year=2026,
+    #     start_week=21,
+    #     end_week=24,  # omit to use current ISO week
+    #     primary_profile_name="breakout_long",  # starting lens
+    #     horizon_name="weeks",
+    #     min_scan_data_count=3000,  # use 8000+ to prefer backfill universe only
+    #     show_progress=True,  # live stderr progress in Git Bash (week bar, ETA, timings)
+    # )
+    # print(result["overview_log"])
+
+    # # Discover weeks 13–24 of 2026 and pool them
+    # result = run_move_prediction_run_pool_aggregation(
+    #     iso_year=2026,
+    #     start_week=20,
+    #     end_week=24,
+    #     memory_gb=28,
+    #     duckdb_threads=20,
+    #     attach_batch_size=8,  # more parallel attach batches
+    #     prefer_parquet_inputs=True,
+    # )
+    # print(result["database_path"])
+
+    # # Analyze the pooled database for top profiles and stock rankings
+    # # Option 1: By pool ID pattern
+    # analysis_result = run_pool_analysis_from_path(
+    #     pool_id_pattern="move_prediction_run_pool_20260610_2000",
+    #     min_score_threshold=65.0,
+    #     top_n_profiles=10,
+    #     top_n_stocks=200,
+    # )
+    # # Option 2: By explicit database path
+    # # analysis_result = analyze_pool_database(
+    # #     database_path=result["database_path"],
+    # #     min_score_threshold=65.0,
+    # #     top_n_profiles=10,
+    # #     top_n_stocks=200,
+    # # )
+    # # Export analysis reports
+    # exported = export_analysis_reports(
+    #     analysis_result,
+    #     output_dir=Path(result["output_dir"]) / "analysis",
+    #     export_json=True,
+    #     export_csv=True,
+    #     export_sql=True,
+    # )
+    # print(f"Analysis reports exported: {list(exported.keys())}")
 
     pass
 

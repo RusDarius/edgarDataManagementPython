@@ -105,6 +105,174 @@ FROM all_runs r
 ORDER BY m.created_at_utc DESC NULLS LAST,
     r.run_id;
 -- @block
+-- Profile scores across ALL profiles and ALL horizons for a ticker watchlist.
+-- One distinct row per symbol + profile_name + horizon_name.
+-- Edit the tickers list in tickers[] below.
+--
+-- Three variants are included below:
+--   A) latest run          — ACTIVE (runnable as-is)
+--   B) specific run_id     — commented out; uncomment block B and comment block A to use
+--   C) all runs            — commented out; uncomment block C and comment block A to use
+WITH tickers AS (
+    SELECT unnest(
+            [
+                'VSH',
+                'STMPA',
+                'SYNA',
+                'GTLB',
+                'TEAM',
+                'ZS',
+            ]
+        ) AS ticker
+),
+latest_run AS (
+    SELECT run_id,
+        created_at_utc,
+        run_date_utc,
+        iso_year,
+        iso_week
+    FROM run_metadata
+    ORDER BY created_at_utc DESC
+    LIMIT 1
+)
+SELECT h.symbol,
+    h.company,
+    h.industry,
+    h.market_cap_basic,
+    h.close AS close_price,
+    h.profile_name,
+    h.horizon_name,
+    h.score,
+    h.direction,
+    h.confidence,
+    h.coverage,
+    h.setup,
+    h.risk_adjusted_score,
+    h.risk_tier,
+    h.manager_action_signal
+FROM profile_horizon_scores h
+    INNER JOIN latest_run lr ON h.run_id = lr.run_id
+    INNER JOIN tickers t ON upper(trim(h.symbol)) = upper(trim(t.ticker))
+    OR upper(trim(h.symbol)) LIKE '%:' || upper(trim(t.ticker))
+ORDER BY h.symbol,
+    h.profile_name,
+    CASE
+        h.horizon_name
+        WHEN 'days' THEN 1
+        WHEN 'weeks' THEN 2
+        WHEN 'months' THEN 3
+        WHEN 'years' THEN 4
+        ELSE 99
+    END;
+-- @block
+-- Variant B: profile scores for a SPECIFIC run_id and ticker watchlist.
+-- Uncomment the full statement below and comment out Variant A block above to use.
+--
+-- WITH tickers AS (
+--     SELECT unnest(
+--             [
+--                 'NVDA',
+--                 'AAPL',
+--                 'MSFT',
+--                 'GOOGL',
+--                 'AMZN'
+--             ]
+--         ) AS ticker
+-- ),
+-- target_run AS (
+--     SELECT run_id,
+--         created_at_utc,
+--         run_date_utc,
+--         iso_year,
+--         iso_week
+--     FROM run_metadata
+--     WHERE run_id = 'move_prediction_20260610_1437_utc_698d1f59'
+-- )
+-- SELECT tr.run_date_utc,
+--     tr.created_at_utc AS run_created_at_utc,
+--     tr.iso_year,
+--     tr.iso_week,
+--     h.run_id,
+--     h.symbol,
+--     h.company,
+--     h.sector,
+--     h.industry,
+--     h.market_cap_basic,
+--     h.close AS close_price,
+--     h.profile_name,
+--     h.horizon_name,
+--     h.score,
+--     h.direction,
+--     h.confidence,
+--     h.coverage,
+--     h.setup,
+--     h.risk_adjusted_score,
+--     h.risk_tier,
+--     h.manager_action_signal
+-- FROM profile_horizon_scores h
+--     INNER JOIN target_run tr ON h.run_id = tr.run_id
+--     INNER JOIN tickers t ON upper(trim(h.symbol)) = upper(trim(t.ticker))
+--     OR upper(trim(h.symbol)) LIKE '%:' || upper(trim(t.ticker))
+-- ORDER BY h.symbol,
+--     h.profile_name,
+--     CASE h.horizon_name
+--         WHEN 'days' THEN 1
+--         WHEN 'weeks' THEN 2
+--         WHEN 'months' THEN 3
+--         WHEN 'years' THEN 4
+--         ELSE 99
+--     END;
+-- @block
+-- Variant C: profile scores across ALL runs for a ticker watchlist.
+-- Uncomment the full statement below and comment out Variant A block above to use.
+--
+-- WITH tickers AS (
+--     SELECT unnest(
+--             [
+--                 'NVDA',
+--                 'AAPL',
+--                 'MSFT',
+--                 'GOOGL',
+--                 'AMZN'
+--             ]
+--         ) AS ticker
+-- )
+-- SELECT m.run_date_utc,
+--     m.created_at_utc AS run_created_at_utc,
+--     m.iso_year,
+--     m.iso_week,
+--     h.run_id,
+--     h.symbol,
+--     h.company,
+--     h.sector,
+--     h.industry,
+--     h.market_cap_basic,
+--     h.close AS close_price,
+--     h.profile_name,
+--     h.horizon_name,
+--     h.score,
+--     h.direction,
+--     h.confidence,
+--     h.coverage,
+--     h.setup,
+--     h.risk_adjusted_score,
+--     h.risk_tier,
+--     h.manager_action_signal
+-- FROM profile_horizon_scores h
+--     INNER JOIN run_metadata m ON h.run_id = m.run_id
+--     INNER JOIN tickers t ON upper(trim(h.symbol)) = upper(trim(t.ticker))
+--     OR upper(trim(h.symbol)) LIKE '%:' || upper(trim(t.ticker))
+-- ORDER BY h.symbol,
+--     m.created_at_utc DESC,
+--     h.profile_name,
+--     CASE h.horizon_name
+--         WHEN 'days' THEN 1
+--         WHEN 'weeks' THEN 2
+--         WHEN 'months' THEN 3
+--         WHEN 'years' THEN 4
+--         ELSE 99
+--     END;
+-- @block
 -- Ranks the latest run's top weekly consensus long candidates by risk-adjusted score.
 WITH latest_run AS (
     SELECT run_id
@@ -125,7 +293,7 @@ FROM consensus_horizon_scores c
 WHERE c.horizon_name = 'weeks'
     AND c.score IS NOT NULL
 ORDER BY c.risk_adjusted_score DESC NULLS LAST
-LIMIT 50;
+LIMIT 2000;
 -- @block
 -- Shows breakout_long weekly profile rankings for the latest run.
 WITH latest_run AS (

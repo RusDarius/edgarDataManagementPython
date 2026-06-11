@@ -1,0 +1,241 @@
+{
+  "schema_version": "move_prediction_profile_file_v1",
+  "profile_id": "value_recovery_v1",
+  "base_profile_id": "value_recovery",
+  "version": "1.0.0",
+  "effective_from": "2026-06-09",
+  "changelog": "BBPower divergence as reversal trigger.",
+  "profile": {
+    "name": "value_recovery_v1",
+    "description": "Operating turnaround profile for companies where sequential metrics are actively inflecting from a depressed base. The key differentiator from asymmetric_value: this profile requires recovery evidence, not just static cheapness. The model prioritizes QoQ revenue, EBITDA, net income, FCF, EPS-forward, and surprise evidence through an operating turnaround composite, then asks whether valuation still offers a discount and whether the tape is beginning to confirm the turn. Momentum history is damped so recent weakness is forgiven, but weak or missing operating quality is penalized heavily.",
+    "horizon_weights": {
+      "days": {
+        "attention": 0.04,
+        "event": 0.05,
+        "momentum": 0.06,
+        "trend": 0.16,
+        "quality": 0.34,
+        "valuation": 0.22,
+        "safety": 0.13
+      },
+      "weeks": {
+        "attention": 0.04,
+        "event": 0.04,
+        "momentum": 0.07,
+        "trend": 0.18,
+        "quality": 0.34,
+        "valuation": 0.22,
+        "safety": 0.11
+      },
+      "months": {
+        "attention": 0.03,
+        "event": 0.03,
+        "momentum": 0.05,
+        "trend": 0.17,
+        "quality": 0.38,
+        "valuation": 0.24,
+        "safety": 0.1
+      },
+      "years": {
+        "attention": 0.01,
+        "event": 0.01,
+        "momentum": 0.02,
+        "trend": 0.1,
+        "quality": 0.4,
+        "valuation": 0.28,
+        "safety": 0.18
+      }
+    },
+    "component_signal_weights": {
+      "attention": {
+        "relative_volume_10d_calc": 0.4,
+        "float_turnover": 0.35,
+        "dollar_turnover_intensity": 0.35,
+        "Value.Traded": 0.2,
+        "AvgValue.Traded_10d": 0.2,
+        "volume_trend": 0.75,
+        "intraday_momentum": 0.45
+      },
+      "momentum": {
+        "change": 0.45,
+        "Perf.5D": 0.25,
+        "Perf.W": 0.35,
+        "Perf.1M": 0.35,
+        "Perf.3M": 0.45,
+        "Perf.6M": 0.15,
+        "Perf.YTD": 0.2,
+        "Perf.Y": 0.05,
+        "ROC": 0.7,
+        "Mom": 0.7,
+        "macd_spread": 0.7,
+        "Recommend.All": 0.65,
+        "Recommend.MA": 0.55,
+        "Recommend.Other": 0.65,
+        "rsi_centered": 0.2,
+        "rsi7_centered": 0.12,
+        "stoch_rsi_centered": 0.55,
+        "stoch_rsi_crossover": 1.55,
+        "bbpower_divergence": 1.2,
+        "aroon_spread": 0.95,
+        "adx_directional_spread": 0.85
+      },
+      "valuation": {
+        "price_earnings_ttm": 1.15,
+        "price_earnings_growth_ttm": 1.25,
+        "price_book_fq": 1.25,
+        "price_sales_current": 1.1,
+        "price_free_cash_flow_ttm": 1.2,
+        "price_to_cash_f_operating_activities_ttm": 1.0,
+        "enterprise_value_to_revenue_ttm": 1.1,
+        "enterprise_value_to_ebit_ttm": 1.1,
+        "enterprise_value_ebitda_ttm": 1.25,
+        "earnings_yield": 1.35,
+        "distance_from_52w_high": 1.2,
+        "range_position_52w": 1.2,
+        "enterprise_value_to_free_cash_flow_ttm": 1.25,
+        "enterprise_value_to_gross_profit_ttm": 1.05,
+        "price_target_upside_average": 1.2,
+        "price_target_upside_median": 1.3,
+        "price_target_downside_floor": 1.15,
+        "book_value_discount": 1.2,
+        "graham_value_gap": 1.2,
+        "tangible_book_value_gap": 1.15,
+        "free_cash_flow_yield": 1.2,
+        "operating_cash_flow_yield": 1.15,
+        "industry_revenue_value_gap": 0.9
+      },
+      "quality": {
+        "operating_turnaround_score": 1.75,
+        "total_revenue_yoy_growth_ttm": 0.75,
+        "total_revenue_qoq_growth_fq": 1.45,
+        "ebitda_yoy_growth_ttm": 0.8,
+        "ebitda_qoq_growth_fq": 1.55,
+        "net_income_yoy_growth_ttm": 0.85,
+        "net_income_qoq_growth_fq": 1.6,
+        "free_cash_flow_yoy_growth_ttm": 1.0,
+        "free_cash_flow_qoq_growth_fq": 1.65,
+        "gross_margin": 0.9,
+        "operating_margin": 1.15,
+        "after_tax_margin": 1.0,
+        "return_on_assets": 0.9,
+        "return_on_equity": 0.95,
+        "return_on_invested_capital": 1.2,
+        "free_cash_flow_margin_ttm": 1.3,
+        "buyback_yield": 0.45,
+        "dividends_yield_current": 0.35,
+        "eps_forward_growth": 1.65,
+        "revenue_per_employee": 0.8,
+        "earnings_per_share_diluted_yoy_growth_ttm": 1.0,
+        "gross_profit_margin_fy": 0.85,
+        "sustainable_growth_rate_ttm": 1.15,
+        "piotroski_f_score_ttm": 1.35,
+        "operating_margin_ttm": 1.1,
+        "net_margin_ttm": 1.05,
+        "asset_turnover_current": 0.95,
+        "sloan_ratio_ttm": 1.1,
+        "dps_common_stock_prim_issue_yoy_growth_fy": 0.35
+      },
+      "safety": {
+        "current_ratio": 1.05,
+        "quick_ratio": 1.05,
+        "cash_ratio": 1.0,
+        "short_term_cash_coverage": 1.15,
+        "altman_z_score_ttm": 1.25,
+        "debt_to_equity": 1.2,
+        "debt_to_revenue_ttm": 1.15,
+        "net_debt": 1.2,
+        "beta_1_year": 0.8,
+        "total_debt_to_ebitda_fq": 1.4,
+        "total_debt_to_ebitda_fy": 1.25,
+        "net_debt_to_ebitda_fq": 1.35,
+        "net_debt_to_ebitda_fy": 1.2,
+        "interst_cover_ttm": 1.2,
+        "zmijewski_score_ttm": 1.2,
+        "beta_adjusted_atrp": 0.75,
+        "price_target_dispersion": 0.65
+      },
+      "trend": {
+        "close_vs_sma10": 1.2,
+        "close_vs_sma20": 1.15,
+        "close_vs_sma30": 1.05,
+        "close_vs_sma50": 0.85,
+        "close_vs_sma200": 1.1,
+        "close_vs_ema10": 1.2,
+        "close_vs_ema20": 1.15,
+        "close_vs_ema30": 1.05,
+        "close_vs_ema50": 0.85,
+        "close_vs_ema200": 1.1,
+        "close_vs_vwap": 0.55,
+        "close_vs_vwma": 0.7,
+        "trend_alignment": 0.85,
+        "pivot_distance": 1.1,
+        "short_trend_emergence": 1.45,
+        "bb_position": 0.95
+      }
+    },
+    "component_directional_bias": {
+      "attention": {
+        "positive_multiplier": 0.65,
+        "negative_multiplier": 1.1
+      },
+      "momentum": {
+        "positive_multiplier": 1.2,
+        "negative_multiplier": 0.35
+      },
+      "trend": {
+        "positive_multiplier": 1.25,
+        "negative_multiplier": 0.75
+      },
+      "valuation": {
+        "positive_multiplier": 1.25,
+        "negative_multiplier": 1.1
+      },
+      "quality": {
+        "positive_multiplier": 1.3,
+        "negative_multiplier": 1.4
+      },
+      "safety": {
+        "positive_multiplier": 1.15,
+        "negative_multiplier": 1.4
+      }
+    },
+    "missing_component_scores_by_horizon": {
+      "days": {
+        "attention": -0.25,
+        "valuation": -0.95,
+        "quality": -1.25,
+        "safety": -0.8
+      },
+      "weeks": {
+        "attention": -0.2,
+        "valuation": -1.05,
+        "quality": -1.35,
+        "safety": -0.9
+      },
+      "months": {
+        "attention": -0.15,
+        "valuation": -1.15,
+        "quality": -1.45,
+        "safety": -1.0
+      },
+      "years": {
+        "valuation": -1.25,
+        "quality": -1.55,
+        "safety": -1.1
+      }
+    },
+    "performance_tracking_periods": {},
+    "intro_metric_notes": [
+      "Operating turnaround profile — rewards active recovery evidence, not static cheapness.",
+      "New operating_turnaround_score=1.75 combines QoQ revenue, EBITDA, net income, FCF, EPS surprise, and forward EPS growth evidence. At least two metrics are required for the composite.",
+      "QoQ growth dominates YoY: revenue=1.45, EBITDA=1.55, net income=1.60, and FCF=1.65. This targets names where the income statement and cash flow are actually turning.",
+      "Forward recovery conviction is explicit: eps_forward_growth=1.65. A turnaround without forward EPS improvement should not rank highly.",
+      "Early reversal confirmation strengthened: stoch_rsi_crossover=1.55, short_trend_emergence=1.45, and short moving average fields are active. The profile wants the first proof of tape repair, not a mature breakout.",
+      "Trailing momentum is damped hard: Perf.Y=0.05, Perf.YTD=0.20, Perf.6M=0.15. Recent historical underperformance is allowed; fresh improvement is what matters.",
+      "Valuation remains required but secondary to the turn: earnings_yield=1.35, target upside median=1.30, EV/FCF=1.25, price_book=1.25, Graham gap=1.20.",
+      "Passive and quality-overlap filters are stronger: missing quality penalty reaches -1.55, and safety deterioration is amplified 1.40x. Funds with no operating turn evidence should fall out of top ranks."
+    ],
+    "confidence_multiplier": 1.0,
+    "confidence_offset": 0.0
+  }
+}

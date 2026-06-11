@@ -20,6 +20,79 @@ The root causes were:
 
 This reference documents the revised scoring model and the updated profile behavior.
 
+## June 2026 Active-Manager Update — Tier-1 Signals & Six New Profiles
+
+This pass activates under-used TradingView catalog fields and expands the profile suite from 10 to **16** lenses.
+
+### Tier-1 derived signals (new)
+
+| Signal | Source fields | Transform | Component | Notes |
+| --- | --- | --- | --- | --- |
+| `donchian_position` | `DonchCh20.Upper`, `DonchCh20.Lower`, `close` | `(close - Lower) / (Upper - Lower)` | trend | Channel position; upper = extended |
+| `close_vs_psar` | `P.SAR`, `close` | `+1/-1` vs SAR | trend | Parabolic SAR trend confirm |
+| `close_vs_hullma9` | `HullMA9`, `close` | `+1/-1` vs Hull MA | trend | Fastest MA confirmation |
+| `chaikin_money_flow_signal` | `ChaikinMoneyFlow` | robust normalized | attention | Institutional accumulation |
+| `bbpower_divergence` | `BBPower` | robust normalized | momentum | Bull/Bear power; early reversal / exhaustion |
+| `recommend_tf_spread` | `Recommend.All\|1W`, `Recommend.All` | weekly minus daily | momentum | Timeframe sentiment disagreement |
+| `ebitda_per_employee` | `ebitda`, `number_of_employees` | ratio | quality | Operating efficiency beyond revenue/head |
+| `near_52w_high_score` | `distance_from_52w_high` | negated distance | momentum | Exhaustion overlay only |
+| `exhaustion_range_position` | `range_position_52w` | raw 0–1 position | momentum | Exhaustion overlay only |
+
+Payload additions in `GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD`: `DonchCh20.Upper`, `DonchCh20.Lower`, `P.SAR`, `HullMA9`, `ChaikinMoneyFlow`, `BBPower`, `Recommend.All|1W`.
+
+### Existing profile tuning
+
+| Profile | Key changes |
+| --- | --- |
+| `breakout_long` | Activated `donchian_position`, `close_vs_psar`, `chaikin_money_flow_signal`; damped RSI/Stoch/Perf.1M; added `price_target_dispersion` safety guard |
+| `early_momentum_inflection` | Activated `close_vs_hullma9`, `bbpower_divergence`; emits `promote_to_breakout` when handoff conditions met |
+| `forward_edge_active` | Activated `close_vs_hullma9`, `recommend_tf_spread`; boosted `eps_surprise_percent_fq` |
+| `durable_value_compounder` | Activated `ebitda_per_employee`; strengthened missing valuation penalties |
+| `sector_relative_outperformer` | Activated `chaikin_money_flow_signal`, `ebitda_per_employee` |
+| `value_recovery` | Activated `bbpower_divergence` |
+| `fragility_short` | `hedge_or_short` requires ≥2 bullish long-profile disagreements |
+
+### Six new profiles
+
+| Profile | Horizon emphasis | Consensus weight | Inverted in consensus? |
+| --- | --- | ---: | --- |
+| `income_compounder` | months → years | 0.05 | no |
+| `pre_earnings_drift` | days → weeks | 0.04 | no |
+| `mean_reversion_exhaustion` | days → weeks | 0.02 | **yes** |
+| `defensive_fortress` | months → years | 0.04 | no |
+| `sector_rotation_momentum` | weeks → months | 0.04 | no |
+| `quality_growth_at_reasonable_price` | months | 0.05 | no |
+
+### Consensus weights (June 2026, sum = 1.00)
+
+| Profile | Weight |
+| --- | ---: |
+| `breakout_long` | 0.15 |
+| `early_momentum_inflection` | 0.09 |
+| `forward_edge_active` | 0.09 |
+| `quality_value_compounder` | 0.08 |
+| `durable_value_compounder` | 0.07 |
+| `sector_relative_outperformer` | 0.07 |
+| `asymmetric_value` | 0.07 |
+| `value_recovery` | 0.06 |
+| `deep_value_momentum` | 0.03 |
+| `fragility_short` | 0.05 |
+| `income_compounder` | 0.05 |
+| `pre_earnings_drift` | 0.04 |
+| `mean_reversion_exhaustion` | 0.02 |
+| `defensive_fortress` | 0.04 |
+| `sector_rotation_momentum` | 0.04 |
+| `quality_growth_at_reasonable_price` | 0.05 |
+
+### New manager action signals
+
+| Signal | Profile context |
+| --- | --- |
+| `promote_to_breakout` | `early_momentum_inflection` handoff to tactical breakout sleeve |
+| `trim_extended_long` | `mean_reversion_exhaustion` overlay |
+
+See [active_manager_implementation_usage.md](active_manager_implementation_usage.md) and [tradingview_move_prediction_pattern_discovery_reference.md](tradingview_move_prediction_pattern_discovery_reference.md) for workflow and discovery tooling.
+
 ## May 2026 Active-Manager Update
 
 The latest model pass shifted the suite from a pure score/rank engine toward an active-manager decision tool. The goal is to better separate operating-company value from passive-vehicle cheapness, make value signals horizon-aware, and present the risk behind every recommendation.
@@ -1420,17 +1493,17 @@ These are data-layer and scan-level enhancements that could further improve forw
 
 **New suggestions (April 5, 2026):**
 
-7. **Donchian Channel breakout detection**: TradingView provides `DonchCh20.Upper` and `DonchCh20.Lower`. A derived signal `donchian_position = (close - DonchCh20.Lower) / (DonchCh20.Upper - DonchCh20.Lower)` would detect breakout proximity. Close to upper channel = trending strongly. This is complementary to Bollinger Bands because Donchian is purely price-based (no volatility normalization).
+7. ~~**Donchian Channel breakout detection**~~: **Implemented** as `donchian_position` in June 2026. Activated in `breakout_long`, `early_momentum_inflection`, and exhaustion/rotation profiles.
 
-8. **Parabolic SAR trend confirmation**: `P.SAR` is available. A binary `+1/-1` signal for `close > P.SAR` (bullish) vs `close < P.SAR` (bearish) would add another trend confirmation layer. Useful for `breakout_long` and `early_momentum_inflection`.
+8. ~~**Parabolic SAR trend confirmation**~~: **Implemented** as `close_vs_psar` (`+1/-1`). Activated in breakout and inflection profiles.
 
-9. **Hull Moving Average crossover**: `HullMA9` is available. A signal comparing `close` vs `HullMA9` would provide the fastest-reacting MA crossover signal. Hull MA reduces lag compared to SMA/EMA and could improve early trend detection in `early_momentum_inflection` and `forward_edge_active`.
+9. ~~**Hull Moving Average crossover**~~: **Implemented** as `close_vs_hullma9` (`+1/-1`). Activated in inflection, forward-edge, pre-earnings, and sector-rotation profiles.
 
 10. **Ichimoku Cloud positioning**: `Ichimoku.Lead1` and `Ichimoku.Lead2` are available. A composite signal based on whether price is above/below the cloud and whether the cloud is bullish (Lead1 > Lead2) would add a powerful multi-factor trend confirmation. Particularly useful for `sector_relative_outperformer` and `quality_value_compounder` on longer horizons.
 
-11. **Chaikin Money Flow as attention signal**: `ChaikinMoneyFlow` is available across timeframes. It combines price and volume to measure buying/selling pressure. Positive CMF = institutional accumulation. Could complement `volume_trend` in detecting authentic buying interest vs noise.
+11. ~~**Chaikin Money Flow as attention signal**~~: **Implemented** as `chaikin_money_flow_signal`. Activated in `breakout_long`, `sector_relative_outperformer`, and `sector_rotation_momentum`.
 
-12. **Bull/Bear Power divergence**: `BBPower` (Bull Bear Power) is available. It measures the difference between the highest price and a 13-period EMA. Rising BBPower with declining price = bullish divergence. This would be a mean-reversion/early-inflection signal for `early_momentum_inflection` and `value_recovery`.
+12. ~~**Bull/Bear Power divergence**~~: **Implemented** as `bbpower_divergence`. Activated in `early_momentum_inflection`, `value_recovery`, and `mean_reversion_exhaustion`.
 
 13. **Revenue efficiency composite**: Combine `revenue_per_employee` with a new `ebitda_per_employee` (derived from `ebitda / number_of_employees`) to create a composite operational efficiency score. This would separate companies that generate high revenue per head AND retain most of it as operating profit from distribution/logistics companies that have high revenue per head but thin margins.
 

@@ -1,0 +1,201 @@
+{
+  "schema_version": "move_prediction_profile_file_v1",
+  "profile_id": "sector_relative_outperformer_v1",
+  "base_profile_id": "sector_relative_outperformer",
+  "version": "1.0.0",
+  "effective_from": "2026-06-09",
+  "changelog": "CMF accumulation and EBITDA/employee efficiency.",
+  "profile": {
+    "name": "sector_relative_outperformer_v1",
+    "description": "Operational excellence profile that surfaces best-in-class operators within their peer group. Emphasizes revenue efficiency per employee, ROIC, margin durability, capital return discipline (buyback yield, dividend yield), and forward earnings growth. Differentiator from quality_value_compounder: this profile rewards RELATIVE strength via long-duration momentum (Perf.Y, Perf.6M) to identify companies that the market has already begun to recognize as superior operators. Noise reduction: volume_trend detects sustained institutional accumulation; pivot_distance confirms structural support. Short-term tape noise is aggressively damped.",
+    "horizon_weights": {
+      "days": {
+        "attention": 0.04,
+        "event": 0.02,
+        "momentum": 0.08,
+        "trend": 0.2,
+        "quality": 0.32,
+        "valuation": 0.14,
+        "safety": 0.2
+      },
+      "weeks": {
+        "attention": 0.03,
+        "event": 0.02,
+        "momentum": 0.08,
+        "trend": 0.18,
+        "quality": 0.32,
+        "valuation": 0.17,
+        "safety": 0.2
+      },
+      "months": {
+        "attention": 0.02,
+        "event": 0.01,
+        "momentum": 0.06,
+        "trend": 0.14,
+        "quality": 0.35,
+        "valuation": 0.22,
+        "safety": 0.2
+      },
+      "years": {
+        "attention": 0.01,
+        "event": 0.01,
+        "momentum": 0.03,
+        "trend": 0.07,
+        "quality": 0.4,
+        "valuation": 0.26,
+        "safety": 0.22
+      }
+    },
+    "component_signal_weights": {
+      "attention": {
+        "relative_volume_10d_calc": 0.85,
+        "float_turnover": 0.8,
+        "dollar_turnover_intensity": 0.75,
+        "Value.Traded": 0.7,
+        "AvgValue.Traded_10d": 0.65,
+        "volume_trend": 1.5,
+        "intraday_momentum": 0.4,
+        "chaikin_money_flow_signal": 1.25
+      },
+      "momentum": {
+        "change": 0.15,
+        "Perf.5D": 0.15,
+        "Perf.W": 0.25,
+        "Perf.1M": 0.45,
+        "Perf.3M": 1.05,
+        "Perf.6M": 1.2,
+        "Perf.YTD": 1.15,
+        "Perf.Y": 1.3,
+        "ROC": 0.4,
+        "Mom": 0.45,
+        "macd_spread": 0.35,
+        "Recommend.All": 0.7,
+        "Recommend.MA": 0.55,
+        "Recommend.Other": 0.65,
+        "rsi_centered": 0.2,
+        "rsi7_centered": 0.1
+      },
+      "trend": {
+        "close_vs_sma50": 0.85,
+        "close_vs_sma200": 1.4,
+        "close_vs_ema50": 0.85,
+        "close_vs_ema200": 1.4,
+        "close_vs_vwap": 0.3,
+        "close_vs_vwma": 0.4,
+        "trend_alignment": 1.3,
+        "pivot_distance": 1.15
+      },
+      "quality": {
+        "total_revenue_yoy_growth_ttm": 1.2,
+        "total_revenue_qoq_growth_fq": 0.85,
+        "ebitda_yoy_growth_ttm": 1.25,
+        "ebitda_qoq_growth_fq": 0.9,
+        "net_income_yoy_growth_ttm": 1.15,
+        "net_income_qoq_growth_fq": 0.85,
+        "free_cash_flow_yoy_growth_ttm": 1.3,
+        "free_cash_flow_qoq_growth_fq": 1.0,
+        "gross_margin": 1.15,
+        "operating_margin": 1.3,
+        "after_tax_margin": 1.1,
+        "return_on_assets": 1.15,
+        "return_on_equity": 1.2,
+        "return_on_invested_capital": 1.4,
+        "free_cash_flow_margin_ttm": 1.3,
+        "buyback_yield": 1.1,
+        "dividends_yield_current": 0.85,
+        "eps_forward_growth": 1.35,
+        "revenue_per_employee": 1.3,
+        "ebitda_per_employee": 1.2,
+        "earnings_per_share_diluted_yoy_growth_ttm": 1.2,
+        "gross_profit_margin_fy": 1.15
+      },
+      "valuation": {
+        "price_earnings_ttm": 1.05,
+        "price_earnings_growth_ttm": 1.25,
+        "price_sales_current": 0.9,
+        "price_book_fq": 0.8,
+        "price_free_cash_flow_ttm": 1.2,
+        "price_to_cash_f_operating_activities_ttm": 1.05,
+        "enterprise_value_to_revenue_ttm": 0.95,
+        "enterprise_value_to_ebit_ttm": 0.85,
+        "enterprise_value_ebitda_ttm": 1.1,
+        "earnings_yield": 1.2
+      },
+      "safety": {
+        "current_ratio": 1.05,
+        "quick_ratio": 1.05,
+        "cash_ratio": 0.9,
+        "short_term_cash_coverage": 1.1,
+        "altman_z_score_ttm": 1.2,
+        "debt_to_equity": 1.15,
+        "debt_to_revenue_ttm": 1.1,
+        "net_debt": 1.1,
+        "beta_1_year": 0.65
+      }
+    },
+    "component_directional_bias": {
+      "attention": {
+        "positive_multiplier": 0.7,
+        "negative_multiplier": 1.4
+      },
+      "momentum": {
+        "positive_multiplier": 1.08,
+        "negative_multiplier": 0.85
+      },
+      "trend": {
+        "positive_multiplier": 1.12,
+        "negative_multiplier": 1.12
+      },
+      "quality": {
+        "positive_multiplier": 1.3,
+        "negative_multiplier": 1.35
+      },
+      "valuation": {
+        "positive_multiplier": 1.18,
+        "negative_multiplier": 1.12
+      },
+      "safety": {
+        "positive_multiplier": 1.15,
+        "negative_multiplier": 1.28
+      }
+    },
+    "missing_component_scores_by_horizon": {
+      "days": {
+        "attention": -0.45,
+        "quality": -0.9,
+        "valuation": -0.7,
+        "safety": -0.7
+      },
+      "weeks": {
+        "attention": -0.35,
+        "quality": -1.0,
+        "valuation": -0.8,
+        "safety": -0.8
+      },
+      "months": {
+        "attention": -0.25,
+        "quality": -1.1,
+        "valuation": -0.9,
+        "safety": -0.9
+      },
+      "years": {
+        "quality": -1.2,
+        "valuation": -1.0,
+        "safety": -0.95
+      }
+    },
+    "performance_tracking_periods": {},
+    "intro_metric_notes": [
+      "Operational excellence profile — rewards relative strength within peer group.",
+      "Accumulation confirmation: volume_trend=1.50, chaikin_money_flow_signal=1.25, pivot_distance=1.15.",
+      "Efficiency core: revenue_per_employee=1.30 (highest in system), ROIC=1.40, operating_margin=1.30, FCF_margin=1.30.",
+      "Capital return discipline: buyback_yield=1.10, dividends_yield=0.85. Companies returning cash to shareholders consistently outperform over long horizons.",
+      "Forward conviction: eps_forward_growth=1.35, EPS_diluted_growth=1.20. The market prices forward earnings, not backward.",
+      "Long-duration momentum confirms market recognition: Perf.Y=1.30, Perf.6M=1.20, Perf.YTD=1.15. Short-term tape crushed (change=0.15, Perf.5D=0.15).",
+      "Volume accumulation: volume_trend=1.50 (highest in system) detects sustained institutional buying pattern — not one-day attention spikes.",
+      "Attention strongly inverted: positive=0.70x, negative=1.40x. Quality must stand on its own merits, not popularity."
+    ],
+    "confidence_multiplier": 1.02,
+    "confidence_offset": 0.0
+  }
+}

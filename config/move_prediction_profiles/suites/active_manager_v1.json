@@ -1,0 +1,62 @@
+{
+  "schema_version": "move_prediction_profile_suite_v1",
+  "suite_id": "active_manager_v1",
+  "suite_version": "1.0.0",
+  "description": "June 2026 active-manager pass: tier-1 signals via versioned profile JSON files. Baseline presets unchanged for historical comparison.",
+  "profile_names": [
+    "breakout_long_v1",
+    "early_momentum_inflection_v1",
+    "forward_edge_active_v1",
+    "quality_value_compounder",
+    "durable_value_compounder_v1",
+    "sector_relative_outperformer_v1",
+    "asymmetric_value",
+    "value_recovery_v1",
+    "deep_value_momentum",
+    "fragility_short",
+    "income_compounder_v1",
+    "pre_earnings_drift_v1",
+    "mean_reversion_exhaustion_v1",
+    "defensive_fortress_v1",
+    "sector_rotation_momentum_v1",
+    "quality_growth_at_reasonable_price_v1"
+  ],
+  "consensus_profile_weights": {
+    "breakout_long_v1": 0.15,
+    "early_momentum_inflection_v1": 0.09,
+    "forward_edge_active_v1": 0.09,
+    "quality_value_compounder": 0.08,
+    "durable_value_compounder_v1": 0.07,
+    "sector_relative_outperformer_v1": 0.07,
+    "asymmetric_value": 0.07,
+    "value_recovery_v1": 0.06,
+    "deep_value_momentum": 0.03,
+    "fragility_short": 0.05,
+    "income_compounder_v1": 0.05,
+    "pre_earnings_drift_v1": 0.04,
+    "mean_reversion_exhaustion_v1": 0.02,
+    "defensive_fortress_v1": 0.04,
+    "sector_rotation_momentum_v1": 0.04,
+    "quality_growth_at_reasonable_price_v1": 0.05
+  },
+  "inverted_consensus_profiles": [
+    "fragility_short",
+    "mean_reversion_exhaustion_v1"
+  ],
+  "long_consensus_profiles": [
+    "breakout_long_v1",
+    "early_momentum_inflection_v1",
+    "forward_edge_active_v1",
+    "quality_value_compounder",
+    "durable_value_compounder_v1",
+    "sector_relative_outperformer_v1",
+    "asymmetric_value",
+    "value_recovery_v1",
+    "deep_value_momentum",
+    "income_compounder_v1",
+    "pre_earnings_drift_v1",
+    "defensive_fortress_v1",
+    "sector_rotation_momentum_v1",
+    "quality_growth_at_reasonable_price_v1"
+  ]
+}

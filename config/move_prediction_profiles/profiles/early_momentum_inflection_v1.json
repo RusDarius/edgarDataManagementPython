@@ -1,0 +1,172 @@
+{
+  "schema_version": "move_prediction_profile_file_v1",
+  "profile_id": "early_momentum_inflection_v1",
+  "base_profile_id": "early_momentum_inflection",
+  "version": "1.0.0",
+  "effective_from": "2026-06-09",
+  "changelog": "Hull MA, BBPower, Donchian/PSAR handoff rules.",
+  "profile": {
+    "name": "early_momentum_inflection_v1",
+    "description": "Early trend detection profile that catches names at the beginning of a directional move before crowd confirmation. Core differentiator: the coiled-energy suite (bb_squeeze, range_compression, volatility_contraction) combined with early directional indicators (aroon_spread, adx_directional_spread, stoch_rsi_crossover). This profile specifically looks for names exiting consolidation phases — price compression followed by the first signs of directional expansion. Established momentum is aggressively damped so the leaderboard surfaces genuinely nascent moves, not names mid-run.",
+    "horizon_weights": {
+      "days": {
+        "attention": 0.26,
+        "event": 0.1,
+        "momentum": 0.3,
+        "trend": 0.26,
+        "quality": 0.02,
+        "valuation": 0.01,
+        "safety": 0.05
+      },
+      "weeks": {
+        "attention": 0.2,
+        "event": 0.06,
+        "momentum": 0.28,
+        "trend": 0.32,
+        "quality": 0.04,
+        "valuation": 0.02,
+        "safety": 0.08
+      },
+      "months": {
+        "attention": 0.12,
+        "event": 0.04,
+        "momentum": 0.22,
+        "trend": 0.28,
+        "quality": 0.12,
+        "valuation": 0.06,
+        "safety": 0.16
+      },
+      "years": {
+        "attention": 0.02,
+        "event": 0.02,
+        "momentum": 0.08,
+        "trend": 0.18,
+        "quality": 0.24,
+        "valuation": 0.18,
+        "safety": 0.28
+      }
+    },
+    "component_signal_weights": {
+      "attention": {
+        "relative_volume_10d_calc": 1.25,
+        "float_turnover": 1.2,
+        "dollar_turnover_intensity": 1.1,
+        "Value.Traded": 1.0,
+        "AvgValue.Traded_10d": 0.9,
+        "bb_squeeze": 1.55,
+        "range_compression": 1.5,
+        "volatility_contraction": 1.45,
+        "volume_trend": 1.4,
+        "intraday_momentum": 1.0
+      },
+      "event": {
+        "premarket_change": 1.1,
+        "postmarket_change": 1.1,
+        "gap": 1.1,
+        "gap_severity": 1.2,
+        "event_intensity": 1.15,
+        "eps_surprise_percent_fq": 0.9
+      },
+      "momentum": {
+        "change": 0.95,
+        "Perf.5D": 1.3,
+        "Perf.W": 1.1,
+        "Perf.1M": 0.65,
+        "Perf.3M": 0.4,
+        "Perf.6M": 0.2,
+        "Perf.YTD": 0.15,
+        "Perf.Y": 0.1,
+        "ROC": 1.3,
+        "Mom": 1.25,
+        "macd_spread": 1.35,
+        "Recommend.All": 0.75,
+        "Recommend.MA": 0.9,
+        "Recommend.Other": 0.8,
+        "rsi_centered": 0.65,
+        "rsi7_centered": 1.15,
+        "aroon_spread": 1.65,
+        "adx_directional_spread": 1.55,
+        "stoch_rsi_centered": 1.15,
+        "CCI20": 0.95,
+        "stoch_rsi_crossover": 1.4,
+        "bbpower_divergence": 1.25
+      },
+      "trend": {
+        "close_vs_sma10": 1.4,
+        "close_vs_sma20": 1.25,
+        "close_vs_sma30": 1.15,
+        "close_vs_sma50": 0.9,
+        "close_vs_sma200": 0.5,
+        "close_vs_ema10": 1.4,
+        "close_vs_ema20": 1.25,
+        "close_vs_ema30": 1.15,
+        "close_vs_ema50": 0.9,
+        "close_vs_ema200": 0.5,
+        "close_vs_vwap": 1.2,
+        "close_vs_vwma": 1.15,
+        "trend_alignment": 0.75,
+        "bb_position": 1.3,
+        "short_trend_emergence": 1.55,
+        "pivot_distance": 0.8,
+        "close_vs_hullma9": 1.45,
+        "donchian_position": 1.15,
+        "close_vs_psar": 1.1
+      }
+    },
+    "component_directional_bias": {
+      "attention": {
+        "positive_multiplier": 1.3,
+        "negative_multiplier": 0.72
+      },
+      "event": {
+        "positive_multiplier": 1.12,
+        "negative_multiplier": 0.88
+      },
+      "momentum": {
+        "positive_multiplier": 1.4,
+        "negative_multiplier": 0.65
+      },
+      "trend": {
+        "positive_multiplier": 1.3,
+        "negative_multiplier": 0.75
+      },
+      "quality": {
+        "positive_multiplier": 1.0,
+        "negative_multiplier": 0.82
+      },
+      "safety": {
+        "positive_multiplier": 1.0,
+        "negative_multiplier": 0.82
+      }
+    },
+    "missing_component_scores_by_horizon": {
+      "days": {
+        "attention": -0.75,
+        "momentum": -0.8,
+        "trend": -0.55
+      },
+      "weeks": {
+        "attention": -0.5,
+        "momentum": -0.6,
+        "trend": -0.45
+      },
+      "months": {
+        "momentum": -0.4,
+        "trend": -0.3
+      }
+    },
+    "performance_tracking_periods": {},
+    "intro_metric_notes": [
+      "Early inflection profile for catching moves BEFORE confirmation.",
+      "Fast confirmation: close_vs_hullma9=1.45, bbpower_divergence=1.25, donchian_position=1.15, close_vs_psar=1.10.",
+      "Handoff rule: manager_action_signal may emit promote_to_breakout when breakout weeks overtakes inflection with volume_trend>1.05 and bullish ADX spread.",
+      "Coiled-energy detection: bb_squeeze=1.55 (inverted band width — tighter bands = more energy stored), range_compression=1.50 (inverted 3-month range — tighter range = pending expansion), volatility_contraction=1.45 (daily vol below monthly = compression before release).",
+      "Early directional indicators: aroon_spread=1.65 (highest in system — new uptrend at indicator level), adx_directional_spread=1.55 (bullish directional divergence emerging), stoch_rsi_crossover=1.40 (first bullish crossover signal).",
+      "Short-term MA override: SMA10/EMA10=1.40 catch first crossovers. long-term alignment (SMA200/EMA200) reduced to 0.50. trend_alignment reduced to 0.75 — established alignment is irrelevant for nascent moves.",
+      "Established momentum crushed: Perf.Y=0.10, Perf.YTD=0.15, Perf.6M=0.20, Perf.3M=0.40. Names already mid-run are invisible.",
+      "Momentum bias is the most aggressive in the system: upside +1.40x, downside 0.65x. This makes early positive readings amplified while negative legacy does not dominate."
+    ],
+    "confidence_multiplier": 1.05,
+    "confidence_offset": 0.0
+  }
+}

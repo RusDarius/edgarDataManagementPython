@@ -12,7 +12,7 @@ from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from db.trading_view_move_prediction_duckdb import (
     MovePredictionDuckDBStore,
@@ -57,6 +57,7 @@ DUCKDB_RUN_SESSION_TIME_PATTERN = re.compile(
 )
 DEFAULT_DUCKDB_HISTORY_ROOT_FOLDER = "historical_prediction_analysis"
 DEFAULT_DUCKDB_HISTORY_RUN_PREFIX = "history_aggregation"
+DEFAULT_DUCKDB_HISTORY_ROLLING_RUN_ID = "history_aggregation_rolling"
 DEFAULT_DUCKDB_HISTORY_MEMORY_RESERVE_GB = 4.0
 DEFAULT_DUCKDB_HISTORY_MEMORY_CHECK_COOLDOWN_SECONDS = 0.25
 DEFAULT_DUCKDB_HISTORY_MAX_PARALLEL_WORKERS = 8
@@ -344,6 +345,17 @@ class DuckDBHistoricalAggregationExecutionConfig:
     prefer_parquet_inputs: bool
     temp_directory: Path
     enable_sql_native_pipeline: bool
+
+
+@dataclass(frozen=True)
+class HistoricalAggregationBuildOptions:
+    """Control which derived artifacts are materialized for a history run."""
+
+    build_profile_outputs: bool = True
+    build_wide_progression_tables: bool = True
+    build_cross_comparison: bool = True
+    include_snapshot_delta_view: bool = True
+    calibration_only: bool = False
 
 
 @dataclass
@@ -1099,6 +1111,7 @@ def aggregate_move_prediction_history_duckdb(
     prefer_parquet_inputs: bool = True,
     temp_directory: str | Path | None = None,
     enable_sql_native_pipeline: bool = True,
+    build_options: HistoricalAggregationBuildOptions | None = None,
 ) -> dict[str, Any]:
     supported_profiles = _resolve_included_profiles(include_profiles)
     layout = _resolve_duckdb_history_output_layout(output_dir)
@@ -1141,7 +1154,7 @@ def aggregate_move_prediction_history_duckdb(
         memory_limit=execution_config.duckdb_memory_limit,
         temp_directory=execution_config.temp_directory,
     ) as store:
-        _prepare_sql_native_history_stage(store)
+        _prepare_sql_native_history_stage(store, preserve_existing=False)
         input_runs, memory_budget = _stage_sql_native_duckdb_inputs(
             store,
             input_paths=input_paths,
@@ -1159,6 +1172,7 @@ def aggregate_move_prediction_history_duckdb(
             execution_config=execution_config,
             write_csv_outputs=write_legacy_csv_outputs,
             export_parquet=export_parquet,
+            build_options=build_options or HistoricalAggregationBuildOptions(),
         )
         if memory_budget is not None:
             result["execution_memory_budget"] = {
@@ -1197,6 +1211,7 @@ def run_move_prediction_history_aggregation_duckdb(
     prefer_parquet_inputs: bool = True,
     temp_directory: str | Path | None = None,
     enable_sql_native_pipeline: bool = True,
+    build_options: HistoricalAggregationBuildOptions | None = None,
 ) -> dict[str, Any]:
     return aggregate_move_prediction_history_duckdb(
         input_paths=input_paths,
@@ -1214,7 +1229,164 @@ def run_move_prediction_history_aggregation_duckdb(
         prefer_parquet_inputs=prefer_parquet_inputs,
         temp_directory=temp_directory,
         enable_sql_native_pipeline=enable_sql_native_pipeline,
+        build_options=build_options,
     )
+
+
+def run_move_prediction_history_aggregation_duckdb_incremental(
+    input_paths: Sequence[str | Path] | str | Path,
+    output_dir: str | Path | None = None,
+    include_profiles: Sequence[str] | None = None,
+    include_run_ids: Sequence[str] | None = None,
+    recursive: bool = True,
+    write_legacy_csv_outputs: bool = False,
+    export_parquet: bool = False,
+    max_memory_gb: float | None = None,
+    duckdb_memory_limit: str | int | float | None = None,
+    duckdb_threads: int | None = None,
+    prefer_parquet_inputs: bool = True,
+    temp_directory: str | Path | None = None,
+    on_stage_completed: Callable[
+        [int, int, Path, int, int, float], None
+    ] | None = None,
+    build_options: HistoricalAggregationBuildOptions | None = None,
+    rolling: bool = False,
+) -> dict[str, Any]:
+    """Stage DuckDB inputs directly into the final history store.
+
+    This incremental mode is intended for long-running batch workflows that need
+    input-level progress visibility and lower disk churn than the default
+    artifact-based SQL-native loader.
+    """
+
+    supported_profiles = _resolve_included_profiles(include_profiles)
+    layout = _resolve_duckdb_history_output_layout(output_dir, rolling=rolling)
+    _prepare_duckdb_history_output_layout(layout)
+    execution_config = _resolve_duckdb_history_execution_config(
+        layout,
+        max_memory_gb=max_memory_gb,
+        duckdb_memory_limit=duckdb_memory_limit,
+        max_parallel_workers=1,
+        duckdb_threads=duckdb_threads,
+        attach_batch_size=1,
+        prefer_parquet_inputs=prefer_parquet_inputs,
+        temp_directory=temp_directory,
+        enable_sql_native_pipeline=True,
+    )
+    normalized_input_paths = _normalize_input_paths(input_paths)
+    normalized_run_ids = {
+        run_id
+        for run_id in (
+            _normalize_text(candidate_run_id)
+            for candidate_run_id in include_run_ids or []
+        )
+        if run_id is not None
+    }
+    candidate_paths = list(
+        _iter_candidate_duckdb_paths(input_paths, recursive=recursive)
+    )
+    if not candidate_paths:
+        raise ValueError(
+            "No move-prediction profile snapshots were found in the provided input paths."
+        )
+
+    memory_budget = _build_history_memory_budget(execution_config.max_memory_gb)
+    with MovePredictionDuckDBStore(
+        database_path=layout.database_path,
+        parquet_dir=layout.parquet_dir if export_parquet else None,
+        threads=execution_config.duckdb_threads,
+        memory_limit=execution_config.duckdb_memory_limit,
+        temp_directory=execution_config.temp_directory,
+    ) as store:
+        _prepare_sql_native_history_stage(store, preserve_existing=rolling)
+        total_sources = len(candidate_paths)
+        staging_seconds_total = 0.0
+        for source_index, database_path in enumerate(candidate_paths):
+            if memory_budget is not None:
+                memory_budget.wait_until_under_budget()
+                memory_budget.record_sample()
+
+            stage_started = time.perf_counter()
+            _stage_single_duckdb_input_source(
+                store,
+                database_path,
+                source_index=source_index,
+                supported_profiles=supported_profiles,
+                normalized_run_ids=normalized_run_ids,
+                prefer_parquet_inputs=execution_config.prefer_parquet_inputs,
+            )
+            gc.collect()
+            staging_seconds_total += time.perf_counter() - stage_started
+            if memory_budget is not None:
+                memory_budget.record_sample()
+
+            if on_stage_completed is not None:
+                staged_run_count_row = store.conn.execute(
+                    """
+                    SELECT COUNT(DISTINCT run_id)
+                    FROM stg_input_runs
+                    WHERE database_path = ?
+                    """,
+                    [database_path.as_posix()],
+                ).fetchone()
+                staged_row_count_row = store.conn.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM stg_input_rows
+                    WHERE database_path = ?
+                    """,
+                    [database_path.as_posix()],
+                ).fetchone()
+                on_stage_completed(
+                    source_index + 1,
+                    total_sources,
+                    database_path,
+                    int(staged_run_count_row[0] or 0) if staged_run_count_row else 0,
+                    int(staged_row_count_row[0] or 0) if staged_row_count_row else 0,
+                    time.perf_counter() - stage_started,
+                )
+
+        input_runs = _load_sql_native_input_runs(store.conn)
+        if not input_runs:
+            raise ValueError(
+                "No move-prediction profile snapshots were found in the provided input paths."
+            )
+
+        result = _materialize_sql_native_history_tables(
+            store,
+            analysis_layout=layout,
+            input_paths=normalized_input_paths,
+            include_profiles=include_profiles,
+            input_runs=input_runs,
+            execution_config=execution_config,
+            write_csv_outputs=write_legacy_csv_outputs,
+            export_parquet=export_parquet,
+            build_options=build_options or HistoricalAggregationBuildOptions(),
+            preserve_stage_objects=rolling,
+        )
+        if memory_budget is not None:
+            result["execution_memory_budget"] = {
+                "max_gb": memory_budget.max_gb,
+                "reserve_gb": memory_budget.reserve_gb,
+                "peak_rss_gb": memory_budget.peak_rss_gb,
+                "wait_seconds": memory_budget.wait_seconds,
+                "wait_cycles": memory_budget.wait_cycles,
+            }
+        result["execution_config"] = {
+            "max_memory_gb": execution_config.max_memory_gb,
+            "duckdb_memory_limit": execution_config.duckdb_memory_limit,
+            "max_parallel_workers": execution_config.max_parallel_workers,
+            "duckdb_threads": execution_config.duckdb_threads,
+            "attach_batch_size": execution_config.attach_batch_size,
+            "prefer_parquet_inputs": execution_config.prefer_parquet_inputs,
+            "temp_directory": execution_config.temp_directory,
+            "enable_sql_native_pipeline": execution_config.enable_sql_native_pipeline,
+            "staging_mode": "incremental_direct",
+            "staging_seconds": round(staging_seconds_total, 4),
+            "rolling": rolling,
+        }
+        result["staging_mode"] = "incremental_direct"
+        return result
 
 
 def build_move_prediction_history_inputs_from_folder_names(
@@ -1346,6 +1518,8 @@ def build_move_prediction_history_duckdb_inputs_from_week_folders(
 
 def _resolve_duckdb_history_output_layout(
     output_dir: str | Path | None,
+    *,
+    rolling: bool = False,
 ) -> DuckDBHistoricalAggregationLayout:
     from data_analysis_scripts.trading_view_move_prediction_analysis import LOG_DIR
 
@@ -1355,11 +1529,15 @@ def _resolve_duckdb_history_output_layout(
         if output_dir is not None
         else Path(LOG_DIR) / "duckdb_runs" / DEFAULT_DUCKDB_HISTORY_ROOT_FOLDER
     )
-    run_id = (
-        f"{DEFAULT_DUCKDB_HISTORY_RUN_PREFIX}_"
-        f"{created_at_utc.strftime('%Y%m%d_%H%M')}_utc_{uuid.uuid4().hex[:8]}"
-    )
-    run_dir = base_dir / "runs" / run_id
+    if rolling:
+        run_id = DEFAULT_DUCKDB_HISTORY_ROLLING_RUN_ID
+        run_dir = base_dir
+    else:
+        run_id = (
+            f"{DEFAULT_DUCKDB_HISTORY_RUN_PREFIX}_"
+            f"{created_at_utc.strftime('%Y%m%d_%H%M')}_utc_{uuid.uuid4().hex[:8]}"
+        )
+        run_dir = base_dir / "runs" / run_id
     return DuckDBHistoricalAggregationLayout(
         run_dir=run_dir,
         database_path=run_dir / "historical_prediction_analysis.duckdb",
@@ -1575,11 +1753,18 @@ def _chunked_paths(paths: Sequence[Path], chunk_size: int) -> Iterable[list[Path
         yield current_chunk
 
 
-def _prepare_sql_native_history_stage(store: MovePredictionDuckDBStore) -> None:
+def _prepare_sql_native_history_stage(
+    store: MovePredictionDuckDBStore,
+    *,
+    preserve_existing: bool = False,
+) -> None:
     for table_name, schema in (
         ("stg_input_runs", STAGING_INPUT_RUNS_SCHEMA),
         ("stg_input_rows", STAGING_INPUT_ROWS_SCHEMA),
     ):
+        if preserve_existing:
+            store._ensure_record_table_schema(table_name, schema)
+            continue
         store.conn.execute(f"DROP TABLE IF EXISTS {_quote_identifier(table_name)}")
         columns_sql = ", ".join(
             f"{_quote_identifier(column_name)} {sql_type}"
@@ -1735,6 +1920,25 @@ def _stage_single_duckdb_input_source(
                 }
             )
 
+        if not staged_runs:
+            return
+
+        existing_run_ids = {
+            str(row[0])
+            for row in store.conn.execute(
+                """
+                SELECT run_id
+                FROM stg_input_runs
+                WHERE database_path = ?
+                """,
+                [database_path.as_posix()],
+            ).fetchall()
+        }
+        staged_runs = [
+            staged_run
+            for staged_run in staged_runs
+            if str(staged_run["run_id"]) not in existing_run_ids
+        ]
         if not staged_runs:
             return
 
@@ -3310,7 +3514,14 @@ def _materialize_sql_native_history_tables(
             report_type="history_aggregation_duckdb_table",
             file_path=f"{analysis_layout.database_path.as_posix()}::{table_name}",
         )
-    view_names = _create_historical_analysis_views(store)
+    view_names = _create_historical_analysis_views(
+        store,
+        build_options=HistoricalAggregationBuildOptions(),
+        score_progression_tables_by_horizon={
+            horizon_name: score_progression_tables_by_horizon[horizon_name]
+            for horizon_name in TRACKED_HORIZONS
+        },
+    )
 
     return {
         "database_path": analysis_layout.database_path,
@@ -3441,6 +3652,25 @@ def _drop_sql_native_stage_objects(store: MovePredictionDuckDBStore) -> None:
         store.conn.execute(f"DROP VIEW IF EXISTS {_quote_identifier(view_name)}")
     for table_name in ("stg_input_rows", "stg_input_runs"):
         store.conn.execute(f"DROP TABLE IF EXISTS {_quote_identifier(table_name)}")
+
+
+def _delete_analysis_run_data(
+    store: MovePredictionDuckDBStore,
+    analysis_run_id: str,
+) -> None:
+    for table_name in store.list_tables():
+        columns = set(store._table_columns(table_name))
+        if "analysis_run_id" not in columns:
+            continue
+        row_count = store.conn.execute(
+            f"SELECT COUNT(*) FROM {_quote_identifier(table_name)} WHERE analysis_run_id = ?",
+            [analysis_run_id],
+        ).fetchone()
+        if row_count and int(row_count[0] or 0) > 0:
+            store.conn.execute(
+                f"DELETE FROM {_quote_identifier(table_name)} WHERE analysis_run_id = ?",
+                [analysis_run_id],
+            )
 
 
 def _build_sql_native_ranked_view_sql(analysis_run_id: str) -> str:
@@ -4469,10 +4699,13 @@ def _write_sql_native_overview_log(
     analysis_layout: DuckDBHistoricalAggregationLayout,
     execution_config: DuckDBHistoricalAggregationExecutionConfig,
     manifest_table: str,
+    all_history_table: str | None = None,
     all_summary_table: str,
-    all_price_progression_table: str,
-    core_table_names: Sequence[str],
-    write_csv_outputs: bool,
+    all_price_progression_table: str | None,
+    cross_comparison_table: str | None = None,
+    score_progression_tables_by_horizon: Mapping[str, str] | None = None,
+    core_table_names: Sequence[str] | None = None,
+    write_csv_outputs: bool = False,
 ) -> None:
     analysis_run_id = analysis_layout.analysis_run_id
     overview_log.parent.mkdir(parents=True, exist_ok=True)
@@ -4505,20 +4738,22 @@ def _write_sql_native_overview_log(
         [analysis_run_id],
     ).fetchone()
 
-    price_highlights = _fetch_dict_rows_from_conn(
-        store.conn,
-        f"""
-        SELECT symbol,
-            close_return_pct_total,
-            last_close,
-            max_drawdown_pct
-        FROM {_quote_identifier(all_price_progression_table)}
-        WHERE analysis_run_id = ?
-        ORDER BY row_number
-        LIMIT 10
-        """,
-        [analysis_run_id],
-    )
+    price_highlights: list[dict[str, Any]] = []
+    if all_price_progression_table:
+        price_highlights = _fetch_dict_rows_from_conn(
+            store.conn,
+            f"""
+            SELECT symbol,
+                close_return_pct_total,
+                last_close,
+                max_drawdown_pct
+            FROM {_quote_identifier(all_price_progression_table)}
+            WHERE analysis_run_id = ?
+            ORDER BY row_number
+            LIMIT 10
+            """,
+            [analysis_run_id],
+        )
     summary_highlights = _fetch_dict_rows_from_conn(
         store.conn,
         f"""
@@ -4579,6 +4814,18 @@ def _write_sql_native_overview_log(
                 f"Parallel worker cap: {execution_config.max_parallel_workers}",
                 f"Prefer Parquet inputs: {execution_config.prefer_parquet_inputs}",
                 f"DuckDB temp directory: {execution_config.temp_directory.as_posix()}",
+                f"History table: {all_history_table or 'n/a'}",
+                f"Cross comparison table: {cross_comparison_table or 'skipped'}",
+                "Score progression tables: "
+                + (
+                    ", ".join(
+                        f"{horizon_name}={table_name}"
+                        for horizon_name, table_name in sorted(
+                            (score_progression_tables_by_horizon or {}).items()
+                        )
+                    )
+                    or "skipped"
+                ),
             ],
         ),
         (
@@ -4587,7 +4834,7 @@ def _write_sql_native_overview_log(
         ),
         (
             "DuckDB core tables",
-            list(core_table_names),
+            list(core_table_names or []),
         ),
         *_build_overview_highlight_sections(
             all_summary_rows=summary_highlights,
@@ -4631,7 +4878,14 @@ def _write_sql_native_overview_log(
     )
     log_to_file(
         overview_log,
-        "Progression outputs are wide matrices: one row per (profile, symbol[, horizon]) and one column per snapshot label (prefixed with 'snap__'); empty cells indicate the symbol was not present in that snapshot. Legacy mode writes CSV files; DuckDB mode stores the same structures as queryable tables.",
+        (
+            "Progression outputs are wide matrices: one row per (profile, symbol[, horizon]) and "
+            "one column per snapshot label (prefixed with 'snap__'); empty cells indicate the "
+            "symbol was not present in that snapshot. Legacy mode writes CSV files; DuckDB mode "
+            "stores the same structures as queryable tables."
+            if all_price_progression_table
+            else "Slim calibration mode skipped wide progression tables; calibration views are derived from summary tables only."
+        ),
     )
     log_to_file(overview_log, "")
     log_to_file(overview_log, "Per-profile outputs")
@@ -4677,6 +4931,8 @@ def _materialize_sql_native_history_tables(
     execution_config: DuckDBHistoricalAggregationExecutionConfig,
     write_csv_outputs: bool,
     export_parquet: bool,
+    build_options: HistoricalAggregationBuildOptions,
+    preserve_stage_objects: bool = False,
 ) -> dict[str, Any]:
     analysis_run_id = analysis_layout.analysis_run_id
     analysis_run_id_sql = _quote_sql_literal(analysis_run_id)
@@ -4699,8 +4955,10 @@ def _materialize_sql_native_history_tables(
     input_database_count = len(
         {input_run.database_path.as_posix().lower() for input_run in input_runs}
     )
+    materialization_timings: dict[str, float] = {}
 
     store.delete_run_data(analysis_run_id)
+    _delete_analysis_run_data(store, analysis_run_id)
     store.register_run(
         run_id=analysis_run_id,
         created_at_utc=analysis_layout.created_at_utc,
@@ -4803,137 +5061,202 @@ def _materialize_sql_native_history_tables(
         f"{_build_sql_native_ranked_view_sql(analysis_run_id)}"
     )
 
+    manifest_started = time.perf_counter()
     store.create_or_replace_table_from_query(
         manifest_table,
         _build_sql_native_manifest_query(analysis_run_id),
     )
+    materialization_timings["manifest"] = time.perf_counter() - manifest_started
+
+    history_started = time.perf_counter()
     store.create_or_replace_table_from_query(
         all_history_table,
         _build_sql_native_history_query(analysis_run_id),
     )
+    materialization_timings["history"] = time.perf_counter() - history_started
+
+    summary_started = time.perf_counter()
     store.create_or_replace_table_from_query(
         all_summary_table,
         _build_sql_native_summary_query(analysis_run_id),
     )
-    store.create_or_replace_table_from_query(
-        all_price_progression_table,
-        _build_sql_native_price_progression_query(
-            analysis_run_id,
-            aggregate_snapshot_labels,
-            len(aggregate_snapshot_labels),
-        ),
+    materialization_timings["summary"] = time.perf_counter() - summary_started
+
+    price_progression_available = (
+        build_options.build_wide_progression_tables
+        or build_options.build_cross_comparison
     )
-    for horizon_name in TRACKED_HORIZONS:
+    if price_progression_available:
+        price_started = time.perf_counter()
         store.create_or_replace_table_from_query(
-            score_progression_tables_by_horizon[horizon_name],
-            _build_sql_native_score_progression_query(
+            all_price_progression_table,
+            _build_sql_native_price_progression_query(
                 analysis_run_id,
                 aggregate_snapshot_labels,
-                horizon_name,
-                all_price_progression_table,
+                len(aggregate_snapshot_labels),
             ),
         )
-    store.create_or_replace_table_from_query(
-        cross_comparison_table,
-        _build_sql_native_cross_comparison_query(
-            analysis_run_id,
-            included_profile_names,
-        ),
+        materialization_timings["price_progression"] = (
+            time.perf_counter() - price_started
+        )
+
+    built_score_progression_tables: dict[str, str] = {}
+    if build_options.build_wide_progression_tables:
+        score_started = time.perf_counter()
+        for horizon_name in TRACKED_HORIZONS:
+            store.create_or_replace_table_from_query(
+                score_progression_tables_by_horizon[horizon_name],
+                _build_sql_native_score_progression_query(
+                    analysis_run_id,
+                    aggregate_snapshot_labels,
+                    horizon_name,
+                    all_price_progression_table,
+                ),
+            )
+            built_score_progression_tables[horizon_name] = (
+                score_progression_tables_by_horizon[horizon_name]
+            )
+        materialization_timings["score_progression"] = (
+            time.perf_counter() - score_started
+        )
+
+    cross_comparison_available = (
+        build_options.build_cross_comparison and price_progression_available
     )
+    if cross_comparison_available:
+        cross_started = time.perf_counter()
+        store.create_or_replace_table_from_query(
+            cross_comparison_table,
+            _build_sql_native_cross_comparison_query(
+                analysis_run_id,
+                included_profile_names,
+            ),
+        )
+        materialization_timings["cross_comparison"] = (
+            time.perf_counter() - cross_started
+        )
 
     profile_outputs: dict[str, dict[str, Any]] = {}
     exported_table_names = [
         manifest_table,
         all_history_table,
         all_summary_table,
-        all_price_progression_table,
-        cross_comparison_table,
-        *[score_progression_tables_by_horizon[h] for h in TRACKED_HORIZONS],
     ]
+    if price_progression_available:
+        exported_table_names.append(all_price_progression_table)
+    if cross_comparison_available:
+        exported_table_names.append(cross_comparison_table)
+    exported_table_names.extend(
+        built_score_progression_tables[horizon_name]
+        for horizon_name in TRACKED_HORIZONS
+        if horizon_name in built_score_progression_tables
+    )
     history_projection_sql = ", ".join(
         _quote_identifier(column_name) for column_name in HISTORY_HEADERS
     )
     summary_projection_sql = ", ".join(
         _quote_identifier(column_name) for column_name in SUMMARY_HEADERS
     )
-    for profile_name in included_profile_names:
-        history_table = f"profile_{profile_name}__history"
-        summary_table = f"profile_{profile_name}__summary"
-        price_progression_table = f"profile_{profile_name}__price_progression"
-        score_tables_for_profile = {
-            horizon_name: f"profile_{profile_name}__score_progression__{horizon_name}"
-            for horizon_name in TRACKED_HORIZONS
-        }
-        profile_labels = profile_snapshot_labels.get(profile_name, [])
-        store.create_or_replace_table_from_query(
-            history_table,
-            f"""
-            SELECT analysis_run_id,
-                ROW_NUMBER() OVER (ORDER BY row_number) AS row_number,
-                {history_projection_sql}
-            FROM {_quote_identifier(all_history_table)}
-            WHERE analysis_run_id = {analysis_run_id_sql}
-                AND profile_name = {_quote_sql_literal(profile_name)}
-            """,
-        )
-        store.create_or_replace_table_from_query(
-            summary_table,
-            f"""
-            SELECT analysis_run_id,
-                ROW_NUMBER() OVER (ORDER BY row_number) AS row_number,
-                {summary_projection_sql}
-            FROM {_quote_identifier(all_summary_table)}
-            WHERE analysis_run_id = {analysis_run_id_sql}
-                AND profile_name = {_quote_sql_literal(profile_name)}
-            """,
-        )
-        store.create_or_replace_table_from_query(
-            price_progression_table,
-            _build_sql_native_price_progression_query(
-                analysis_run_id,
-                profile_labels,
-                len(profile_labels),
-                profile_name=profile_name,
-            ),
-        )
-        for horizon_name in TRACKED_HORIZONS:
+    if build_options.build_profile_outputs:
+        profile_started = time.perf_counter()
+        for profile_name in included_profile_names:
+            history_table = f"profile_{profile_name}__history"
+            summary_table = f"profile_{profile_name}__summary"
+            price_progression_table = f"profile_{profile_name}__price_progression"
+            score_tables_for_profile = {
+                horizon_name: f"profile_{profile_name}__score_progression__{horizon_name}"
+                for horizon_name in TRACKED_HORIZONS
+            }
+            profile_labels = profile_snapshot_labels.get(profile_name, [])
             store.create_or_replace_table_from_query(
-                score_tables_for_profile[horizon_name],
-                _build_sql_native_score_progression_query(
-                    analysis_run_id,
-                    profile_labels,
-                    horizon_name,
-                    price_progression_table,
-                    profile_name=profile_name,
-                ),
+                history_table,
+                f"""
+                SELECT analysis_run_id,
+                    ROW_NUMBER() OVER (ORDER BY row_number) AS row_number,
+                    {history_projection_sql}
+                FROM {_quote_identifier(all_history_table)}
+                WHERE analysis_run_id = {analysis_run_id_sql}
+                    AND profile_name = {_quote_sql_literal(profile_name)}
+                """,
             )
-            exported_table_names.append(score_tables_for_profile[horizon_name])
-        exported_table_names.extend([history_table, summary_table, price_progression_table])
+            store.create_or_replace_table_from_query(
+                summary_table,
+                f"""
+                SELECT analysis_run_id,
+                    ROW_NUMBER() OVER (ORDER BY row_number) AS row_number,
+                    {summary_projection_sql}
+                FROM {_quote_identifier(all_summary_table)}
+                WHERE analysis_run_id = {analysis_run_id_sql}
+                    AND profile_name = {_quote_sql_literal(profile_name)}
+                """,
+            )
+            if price_progression_available:
+                store.create_or_replace_table_from_query(
+                    price_progression_table,
+                    _build_sql_native_price_progression_query(
+                        analysis_run_id,
+                        profile_labels,
+                        len(profile_labels),
+                        profile_name=profile_name,
+                    ),
+                )
+            profile_score_tables: dict[str, str] = {}
+            if build_options.build_wide_progression_tables and price_progression_available:
+                for horizon_name in TRACKED_HORIZONS:
+                    table_name = score_tables_for_profile[horizon_name]
+                    store.create_or_replace_table_from_query(
+                        table_name,
+                        _build_sql_native_score_progression_query(
+                            analysis_run_id,
+                            profile_labels,
+                            horizon_name,
+                            price_progression_table,
+                            profile_name=profile_name,
+                        ),
+                    )
+                    profile_score_tables[horizon_name] = table_name
+                    exported_table_names.append(table_name)
+            exported_table_names.extend([history_table, summary_table])
+            if price_progression_available:
+                exported_table_names.append(price_progression_table)
 
-        profile_counts = store.conn.execute(
-            f"""
-            SELECT COUNT(DISTINCT snapshot_label) AS snapshot_count,
-                COUNT(DISTINCT symbol) AS symbol_count
-            FROM {_quote_identifier(history_table)}
-            WHERE analysis_run_id = ?
-            """,
-            [analysis_run_id],
-        ).fetchone()
-        profile_outputs[profile_name] = {
-            "history_table": history_table,
-            "summary_table": summary_table,
-            "price_progression_table": price_progression_table,
-            "score_progression_tables_by_horizon": score_tables_for_profile,
-            "history_output_name": history_table,
-            "summary_output_name": summary_table,
-            "price_progression_output_name": price_progression_table,
-            "score_progression_output_names": dict(score_tables_for_profile),
-            "snapshot_count": int(profile_counts[0] or 0),
-            "trading_session_count": int(profile_counts[0] or 0),
-            "symbol_count": int(profile_counts[1] or 0),
-        }
+            profile_counts = store.conn.execute(
+                f"""
+                SELECT COUNT(DISTINCT snapshot_label) AS snapshot_count,
+                    COUNT(DISTINCT symbol) AS symbol_count
+                FROM {_quote_identifier(history_table)}
+                WHERE analysis_run_id = ?
+                """,
+                [analysis_run_id],
+            ).fetchone()
+            profile_outputs[profile_name] = {
+                "history_table": history_table,
+                "summary_table": summary_table,
+                "price_progression_table": (
+                    price_progression_table if price_progression_available else None
+                ),
+                "score_progression_tables_by_horizon": dict(profile_score_tables),
+                "history_output_name": history_table,
+                "summary_output_name": summary_table,
+                "price_progression_output_name": (
+                    price_progression_table if price_progression_available else "skipped"
+                ),
+                "score_progression_output_names": dict(profile_score_tables),
+                "snapshot_count": int(profile_counts[0] or 0),
+                "trading_session_count": int(profile_counts[0] or 0),
+                "symbol_count": int(profile_counts[1] or 0),
+            }
+        materialization_timings["profile_outputs"] = (
+            time.perf_counter() - profile_started
+        )
 
-    view_names = _create_historical_analysis_views(store)
+    view_started = time.perf_counter()
+    view_names = _create_historical_analysis_views(
+        store,
+        build_options=build_options,
+        score_progression_tables_by_horizon=built_score_progression_tables,
+    )
+    materialization_timings["views"] = time.perf_counter() - view_started
     overview_log = analysis_layout.run_dir / "_aggregation_overview.log"
     _write_sql_native_overview_log(
         store=store,
@@ -4945,14 +5268,20 @@ def _materialize_sql_native_history_tables(
         execution_config=execution_config,
         manifest_table=manifest_table,
         all_summary_table=all_summary_table,
-        all_price_progression_table=all_price_progression_table,
+        all_price_progression_table=(
+            all_price_progression_table if price_progression_available else None
+        ),
         core_table_names=[
             manifest_table,
             all_history_table,
             all_summary_table,
-            all_price_progression_table,
-            cross_comparison_table,
-            *[score_progression_tables_by_horizon[h] for h in TRACKED_HORIZONS],
+            *([all_price_progression_table] if price_progression_available else []),
+            *([cross_comparison_table] if cross_comparison_available else []),
+            *[
+                built_score_progression_tables[h]
+                for h in TRACKED_HORIZONS
+                if h in built_score_progression_tables
+            ],
         ],
         write_csv_outputs=write_csv_outputs,
     )
@@ -4989,103 +5318,114 @@ def _materialize_sql_native_history_tables(
             csv_path=summary_csv,
             analysis_run_id=analysis_run_id,
         )
-        aggregate_price_columns = PRICE_PROGRESSION_AGGREGATE_BASE_HEADERS + [
-            _snapshot_column_key(snapshot_label)
-            for snapshot_label in aggregate_snapshot_labels
-        ]
-        _copy_sql_native_table_to_csv(
-            store,
-            table_name=all_price_progression_table,
-            columns=aggregate_price_columns,
-            csv_path=price_progression_csv,
-            analysis_run_id=analysis_run_id,
-        )
-        _copy_sql_native_table_to_csv(
-            store,
-            table_name=cross_comparison_table,
-            columns=_build_cross_comparison_headers(included_profile_names),
-            csv_path=cross_comparison_csv,
-            analysis_run_id=analysis_run_id,
-        )
-        for horizon_name in TRACKED_HORIZONS:
-            score_csv = (
-                analysis_layout.run_dir
-                / f"_all_profiles_score_progression__{horizon_name}.csv"
-            )
-            score_progression_csv_by_horizon[horizon_name] = score_csv
+        if price_progression_available:
+            aggregate_price_columns = PRICE_PROGRESSION_AGGREGATE_BASE_HEADERS + [
+                _snapshot_column_key(snapshot_label)
+                for snapshot_label in aggregate_snapshot_labels
+            ]
             _copy_sql_native_table_to_csv(
                 store,
-                table_name=score_progression_tables_by_horizon[horizon_name],
-                columns=SCORE_PROGRESSION_BASE_HEADERS
-                + PRICE_EXTRA_BASE_HEADERS
-                + [_snapshot_column_key(label) for label in aggregate_snapshot_labels]
-                + [_price_snapshot_column_key(label) for label in aggregate_snapshot_labels],
-                csv_path=score_csv,
+                table_name=all_price_progression_table,
+                columns=aggregate_price_columns,
+                csv_path=price_progression_csv,
                 analysis_run_id=analysis_run_id,
             )
-        for profile_name in included_profile_names:
-            profile_labels = profile_snapshot_labels.get(profile_name, [])
-            history_path = analysis_layout.run_dir / f"profile_{profile_name}__history.csv"
-            summary_path = analysis_layout.run_dir / f"profile_{profile_name}__summary.csv"
-            price_path = (
-                analysis_layout.run_dir / f"profile_{profile_name}__price_progression.csv"
-            )
+        if cross_comparison_available:
             _copy_sql_native_table_to_csv(
                 store,
-                table_name=profile_outputs[profile_name]["history_table"],
-                columns=HISTORY_HEADERS,
-                csv_path=history_path,
+                table_name=cross_comparison_table,
+                columns=_build_cross_comparison_headers(included_profile_names),
+                csv_path=cross_comparison_csv,
                 analysis_run_id=analysis_run_id,
             )
-            _copy_sql_native_table_to_csv(
-                store,
-                table_name=profile_outputs[profile_name]["summary_table"],
-                columns=SUMMARY_HEADERS,
-                csv_path=summary_path,
-                analysis_run_id=analysis_run_id,
-            )
-            _copy_sql_native_table_to_csv(
-                store,
-                table_name=profile_outputs[profile_name]["price_progression_table"],
-                columns=PRICE_PROGRESSION_BASE_HEADERS
-                + [_snapshot_column_key(label) for label in profile_labels],
-                csv_path=price_path,
-                analysis_run_id=analysis_run_id,
-            )
-            score_paths_for_profile: dict[str, Path] = {}
+        if build_options.build_wide_progression_tables:
             for horizon_name in TRACKED_HORIZONS:
-                score_path = (
+                if horizon_name not in built_score_progression_tables:
+                    continue
+                score_csv = (
                     analysis_layout.run_dir
-                    / f"profile_{profile_name}__score_progression__{horizon_name}.csv"
+                    / f"_all_profiles_score_progression__{horizon_name}.csv"
                 )
-                score_paths_for_profile[horizon_name] = score_path
+                score_progression_csv_by_horizon[horizon_name] = score_csv
                 _copy_sql_native_table_to_csv(
                     store,
-                    table_name=profile_outputs[profile_name]["score_progression_tables_by_horizon"][
-                        horizon_name
-                    ],
+                    table_name=built_score_progression_tables[horizon_name],
                     columns=SCORE_PROGRESSION_BASE_HEADERS
                     + PRICE_EXTRA_BASE_HEADERS
-                    + [_snapshot_column_key(label) for label in profile_labels]
-                    + [_price_snapshot_column_key(label) for label in profile_labels],
-                    csv_path=score_path,
+                    + [_snapshot_column_key(label) for label in aggregate_snapshot_labels]
+                    + [_price_snapshot_column_key(label) for label in aggregate_snapshot_labels],
+                    csv_path=score_csv,
                     analysis_run_id=analysis_run_id,
                 )
-            profile_outputs[profile_name].update(
-                {
+        if build_options.build_profile_outputs:
+            for profile_name in included_profile_names:
+                profile_labels = profile_snapshot_labels.get(profile_name, [])
+                history_path = analysis_layout.run_dir / f"profile_{profile_name}__history.csv"
+                summary_path = analysis_layout.run_dir / f"profile_{profile_name}__summary.csv"
+                _copy_sql_native_table_to_csv(
+                    store,
+                    table_name=profile_outputs[profile_name]["history_table"],
+                    columns=HISTORY_HEADERS,
+                    csv_path=history_path,
+                    analysis_run_id=analysis_run_id,
+                )
+                _copy_sql_native_table_to_csv(
+                    store,
+                    table_name=profile_outputs[profile_name]["summary_table"],
+                    columns=SUMMARY_HEADERS,
+                    csv_path=summary_path,
+                    analysis_run_id=analysis_run_id,
+                )
+                profile_update_payload: dict[str, Any] = {
                     "history_csv": history_path,
                     "summary_csv": summary_path,
-                    "price_progression_csv": price_path,
-                    "score_progression_csv_by_horizon": score_paths_for_profile,
                     "history_output_name": history_path.name,
                     "summary_output_name": summary_path.name,
-                    "price_progression_output_name": price_path.name,
-                    "score_progression_output_names": {
+                }
+                if price_progression_available:
+                    price_path = (
+                        analysis_layout.run_dir / f"profile_{profile_name}__price_progression.csv"
+                    )
+                    _copy_sql_native_table_to_csv(
+                        store,
+                        table_name=profile_outputs[profile_name]["price_progression_table"],
+                        columns=PRICE_PROGRESSION_BASE_HEADERS
+                        + [_snapshot_column_key(label) for label in profile_labels],
+                        csv_path=price_path,
+                        analysis_run_id=analysis_run_id,
+                    )
+                    profile_update_payload["price_progression_csv"] = price_path
+                    profile_update_payload["price_progression_output_name"] = price_path.name
+                score_paths_for_profile: dict[str, Path] = {}
+                if build_options.build_wide_progression_tables:
+                    for horizon_name in TRACKED_HORIZONS:
+                        table_name = profile_outputs[profile_name][
+                            "score_progression_tables_by_horizon"
+                        ].get(horizon_name)
+                        if not table_name:
+                            continue
+                        score_path = (
+                            analysis_layout.run_dir
+                            / f"profile_{profile_name}__score_progression__{horizon_name}.csv"
+                        )
+                        score_paths_for_profile[horizon_name] = score_path
+                        _copy_sql_native_table_to_csv(
+                            store,
+                            table_name=table_name,
+                            columns=SCORE_PROGRESSION_BASE_HEADERS
+                            + PRICE_EXTRA_BASE_HEADERS
+                            + [_snapshot_column_key(label) for label in profile_labels]
+                            + [_price_snapshot_column_key(label) for label in profile_labels],
+                            csv_path=score_path,
+                            analysis_run_id=analysis_run_id,
+                        )
+                profile_update_payload["score_progression_csv_by_horizon"] = score_paths_for_profile
+                if score_paths_for_profile:
+                    profile_update_payload["score_progression_output_names"] = {
                         horizon_name: score_path.name
                         for horizon_name, score_path in score_paths_for_profile.items()
-                    },
-                }
-            )
+                    }
+                profile_outputs[profile_name].update(profile_update_payload)
 
     for table_name in sorted(set(exported_table_names)):
         store.register_report(
@@ -5109,7 +5449,8 @@ def _materialize_sql_native_history_tables(
         file_path=overview_log,
     )
 
-    _drop_sql_native_stage_objects(store)
+    if not preserve_stage_objects:
+        _drop_sql_native_stage_objects(store)
 
     parquet_exports: dict[str, Path] = {}
     if export_parquet:
@@ -5134,6 +5475,16 @@ def _materialize_sql_native_history_tables(
         "views": view_names,
         "parquet_dir": analysis_layout.parquet_dir if export_parquet else None,
         "parquet_exports": parquet_exports,
+        "materialization_timings": {
+            key: round(value, 4) for key, value in materialization_timings.items()
+        },
+        "build_options": {
+            "build_profile_outputs": build_options.build_profile_outputs,
+            "build_wide_progression_tables": build_options.build_wide_progression_tables,
+            "build_cross_comparison": build_options.build_cross_comparison,
+            "include_snapshot_delta_view": build_options.include_snapshot_delta_view,
+            "calibration_only": build_options.calibration_only,
+        },
     }
     result: dict[str, Any] = {
         "output_dir": analysis_layout.run_dir,
@@ -5141,9 +5492,13 @@ def _materialize_sql_native_history_tables(
         "manifest_table": manifest_table,
         "history_table": all_history_table,
         "summary_table": all_summary_table,
-        "price_progression_table": all_price_progression_table,
-        "score_progression_tables_by_horizon": score_progression_tables_by_horizon,
-        "cross_comparison_table": cross_comparison_table,
+        "price_progression_table": (
+            all_price_progression_table if price_progression_available else None
+        ),
+        "score_progression_tables_by_horizon": dict(built_score_progression_tables),
+        "cross_comparison_table": (
+            cross_comparison_table if cross_comparison_available else None
+        ),
         "overview_log": overview_log,
         "profiles": profile_outputs,
         "analysis_database": analysis_layout.database_path,
@@ -5152,6 +5507,8 @@ def _materialize_sql_native_history_tables(
         "analysis_views": view_names,
         "analysis_parquet_dir": analysis_tables["parquet_dir"],
         "analysis_parquet_exports": parquet_exports,
+        "materialization_timings": analysis_tables["materialization_timings"],
+        "build_options": analysis_tables["build_options"],
         "input_runs": [
             {
                 "database_path": input_run.database_path,
@@ -5171,9 +5528,13 @@ def _materialize_sql_native_history_tables(
                 "manifest_csv": manifest_csv,
                 "history_csv": history_csv,
                 "summary_csv": summary_csv,
-                "price_progression_csv": price_progression_csv,
+                "price_progression_csv": (
+                    price_progression_csv if price_progression_available else None
+                ),
                 "score_progression_csv_by_horizon": score_progression_csv_by_horizon,
-                "cross_comparison_csv": cross_comparison_csv,
+                "cross_comparison_csv": (
+                    cross_comparison_csv if cross_comparison_available else None
+                ),
             }
         )
     return result
@@ -5512,7 +5873,14 @@ def _write_aggregation_outputs_to_duckdb(
             report_type="history_aggregation_log",
             file_path=overview_log,
         )
-        view_names = _create_historical_analysis_views(store)
+        view_names = _create_historical_analysis_views(
+            store,
+            build_options=HistoricalAggregationBuildOptions(),
+            score_progression_tables_by_horizon={
+                horizon_name: f"all_profiles_score_progression__{horizon_name}"
+                for horizon_name in TRACKED_HORIZONS
+            },
+        )
         parquet_exports = (
             store.export_tables_to_parquet(
                 run_id=analysis_layout.analysis_run_id,
@@ -5533,23 +5901,50 @@ def _write_aggregation_outputs_to_duckdb(
 
 def _create_historical_analysis_views(
     store: MovePredictionDuckDBStore,
+    *,
+    build_options: HistoricalAggregationBuildOptions | None = None,
+    score_progression_tables_by_horizon: Mapping[str, str] | None = None,
 ) -> list[str]:
-    for view_name, view_sql in _historical_analysis_view_definitions().items():
+    resolved_build_options = build_options or HistoricalAggregationBuildOptions()
+    resolved_score_tables = score_progression_tables_by_horizon or {
+        horizon_name: f"all_profiles_score_progression__{horizon_name}"
+        for horizon_name in TRACKED_HORIZONS
+    }
+    for view_name, view_sql in _historical_analysis_view_definitions(
+        build_options=resolved_build_options,
+        score_progression_tables_by_horizon=resolved_score_tables,
+    ).items():
         store.conn.execute(f"CREATE OR REPLACE VIEW {view_name} AS {view_sql}")
-    return list(HISTORICAL_ANALYSIS_VIEW_NAMES)
+    returned_views = list(HISTORICAL_ANALYSIS_VIEW_NAMES)
+    if not resolved_build_options.include_snapshot_delta_view:
+        returned_views = [
+            view_name
+            for view_name in returned_views
+            if view_name != "vw_profile_horizon_snapshot_deltas"
+        ]
+    return returned_views
 
 
-def _historical_analysis_view_definitions() -> dict[str, str]:
-    progression_union_sql = "\nUNION ALL\n".join(
-        _historical_progression_view_select_sql(horizon_name)
-        for horizon_name in TRACKED_HORIZONS
-    )
-    snapshot_union_sql = "\nUNION ALL\n".join(
-        _historical_snapshot_delta_view_select_sql(horizon_name)
-        for horizon_name in TRACKED_HORIZONS
-    )
+def _historical_analysis_view_definitions(
+    *,
+    build_options: HistoricalAggregationBuildOptions,
+    score_progression_tables_by_horizon: Mapping[str, str],
+) -> dict[str, str]:
+    if build_options.build_wide_progression_tables:
+        progression_union_sql = "\nUNION ALL\n".join(
+            _historical_progression_view_select_sql(
+                score_progression_tables_by_horizon[horizon_name], horizon_name
+            )
+            for horizon_name in TRACKED_HORIZONS
+            if horizon_name in score_progression_tables_by_horizon
+        )
+    else:
+        progression_union_sql = "\nUNION ALL\n".join(
+            _historical_progression_from_summary_select_sql(horizon_name)
+            for horizon_name in TRACKED_HORIZONS
+        )
 
-    return {
+    view_definitions = {
         "vw_analysis_input_runs": """
             SELECT analysis_run_id,
                 database_path,
@@ -5627,12 +6022,17 @@ def _historical_analysis_view_definitions() -> dict[str, str]:
                 ) AS leader_rank
             FROM vw_profile_horizon_progression_core
         """,
-        "vw_profile_horizon_snapshot_deltas": snapshot_union_sql,
     }
+    if build_options.include_snapshot_delta_view:
+        snapshot_union_sql = "\nUNION ALL\n".join(
+            _historical_snapshot_delta_view_select_sql(horizon_name)
+            for horizon_name in TRACKED_HORIZONS
+        )
+        view_definitions["vw_profile_horizon_snapshot_deltas"] = snapshot_union_sql
+    return view_definitions
 
 
-def _historical_progression_view_select_sql(horizon_name: str) -> str:
-    table_name = f"all_profiles_score_progression__{horizon_name}"
+def _historical_progression_view_select_sql(table_name: str, horizon_name: str) -> str:
     return f"""
         SELECT analysis_run_id,
             profile_name,
@@ -5687,6 +6087,68 @@ def _historical_progression_view_select_sql(horizon_name: str) -> str:
                 ELSE close_return_pct_total / NULLIF(snapshots_seen - 1, 0)
             END AS close_return_pct_per_observation
         FROM {table_name}
+    """
+
+
+def _historical_progression_from_summary_select_sql(horizon_name: str) -> str:
+    return f"""
+        SELECT analysis_run_id,
+            profile_name,
+            symbol,
+            company_name,
+            sector,
+            industry,
+            '{horizon_name}' AS horizon_name,
+            snapshots_seen,
+            profile_snapshot_count,
+            presence_ratio,
+            {horizon_name}_first_score AS first_score,
+            {horizon_name}_last_score AS last_score,
+            {horizon_name}_score_delta_total AS score_delta_total,
+            {horizon_name}_avg_score AS avg_score,
+            CASE
+                WHEN {horizon_name}_last_rank IS NULL
+                    OR {horizon_name}_rank_improvement_total IS NULL THEN NULL
+                ELSE {horizon_name}_last_rank + {horizon_name}_rank_improvement_total
+            END AS first_rank,
+            {horizon_name}_last_rank AS last_rank,
+            {horizon_name}_best_rank AS best_rank,
+            {horizon_name}_worst_rank AS worst_rank,
+            {horizon_name}_rank_improvement_total AS rank_improvement_total,
+            first_close,
+            last_close,
+            close_return_pct_total,
+            NULL AS max_close,
+            NULL AS min_close,
+            NULL AS max_drawdown_pct,
+            CASE
+                WHEN {horizon_name}_score_delta_total IS NULL THEN NULL
+                WHEN {horizon_name}_score_delta_total > 0 THEN 1
+                WHEN {horizon_name}_score_delta_total < 0 THEN -1
+                ELSE 0
+            END AS score_direction_sign,
+            CASE
+                WHEN close_return_pct_total IS NULL THEN NULL
+                WHEN close_return_pct_total > 0 THEN 1
+                WHEN close_return_pct_total < 0 THEN -1
+                ELSE 0
+            END AS price_direction_sign,
+            CASE
+                WHEN {horizon_name}_score_delta_total IS NULL OR close_return_pct_total IS NULL THEN NULL
+                WHEN {horizon_name}_score_delta_total = 0 OR close_return_pct_total = 0 THEN 0
+                WHEN ({horizon_name}_score_delta_total > 0 AND close_return_pct_total > 0)
+                    OR ({horizon_name}_score_delta_total < 0 AND close_return_pct_total < 0) THEN 1
+                ELSE -1
+            END AS score_price_alignment_flag,
+            CASE
+                WHEN snapshots_seen IS NULL OR snapshots_seen <= 1 OR {horizon_name}_score_delta_total IS NULL THEN NULL
+                ELSE {horizon_name}_score_delta_total / NULLIF(snapshots_seen - 1, 0)
+            END AS score_delta_per_observation,
+            CASE
+                WHEN snapshots_seen IS NULL OR snapshots_seen <= 1 OR close_return_pct_total IS NULL THEN NULL
+                ELSE close_return_pct_total / NULLIF(snapshots_seen - 1, 0)
+            END AS close_return_pct_per_observation
+        FROM all_profiles_summary
     """
 
 

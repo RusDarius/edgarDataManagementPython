@@ -7,6 +7,7 @@ from data_analysis_scripts.trading_view_move_prediction_history_aggregator impor
     HISTORICAL_ANALYSIS_VIEW_NAMES,
     build_move_prediction_history_duckdb_inputs_from_week_folders,
     run_move_prediction_history_aggregation_duckdb,
+    run_move_prediction_history_aggregation_duckdb_incremental,
 )
 from db.trading_view_move_prediction_duckdb import (
     MovePredictionDuckDBStore,
@@ -791,6 +792,115 @@ class TestTradingViewMovePredictionHistoryAggregatorDuckDB(unittest.TestCase):
             self.assertEqual(2, result["execution_config"]["duckdb_threads"])
             self.assertEqual(16.0, result["execution_config"]["max_memory_gb"])
             self.assertTrue(result["analysis_database"].exists())
+
+    def test_incremental_direct_loader_matches_sql_native_outputs(self):
+        with TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            iso_year_root, output_root = self._build_sample_weekly_database(
+                temp_root=temp_root
+            )
+            input_paths = build_move_prediction_history_duckdb_inputs_from_week_folders(
+                base_dir=iso_year_root,
+                folder_names=["22"],
+            )
+
+            sql_result = run_move_prediction_history_aggregation_duckdb(
+                input_paths=input_paths,
+                output_dir=output_root / "sql_native",
+                include_profiles=["breakout_long"],
+                write_legacy_csv_outputs=False,
+                export_parquet=False,
+            )
+            incremental_events: list[tuple[str, int, int]] = []
+            incremental_result = run_move_prediction_history_aggregation_duckdb_incremental(
+                input_paths=input_paths,
+                output_dir=output_root / "incremental",
+                include_profiles=["breakout_long"],
+                write_legacy_csv_outputs=False,
+                export_parquet=False,
+                on_stage_completed=lambda completed, total, database_path, staged_runs, staged_rows, elapsed: incremental_events.append(
+                    (database_path.name, staged_runs, staged_rows)
+                ),
+            )
+
+            sql_history = query_move_prediction_duckdb(
+                sql_result["analysis_database"],
+                f"""
+                SELECT symbol,
+                    snapshot_label,
+                    days_rank,
+                    days_score_delta_vs_previous,
+                    close_return_pct_vs_previous_snapshot
+                FROM {sql_result['profiles']['breakout_long']['history_table']}
+                WHERE analysis_run_id = ?
+                ORDER BY row_number
+                """,
+                [sql_result["analysis_run_id"]],
+            )
+            incremental_history = query_move_prediction_duckdb(
+                incremental_result["analysis_database"],
+                f"""
+                SELECT symbol,
+                    snapshot_label,
+                    days_rank,
+                    days_score_delta_vs_previous,
+                    close_return_pct_vs_previous_snapshot
+                FROM {incremental_result['profiles']['breakout_long']['history_table']}
+                WHERE analysis_run_id = ?
+                ORDER BY row_number
+                """,
+                [incremental_result["analysis_run_id"]],
+            )
+            self.assertEqual(sql_history, incremental_history)
+            self.assertEqual("incremental_direct", incremental_result["staging_mode"])
+            self.assertEqual(
+                "incremental_direct",
+                incremental_result["execution_config"]["staging_mode"],
+            )
+            self.assertEqual(
+                [("move_prediction_2026_W22.duckdb", 3, 6)],
+                incremental_events,
+            )
+
+    def test_incremental_direct_loader_supports_rolling_output_dir(self):
+        with TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            iso_year_root, output_root = self._build_sample_weekly_database(
+                temp_root=temp_root
+            )
+            input_paths = build_move_prediction_history_duckdb_inputs_from_week_folders(
+                base_dir=iso_year_root,
+                folder_names=["22"],
+            )
+            rolling_dir = output_root / "rolling"
+
+            first_result = run_move_prediction_history_aggregation_duckdb_incremental(
+                input_paths=input_paths,
+                output_dir=rolling_dir,
+                include_profiles=["breakout_long"],
+                write_legacy_csv_outputs=False,
+                export_parquet=False,
+                rolling=True,
+            )
+            second_result = run_move_prediction_history_aggregation_duckdb_incremental(
+                input_paths=input_paths,
+                output_dir=rolling_dir,
+                include_profiles=["breakout_long"],
+                write_legacy_csv_outputs=False,
+                export_parquet=False,
+                rolling=True,
+            )
+
+            self.assertEqual(
+                first_result["analysis_database"],
+                second_result["analysis_database"],
+            )
+            self.assertTrue(second_result["execution_config"]["rolling"])
+            staged_run_count = query_move_prediction_duckdb(
+                second_result["analysis_database"],
+                "SELECT COUNT(*) AS row_count FROM stg_input_runs",
+            )[0]["row_count"]
+            self.assertEqual(3, staged_run_count)
 
     def test_mixed_backfill_and_live_run_ids_are_discovered_from_weekly_database(
         self,

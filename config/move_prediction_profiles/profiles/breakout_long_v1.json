@@ -1,0 +1,180 @@
+{
+  "schema_version": "move_prediction_profile_file_v1",
+  "profile_id": "breakout_long_v1",
+  "base_profile_id": "breakout_long",
+  "version": "1.0.0",
+  "effective_from": "2026-06-09",
+  "changelog": "Tier-1 confirmation signals and false-breakout guards.",
+  "profile": {
+    "name": "breakout_long_v1",
+    "description": "Trend-following profile for confirmed upside continuation. Rewards strong participation, confirmed momentum across multiple timeframes, and aligned trend structure. Fundamentals carry minimal weight — this is a pure tape-reading lens. Noise reduction: requires volume confirmation (volume_trend activated), intraday momentum, and multi-timeframe MA alignment to distinguish genuine breakouts from low-conviction noise spikes. ADX directional spread confirms the move has directional strength, not just volatility.",
+    "horizon_weights": {
+      "days": {
+        "attention": 0.3,
+        "event": 0.18,
+        "momentum": 0.3,
+        "trend": 0.16,
+        "quality": 0.0,
+        "valuation": 0.0,
+        "safety": 0.06
+      },
+      "weeks": {
+        "attention": 0.2,
+        "event": 0.1,
+        "momentum": 0.28,
+        "trend": 0.28,
+        "quality": 0.02,
+        "valuation": 0.0,
+        "safety": 0.12
+      },
+      "months": {
+        "attention": 0.1,
+        "event": 0.06,
+        "momentum": 0.22,
+        "trend": 0.3,
+        "quality": 0.1,
+        "valuation": 0.04,
+        "safety": 0.18
+      },
+      "years": {
+        "attention": 0.03,
+        "event": 0.03,
+        "momentum": 0.12,
+        "trend": 0.22,
+        "quality": 0.18,
+        "valuation": 0.12,
+        "safety": 0.3
+      }
+    },
+    "component_signal_weights": {
+      "attention": {
+        "relative_volume_10d_calc": 1.5,
+        "float_turnover": 1.35,
+        "dollar_turnover_intensity": 1.25,
+        "Value.Traded": 1.2,
+        "AvgValue.Traded_10d": 1.1,
+        "volume_trend": 1.4,
+        "intraday_momentum": 1.25,
+        "chaikin_money_flow_signal": 1.35,
+        "bb_squeeze": 0.6,
+        "range_compression": 0.5,
+        "volatility_contraction": 0.5
+      },
+      "event": {
+        "premarket_change": 1.2,
+        "postmarket_change": 1.2,
+        "gap": 1.2,
+        "gap_severity": 1.35,
+        "event_intensity": 1.3,
+        "eps_surprise_percent_fq": 1.15
+      },
+      "momentum": {
+        "change": 1.2,
+        "Perf.5D": 1.4,
+        "Perf.W": 1.3,
+        "Perf.1M": 0.85,
+        "Perf.3M": 0.85,
+        "Perf.6M": 0.4,
+        "Perf.YTD": 0.45,
+        "Perf.Y": 0.2,
+        "ROC": 1.15,
+        "Mom": 1.15,
+        "macd_spread": 1.2,
+        "Recommend.All": 0.9,
+        "Recommend.MA": 1.15,
+        "Recommend.Other": 0.85,
+        "rsi_centered": 0.65,
+        "rsi7_centered": 0.95,
+        "aroon_spread": 1.45,
+        "adx_directional_spread": 1.5,
+        "stoch_rsi_centered": 0.65,
+        "CCI20": 0.75,
+        "stoch_rsi_crossover": 1.1
+      },
+      "trend": {
+        "trend_alignment": 1.35,
+        "close_vs_sma10": 1.3,
+        "close_vs_sma20": 1.15,
+        "close_vs_sma30": 1.0,
+        "close_vs_sma50": 1.2,
+        "close_vs_sma200": 0.55,
+        "close_vs_ema10": 1.3,
+        "close_vs_ema20": 1.15,
+        "close_vs_ema30": 1.0,
+        "close_vs_ema50": 1.2,
+        "close_vs_ema200": 0.6,
+        "close_vs_vwap": 1.25,
+        "close_vs_vwma": 1.25,
+        "bb_position": 1.2,
+        "short_trend_emergence": 1.2,
+        "pivot_distance": 0.9,
+        "donchian_position": 1.4,
+        "close_vs_psar": 1.35
+      },
+      "safety": {
+        "price_target_dispersion": 1.1
+      }
+    },
+    "component_directional_bias": {
+      "attention": {
+        "positive_multiplier": 1.35,
+        "negative_multiplier": 0.7
+      },
+      "event": {
+        "positive_multiplier": 1.25,
+        "negative_multiplier": 0.75
+      },
+      "momentum": {
+        "positive_multiplier": 1.4,
+        "negative_multiplier": 0.65
+      },
+      "trend": {
+        "positive_multiplier": 1.3,
+        "negative_multiplier": 0.75
+      },
+      "quality": {
+        "positive_multiplier": 1.0,
+        "negative_multiplier": 0.8
+      },
+      "valuation": {
+        "positive_multiplier": 0.9,
+        "negative_multiplier": 0.75
+      },
+      "safety": {
+        "positive_multiplier": 0.85,
+        "negative_multiplier": 1.2
+      }
+    },
+    "missing_component_scores_by_horizon": {
+      "days": {
+        "attention": -0.85,
+        "event": -0.55,
+        "momentum": -0.8,
+        "trend": -0.5
+      },
+      "weeks": {
+        "attention": -0.6,
+        "momentum": -0.65,
+        "trend": -0.45
+      },
+      "months": {
+        "momentum": -0.45,
+        "trend": -0.4
+      }
+    },
+    "performance_tracking_periods": {},
+    "intro_metric_notes": [
+      "Pure trend-following profile for confirmed upside continuation.",
+      "False-breakout guards: donchian_position=1.40, close_vs_psar=1.35, chaikin_money_flow_signal=1.35 confirm channel/volume participation.",
+      "Extended-tape dampening: Perf.1M=0.85, rsi_centered=0.65, stoch_rsi_centered=0.65, price_target_dispersion=1.10 (safety, inverted).",
+      "Volume confirmation: volume_trend=1.40 requires sustained accumulation, not one-day spikes. intraday_momentum=1.25 confirms real-time move conviction.",
+      "ADX directional spread=1.50 confirms directional strength — distinguishes true breakouts from volatility noise.",
+      "Aroon spread=1.45 detects new uptrend formation at the indicator level.",
+      "Short-term MA override: SMA10/EMA10=1.30, SMA50/EMA50=1.20. Long-term trend (200-day) damped to 0.55-0.60 so the profile stays tactical.",
+      "Trailing momentum aggressively decayed: Perf.Y=0.20, Perf.YTD=0.45, Perf.6M=0.40. Names already mid-run are deprioritized.",
+      "Directional bias amplifies upside signals (momentum +1.40x) while heavily suppressing downside readings (momentum -0.65x)."
+    ],
+    "confidence_multiplier": 1.07,
+    "confidence_offset": 0.0
+  }
+}

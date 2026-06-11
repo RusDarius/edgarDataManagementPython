@@ -52,6 +52,13 @@
             "name": "predict_analysis_week24",
             "group": "2026",
             "database": "${workspaceFolder:edgarDataManagementPython}/logs/tradingview_analysis/prediction_analysis/duckdb_runs/iso_year=2026/week=24/move_prediction_2026_W24.duckdb"
+        },
+        {
+            "previewLimit": 50,
+            "driver": "DuckDB",
+            "group": "2026_run_pooled_predict_analysis",
+            "name": "move_prediction_run_pool_20260610_test1",
+            "database": "${workspaceFolder:edgarDataManagementPython}/logs/tradingview_analysis/prediction_analysis/multi_run_pool/runs/move_prediction_run_pool_20260610_2000_utc_94a206f7/pooled_move_prediction_runs.duckdb"
         }
     ],
     "python.analysis.extraPaths": [

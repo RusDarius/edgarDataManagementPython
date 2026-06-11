@@ -268,6 +268,13 @@ RAW_PROFILE_FIELDS = [
     "ncavps_ratio_current",
     "ncavps_ratio_fq",
     "zmijewski_score_ttm",
+    "DonchCh20.Upper",
+    "DonchCh20.Lower",
+    "P.SAR",
+    "HullMA9",
+    "ChaikinMoneyFlow",
+    "BBPower",
+    "Recommend.All|1W",
 ]
 
 DERIVED_PROFILE_FIELDS = [
@@ -325,6 +332,15 @@ DERIVED_PROFILE_FIELDS = [
     "gross_profit_yield_ev",
     "shareholder_yield",
     "net_cash_to_market_cap",
+    "donchian_position",
+    "close_vs_psar",
+    "close_vs_hullma9",
+    "chaikin_money_flow_signal",
+    "bbpower_divergence",
+    "recommend_tf_spread",
+    "ebitda_per_employee",
+    "near_52w_high_score",
+    "exhaustion_range_position",
 ]
 
 EXTENDED_SIGNALS: frozenset[str] = frozenset(
@@ -436,6 +452,31 @@ EXTENDED_SIGNALS: frozenset[str] = frozenset(
         "gross_profit_yield_ev",
         "shareholder_yield",
         "net_cash_to_market_cap",
+        "donchian_position",
+        "close_vs_psar",
+        "close_vs_hullma9",
+        "chaikin_money_flow_signal",
+        "bbpower_divergence",
+        "recommend_tf_spread",
+        "ebitda_per_employee",
+        "near_52w_high_score",
+        "exhaustion_range_position",
+    }
+)
+
+INVERTED_CONSENSUS_PROFILES: frozenset[str] = frozenset({"fragility_short"})
+
+LONG_CONSENSUS_PROFILES: frozenset[str] = frozenset(
+    {
+        "breakout_long",
+        "early_momentum_inflection",
+        "forward_edge_active",
+        "quality_value_compounder",
+        "durable_value_compounder",
+        "sector_relative_outperformer",
+        "asymmetric_value",
+        "value_recovery",
+        "deep_value_momentum",
     }
 )
 
@@ -2727,27 +2768,69 @@ def _directional_hit_rate(values: list[float], expect_positive: bool) -> float |
 
 
 def list_move_prediction_scoring_profiles() -> dict[str, str]:
-    return {
+    from data_analysis_scripts.trading_view_move_prediction_profile_config import (
+        get_default_profile_registry,
+    )
+
+    descriptions = {
         name: profile.description for name, profile in PRESET_SCORING_PROFILES.items()
     }
+    registry = get_default_profile_registry()
+    for profile_id in registry.list_profile_ids():
+        loaded_profile = registry.get_profile(profile_id)
+        if loaded_profile is not None:
+            descriptions[profile_id] = loaded_profile.description
+    return descriptions
 
 
 def resolve_move_prediction_scoring_profile(
     scoring_profile: str | ScoringProfile | None,
+    *,
+    profile_registry: Any | None = None,
 ) -> ScoringProfile:
     if scoring_profile is None:
         return PRESET_SCORING_PROFILES["quality_value_compounder"]
     if isinstance(scoring_profile, ScoringProfile):
         return scoring_profile
-    profile_key = str(scoring_profile)
-    profile_key = _PROFILE_ALIASES.get(profile_key, profile_key)
+
+    from data_analysis_scripts.trading_view_move_prediction_profile_config import (
+        ProfileConfigRegistry,
+        get_default_profile_registry,
+    )
+
+    profile_key = _PROFILE_ALIASES.get(str(scoring_profile), str(scoring_profile))
+    registry = profile_registry or get_default_profile_registry()
+    if isinstance(registry, ProfileConfigRegistry):
+        json_profile = registry.get_profile(profile_key)
+        if json_profile is not None:
+            return json_profile
+
     profile = PRESET_SCORING_PROFILES.get(profile_key)
     if profile is None:
-        available = ", ".join(sorted(PRESET_SCORING_PROFILES))
+        available = sorted(
+            set(PRESET_SCORING_PROFILES) | set(registry.list_profile_ids())
+        )
         raise ValueError(
-            f"Unknown scoring profile '{scoring_profile}'. Available profiles: {available}"
+            f"Unknown scoring profile '{scoring_profile}'. Available profiles: "
+            f"{', '.join(available)}"
         )
     return profile
+
+
+def _get_profile_config_metadata(
+    profile_name: str,
+    *,
+    profile_registry: Any | None = None,
+) -> dict[str, Any] | None:
+    from data_analysis_scripts.trading_view_move_prediction_profile_config import (
+        ProfileConfigRegistry,
+        get_default_profile_registry,
+    )
+
+    registry = profile_registry or get_default_profile_registry()
+    if isinstance(registry, ProfileConfigRegistry):
+        return registry.get_metadata(profile_name)
+    return None
 
 
 def _get_symbol_name(row: dict[str, Any]) -> str:
@@ -2818,8 +2901,20 @@ def _sha256_json(value: Any) -> str:
 
 def _build_profile_config_snapshot(
     scoring_profile: str | ScoringProfile,
+    *,
+    profile_registry: Any | None = None,
+    consensus_profile_weights: Mapping[str, float] | None = None,
+    profile_suite_id: str | None = None,
+    profile_suite_version: str | None = None,
 ) -> dict[str, str]:
-    resolved_profile = resolve_move_prediction_scoring_profile(scoring_profile)
+    resolved_profile = resolve_move_prediction_scoring_profile(
+        scoring_profile,
+        profile_registry=profile_registry,
+    )
+    profile_metadata = _get_profile_config_metadata(
+        resolved_profile.name,
+        profile_registry=profile_registry,
+    )
     config = asdict(resolved_profile)
     config["schema_version"] = PROFILE_CONFIG_SCHEMA_VERSION
     config["component_order"] = list(COMPONENT_ORDER)
@@ -2830,9 +2925,18 @@ def _build_profile_config_snapshot(
     )
     config["strong_move_score_threshold"] = STRONG_MOVE_SCORE_THRESHOLD
     config["directional_move_score_threshold"] = DIRECTIONAL_MOVE_SCORE_THRESHOLD
-    config["consensus_profile_weight"] = CONSENSUS_PROFILE_WEIGHTS.get(
-        resolved_profile.name
-    )
+    weights = consensus_profile_weights or CONSENSUS_PROFILE_WEIGHTS
+    config["consensus_profile_weight"] = weights.get(resolved_profile.name)
+    if profile_metadata:
+        config["profile_file_schema_version"] = profile_metadata.get("schema_version")
+        config["base_profile_id"] = profile_metadata.get("base_profile_id")
+        config["profile_version"] = profile_metadata.get("version")
+        config["profile_effective_from"] = profile_metadata.get("effective_from")
+        config["profile_source_path"] = profile_metadata.get("source_path")
+    if profile_suite_id:
+        config["profile_suite_id"] = profile_suite_id
+    if profile_suite_version:
+        config["profile_suite_version"] = profile_suite_version
     return {
         "profile_name": resolved_profile.name,
         "profile_config_schema_version": PROFILE_CONFIG_SCHEMA_VERSION,
@@ -2843,9 +2947,21 @@ def _build_profile_config_snapshot(
 
 def _build_profile_config_snapshots(
     profile_names: list[str],
+    *,
+    profile_registry: Any | None = None,
+    consensus_profile_weights: Mapping[str, float] | None = None,
+    profile_suite_id: str | None = None,
+    profile_suite_version: str | None = None,
 ) -> list[dict[str, str]]:
     return [
-        _build_profile_config_snapshot(profile_name) for profile_name in profile_names
+        _build_profile_config_snapshot(
+            profile_name,
+            profile_registry=profile_registry,
+            consensus_profile_weights=consensus_profile_weights,
+            profile_suite_id=profile_suite_id,
+            profile_suite_version=profile_suite_version,
+        )
+        for profile_name in profile_names
     ]
 
 
@@ -3205,6 +3321,15 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
     if dividends_yield_value is None:
         dividends_yield_value = _coerce_numeric(row.get("dividend_yield_recent"))
     net_debt_value = _coerce_numeric(row.get("net_debt"))
+    donch_upper = _coerce_numeric(row.get("DonchCh20.Upper"))
+    donch_lower = _coerce_numeric(row.get("DonchCh20.Lower"))
+    parabolic_sar = _coerce_numeric(row.get("P.SAR"))
+    hull_ma9 = _coerce_numeric(row.get("HullMA9"))
+    chaikin_money_flow = _coerce_numeric(row.get("ChaikinMoneyFlow"))
+    bb_power = _coerce_numeric(row.get("BBPower"))
+    recommend_all = _coerce_numeric(row.get("Recommend.All"))
+    recommend_all_1w = _coerce_numeric(row.get("Recommend.All|1W"))
+    ebitda_value = _coerce_numeric(row.get("ebitda"))
 
     short_term_cash_coverage = _safe_ratio(
         cash_n_short_term_invest_fy,
@@ -3428,6 +3553,33 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
             return None
         return (close - pivot_value) / close
 
+    def _close_vs_level(level_value: float | None) -> float | None:
+        if close is None or level_value is None:
+            return None
+        return 1.0 if close >= level_value else -1.0
+
+    donchian_position: float | None = None
+    if (
+        close is not None
+        and donch_upper is not None
+        and donch_lower is not None
+        and donch_upper != donch_lower
+    ):
+        donchian_position = (close - donch_lower) / (donch_upper - donch_lower)
+
+    recommend_tf_spread: float | None = None
+    if recommend_all_1w is not None and recommend_all is not None:
+        recommend_tf_spread = recommend_all_1w - recommend_all
+
+    ebitda_per_employee: float | None = None
+    if ebitda_value is not None and num_employees is not None and num_employees > 0:
+        ebitda_per_employee = ebitda_value / num_employees
+
+    near_52w_high_score: float | None = (
+        -distance_from_52w_high if distance_from_52w_high is not None else None
+    )
+    exhaustion_range_position = range_position_52w
+
     return {
         "float_turnover": _safe_ratio(volume, float_shares),
         "dollar_turnover_intensity": _safe_ratio(avg_value_traded_10d, market_cap),
@@ -3494,6 +3646,15 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
         "gross_profit_yield_ev": gross_profit_yield_ev,
         "shareholder_yield": shareholder_yield,
         "net_cash_to_market_cap": net_cash_to_market_cap,
+        "donchian_position": donchian_position,
+        "close_vs_psar": _close_vs_level(parabolic_sar),
+        "close_vs_hullma9": _close_vs_level(hull_ma9),
+        "chaikin_money_flow_signal": chaikin_money_flow,
+        "bbpower_divergence": bb_power,
+        "recommend_tf_spread": recommend_tf_spread,
+        "ebitda_per_employee": ebitda_per_employee,
+        "near_52w_high_score": near_52w_high_score,
+        "exhaustion_range_position": exhaustion_range_position,
     }
 
 
@@ -3747,6 +3908,9 @@ def _build_component_signal_map(
             "intraday_momentum": _derived_signal(
                 derived_row, profiles, "intraday_momentum"
             ),
+            "chaikin_money_flow_signal": _derived_signal(
+                derived_row, profiles, "chaikin_money_flow_signal"
+            ),
             "low_relative_volume": _field_signal(
                 row, profiles, "relative_volume_10d_calc", invert=True
             ),
@@ -3797,6 +3961,18 @@ def _build_component_signal_map(
             "stoch_rsi_crossover": _derived_signal(
                 derived_row, profiles, "stoch_rsi_crossover"
             ),
+            "bbpower_divergence": _derived_signal(
+                derived_row, profiles, "bbpower_divergence"
+            ),
+            "recommend_tf_spread": _derived_signal(
+                derived_row, profiles, "recommend_tf_spread"
+            ),
+            "near_52w_high_score": _derived_signal(
+                derived_row, profiles, "near_52w_high_score"
+            ),
+            "exhaustion_range_position": _derived_signal(
+                derived_row, profiles, "exhaustion_range_position"
+            ),
         },
         "trend": {
             "close_vs_sma50": derived_row.get("close_vs_sma50"),
@@ -3827,6 +4003,11 @@ def _build_component_signal_map(
             "close_vs_camarilla_r2": _derived_signal(
                 derived_row, profiles, "close_vs_camarilla_r2"
             ),
+            "donchian_position": _derived_signal(
+                derived_row, profiles, "donchian_position"
+            ),
+            "close_vs_psar": derived_row.get("close_vs_psar"),
+            "close_vs_hullma9": derived_row.get("close_vs_hullma9"),
         },
         "quality": {
             "total_revenue_yoy_growth_ttm": _field_signal(
@@ -3873,6 +4054,9 @@ def _build_component_signal_map(
             ),
             "revenue_per_employee": _derived_signal(
                 derived_row, profiles, "revenue_per_employee"
+            ),
+            "ebitda_per_employee": _derived_signal(
+                derived_row, profiles, "ebitda_per_employee"
             ),
             "earnings_per_share_diluted_yoy_growth_ttm": _field_signal(
                 row, profiles, "earnings_per_share_diluted_yoy_growth_ttm"
@@ -4323,9 +4507,41 @@ def _risk_adjusted_score(
     return _clamp(score * (1.0 + short_bonus) / (1.0 + short_penalty), -3.0, 3.0)
 
 
+def _profile_action_family(profile_name: str | None) -> str | None:
+    if not profile_name:
+        return None
+    return profile_name.removesuffix("_v1")
+
+
+def _count_bullish_long_profiles(
+    profile_scores: dict[str, dict[str, dict[str, Any]]] | None,
+    *,
+    horizon_name: str = "weeks",
+    threshold: float = DIRECTIONAL_MOVE_SCORE_THRESHOLD,
+    long_consensus_profiles: frozenset[str] | None = None,
+) -> int:
+    if not profile_scores:
+        return 0
+    long_profiles = long_consensus_profiles or LONG_CONSENSUS_PROFILES
+    bullish_count = 0
+    for profile_name, horizons in profile_scores.items():
+        if profile_name not in long_profiles:
+            continue
+        score = horizons.get(horizon_name, {}).get("score")
+        if score is not None and score >= threshold:
+            bullish_count += 1
+    return bullish_count
+
+
 def _manager_action_signal(
     horizons: dict[str, dict[str, Any]],
     component_scores: dict[str, float | None],
+    *,
+    scoring_profile_name: str | None = None,
+    derived_row: dict[str, float | None] | None = None,
+    earnings_days_to_next: int | None = None,
+    profile_scores: dict[str, dict[str, dict[str, Any]]] | None = None,
+    long_consensus_profiles: frozenset[str] | None = None,
 ) -> str:
     days = horizons.get("days", {}).get("score")
     weeks = horizons.get("weeks", {}).get("score")
@@ -4338,6 +4554,43 @@ def _manager_action_signal(
     quality = component_scores.get("quality") or 0.0
     valuation = component_scores.get("valuation") or 0.0
     safety = component_scores.get("safety") or 0.0
+
+    profile_family = _profile_action_family(scoring_profile_name)
+    if profile_family == "early_momentum_inflection":
+        breakout_weeks = None
+        if profile_scores:
+            for breakout_name in ("breakout_long_v1", "breakout_long"):
+                if breakout_name in profile_scores:
+                    breakout_weeks = profile_scores[breakout_name].get("weeks", {}).get(
+                        "score"
+                    )
+                    if breakout_weeks is not None:
+                        break
+        volume_trend = (derived_row or {}).get("volume_trend")
+        adx_spread = (derived_row or {}).get("adx_directional_spread")
+        if (
+            breakout_weeks is not None
+            and weeks is not None
+            and breakout_weeks > weeks
+            and volume_trend is not None
+            and volume_trend > 1.05
+            and adx_spread is not None
+            and adx_spread > 0
+        ):
+            return "promote_to_breakout"
+
+    if profile_family == "mean_reversion_exhaustion":
+        if weeks is not None and weeks >= 0.55 and momentum >= 0.45:
+            return "trim_extended_long"
+
+    if profile_family == "pre_earnings_drift":
+        if (
+            earnings_days_to_next is not None
+            and 2 <= earnings_days_to_next <= 28
+            and weeks is not None
+            and weeks >= 0.35
+        ):
+            return "accumulate_value_catalyst"
 
     if valuation >= 0.55 and (quality <= -0.35 or safety <= -0.55):
         return "avoid_value_trap"
@@ -4378,7 +4631,25 @@ def _manager_action_signal(
         and safety <= -0.30
         and (momentum <= -0.30 or trend <= -0.30)
     ):
-        return "hedge_or_short"
+        bullish_long_profiles = _count_bullish_long_profiles(
+            profile_scores,
+            long_consensus_profiles=long_consensus_profiles,
+        )
+        fragility_weeks = None
+        if profile_scores and "fragility_short" in profile_scores:
+            fragility_weeks = profile_scores["fragility_short"].get("weeks", {}).get(
+                "score"
+            )
+        if (
+            profile_family == "fragility_short"
+            and fragility_weeks is not None
+            and fragility_weeks >= 0.55
+            and bullish_long_profiles < 2
+        ):
+            return "neutral_watch"
+        if bullish_long_profiles >= 2 or profile_family == "fragility_short":
+            return "hedge_or_short"
+        return "neutral_watch"
     if (
         days is not None
         and months is not None
@@ -4505,7 +4776,11 @@ def _build_prediction_rows(
                 "earnings_days_to_next": earnings_days_to_next,
                 "scoring_profile": scoring_profile.name,
                 "manager_action_signal": _manager_action_signal(
-                    horizons, component_scores
+                    horizons,
+                    component_scores,
+                    scoring_profile_name=scoring_profile.name,
+                    derived_row=derived_row,
+                    earnings_days_to_next=earnings_days_to_next,
                 ),
             }
         )
@@ -5497,25 +5772,15 @@ def run_move_prediction_profile_suite_by_industry(
 # ──────────────────────────────────────────────────────────────────────────────
 
 CONSENSUS_PROFILE_WEIGHTS: dict[str, float] = {
-    # Empirically strongest predictor for 1-month performance — highest weight
     "breakout_long": 0.20,
-    # Second-best for catching nascent moves early
     "early_momentum_inflection": 0.12,
-    # Forward earnings quality — solid but slower horizon
     "quality_value_compounder": 0.10,
-    # Quality-led value investing lens for months/years positioning
     "durable_value_compounder": 0.09,
-    # Sector-relative setups — reduced; market-relative is less nimble
     "sector_relative_outperformer": 0.09,
-    # Forward estimate revisions — strong complementary signal
     "forward_edge_active": 0.11,
-    # Overlooked fundamentals (redesigned to filter ETFs)
     "asymmetric_value": 0.09,
-    # Active fundamental recovery — requires actual turn confirmation
     "value_recovery": 0.08,
-    # New: value + catalyst intersection profile
     "deep_value_momentum": 0.05,
-    # Short/fragility hedge — inverted in consensus (score = -score)
     "fragility_short": 0.07,
 }
 
@@ -5526,16 +5791,26 @@ def _build_consensus_scores(
     scan_data: list[dict[str, Any]],
     profile_names: list[str] | None = None,
     min_coverage: float = MINIMUM_COVERAGE_FOR_CONSENSUS,
+    *,
+    profile_registry: Any | None = None,
+    consensus_profile_weights: Mapping[str, float] | None = None,
+    inverted_consensus_profiles: frozenset[str] | None = None,
+    long_consensus_profiles: frozenset[str] | None = None,
 ) -> list[dict[str, Any]]:
     if profile_names is None:
         profile_names = list(CONSENSUS_PROFILE_WEIGHTS.keys())
+    weights = consensus_profile_weights or CONSENSUS_PROFILE_WEIGHTS
+    inverted_profiles = inverted_consensus_profiles or INVERTED_CONSENSUS_PROFILES
 
     profiles_data: dict[str, list[dict[str, Any]]] = {}
     shared_profiles: dict[str, dict[str, float | int | None]] | None = None
     shared_derived: list[dict[str, float | None]] | None = None
 
     for profile_name in profile_names:
-        resolved_profile = resolve_move_prediction_scoring_profile(profile_name)
+        resolved_profile = resolve_move_prediction_scoring_profile(
+            profile_name,
+            profile_registry=profile_registry,
+        )
         if shared_profiles is None:
             _enrich_with_peer_metrics(scan_data)
             shared_derived = [_build_derived_metrics(row) for row in scan_data]
@@ -5581,9 +5856,9 @@ def _build_consensus_scores(
                 if score is None or (coverage or 0) < min_coverage:
                     continue
 
-                profile_weight = CONSENSUS_PROFILE_WEIGHTS.get(profile_name, 0.10)
+                profile_weight = weights.get(profile_name, 0.10)
 
-                if profile_name == "fragility_short":
+                if profile_name in inverted_profiles:
                     score = -score
 
                 weighted_score += score * profile_weight
@@ -5656,7 +5931,10 @@ def _build_consensus_scores(
             horizon_data["risk_tier"] = _risk_tier(consensus_components)
 
         manager_action_signal = _manager_action_signal(
-            consensus_horizons, consensus_components
+            consensus_horizons,
+            consensus_components,
+            profile_scores=profile_scores,
+            long_consensus_profiles=long_consensus_profiles,
         )
 
         consensus_rows.append(
@@ -5683,6 +5961,9 @@ def _log_consensus_aggregator_report(
     min_market_cap_usd: float | None,
     max_market_cap_usd: float | None,
     profile_names: list[str],
+    *,
+    consensus_profile_weights: Mapping[str, float] | None = None,
+    inverted_consensus_profiles: frozenset[str] | None = None,
 ) -> None:
     _reset_log_file(log_file)
     log_to_file(
@@ -5697,10 +5978,12 @@ def _log_consensus_aggregator_report(
             f"min_market_cap={min_market_cap_usd} | max_market_cap={max_market_cap_usd}"
         ),
     )
+    weights = consensus_profile_weights or CONSENSUS_PROFILE_WEIGHTS
+    inverted_profiles = inverted_consensus_profiles or INVERTED_CONSENSUS_PROFILES
     log_to_file(
         log_file,
         f"Profiles aggregated: {', '.join(profile_names)} | "
-        f"Profile weights: {', '.join(f'{k}={v:.2f}' for k, v in CONSENSUS_PROFILE_WEIGHTS.items() if k in profile_names)}",
+        f"Profile weights: {', '.join(f'{k}={v:.2f}' for k, v in weights.items() if k in profile_names)}",
     )
     log_to_file(log_file, "")
     log_to_file(log_file, "Methodology")
@@ -5708,7 +5991,7 @@ def _log_consensus_aggregator_report(
     log_to_file(
         log_file,
         "Each profile scores every name independently. The consensus score is a weighted average across all profiles per horizon. "
-        "Fragility_short scores are sign-inverted before aggregation (a bearish fragility call becomes a negative consensus contribution). "
+        "Fragility_short and mean_reversion_exhaustion scores are sign-inverted before aggregation (bearish overlay calls become negative consensus contributions). "
         "Agreement ratio measures what fraction of profiles with directional opinions agree on direction. "
         "Score variance penalizes inconsistent cross-profile readings — names where profiles disagree heavily get lower confidence.",
     )
@@ -6459,6 +6742,11 @@ def _run_consensus_aggregator_duckdb(
     min_market_cap_usd: float | None = None,
     max_market_cap_usd: float | None = None,
     output_dir: str | Path | None = None,
+    *,
+    profile_registry: Any | None = None,
+    consensus_profile_weights: Mapping[str, float] | None = None,
+    inverted_consensus_profiles: frozenset[str] | None = None,
+    long_consensus_profiles: frozenset[str] | None = None,
 ) -> Path:
     industries = _normalize_industries(industries)
     resolved_output_dir = Path(output_dir) if output_dir is not None else None
@@ -6474,6 +6762,10 @@ def _run_consensus_aggregator_duckdb(
     consensus_rows = _build_consensus_scores(
         scan_data=scan_data,
         profile_names=profile_names,
+        profile_registry=profile_registry,
+        consensus_profile_weights=consensus_profile_weights,
+        inverted_consensus_profiles=inverted_consensus_profiles,
+        long_consensus_profiles=long_consensus_profiles,
     )
 
     _log_consensus_aggregator_report(
@@ -6484,6 +6776,8 @@ def _run_consensus_aggregator_duckdb(
         min_market_cap_usd=min_market_cap_usd,
         max_market_cap_usd=max_market_cap_usd,
         profile_names=profile_names,
+        consensus_profile_weights=consensus_profile_weights,
+        inverted_consensus_profiles=inverted_consensus_profiles,
     )
 
     horizon_names = list(DEFAULT_HORIZON_WEIGHTS.keys())
@@ -6547,6 +6841,7 @@ def _log_duckdb_run_overview(
 def run_full_analysis_suite_duckdb(
     scan_data: list[dict[str, Any]] | Mapping[str, Any],
     profile_names: list[str] | None = None,
+    profile_suite_path: str | Path | None = None,
     industries: list[str] | str | None = None,
     min_market_cap_usd: float | None = None,
     max_market_cap_usd: float | None = None,
@@ -6570,9 +6865,17 @@ def run_full_analysis_suite_duckdb(
 
     ``reference_time`` can be supplied to backfill historical data; it controls
     the ISO week partition, run timestamp metadata, and run id timestamp seed.
+
+    Pass ``profile_suite_path`` to run a versioned JSON profile suite
+    (for example ``config/move_prediction_profiles/suites/active_manager_v1.json``).
+    Built-in presets remain the default when omitted.
     """
+    from data_analysis_scripts.trading_view_move_prediction_profile_config import (
+        resolve_profile_suite,
+    )
     from db.trading_view_move_prediction_duckdb import MovePredictionDuckDBStore
 
+    profile_suite = resolve_profile_suite(profile_suite_path, profile_names)
     created_at_utc = reference_time or datetime.now(tz=timezone.utc)
     if created_at_utc.tzinfo is None:
         created_at_utc = created_at_utc.replace(tzinfo=timezone.utc)
@@ -6584,10 +6887,19 @@ def run_full_analysis_suite_duckdb(
         api_request_metadata=api_request_metadata,
     )
     resolved_profiles = [
-        resolve_move_prediction_scoring_profile(profile_name).name
-        for profile_name in list(profile_names or DEFAULT_MOVE_PREDICTION_PROFILE_SUITE)
+        resolve_move_prediction_scoring_profile(
+            profile_name,
+            profile_registry=profile_suite["registry"],
+        ).name
+        for profile_name in profile_suite["profile_names"]
     ]
-    profile_config_snapshots = _build_profile_config_snapshots(resolved_profiles)
+    profile_config_snapshots = _build_profile_config_snapshots(
+        resolved_profiles,
+        profile_registry=profile_suite["registry"],
+        consensus_profile_weights=profile_suite["consensus_profile_weights"],
+        profile_suite_id=profile_suite.get("suite_id"),
+        profile_suite_version=profile_suite.get("suite_version"),
+    )
     profile_config_hashes = {
         snapshot["profile_name"]: snapshot["profile_config_hash"]
         for snapshot in profile_config_snapshots
@@ -6636,7 +6948,10 @@ def run_full_analysis_suite_duckdb(
                     run_id_generated=run_id_generated,
                     notes=(
                         "Week-level DuckDB/Parquet storage path for move-prediction "
-                        "suite. Reports remain isolated per run."
+                        "suite. Reports remain isolated per run. "
+                        f"profile_suite_id={profile_suite.get('suite_id')}; "
+                        f"profile_suite_version={profile_suite.get('suite_version')}; "
+                        f"profile_suite_path={profile_suite.get('source_path')}"
                     ),
                 )
                 duckdb_store.append_profile_config_snapshots(
@@ -6679,6 +6994,12 @@ def run_full_analysis_suite_duckdb(
                     min_market_cap_usd=min_market_cap_usd,
                     max_market_cap_usd=max_market_cap_usd,
                     output_dir=storage_layout.run_output_dir,
+                    profile_registry=profile_suite["registry"],
+                    consensus_profile_weights=profile_suite["consensus_profile_weights"],
+                    inverted_consensus_profiles=profile_suite[
+                        "inverted_consensus_profiles"
+                    ],
+                    long_consensus_profiles=profile_suite["long_consensus_profiles"],
                 )
                 generated_logs["_consensus_aggregator"] = consensus_log
             except Exception:
@@ -6732,6 +7053,10 @@ def run_full_analysis_suite_duckdb(
     )
     result["_duckdb_run_id"] = run_id
     result["_duckdb_profile_config_hashes"] = profile_config_hashes
+    result["_duckdb_profile_names"] = resolved_profiles
+    result["_duckdb_profile_suite_id"] = profile_suite.get("suite_id")
+    result["_duckdb_profile_suite_version"] = profile_suite.get("suite_version")
+    result["_duckdb_profile_suite_path"] = profile_suite.get("source_path")
     result["_duckdb_code_version"] = code_version_metadata
     result["_duckdb_week_dir"] = storage_layout.period_dir
     result["_duckdb_period_dir"] = storage_layout.period_dir
@@ -7966,6 +8291,7 @@ def run_full_analysis_suite_with_earnings_priority(
 def run_full_analysis_suite_with_earnings_priority_duckdb(
     scan_data: list[dict[str, Any]] | Mapping[str, Any],
     profile_names: list[str] | None = None,
+    profile_suite_path: str | Path | None = None,
     industries: list[str] | str | None = None,
     min_market_cap_usd: float | None = None,
     max_market_cap_usd: float | None = None,
@@ -7991,13 +8317,21 @@ def run_full_analysis_suite_with_earnings_priority_duckdb(
     :func:`run_full_analysis_suite_duckdb` and the base suite will not run
     again. This avoids duplicate profile/consensus logs and table writes when
     chaining both functions together.
+
+    ``profile_suite_path`` is forwarded to the base suite when ``base_result``
+    is omitted. When ``base_result`` is supplied, profiles are taken from that
+    run so earnings-priority stays aligned with the base analysis.
     """
+    from data_analysis_scripts.trading_view_move_prediction_profile_config import (
+        resolve_profile_suite,
+    )
     from db.trading_view_move_prediction_duckdb import MovePredictionDuckDBStore
 
     if base_result is None:
         base_result = run_full_analysis_suite_duckdb(
             scan_data=scan_data,
             profile_names=profile_names,
+            profile_suite_path=profile_suite_path,
             industries=industries,
             min_market_cap_usd=min_market_cap_usd,
             max_market_cap_usd=max_market_cap_usd,
@@ -8038,10 +8372,17 @@ def run_full_analysis_suite_with_earnings_priority_duckdb(
         scan_data,
         api_request_metadata=api_request_metadata,
     )
-    resolved_profiles = [
-        resolve_move_prediction_scoring_profile(profile_name).name
-        for profile_name in list(profile_names or DEFAULT_MOVE_PREDICTION_PROFILE_SUITE)
-    ]
+    if base_result.get("_duckdb_profile_names"):
+        resolved_profiles = list(base_result["_duckdb_profile_names"])
+    else:
+        profile_suite = resolve_profile_suite(profile_suite_path, profile_names)
+        resolved_profiles = [
+            resolve_move_prediction_scoring_profile(
+                profile_name,
+                profile_registry=profile_suite["registry"],
+            ).name
+            for profile_name in profile_suite["profile_names"]
+        ]
 
     earnings_priority_dir = run_output_dir / "earnings_priority"
     earnings_priority_dir.mkdir(parents=True, exist_ok=True)

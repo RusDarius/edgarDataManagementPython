@@ -1,0 +1,42 @@
+{
+  "schema_version": "move_prediction_profile_suite_v1",
+  "suite_id": "baseline",
+  "suite_version": "1.0.0",
+  "description": "Frozen built-in preset profiles (10 lenses). Default for backward-compatible runs.",
+  "profile_names": [
+    "breakout_long",
+    "quality_value_compounder",
+    "durable_value_compounder",
+    "value_recovery",
+    "fragility_short",
+    "asymmetric_value",
+    "deep_value_momentum",
+    "early_momentum_inflection",
+    "forward_edge_active",
+    "sector_relative_outperformer"
+  ],
+  "consensus_profile_weights": {
+    "breakout_long": 0.20,
+    "early_momentum_inflection": 0.12,
+    "quality_value_compounder": 0.10,
+    "durable_value_compounder": 0.09,
+    "sector_relative_outperformer": 0.09,
+    "forward_edge_active": 0.11,
+    "asymmetric_value": 0.09,
+    "value_recovery": 0.08,
+    "deep_value_momentum": 0.05,
+    "fragility_short": 0.07
+  },
+  "inverted_consensus_profiles": ["fragility_short"],
+  "long_consensus_profiles": [
+    "breakout_long",
+    "early_momentum_inflection",
+    "forward_edge_active",
+    "quality_value_compounder",
+    "durable_value_compounder",
+    "sector_relative_outperformer",
+    "asymmetric_value",
+    "value_recovery",
+    "deep_value_momentum"
+  ]
+}

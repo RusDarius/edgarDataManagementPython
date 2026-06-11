@@ -1,0 +1,97 @@
+{
+  "schema_version": "move_prediction_profile_file_v1",
+  "profile_id": "sector_rotation_momentum_v1",
+  "base_profile_id": "sector_rotation_momentum",
+  "version": "1.0.0",
+  "effective_from": "2026-06-09",
+  "changelog": "Industry-relative tactical momentum.",
+  "profile": {
+    "name": "sector_rotation_momentum_v1",
+    "description": "Tactical sector-rotation profile combining industry-relative momentum with operational efficiency. Best used with per-industry scans for peer-pure leadership. Complements sector_relative_outperformer with shorter-horizon tape emphasis.",
+    "horizon_weights": {
+      "days": {
+        "attention": 0.1,
+        "event": 0.04,
+        "momentum": 0.28,
+        "trend": 0.22,
+        "quality": 0.18,
+        "valuation": 0.08,
+        "safety": 0.1
+      },
+      "weeks": {
+        "attention": 0.08,
+        "event": 0.03,
+        "momentum": 0.26,
+        "trend": 0.24,
+        "quality": 0.2,
+        "valuation": 0.1,
+        "safety": 0.09
+      },
+      "months": {
+        "attention": 0.04,
+        "event": 0.02,
+        "momentum": 0.18,
+        "trend": 0.2,
+        "quality": 0.28,
+        "valuation": 0.16,
+        "safety": 0.12
+      },
+      "years": {
+        "attention": 0.01,
+        "event": 0.01,
+        "momentum": 0.06,
+        "trend": 0.1,
+        "quality": 0.36,
+        "valuation": 0.26,
+        "safety": 0.2
+      }
+    },
+    "component_signal_weights": {
+      "attention": {
+        "chaikin_money_flow_signal": 1.4,
+        "volume_trend": 1.35
+      },
+      "momentum": {
+        "Perf.W": 1.25,
+        "Perf.1M": 1.35,
+        "Perf.3M": 1.2,
+        "Perf.6M": 1.1,
+        "aroon_spread": 1.15,
+        "adx_directional_spread": 1.1
+      },
+      "quality": {
+        "revenue_per_employee": 1.35,
+        "ebitda_per_employee": 1.3,
+        "return_on_invested_capital": 1.2,
+        "operating_margin": 1.15
+      },
+      "valuation": {
+        "peer_revenue_value_gap": 1.25,
+        "industry_revenue_value_gap": 1.2
+      },
+      "trend": {
+        "close_vs_hullma9": 1.2,
+        "donchian_position": 1.1,
+        "pivot_distance": 0.95
+      }
+    },
+    "component_directional_bias": {
+      "momentum": {
+        "positive_multiplier": 1.3,
+        "negative_multiplier": 0.75
+      },
+      "quality": {
+        "positive_multiplier": 1.2,
+        "negative_multiplier": 1.15
+      }
+    },
+    "missing_component_scores_by_horizon": {},
+    "performance_tracking_periods": {},
+    "intro_metric_notes": [
+      "Tactical sector rotation — run per-industry for peer purity.",
+      "Pair: industry/peer value gaps + CMF + revenue/ebitda per employee."
+    ],
+    "confidence_multiplier": 1.03,
+    "confidence_offset": 0.0
+  }
+}
