@@ -438,3 +438,419 @@ SELECT table_name,
 FROM parquet_exports
 ORDER BY exported_at_utc DESC,
     table_name;
+-- @block
+-- Latest run: today's best/worst movers with model scores for score-vs-price review.
+-- Uses raw_scan_rows.change as same-day % move (TradingView daily change field).
+-- Edit top_n (default 40) or horizon filter as needed; days horizon is the primary short-term lens.
+WITH latest_run AS (
+    SELECT run_id,
+        created_at_utc,
+        run_date_utc
+    FROM run_metadata
+    ORDER BY created_at_utc DESC
+    LIMIT 1
+), today_tape AS (
+    SELECT lr.run_id,
+        lr.created_at_utc AS run_created_at_utc,
+        lr.run_date_utc,
+        r.symbol,
+        r.company,
+        r.sector,
+        r.industry,
+        TRY_CAST(r.close AS DOUBLE) AS close_price,
+        TRY_CAST(r.change AS DOUBLE) AS change_pct,
+        TRY_CAST(r.change_from_open AS DOUBLE) AS change_from_open_pct,
+        TRY_CAST(r.premarket_change AS DOUBLE) AS premarket_change_pct,
+        TRY_CAST(r.postmarket_change AS DOUBLE) AS postmarket_change_pct,
+        TRY_CAST(r."Perf.5D" AS DOUBLE) AS perf_5d_pct,
+        TRY_CAST(r."Perf.W" AS DOUBLE) AS perf_w_pct
+    FROM latest_run lr
+        INNER JOIN raw_scan_rows r ON r.run_id = lr.run_id
+    WHERE TRY_CAST(r.change AS DOUBLE) IS NOT NULL
+),
+ranked_movers AS (
+    SELECT *,
+        ROW_NUMBER() OVER (
+            ORDER BY change_pct DESC NULLS LAST,
+                symbol
+        ) AS gainer_rank,
+        ROW_NUMBER() OVER (
+            ORDER BY change_pct ASC NULLS LAST,
+                symbol
+        ) AS loser_rank
+    FROM today_tape
+),
+mover_cohort AS (
+    SELECT *
+    FROM ranked_movers
+    WHERE gainer_rank <= 40
+        OR loser_rank <= 40
+),
+consensus_scores AS (
+    SELECT c.symbol,
+        c.horizon_name,
+        c.score AS consensus_score,
+        c.risk_adjusted_score AS consensus_risk_adjusted_score,
+        c.direction AS consensus_direction,
+        c.confidence AS consensus_confidence,
+        c.agreement_ratio,
+        c.manager_action_signal AS consensus_manager_action_signal
+    FROM consensus_horizon_scores c
+        INNER JOIN latest_run lr ON c.run_id = lr.run_id
+    WHERE c.horizon_name IN ('days', 'weeks')
+)
+SELECT m.run_created_at_utc,
+    m.run_date_utc,
+    CASE
+        WHEN m.gainer_rank <= 40 THEN 'TOP_GAINER'
+        ELSE 'TOP_LOSER'
+    END AS mover_bucket,
+    m.gainer_rank,
+    m.loser_rank,
+    m.symbol,
+    m.company,
+    m.industry,
+    m.close_price,
+    m.change_pct,
+    m.change_from_open_pct,
+    m.premarket_change_pct,
+    m.postmarket_change_pct,
+    m.perf_5d_pct,
+    m.perf_w_pct,
+    cs_days.consensus_score AS consensus_days_score,
+    cs_days.consensus_risk_adjusted_score AS consensus_days_risk_adjusted_score,
+    cs_days.consensus_direction AS consensus_days_direction,
+    cs_weeks.consensus_score AS consensus_weeks_score,
+    cs_weeks.consensus_risk_adjusted_score AS consensus_weeks_risk_adjusted_score,
+    cs_weeks.consensus_direction AS consensus_weeks_direction,
+    cs_weeks.agreement_ratio AS consensus_weeks_agreement_ratio,
+    h.profile_name,
+    h.horizon_name,
+    h.score,
+    h.risk_adjusted_score,
+    h.confidence,
+    h.risk_tier,
+    h.manager_action_signal
+FROM mover_cohort m
+    LEFT JOIN consensus_scores cs_days ON (
+        cs_days.symbol = m.symbol
+        OR cs_days.symbol LIKE '%:' || m.symbol
+        OR m.symbol LIKE '%:' || cs_days.symbol
+    )
+    AND cs_days.horizon_name = 'days'
+    LEFT JOIN consensus_scores cs_weeks ON (
+        cs_weeks.symbol = m.symbol
+        OR cs_weeks.symbol LIKE '%:' || m.symbol
+        OR m.symbol LIKE '%:' || cs_weeks.symbol
+    )
+    AND cs_weeks.horizon_name = 'weeks'
+    LEFT JOIN profile_horizon_scores h ON h.run_id = m.run_id
+    AND (
+        h.symbol = m.symbol
+        OR h.symbol LIKE '%:' || m.symbol
+        OR m.symbol LIKE '%:' || h.symbol
+    )
+    AND h.horizon_name IN ('days', 'weeks')
+ORDER BY m.change_pct DESC NULLS LAST,
+    m.symbol,
+    h.profile_name,
+    CASE
+        h.horizon_name
+        WHEN 'days' THEN 1
+        WHEN 'weeks' THEN 2
+        ELSE 99
+    END;
+-- @block
+-- Latest run: compact top-gainer scoreboard (one row per symbol) for quick score/price eyeballing.
+-- Shows best consensus + best profile days score beside today's tape.
+WITH latest_run AS (
+    SELECT run_id,
+        created_at_utc,
+        run_date_utc
+    FROM run_metadata
+    ORDER BY created_at_utc DESC
+    LIMIT 1
+), today_tape AS (
+    SELECT lr.run_id,
+        lr.created_at_utc AS run_created_at_utc,
+        lr.run_date_utc,
+        r.symbol,
+        MAX(r.company) AS company,
+        MAX(r.sector) AS sector,
+        MAX(r.industry) AS industry,
+        MAX(TRY_CAST(r.close AS DOUBLE)) AS close_price,
+        MAX(TRY_CAST(r.change AS DOUBLE)) AS change_pct,
+        MAX(TRY_CAST(r.change_from_open AS DOUBLE)) AS change_from_open_pct,
+        MAX(TRY_CAST(r."Perf.5D" AS DOUBLE)) AS perf_5d_pct
+    FROM latest_run lr
+        INNER JOIN raw_scan_rows r ON r.run_id = lr.run_id
+    WHERE TRY_CAST(r.change AS DOUBLE) IS NOT NULL
+    GROUP BY lr.run_id,
+        lr.created_at_utc,
+        lr.run_date_utc,
+        r.symbol
+),
+profile_days AS (
+    SELECT h.symbol,
+        MAX(
+            CASE
+                WHEN h.horizon_name = 'days' THEN h.score
+            END
+        ) AS best_days_score,
+        max_by(
+            h.profile_name,
+            CASE
+                WHEN h.horizon_name = 'days' THEN h.score
+            END
+        ) AS best_days_profile,
+        MAX(
+            CASE
+                WHEN h.horizon_name = 'days' THEN h.risk_adjusted_score
+            END
+        ) AS best_days_risk_adjusted_score,
+        MAX(
+            CASE
+                WHEN h.horizon_name = 'weeks' THEN h.score
+            END
+        ) AS best_weeks_score,
+        max_by(
+            h.profile_name,
+            CASE
+                WHEN h.horizon_name = 'weeks' THEN h.score
+            END
+        ) AS best_weeks_profile,
+        COUNT(DISTINCT h.profile_name) FILTER (
+            WHERE h.horizon_name = 'days'
+                AND h.direction IN ('Strong Up', 'Up')
+        ) AS bullish_days_profiles,
+        COUNT(DISTINCT h.profile_name) FILTER (
+            WHERE h.horizon_name = 'days'
+        ) AS days_profiles_scored
+    FROM profile_horizon_scores h
+        INNER JOIN latest_run lr ON h.run_id = lr.run_id
+    GROUP BY h.symbol
+),
+consensus_days AS (
+    SELECT c.symbol,
+        c.score AS consensus_days_score,
+        c.risk_adjusted_score AS consensus_days_risk_adjusted_score,
+        c.direction AS consensus_days_direction,
+        c.agreement_ratio AS consensus_days_agreement_ratio,
+        c.manager_action_signal AS consensus_days_manager_action_signal
+    FROM consensus_horizon_scores c
+        INNER JOIN latest_run lr ON c.run_id = lr.run_id
+    WHERE c.horizon_name = 'days'
+)
+SELECT t.run_created_at_utc,
+    t.run_date_utc,
+    t.symbol,
+    t.company,
+    t.sector,
+    t.industry,
+    t.close_price,
+    t.change_pct,
+    t.change_from_open_pct,
+    t.perf_5d_pct,
+    cd.consensus_days_score,
+    cd.consensus_days_risk_adjusted_score,
+    cd.consensus_days_direction,
+    cd.consensus_days_agreement_ratio,
+    cd.consensus_days_manager_action_signal,
+    pd.best_days_score,
+    pd.best_days_profile,
+    pd.best_days_risk_adjusted_score,
+    pd.best_weeks_score,
+    pd.best_weeks_profile,
+    pd.bullish_days_profiles,
+    pd.days_profiles_scored
+FROM today_tape t
+    LEFT JOIN consensus_days cd ON (
+        cd.symbol = t.symbol
+        OR cd.symbol LIKE '%:' || t.symbol
+        OR t.symbol LIKE '%:' || cd.symbol
+    )
+    LEFT JOIN profile_days pd ON (
+        pd.symbol = t.symbol
+        OR pd.symbol LIKE '%:' || t.symbol
+        OR t.symbol LIKE '%:' || pd.symbol
+    )
+ORDER BY t.change_pct DESC NULLS LAST,
+    t.symbol
+LIMIT 80;
+-- @block
+-- Latest run: which profile/horizon is most aligned with TODAY's price move (change field).
+-- Ranks profiles by correlation and top-vs-bottom decile spread on same-day % change.
+-- Prefer days horizon for intraday/daily tuning; weeks included for context.
+WITH latest_run AS (
+    SELECT run_id,
+        created_at_utc,
+        run_date_utc
+    FROM run_metadata
+    ORDER BY created_at_utc DESC
+    LIMIT 1
+), scored_with_today AS (
+    SELECT h.profile_name,
+        h.horizon_name,
+        h.symbol,
+        h.score,
+        h.risk_adjusted_score,
+        h.direction,
+        h.confidence,
+        CASE
+            WHEN h.direction IN ('Strong Up', 'Up') THEN 1
+            WHEN h.direction IN ('Strong Down', 'Down') THEN -1
+            ELSE 0
+        END AS direction_sign,
+        TRY_CAST(r.change AS DOUBLE) AS change_pct,
+        TRY_CAST(r.change_from_open AS DOUBLE) AS change_from_open_pct
+    FROM profile_horizon_scores h
+        INNER JOIN latest_run lr ON h.run_id = lr.run_id
+        INNER JOIN raw_scan_rows r ON r.run_id = h.run_id
+        AND (
+            r.symbol = h.symbol
+            OR r.symbol LIKE '%:' || h.symbol
+            OR h.symbol LIKE '%:' || r.symbol
+        )
+    WHERE TRY_CAST(r.change AS DOUBLE) IS NOT NULL
+        AND h.score IS NOT NULL
+),
+cohorted AS (
+    SELECT *,
+        NTILE(10) OVER (
+            PARTITION BY profile_name,
+            horizon_name
+            ORDER BY score DESC NULLS LAST
+        ) AS score_decile
+    FROM scored_with_today
+),
+profile_alignment AS (
+    SELECT profile_name,
+        horizon_name,
+        COUNT(*) AS scored_symbols,
+        CORR(score, change_pct) AS score_change_corr,
+        CORR(risk_adjusted_score, change_pct) AS ras_change_corr,
+        CORR(direction_sign, change_pct) AS direction_change_corr,
+        CORR(confidence, ABS(change_pct)) AS confidence_abs_move_corr,
+        AVG(
+            CASE
+                WHEN score_decile = 1 THEN change_pct
+            END
+        ) AS top_decile_avg_change_pct,
+        AVG(
+            CASE
+                WHEN score_decile = 10 THEN change_pct
+            END
+        ) AS bottom_decile_avg_change_pct,
+        AVG(
+            CASE
+                WHEN direction_sign > 0 THEN change_pct
+            END
+        ) AS bullish_cohort_avg_change_pct,
+        AVG(
+            CASE
+                WHEN direction_sign < 0 THEN change_pct
+            END
+        ) AS bearish_cohort_avg_change_pct,
+        AVG(
+            CASE
+                WHEN direction_sign > 0
+                AND change_pct > 0 THEN 1.0
+                WHEN direction_sign > 0
+                AND change_pct <= 0 THEN 0.0
+            END
+        ) AS bullish_hit_rate,
+        AVG(
+            CASE
+                WHEN direction_sign < 0
+                AND change_pct < 0 THEN 1.0
+                WHEN direction_sign < 0
+                AND change_pct >= 0 THEN 0.0
+            END
+        ) AS bearish_hit_rate
+    FROM cohorted
+    GROUP BY profile_name,
+        horizon_name
+),
+consensus_alignment AS (
+    SELECT 'consensus' AS profile_name,
+        c.horizon_name,
+        COUNT(*) AS scored_symbols,
+        CORR(c.score, TRY_CAST(r.change AS DOUBLE)) AS score_change_corr,
+        CORR(
+            c.risk_adjusted_score,
+            TRY_CAST(r.change AS DOUBLE)
+        ) AS ras_change_corr,
+        CORR(
+            CASE
+                WHEN c.direction IN ('Strong Up', 'Up') THEN 1
+                WHEN c.direction IN ('Strong Down', 'Down') THEN -1
+                ELSE 0
+            END,
+            TRY_CAST(r.change AS DOUBLE)
+        ) AS direction_change_corr,
+        CORR(c.confidence, ABS(TRY_CAST(r.change AS DOUBLE))) AS confidence_abs_move_corr,
+        NULL::DOUBLE AS top_decile_avg_change_pct,
+        NULL::DOUBLE AS bottom_decile_avg_change_pct,
+        AVG(
+            CASE
+                WHEN c.direction IN ('Strong Up', 'Up') THEN TRY_CAST(r.change AS DOUBLE)
+            END
+        ) AS bullish_cohort_avg_change_pct,
+        AVG(
+            CASE
+                WHEN c.direction IN ('Strong Down', 'Down') THEN TRY_CAST(r.change AS DOUBLE)
+            END
+        ) AS bearish_cohort_avg_change_pct,
+        AVG(
+            CASE
+                WHEN c.direction IN ('Strong Up', 'Up')
+                AND TRY_CAST(r.change AS DOUBLE) > 0 THEN 1.0
+                WHEN c.direction IN ('Strong Up', 'Up')
+                AND TRY_CAST(r.change AS DOUBLE) <= 0 THEN 0.0
+            END
+        ) AS bullish_hit_rate,
+        AVG(
+            CASE
+                WHEN c.direction IN ('Strong Down', 'Down')
+                AND TRY_CAST(r.change AS DOUBLE) < 0 THEN 1.0
+                WHEN c.direction IN ('Strong Down', 'Down')
+                AND TRY_CAST(r.change AS DOUBLE) >= 0 THEN 0.0
+            END
+        ) AS bearish_hit_rate
+    FROM consensus_horizon_scores c
+        INNER JOIN latest_run lr ON c.run_id = lr.run_id
+        INNER JOIN raw_scan_rows r ON r.run_id = c.run_id
+        AND (
+            r.symbol = c.symbol
+            OR r.symbol LIKE '%:' || c.symbol
+            OR c.symbol LIKE '%:' || r.symbol
+        )
+    WHERE TRY_CAST(r.change AS DOUBLE) IS NOT NULL
+        AND c.score IS NOT NULL
+    GROUP BY c.horizon_name
+)
+SELECT *,
+    top_decile_avg_change_pct - bottom_decile_avg_change_pct AS top_minus_bottom_decile_spread,
+    CASE
+        WHEN ras_change_corr >= 0.25 THEN 'ALIGNED'
+        WHEN ras_change_corr <= -0.10 THEN 'CONTRARIAN'
+        ELSE 'NEUTRAL'
+    END AS alignment_label
+FROM (
+        SELECT *
+        FROM profile_alignment
+        UNION ALL
+        SELECT *
+        FROM consensus_alignment
+    ) aligned
+ORDER BY CASE
+        horizon_name
+        WHEN 'days' THEN 1
+        WHEN 'weeks' THEN 2
+        WHEN 'months' THEN 3
+        WHEN 'years' THEN 4
+        ELSE 99
+    END,
+    ras_change_corr DESC NULLS LAST,
+    top_minus_bottom_decile_spread DESC NULLS LAST,
+    profile_name;

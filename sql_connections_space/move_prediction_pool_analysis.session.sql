@@ -1,22 +1,18 @@
 -- DuckDB query session for TradingView move prediction POOL analysis
--- Connection target: move_prediction_run_pool database (pooled_move_prediction_runs.duckdb)
--- Purpose: Analyze aggregated multi-week/run data for profile performance and pattern discovery
-
+-- Connection: pooled_move_prediction_runs.duckdb
+-- Run one @block at a time in DBCode/SQLTools — click the q_pool_* line only.
+-- Block documentation: move_prediction_pool_analysis.block_reference.txt
 -- ============================================================
 -- 1. DATABASE INVENTORY & METADATA
 -- ============================================================
--- @block
--- Show all tables in the pooled database
+-- @block q_pool_list_tables
 SELECT table_name,
     table_type
 FROM information_schema.tables
 WHERE table_schema = 'main'
 ORDER BY table_name;
-
--- @block
--- Pool aggregation summary
-SELECT
-    pool_aggregation_id,
+-- @block q_pool_aggregation_summary
+SELECT pool_aggregation_id,
     created_at_utc,
     source_database_count,
     source_run_count,
@@ -25,97 +21,528 @@ SELECT
 FROM pool_aggregation_runs
 ORDER BY created_at_utc DESC
 LIMIT 5;
-
--- @block
--- Source databases inventory (weeks included)
-SELECT
-    source_iso_year as year,
-    source_iso_week as week,
-    COUNT(*) as databases,
-    SUM(run_count) as total_runs,
-    MIN(ingested_at_utc) as first_ingested,
-    MAX(ingested_at_utc) as last_ingested
+-- @block q_pool_source_inventory
+SELECT source_iso_year AS year,
+    source_iso_week AS week,
+    COUNT(*) AS databases,
+    SUM(run_count) AS total_runs,
+    MIN(ingested_at_utc) AS first_ingested,
+    MAX(ingested_at_utc) AS last_ingested
 FROM pool_source_databases
-GROUP BY source_iso_year, source_iso_week
-ORDER BY source_iso_year DESC, source_iso_week DESC;
-
+GROUP BY source_iso_year,
+    source_iso_week
+ORDER BY source_iso_year DESC,
+    source_iso_week DESC;
 -- ============================================================
 -- 2. TOP PERFORMING PROFILES - BY SCORE METRICS
 -- ============================================================
--- @block
--- Profile performance ranking (weeks horizon primary)
-SELECT
-    profile_name,
-    COUNT(DISTINCT run_id) as runs_present,
-    COUNT(DISTINCT symbol) as total_symbols_scored,
-    AVG(score) as avg_score,
-    AVG(risk_adjusted_score) as avg_risk_adjusted_score,
-    AVG(confidence) as avg_confidence,
-    AVG(coverage) as avg_coverage,
-    STDDEV(score) as score_volatility,
-    AVG(CASE WHEN direction > 0 THEN 1.0 ELSE 0.0 END) as bullish_bias_ratio,
-    AVG(CASE WHEN confidence >= 0.7 THEN 1.0 ELSE 0.0 END) as high_confidence_ratio,
-    AVG(CASE WHEN score >= 80 THEN 1.0 ELSE 0.0 END) as high_score_ratio,
-    MAX(score) as max_score_achieved,
-    COUNT(DISTINCT sector) as sectors_covered
+-- @block q_pool_profile_performance_weeks
+SELECT profile_name,
+    COUNT(DISTINCT run_id) AS runs_present,
+    COUNT(DISTINCT symbol) AS total_symbols_scored,
+    AVG(score) AS avg_score,
+    AVG(risk_adjusted_score) AS avg_risk_adjusted_score,
+    AVG(confidence) AS avg_confidence,
+    AVG(coverage) AS avg_coverage,
+    STDDEV(score) AS score_volatility,
+    AVG(
+        CASE
+            WHEN direction IN ('Strong Up', 'Up') THEN 1.0
+            ELSE 0.0
+        END
+    ) AS bullish_bias_ratio,
+    AVG(
+        CASE
+            WHEN confidence >= 70 THEN 1.0
+            ELSE 0.0
+        END
+    ) AS high_confidence_ratio,
+    AVG(
+        CASE
+            WHEN score >= 1.10 THEN 1.0
+            ELSE 0.0
+        END
+    ) AS strong_up_ratio,
+    MAX(score) AS max_score_achieved,
+    COUNT(DISTINCT sector) AS sectors_covered
 FROM pool_profile_horizon_scores
 WHERE horizon_name = 'weeks'
 GROUP BY profile_name
 ORDER BY avg_risk_adjusted_score DESC NULLS LAST;
-
--- @block
--- Profile performance by horizon
-SELECT
-    profile_name,
+-- @block q_pool_profile_performance_by_horizon
+SELECT profile_name,
     horizon_name,
-    COUNT(*) as rows,
-    AVG(score) as avg_score,
-    AVG(risk_adjusted_score) as avg_risk_adj,
-    AVG(confidence) as avg_confidence,
-    AVG(CASE WHEN direction > 0 THEN 1.0 ELSE 0.0 END) as bullish_ratio
+    COUNT(*) AS rows,
+    AVG(score) AS avg_score,
+    AVG(risk_adjusted_score) AS avg_risk_adj,
+    AVG(confidence) AS avg_confidence,
+    AVG(
+        CASE
+            WHEN direction IN ('Strong Up', 'Up') THEN 1.0
+            ELSE 0.0
+        END
+    ) AS bullish_ratio
 FROM pool_profile_horizon_scores
-GROUP BY profile_name, horizon_name
+GROUP BY profile_name,
+    horizon_name
 ORDER BY profile_name,
-    CASE horizon_name
+    CASE
+        horizon_name
         WHEN 'days' THEN 1
         WHEN 'weeks' THEN 2
         WHEN 'months' THEN 3
         WHEN 'years' THEN 4
         ELSE 5
     END;
-
+-- @block q_pool_profile_weekly_score_price_layer
+-- Run: use "Run block" codelens on this line, or put cursor on WITH below. Ctrl+Enter on @block alone is empty.
+WITH scored_with_price AS (
+    SELECT s.profile_name,
+        s.source_iso_year,
+        s.source_iso_week,
+        s.horizon_name,
+        s.run_id,
+        s.symbol,
+        s.score,
+        s.risk_adjusted_score,
+        s.direction,
+        CASE
+            WHEN s.direction IN ('Strong Up', 'Up') THEN 1
+            WHEN s.direction IN ('Strong Down', 'Down') THEN -1
+            ELSE 0
+        END AS direction_sign,
+        TRY_CAST(r.change AS DOUBLE) AS change_pct,
+        TRY_CAST(r."Perf.W" AS DOUBLE) AS perf_w_pct,
+        TRY_CAST(r."Perf.1M" AS DOUBLE) AS perf_1m_pct,
+        TRY_CAST(r."Perf.5D" AS DOUBLE) AS perf_5d_pct
+    FROM pool_profile_horizon_scores AS s
+        INNER JOIN pool_raw_scan_rows AS r ON s.pool_aggregation_id = r.pool_aggregation_id
+        AND s.source_database_path = r.source_database_path
+        AND s.run_id = r.run_id
+        AND (
+            s.symbol = r.symbol
+            OR r.symbol LIKE '%:' || s.symbol
+            OR s.symbol LIKE '%:' || r.symbol
+        )
+    WHERE s.horizon_name = 'weeks'
+),
+cohorted AS (
+    SELECT *,
+        NTILE(10) OVER (
+            PARTITION BY profile_name,
+            source_iso_year,
+            source_iso_week,
+            horizon_name
+            ORDER BY score DESC NULLS LAST
+        ) AS score_decile
+    FROM scored_with_price
+    WHERE score IS NOT NULL
+)
+SELECT profile_name,
+    source_iso_year AS year,
+    source_iso_week AS week,
+    horizon_name,
+    COUNT(DISTINCT symbol) AS symbols_scored,
+    COUNT(DISTINCT run_id) AS runs_in_week,
+    AVG(score) AS avg_score,
+    AVG(risk_adjusted_score) AS avg_risk_adj,
+    AVG(change_pct) AS avg_same_day_change_pct,
+    AVG(perf_w_pct) AS avg_perf_w_pct,
+    AVG(perf_1m_pct) AS avg_perf_1m_pct,
+    AVG(perf_5d_pct) AS avg_perf_5d_pct,
+    CORR(score, change_pct) AS week_score_change_corr,
+    CORR(score, perf_w_pct) AS week_score_perf_w_corr,
+    CORR(risk_adjusted_score, perf_w_pct) AS week_ras_perf_w_corr,
+    CORR(risk_adjusted_score, perf_1m_pct) AS week_ras_perf_1m_corr,
+    AVG(
+        CASE
+            WHEN score_decile = 1 THEN perf_w_pct
+        END
+    ) AS top_decile_avg_perf_w,
+    AVG(
+        CASE
+            WHEN score_decile = 10 THEN perf_w_pct
+        END
+    ) AS bottom_decile_avg_perf_w,
+    AVG(
+        CASE
+            WHEN direction_sign > 0
+            AND perf_w_pct > 0 THEN 1.0
+            WHEN direction_sign > 0
+            AND perf_w_pct <= 0 THEN 0.0
+        END
+    ) AS bullish_perf_w_hit_rate,
+    AVG(
+        CASE
+            WHEN direction_sign < 0
+            AND perf_w_pct < 0 THEN 1.0
+            WHEN direction_sign < 0
+            AND perf_w_pct >= 0 THEN 0.0
+        END
+    ) AS bearish_perf_w_hit_rate
+FROM cohorted
+GROUP BY profile_name,
+    source_iso_year,
+    source_iso_week,
+    horizon_name
+HAVING COUNT(*) >= 20
+ORDER BY profile_name,
+    source_iso_year DESC,
+    source_iso_week DESC;
+-- @block q_pool_profile_strongest_score_price_corr
+-- Run: use "Run block" codelens on this line, or put cursor on WITH below. Ctrl+Enter on @block alone is empty.
+-- Threshold ladder: ALL baseline, then score >= 0.35 / 1.10 / 1.50 / 2.00, plus TOP_DECILE per ISO week.
+WITH scored_with_price AS (
+    SELECT s.profile_name,
+        s.horizon_name,
+        s.source_iso_year,
+        s.source_iso_week,
+        s.run_id,
+        s.symbol,
+        s.score,
+        s.risk_adjusted_score,
+        CASE
+            WHEN s.direction IN ('Strong Up', 'Up') THEN 1
+            WHEN s.direction IN ('Strong Down', 'Down') THEN -1
+            ELSE 0
+        END AS direction_sign,
+        TRY_CAST(r.change AS DOUBLE) AS change_pct,
+        TRY_CAST(r."Perf.W" AS DOUBLE) AS perf_w_pct,
+        TRY_CAST(r."Perf.1M" AS DOUBLE) AS perf_1m_pct,
+        TRY_CAST(r."Perf.5D" AS DOUBLE) AS perf_5d_pct
+    FROM pool_profile_horizon_scores AS s
+        INNER JOIN pool_raw_scan_rows AS r ON s.pool_aggregation_id = r.pool_aggregation_id
+        AND s.source_database_path = r.source_database_path
+        AND s.run_id = r.run_id
+        AND (
+            s.symbol = r.symbol
+            OR r.symbol LIKE '%:' || s.symbol
+            OR s.symbol LIKE '%:' || r.symbol
+        )
+    WHERE s.horizon_name = 'weeks'
+        AND s.score IS NOT NULL
+),
+deciled AS (
+    SELECT *,
+        NTILE(10) OVER (
+            PARTITION BY profile_name,
+            source_iso_year,
+            source_iso_week
+            ORDER BY score DESC NULLS LAST
+        ) AS score_decile
+    FROM scored_with_price
+),
+score_thresholds AS (
+    SELECT *
+    FROM (
+            VALUES ('ALL', NULL::DOUBLE, 0),
+                ('BULLISH_UP', 0.35, 1),
+                ('STRONG_UP', 1.10, 2),
+                ('VERY_HIGH', 1.50, 3),
+                ('ELITE', 2.00, 4),
+                ('TOP_DECILE', NULL::DOUBLE, 5)
+        ) AS t(score_slice, min_score, slice_order)
+),
+sliced AS (
+    SELECT s.profile_name,
+        s.horizon_name,
+        s.source_iso_year,
+        s.source_iso_week,
+        s.run_id,
+        s.symbol,
+        s.score,
+        s.risk_adjusted_score,
+        s.direction_sign,
+        s.change_pct,
+        s.perf_w_pct,
+        s.perf_1m_pct,
+        s.perf_5d_pct,
+        t.score_slice,
+        t.min_score,
+        t.slice_order
+    FROM deciled AS s
+        CROSS JOIN score_thresholds AS t
+    WHERE (t.score_slice = 'ALL')
+        OR (
+            t.score_slice = 'TOP_DECILE'
+            AND s.score_decile = 1
+        )
+        OR (
+            t.min_score IS NOT NULL
+            AND s.score >= t.min_score
+        )
+),
+slice_corrs AS (
+    SELECT profile_name,
+        horizon_name,
+        score_slice,
+        min_score,
+        slice_order,
+        COUNT(*) AS pair_count,
+        COUNT(
+            DISTINCT source_iso_year || '-' || source_iso_week
+        ) AS snapshot_weeks,
+        COUNT(perf_w_pct) AS perf_w_obs_count,
+        COUNT(perf_1m_pct) AS perf_1m_obs_count,
+        ROUND(STDDEV_SAMP(direction_sign), 4) AS direction_sign_stddev,
+        ROUND(AVG(score), 3) AS avg_score_in_slice,
+        ROUND(AVG(risk_adjusted_score), 3) AS avg_ras_in_slice,
+        ROUND(AVG(perf_w_pct), 3) AS avg_perf_w_pct,
+        ROUND(AVG(perf_1m_pct), 3) AS avg_perf_1m_pct,
+        ROUND(
+            AVG(
+                CASE
+                    WHEN direction_sign > 0
+                    AND perf_w_pct > 0 THEN 1.0
+                    WHEN direction_sign > 0
+                    AND perf_w_pct <= 0 THEN 0.0
+                END
+            ),
+            3
+        ) AS bullish_perf_w_hit_rate,
+        CORR(score, change_pct) AS score_vs_change_corr,
+        CORR(score, perf_w_pct) AS score_vs_perf_w_corr,
+        CORR(score, perf_1m_pct) AS score_vs_perf_1m_corr,
+        CORR(score, perf_5d_pct) AS score_vs_perf_5d_corr,
+        CORR(risk_adjusted_score, perf_w_pct) AS ras_vs_perf_w_corr,
+        CORR(risk_adjusted_score, perf_1m_pct) AS ras_vs_perf_1m_corr,
+        CASE
+            WHEN STDDEV_SAMP(direction_sign) > 0 THEN CORR(direction_sign, perf_w_pct)
+        END AS direction_vs_perf_w_corr
+    FROM sliced
+    GROUP BY profile_name,
+        horizon_name,
+        score_slice,
+        min_score,
+        slice_order
+    HAVING COUNT(*) >= CASE
+            score_slice
+            WHEN 'ALL' THEN 50
+            WHEN 'ELITE' THEN 10
+            WHEN 'TOP_DECILE' THEN 15
+            ELSE 20
+        END
+),
+weekly_slice_corrs AS (
+    SELECT profile_name,
+        horizon_name,
+        score_slice,
+        source_iso_year,
+        source_iso_week,
+        COUNT(*) AS week_pair_count,
+        COUNT(perf_w_pct) AS week_perf_w_obs_count,
+        CORR(score, perf_w_pct) AS week_score_perf_w_corr,
+        CORR(risk_adjusted_score, perf_w_pct) AS week_ras_perf_w_corr,
+        AVG(perf_w_pct) AS week_avg_perf_w_pct
+    FROM sliced
+    GROUP BY profile_name,
+        horizon_name,
+        score_slice,
+        source_iso_year,
+        source_iso_week
+    HAVING COUNT(*) >= CASE score_slice
+            WHEN 'ALL' THEN 8
+            WHEN 'ELITE' THEN 3
+            WHEN 'VERY_HIGH' THEN 4
+            ELSE 5
+        END
+        AND COUNT(perf_w_pct) >= CASE score_slice
+            WHEN 'ELITE' THEN 3
+            ELSE 5
+        END
+),
+snapshot_stats AS (
+    SELECT profile_name,
+        horizon_name,
+        score_slice,
+        COUNT(*) AS weekly_snapshots_with_corr,
+        ROUND(AVG(week_score_perf_w_corr), 4) AS mean_weekly_score_perf_w_corr,
+        ROUND(MEDIAN(week_score_perf_w_corr), 4) AS median_weekly_score_perf_w_corr,
+        ROUND(
+            AVG(
+                CASE
+                    WHEN week_score_perf_w_corr IS NOT NULL
+                    AND week_score_perf_w_corr >= 0.30 THEN 1.0
+                    WHEN week_score_perf_w_corr IS NOT NULL THEN 0.0
+                END
+            ),
+            3
+        ) AS pct_weeks_strong_aligned,
+        ROUND(
+            AVG(
+                CASE
+                    WHEN week_score_perf_w_corr IS NOT NULL
+                    AND week_score_perf_w_corr >= 0.10 THEN 1.0
+                    WHEN week_score_perf_w_corr IS NOT NULL THEN 0.0
+                END
+            ),
+            3
+        ) AS pct_weeks_moderate_aligned
+    FROM weekly_slice_corrs
+    WHERE week_score_perf_w_corr IS NOT NULL
+        AND week_score_perf_w_corr = week_score_perf_w_corr
+    GROUP BY profile_name,
+        horizon_name,
+        score_slice
+),
+baseline AS (
+    SELECT profile_name,
+        horizon_name,
+        score_vs_perf_w_corr AS baseline_score_perf_w_corr,
+        ras_vs_perf_w_corr AS baseline_ras_perf_w_corr,
+        direction_vs_perf_w_corr AS baseline_direction_perf_w_corr,
+        bullish_perf_w_hit_rate AS baseline_bullish_hit_rate
+    FROM slice_corrs
+    WHERE score_slice = 'ALL'
+),
+corr_long AS (
+    SELECT profile_name,
+        horizon_name,
+        score_slice,
+        slice_order,
+        pair_count,
+        metric_name,
+        corr_value
+    FROM slice_corrs UNPIVOT (
+            corr_value FOR metric_name IN (
+                score_vs_change_corr,
+                score_vs_perf_w_corr,
+                score_vs_perf_1m_corr,
+                score_vs_perf_5d_corr,
+                ras_vs_perf_w_corr,
+                ras_vs_perf_1m_corr,
+                direction_vs_perf_w_corr
+            )
+        )
+),
+valid_corr_long AS (
+    SELECT *
+    FROM corr_long
+    WHERE corr_value IS NOT NULL
+        AND corr_value = corr_value
+        AND isfinite(corr_value)
+),
+ranked_metrics AS (
+    SELECT *,
+        ROW_NUMBER() OVER (
+            PARTITION BY profile_name,
+            horizon_name,
+            score_slice
+            ORDER BY ABS(corr_value) DESC NULLS LAST,
+                corr_value DESC NULLS LAST
+        ) AS metric_rank
+    FROM valid_corr_long
+)
+SELECT c.profile_name,
+    c.horizon_name,
+    c.score_slice,
+    c.min_score,
+    c.pair_count,
+    c.snapshot_weeks,
+    c.perf_w_obs_count,
+    c.direction_sign_stddev,
+    r.metric_name AS strongest_metric,
+    ROUND(r.corr_value, 4) AS strongest_corr,
+    ROUND(ABS(r.corr_value), 4) AS strongest_corr_abs,
+    CASE
+        WHEN r.corr_value IS NULL THEN 'NO_VALID_CORR'
+        WHEN r.corr_value >= 0.30 THEN 'STRONG_ALIGNED'
+        WHEN r.corr_value >= 0.10 THEN 'MODERATE_ALIGNED'
+        WHEN r.corr_value <= -0.10 THEN 'CONTRARIAN'
+        ELSE 'WEAK'
+    END AS alignment_label,
+    c.avg_score_in_slice,
+    c.avg_ras_in_slice,
+    c.avg_perf_w_pct,
+    c.avg_perf_1m_pct,
+    c.bullish_perf_w_hit_rate,
+    ROUND(c.score_vs_perf_w_corr, 4) AS score_vs_perf_w_corr,
+    ROUND(c.ras_vs_perf_w_corr, 4) AS ras_vs_perf_w_corr,
+    ROUND(b.baseline_score_perf_w_corr, 4) AS baseline_score_perf_w_corr,
+    ROUND(
+        c.score_vs_perf_w_corr - b.baseline_score_perf_w_corr,
+        4
+    ) AS score_perf_w_lift_vs_all,
+    ROUND(
+        c.ras_vs_perf_w_corr - b.baseline_ras_perf_w_corr,
+        4
+    ) AS ras_perf_w_lift_vs_all,
+    ROUND(
+        c.bullish_perf_w_hit_rate - b.baseline_bullish_hit_rate,
+        3
+    ) AS bullish_hit_lift_vs_all,
+    ss.weekly_snapshots_with_corr,
+    ss.mean_weekly_score_perf_w_corr,
+    ss.median_weekly_score_perf_w_corr,
+    ss.pct_weeks_strong_aligned,
+    ss.pct_weeks_moderate_aligned,
+    CASE
+        WHEN c.direction_sign_stddev = 0
+        OR c.direction_sign_stddev IS NULL THEN 'direction_constant_in_slice'
+        WHEN c.perf_w_obs_count < 20 THEN 'sparse_price_data'
+        WHEN ss.weekly_snapshots_with_corr IS NULL
+        OR ss.weekly_snapshots_with_corr < 2 THEN 'insufficient_weekly_snapshots'
+        ELSE NULL
+    END AS null_diag_note
+FROM slice_corrs AS c
+    LEFT JOIN ranked_metrics AS r ON c.profile_name = r.profile_name
+    AND c.horizon_name = r.horizon_name
+    AND c.score_slice = r.score_slice
+    AND r.metric_rank = 1
+    LEFT JOIN baseline AS b ON c.profile_name = b.profile_name
+    AND c.horizon_name = b.horizon_name
+    LEFT JOIN snapshot_stats AS ss ON c.profile_name = ss.profile_name
+    AND c.horizon_name = ss.horizon_name
+    AND c.score_slice = ss.score_slice
+ORDER BY c.profile_name,
+    c.slice_order,
+    strongest_corr_abs DESC NULLS LAST;
 -- ============================================================
 -- 3. STOCK COMPOSITE RANKINGS - MULTI-PROFILE CONSENSUS
 -- ============================================================
--- @block
--- Top stocks by composite ranking (appears in multiple profiles)
+-- @block q_pool_composite_stock_rankings
 WITH stock_aggregates AS (
-    SELECT
-        symbol,
-        MAX(company) as company,
-        MAX(sector) as sector,
-        MAX(industry) as industry,
-        COUNT(DISTINCT profile_name) as profile_appearances,
-        COUNT(DISTINCT run_id) as run_appearances,
-        COUNT(DISTINCT CASE WHEN direction > 0 THEN profile_name END) as bullish_profiles,
-        COUNT(DISTINCT CASE WHEN direction < 0 THEN profile_name END) as bearish_profiles,
-        AVG(score) as avg_score,
-        MAX(score) as max_score,
-        AVG(risk_adjusted_score) as avg_risk_adj,
-        MAX(risk_adjusted_score) as max_risk_adj,
-        AVG(confidence) as avg_confidence,
-        AVG(direction) as avg_direction_bias,
-        SUM(CASE WHEN direction > 0 THEN 1 ELSE 0 END) as long_votes,
-        SUM(CASE WHEN direction < 0 THEN 1 ELSE 0 END) as short_votes,
-        MODE(profile_name) as most_common_profile
+    SELECT symbol,
+        MAX(company) AS company,
+        MAX(sector) AS sector,
+        MAX(industry) AS industry,
+        COUNT(DISTINCT profile_name) AS profile_appearances,
+        COUNT(DISTINCT run_id) AS run_appearances,
+        COUNT(
+            DISTINCT CASE
+                WHEN direction IN ('Strong Up', 'Up') THEN profile_name
+            END
+        ) AS bullish_profiles,
+        COUNT(
+            DISTINCT CASE
+                WHEN direction IN ('Strong Down', 'Down') THEN profile_name
+            END
+        ) AS bearish_profiles,
+        AVG(score) AS avg_score,
+        MAX(score) AS max_score,
+        AVG(risk_adjusted_score) AS avg_risk_adj,
+        MAX(risk_adjusted_score) AS max_risk_adj,
+        AVG(confidence) AS avg_confidence,
+        SUM(
+            CASE
+                WHEN direction IN ('Strong Up', 'Up') THEN 1
+                ELSE 0
+            END
+        ) AS long_votes,
+        SUM(
+            CASE
+                WHEN direction IN ('Strong Down', 'Down') THEN 1
+                ELSE 0
+            END
+        ) AS short_votes,
+        MODE(profile_name) AS most_common_profile
     FROM pool_profile_horizon_scores
     WHERE horizon_name = 'weeks'
         AND score IS NOT NULL
     GROUP BY symbol
-    HAVING COUNT(DISTINCT profile_name) >= 3  -- Require multi-profile coverage
+    HAVING COUNT(DISTINCT profile_name) >= 3
 )
-SELECT
-    symbol,
+SELECT symbol,
     company,
     sector,
     profile_appearances,
@@ -127,434 +554,458 @@ SELECT
     avg_confidence,
     long_votes,
     short_votes,
-    -- Composite ranking formula
-    (avg_risk_adj * 0.5 + avg_score * 0.3 + avg_confidence * 10 * 0.2)
-        * (1 + LEAST(profile_appearances / 10, 0.5)) as composite_rank,
-    -- Consensus signal strength
+    (
+        avg_risk_adj * 0.5 + avg_score * 0.3 + (avg_confidence / 100.0) * 0.2
+    ) * (1 + LEAST(profile_appearances / 10.0, 0.5)) AS composite_rank,
     CASE
-        WHEN bullish_profiles > bearish_profiles * 2 AND long_votes > short_votes * 2 THEN 'STRONG_LONG'
-        WHEN bullish_profiles > bearish_profiles AND long_votes > short_votes THEN 'LONG'
-        WHEN bearish_profiles > bullish_profiles AND short_votes > long_votes THEN 'SHORT'
-        WHEN bearish_profiles > bullish_profiles * 2 AND short_votes > long_votes * 2 THEN 'STRONG_SHORT'
+        WHEN bullish_profiles > bearish_profiles * 2
+        AND long_votes > short_votes * 2 THEN 'STRONG_LONG'
+        WHEN bullish_profiles > bearish_profiles
+        AND long_votes > short_votes THEN 'LONG'
+        WHEN bearish_profiles > bullish_profiles
+        AND short_votes > long_votes THEN 'SHORT'
+        WHEN bearish_profiles > bullish_profiles * 2
+        AND short_votes > long_votes * 2 THEN 'STRONG_SHORT'
         ELSE 'MIXED'
-    END as consensus_signal,
-    most_common_profile as strongest_predictor_profile
+    END AS consensus_signal,
+    most_common_profile AS strongest_predictor_profile
 FROM stock_aggregates
 ORDER BY composite_rank DESC NULLS LAST
 LIMIT 200;
-
--- @block
--- Best stocks by specific profile (change profile_name as needed)
-SELECT
-    symbol,
-    MAX(company) as company,
-    MAX(sector) as sector,
-    AVG(score) as avg_score,
-    AVG(risk_adjusted_score) as avg_risk_adj,
-    AVG(confidence) as avg_confidence,
-    COUNT(DISTINCT run_id) as appearances
+-- @block q_pool_best_stocks_by_profile
+SELECT symbol,
+    MAX(company) AS company,
+    MAX(sector) AS sector,
+    AVG(score) AS avg_score,
+    AVG(risk_adjusted_score) AS avg_risk_adj,
+    AVG(confidence) AS avg_confidence,
+    COUNT(DISTINCT run_id) AS appearances
 FROM pool_profile_horizon_scores
-WHERE profile_name = 'breakout_long'  -- Change to desired profile
+WHERE profile_name = 'breakout_long'
     AND horizon_name = 'weeks'
 GROUP BY symbol
-HAVING COUNT(DISTINCT run_id) >= 2  -- Appeared in at least 2 runs
+HAVING COUNT(DISTINCT run_id) >= 2
 ORDER BY avg_risk_adj DESC NULLS LAST
 LIMIT 100;
-
--- @block
--- Sector leaders by composite score
+-- @block q_pool_sector_leaders
 WITH sector_scores AS (
-    SELECT
-        sector,
+    SELECT sector,
         symbol,
-        MAX(company) as company,
-        AVG(risk_adjusted_score) as avg_risk_adj,
-        AVG(score) as avg_score,
-        COUNT(DISTINCT profile_name) as profile_count
+        MAX(company) AS company,
+        AVG(risk_adjusted_score) AS avg_risk_adj,
+        AVG(score) AS avg_score,
+        COUNT(DISTINCT profile_name) AS profile_count
     FROM pool_profile_horizon_scores
     WHERE horizon_name = 'weeks'
         AND sector IS NOT NULL
-    GROUP BY sector, symbol
+    GROUP BY sector,
+        symbol
     HAVING COUNT(DISTINCT profile_name) >= 2
 )
 SELECT *
 FROM (
-    SELECT
-        *,
-        ROW_NUMBER() OVER (PARTITION BY sector ORDER BY avg_risk_adj DESC) as rank_in_sector
-    FROM sector_scores
-)
+        SELECT *,
+            ROW_NUMBER() OVER (
+                PARTITION BY sector
+                ORDER BY avg_risk_adj DESC
+            ) AS rank_in_sector
+        FROM sector_scores
+    )
 WHERE rank_in_sector <= 10
-ORDER BY sector, rank_in_sector;
-
+ORDER BY sector,
+    rank_in_sector;
 -- ============================================================
 -- 4. PATTERN PREDICTOR DISCOVERY - RAW FIELD CORRELATIONS
 -- ============================================================
--- @block
--- Correlation between raw momentum fields and profile scores
+-- @block q_pool_raw_momentum_correlations
 WITH scored_with_raw AS (
-    SELECT
-        s.profile_name,
+    SELECT s.profile_name,
         s.symbol,
         s.score,
         s.risk_adjusted_score,
         s.direction,
-        TRY_CAST(r.RSI AS DOUBLE) as rsi,
-        TRY_CAST(r.Perf.W AS DOUBLE) as perf_w,
-        TRY_CAST(r.Perf.1M AS DOUBLE) as perf_1m,
-        TRY_CAST(r.Perf.3M AS DOUBLE) as perf_3m,
-        TRY_CAST(r.momentum AS DOUBLE) as momentum_component,
-        TRY_CAST(r.trend AS DOUBLE) as trend_component
-    FROM pool_profile_horizon_scores s
-    INNER JOIN pool_raw_scan_rows r
-        ON s.run_id = r.run_id
-        AND (s.symbol = r.symbol
-            OR r.symbol LIKE '%:' || s.symbol
-            OR s.symbol LIKE '%:' || r.symbol)
+        TRY_CAST(s."RSI" AS DOUBLE) AS rsi,
+        TRY_CAST(s."Perf.W" AS DOUBLE) AS perf_w,
+        TRY_CAST(s."Perf.1M" AS DOUBLE) AS perf_1m,
+        c.momentum AS momentum_component,
+        c.trend AS trend_component
+    FROM vw_pool_profile_scores_with_raw AS s
+        LEFT JOIN pool_profile_components AS c ON c.pool_aggregation_id = s.pool_aggregation_id
+        AND c.source_database_path = s.source_database_path
+        AND c.run_id = s.run_id
+        AND c.profile_name = s.profile_name
+        AND c.symbol = s.symbol
     WHERE s.horizon_name = 'weeks'
 )
-SELECT
-    profile_name,
-    CORR(score, rsi) as score_rsi_corr,
-    CORR(score, perf_w) as score_perf_w_corr,
-    CORR(score, perf_1m) as score_perf_1m_corr,
-    CORR(score, perf_3m) as score_perf_3m_corr,
-    CORR(score, momentum_component) as score_momentum_corr,
-    CORR(score, trend_component) as score_trend_corr,
-    CORR(risk_adjusted_score, momentum_component) as riskadj_momentum_corr,
-    CORR(direction, rsi) as direction_rsi_corr,
-    -- Combined predictive power (sum of absolute correlations)
-    ABS(CORR(score, rsi)) +
-    ABS(CORR(score, momentum_component)) +
-    ABS(CORR(risk_adjusted_score, momentum_component)) as combined_momentum_power
+SELECT profile_name,
+    CORR(score, rsi) AS score_rsi_corr,
+    CORR(score, perf_w) AS score_perf_w_corr,
+    CORR(score, perf_1m) AS score_perf_1m_corr,
+    CORR(score, momentum_component) AS score_momentum_corr,
+    CORR(score, trend_component) AS score_trend_corr,
+    CORR(risk_adjusted_score, momentum_component) AS riskadj_momentum_corr,
+    CORR(
+        CASE
+            WHEN direction IN ('Strong Up', 'Up') THEN 1.0
+            WHEN direction IN ('Strong Down', 'Down') THEN -1.0
+            ELSE 0.0
+        END,
+        rsi
+    ) AS direction_rsi_corr,
+    ABS(CORR(score, rsi)) + ABS(CORR(score, momentum_component)) + ABS(
+        CORR(risk_adjusted_score, momentum_component)
+    ) AS combined_momentum_power
 FROM scored_with_raw
 GROUP BY profile_name
 HAVING CORR(score, rsi) IS NOT NULL
 ORDER BY combined_momentum_power DESC NULLS LAST;
-
--- @block
--- Which raw fields best predict high scores for each profile
--- (Requires inspecting available raw fields first)
-SELECT
-    column_name,
-    data_type,
-    COUNT(*) as row_count
+-- @block q_pool_raw_numeric_columns
+SELECT column_name,
+    data_type
 FROM information_schema.columns
 WHERE table_name = 'pool_raw_scan_rows'
-    AND column_name NOT IN ('pool_aggregation_id', 'source_database_path',
-        'source_iso_year', 'source_iso_week', 'run_id', 'row_number', 'symbol')
-    AND data_type IN ('FLOAT', 'DOUBLE', 'INTEGER', 'BIGINT', 'DECIMAL')
+    AND column_name NOT IN (
+        'pool_aggregation_id',
+        'source_database_path',
+        'source_iso_year',
+        'source_iso_week',
+        'run_id',
+        'row_number',
+        'symbol'
+    )
+    AND data_type IN (
+        'FLOAT',
+        'DOUBLE',
+        'INTEGER',
+        'BIGINT',
+        'DECIMAL'
+    )
 ORDER BY column_name;
-
--- @block
--- Component analysis for a specific profile
--- Shows how profile component scores relate to final score
-SELECT
-    c.profile_name,
+-- @block q_pool_component_analysis
+SELECT c.profile_name,
     c.symbol,
-    MAX(c.company) as company,
-    AVG(c.momentum) as avg_momentum,
-    AVG(c.trend) as avg_trend,
-    AVG(c.quality) as avg_quality,
-    AVG(c.valuation) as avg_valuation,
-    AVG(c.safety) as avg_safety,
-    AVG(c.scale) as avg_scale,
-    AVG(c.attention) as avg_attention,
-    AVG(c.event) as avg_event,
-    AVG(s.score) as avg_final_score,
-    AVG(s.risk_adjusted_score) as avg_risk_adj,
-    CORR(c.momentum, s.score) as momentum_score_corr,
-    CORR(c.trend, s.score) as trend_score_corr,
-    CORR(c.quality, s.score) as quality_score_corr,
-    CORR(c.valuation, s.score) as valuation_score_corr
-FROM pool_profile_components c
-INNER JOIN pool_profile_horizon_scores s
-    ON c.run_id = s.run_id
+    MAX(c.company) AS company,
+    AVG(c.momentum) AS avg_momentum,
+    AVG(c.trend) AS avg_trend,
+    AVG(c.quality) AS avg_quality,
+    AVG(c.valuation) AS avg_valuation,
+    AVG(c.safety) AS avg_safety,
+    AVG(c.scale) AS avg_scale,
+    AVG(c.attention) AS avg_attention,
+    AVG(c.event) AS avg_event,
+    AVG(s.score) AS avg_final_score,
+    AVG(s.risk_adjusted_score) AS avg_risk_adj,
+    CORR(c.momentum, s.score) AS momentum_score_corr,
+    CORR(c.trend, s.score) AS trend_score_corr,
+    CORR(c.quality, s.score) AS quality_score_corr,
+    CORR(c.valuation, s.score) AS valuation_score_corr
+FROM pool_profile_components AS c
+    INNER JOIN pool_profile_horizon_scores AS s ON c.pool_aggregation_id = s.pool_aggregation_id
+    AND c.source_database_path = s.source_database_path
+    AND c.run_id = s.run_id
     AND c.profile_name = s.profile_name
     AND c.symbol = s.symbol
-WHERE c.profile_name = 'breakout_long'  -- Change profile as needed
-GROUP BY c.profile_name, c.symbol
+WHERE c.profile_name = 'breakout_long'
+    AND s.horizon_name = 'weeks'
+GROUP BY c.profile_name,
+    c.symbol
 ORDER BY avg_risk_adj DESC NULLS LAST
 LIMIT 50;
-
 -- ============================================================
 -- 5. SCORE vs PRICE PERFORMANCE INTERSECTION ANALYSIS
 -- ============================================================
--- @block
--- High score + positive momentum intersection (winners)
+-- @block q_pool_high_score_positive_momentum
 WITH high_scorers AS (
-    SELECT DISTINCT
-        symbol,
-        MAX(risk_adjusted_score) as max_score,
-        AVG(score) as avg_score,
-        COUNT(DISTINCT profile_name) as profile_count
+    SELECT symbol,
+        MAX(risk_adjusted_score) AS max_score,
+        AVG(score) AS avg_score,
+        COUNT(DISTINCT profile_name) AS profile_count
     FROM pool_profile_horizon_scores
     WHERE horizon_name = 'weeks'
-        AND risk_adjusted_score >= 75
+        AND risk_adjusted_score >= 0.75
     GROUP BY symbol
     HAVING COUNT(DISTINCT profile_name) >= 2
 ),
 price_performers AS (
-    SELECT DISTINCT
-        r.symbol,
-        TRY_CAST(r.Perf.W AS DOUBLE) as perf_w,
-        TRY_CAST(r.Perf.1M AS DOUBLE) as perf_1m,
-        TRY_CAST(r.RSI AS DOUBLE) as rsi,
-        TRY_CAST(r.momentum AS DOUBLE) as momentum
-    FROM pool_raw_scan_rows r
-    WHERE (TRY_CAST(r.Perf.W AS DOUBLE) > 0 OR TRY_CAST(r.Perf.1M AS DOUBLE) > 0)
-        AND TRY_CAST(r.RSI AS DOUBLE) BETWEEN 40 AND 80
+    SELECT DISTINCT r.symbol,
+        TRY_CAST(r."Perf.W" AS DOUBLE) AS perf_w,
+        TRY_CAST(r."Perf.1M" AS DOUBLE) AS perf_1m,
+        TRY_CAST(r."RSI" AS DOUBLE) AS rsi
+    FROM pool_raw_scan_rows AS r
+    WHERE (
+            TRY_CAST(r."Perf.W" AS DOUBLE) > 0
+            OR TRY_CAST(r."Perf.1M" AS DOUBLE) > 0
+        )
+        AND TRY_CAST(r."RSI" AS DOUBLE) BETWEEN 40 AND 80
 )
-SELECT
-    h.symbol,
+SELECT h.symbol,
     h.max_score,
     h.avg_score,
     h.profile_count,
     p.perf_w,
     p.perf_1m,
     p.rsi,
-    p.momentum,
-    'HIGH_SCORE_POSITIVE_MOMENTUM' as classification
-FROM high_scorers h
-INNER JOIN price_performers p ON h.symbol = p.symbol
-ORDER BY h.max_score DESC, p.perf_w DESC NULLS LAST
+    'HIGH_SCORE_POSITIVE_MOMENTUM' AS classification
+FROM high_scorers AS h
+    INNER JOIN price_performers AS p ON h.symbol = p.symbol
+ORDER BY h.max_score DESC,
+    p.perf_w DESC NULLS LAST
 LIMIT 100;
-
--- @block
--- High score but poor momentum (potential false positives / early signals)
+-- @block q_pool_high_score_poor_momentum
 WITH high_scorers AS (
-    SELECT DISTINCT
-        symbol,
-        MAX(risk_adjusted_score) as max_score,
-        AVG(score) as avg_score,
-        COUNT(DISTINCT profile_name) as profile_count
+    SELECT symbol,
+        MAX(risk_adjusted_score) AS max_score,
+        AVG(score) AS avg_score,
+        COUNT(DISTINCT profile_name) AS profile_count
     FROM pool_profile_horizon_scores
     WHERE horizon_name = 'weeks'
-        AND risk_adjusted_score >= 75
+        AND risk_adjusted_score >= 0.75
     GROUP BY symbol
     HAVING COUNT(DISTINCT profile_name) >= 2
-),
-poor_performers AS (
-    SELECT DISTINCT symbol
-    FROM pool_raw_scan_rows
-    WHERE (TRY_CAST(Perf.W AS DOUBLE) < 0 OR TRY_CAST(Perf.1M AS DOUBLE) < 0)
-        OR TRY_CAST(RSI AS DOUBLE) < 40
-        OR TRY_CAST(RSI AS DOUBLE) > 70
 )
-SELECT
-    h.symbol,
+SELECT h.symbol,
     h.max_score,
     h.avg_score,
     h.profile_count,
-    'HIGH_SCORE_CHECK_PRICE' as status,
-    'May be early signal or false positive' as note
-FROM high_scorers h
-LEFT JOIN (
-    SELECT DISTINCT symbol FROM pool_raw_scan_rows
-    WHERE TRY_CAST(Perf.W AS DOUBLE) > 0
-) good ON h.symbol = good.symbol
+    'HIGH_SCORE_CHECK_PRICE' AS status,
+    'May be early signal or false positive' AS note
+FROM high_scorers AS h
+    LEFT JOIN (
+        SELECT DISTINCT symbol
+        FROM pool_raw_scan_rows
+        WHERE TRY_CAST("Perf.W" AS DOUBLE) > 0
+    ) AS good ON h.symbol = good.symbol
 WHERE good.symbol IS NULL
 ORDER BY h.max_score DESC
 LIMIT 50;
-
--- @block
--- Score/price divergence analysis by profile
+-- @block q_pool_score_price_divergence
 WITH profile_high_scores AS (
-    SELECT
-        profile_name,
+    SELECT profile_name,
         symbol,
         score,
         risk_adjusted_score,
         direction
     FROM pool_profile_horizon_scores
     WHERE horizon_name = 'weeks'
-        AND risk_adjusted_score >= 70
+        AND risk_adjusted_score >= 0.70
 )
-SELECT
-    phs.profile_name,
-    COUNT(*) as high_score_count,
-    AVG(TRY_CAST(r.Perf.W AS DOUBLE)) as avg_perf_w,
-    AVG(TRY_CAST(r.Perf.1M AS DOUBLE)) as avg_perf_1m,
-    CORR(phs.risk_adjusted_score, TRY_CAST(r.Perf.W AS DOUBLE)) as score_price_corr_w,
-    CORR(phs.risk_adjusted_score, TRY_CAST(r.Perf.1M AS DOUBLE)) as score_price_corr_1m,
+SELECT phs.profile_name,
+    COUNT(*) AS high_score_count,
+    AVG(TRY_CAST(r."Perf.W" AS DOUBLE)) AS avg_perf_w,
+    AVG(TRY_CAST(r."Perf.1M" AS DOUBLE)) AS avg_perf_1m,
+    CORR(
+        phs.risk_adjusted_score,
+        TRY_CAST(r."Perf.W" AS DOUBLE)
+    ) AS score_price_corr_w,
+    CORR(
+        phs.risk_adjusted_score,
+        TRY_CAST(r."Perf.1M" AS DOUBLE)
+    ) AS score_price_corr_1m,
     CASE
-        WHEN CORR(phs.risk_adjusted_score, TRY_CAST(r.Perf.W AS DOUBLE)) > 0.3 THEN 'ALIGNED'
-        WHEN CORR(phs.risk_adjusted_score, TRY_CAST(r.Perf.W AS DOUBLE)) < -0.1 THEN 'CONTRARIAN'
+        WHEN CORR(
+            phs.risk_adjusted_score,
+            TRY_CAST(r."Perf.W" AS DOUBLE)
+        ) > 0.3 THEN 'ALIGNED'
+        WHEN CORR(
+            phs.risk_adjusted_score,
+            TRY_CAST(r."Perf.W" AS DOUBLE)
+        ) < -0.1 THEN 'CONTRARIAN'
         ELSE 'NEUTRAL'
-    END as alignment_status
-FROM profile_high_scores phs
-LEFT JOIN pool_raw_scan_rows r
-    ON phs.symbol = r.symbol
+    END AS alignment_status
+FROM profile_high_scores AS phs
+    LEFT JOIN pool_raw_scan_rows AS r ON phs.symbol = r.symbol
     OR r.symbol LIKE '%:' || phs.symbol
     OR phs.symbol LIKE '%:' || r.symbol
 GROUP BY phs.profile_name
 ORDER BY score_price_corr_w DESC NULLS LAST;
-
 -- ============================================================
 -- 6. TEMPORAL ANALYSIS - PERFORMANCE ACROSS WEEKS
 -- ============================================================
--- @block
--- Profile performance consistency across weeks (weeks horizon)
-SELECT
-    profile_name,
-    source_iso_week as week,
-    COUNT(DISTINCT symbol) as symbols_scored,
-    AVG(score) as avg_score,
-    AVG(risk_adjusted_score) as avg_risk_adj,
-    AVG(confidence) as avg_confidence,
-    AVG(CASE WHEN direction > 0 THEN 1.0 ELSE 0.0 END) as bullish_pct,
-    STDDEV(score) as score_stddev,
-    MAX(score) as max_score
+-- @block q_pool_profile_weekly_consistency
+SELECT profile_name,
+    source_iso_week AS week,
+    COUNT(DISTINCT symbol) AS symbols_scored,
+    AVG(score) AS avg_score,
+    AVG(risk_adjusted_score) AS avg_risk_adj,
+    AVG(confidence) AS avg_confidence,
+    AVG(
+        CASE
+            WHEN direction IN ('Strong Up', 'Up') THEN 1.0
+            ELSE 0.0
+        END
+    ) AS bullish_pct,
+    STDDEV(score) AS score_stddev,
+    MAX(score) AS max_score
 FROM pool_profile_horizon_scores
-    JOIN pool_run_metadata USING (run_id, pool_aggregation_id, source_database_path)
 WHERE horizon_name = 'weeks'
-GROUP BY profile_name, source_iso_week
-ORDER BY profile_name, source_iso_week;
-
--- @block
--- Week-by-week consensus leaders
+GROUP BY profile_name,
+    source_iso_week
+ORDER BY profile_name,
+    source_iso_week;
+-- @block q_pool_weekly_consensus_leaders
 WITH weekly_scores AS (
-    SELECT
-        source_iso_week as week,
+    SELECT source_iso_week AS week,
         symbol,
-        MAX(company) as company,
-        MAX(sector) as sector,
-        COUNT(DISTINCT profile_name) as profile_count,
-        AVG(risk_adjusted_score) as avg_risk_adj,
-        SUM(CASE WHEN direction > 0 THEN 1 ELSE 0 END) as long_votes,
-        COUNT(*) as total_votes
+        MAX(company) AS company,
+        MAX(sector) AS sector,
+        COUNT(DISTINCT profile_name) AS profile_count,
+        AVG(risk_adjusted_score) AS avg_risk_adj,
+        SUM(
+            CASE
+                WHEN direction IN ('Strong Up', 'Up') THEN 1
+                ELSE 0
+            END
+        ) AS long_votes,
+        COUNT(*) AS total_votes
     FROM pool_profile_horizon_scores
-        JOIN pool_run_metadata USING (run_id, pool_aggregation_id, source_database_path)
     WHERE horizon_name = 'weeks'
-    GROUP BY source_iso_week, symbol
+    GROUP BY source_iso_week,
+        symbol
     HAVING COUNT(DISTINCT profile_name) >= 4
 )
 SELECT *
 FROM (
-    SELECT
-        *,
-        ROW_NUMBER() OVER (PARTITION BY week ORDER BY avg_risk_adj DESC) as weekly_rank,
-        CAST(long_votes AS DOUBLE) / NULLIF(total_votes, 0) as consensus_ratio
-    FROM weekly_scores
-)
+        SELECT *,
+            ROW_NUMBER() OVER (
+                PARTITION BY week
+                ORDER BY avg_risk_adj DESC
+            ) AS weekly_rank,
+            CAST(long_votes AS DOUBLE) / NULLIF(total_votes, 0) AS consensus_ratio
+        FROM weekly_scores
+    )
 WHERE weekly_rank <= 20
-ORDER BY week DESC, weekly_rank;
-
--- @block
--- Profile persistence score (consistency across weeks)
+ORDER BY week DESC,
+    weekly_rank;
+-- @block q_pool_profile_persistence
 WITH weekly_profile_scores AS (
-    SELECT
-        profile_name,
-        source_iso_week as week,
-        AVG(risk_adjusted_score) as weekly_avg_score
+    SELECT profile_name,
+        source_iso_week AS week,
+        AVG(risk_adjusted_score) AS weekly_avg_score
     FROM pool_profile_horizon_scores
-        JOIN pool_run_metadata USING (run_id, pool_aggregation_id, source_database_path)
     WHERE horizon_name = 'weeks'
-    GROUP BY profile_name, source_iso_week
+    GROUP BY profile_name,
+        source_iso_week
 )
-SELECT
-    profile_name,
-    COUNT(DISTINCT week) as weeks_present,
-    AVG(weekly_avg_score) as overall_avg_score,
-    STDDEV(weekly_avg_score) as week_to_week_volatility,
-    MIN(weekly_avg_score) as worst_week_score,
-    MAX(weekly_avg_score) as best_week_score,
-    (AVG(weekly_avg_score) - STDDEV(weekly_avg_score)) as persistence_score,
+SELECT profile_name,
+    COUNT(DISTINCT week) AS weeks_present,
+    AVG(weekly_avg_score) AS overall_avg_score,
+    STDDEV(weekly_avg_score) AS week_to_week_volatility,
+    MIN(weekly_avg_score) AS worst_week_score,
+    MAX(weekly_avg_score) AS best_week_score,
+    (AVG(weekly_avg_score) - STDDEV(weekly_avg_score)) AS persistence_score,
     CASE
-        WHEN STDDEV(weekly_avg_score) < 2 THEN 'VERY_STABLE'
-        WHEN STDDEV(weekly_avg_score) < 5 THEN 'STABLE'
-        WHEN STDDEV(weekly_avg_score) < 10 THEN 'MODERATE'
+        WHEN STDDEV(weekly_avg_score) < 0.20 THEN 'VERY_STABLE'
+        WHEN STDDEV(weekly_avg_score) < 0.50 THEN 'STABLE'
+        WHEN STDDEV(weekly_avg_score) < 1.00 THEN 'MODERATE'
         ELSE 'VOLATILE'
-    END as stability_rating
+    END AS stability_rating
 FROM weekly_profile_scores
 GROUP BY profile_name
 HAVING COUNT(DISTINCT week) >= 2
 ORDER BY persistence_score DESC NULLS LAST;
-
 -- ============================================================
 -- 7. SECTOR & INDUSTRY ANALYSIS
 -- ============================================================
--- @block
--- Sector performance by profile
-SELECT
-    profile_name,
-    sector,
-    COUNT(DISTINCT symbol) as symbol_count,
-    COUNT(DISTINCT industry) as industries,
-    AVG(score) as avg_score,
-    AVG(risk_adjusted_score) as avg_risk_adj,
-    AVG(confidence) as avg_confidence,
-    AVG(CASE WHEN direction > 0 THEN 1.0 ELSE 0.0 END) as bullish_pct,
-    STDDEV(score) as score_dispersion,
-    -- Rank sectors within each profile
+-- @block q_pool_sector_by_profile
+WITH sector_profile_stats AS (
+    SELECT profile_name,
+        sector,
+        COUNT(DISTINCT symbol) AS symbol_count,
+        COUNT(DISTINCT industry) AS industries,
+        AVG(score) AS avg_score,
+        AVG(risk_adjusted_score) AS avg_risk_adj,
+        AVG(confidence) AS avg_confidence,
+        AVG(
+            CASE
+                WHEN direction IN ('Strong Up', 'Up') THEN 1.0
+                ELSE 0.0
+            END
+        ) AS bullish_pct,
+        STDDEV(score) AS score_dispersion
+    FROM pool_profile_horizon_scores
+    WHERE horizon_name = 'weeks'
+        AND sector IS NOT NULL
+    GROUP BY profile_name,
+        sector
+    HAVING COUNT(DISTINCT symbol) >= 5
+)
+SELECT *,
     ROW_NUMBER() OVER (
         PARTITION BY profile_name
-        ORDER BY AVG(risk_adjusted_score) DESC
-    ) as rank_in_profile
-FROM pool_profile_horizon_scores
-WHERE horizon_name = 'weeks'
-    AND sector IS NOT NULL
-GROUP BY profile_name, sector
-HAVING COUNT(DISTINCT symbol) >= 5
-ORDER BY profile_name, avg_risk_adj DESC NULLS LAST;
-
--- @block
--- Best performing industries (multi-profile consensus)
-SELECT
-    industry,
+        ORDER BY avg_risk_adj DESC
+    ) AS rank_in_profile
+FROM sector_profile_stats
+ORDER BY profile_name,
+    avg_risk_adj DESC NULLS LAST;
+-- @block q_pool_top_industries
+SELECT industry,
     sector,
-    COUNT(DISTINCT symbol) as symbols,
-    COUNT(DISTINCT profile_name) as profiles_covering,
-    AVG(score) as avg_score,
-    AVG(risk_adjusted_score) as avg_risk_adj,
-    AVG(confidence) as avg_confidence,
-    AVG(CASE WHEN direction > 0 THEN 1.0 ELSE 0.0 END) as bullish_consensus
+    COUNT(DISTINCT symbol) AS symbols,
+    COUNT(DISTINCT profile_name) AS profiles_covering,
+    AVG(score) AS avg_score,
+    AVG(risk_adjusted_score) AS avg_risk_adj,
+    AVG(confidence) AS avg_confidence,
+    AVG(
+        CASE
+            WHEN direction IN ('Strong Up', 'Up') THEN 1.0
+            ELSE 0.0
+        END
+    ) AS bullish_consensus
 FROM pool_profile_horizon_scores
 WHERE horizon_name = 'weeks'
     AND industry IS NOT NULL
-GROUP BY industry, sector
+GROUP BY industry,
+    sector
 HAVING COUNT(DISTINCT profile_name) >= 3
     AND COUNT(DISTINCT symbol) >= 3
 ORDER BY avg_risk_adj DESC NULLS LAST
 LIMIT 50;
-
 -- ============================================================
 -- 8. CONFIDENCE & COVERAGE ANALYSIS
 -- ============================================================
--- @block
--- Profile confidence statistics
-SELECT
-    profile_name,
+-- @block q_pool_confidence_stats
+SELECT profile_name,
     horizon_name,
-    AVG(confidence) as mean_confidence,
-    MEDIAN(confidence) as median_confidence,
-    MIN(confidence) as min_confidence,
-    MAX(confidence) as max_confidence,
-    PERCENTILE_CONT(0.1) WITHIN GROUP (ORDER BY confidence) as p10_confidence,
-    PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY confidence) as p90_confidence,
-    AVG(CASE WHEN confidence >= 0.7 THEN 1.0 ELSE 0.0 END) as high_confidence_rate,
-    AVG(CASE WHEN confidence >= 0.5 THEN 1.0 ELSE 0.0 END) as medium_plus_confidence_rate,
-    COUNT(*) FILTER (WHERE confidence >= 0.7 AND score >= 75) as high_conf_high_score_count
+    AVG(confidence) AS mean_confidence,
+    MEDIAN(confidence) AS median_confidence,
+    MIN(confidence) AS min_confidence,
+    MAX(confidence) AS max_confidence,
+    quantile_cont(confidence, 0.10) AS p10_confidence,
+    quantile_cont(confidence, 0.90) AS p90_confidence,
+    AVG(
+        CASE
+            WHEN confidence >= 70 THEN 1.0
+            ELSE 0.0
+        END
+    ) AS high_confidence_rate,
+    AVG(
+        CASE
+            WHEN confidence >= 50 THEN 1.0
+            ELSE 0.0
+        END
+    ) AS medium_plus_confidence_rate,
+    COUNT(*) FILTER (
+        WHERE confidence >= 70
+            AND score >= 1.10
+    ) AS high_conf_strong_up_count
 FROM pool_profile_horizon_scores
-GROUP BY profile_name, horizon_name
-ORDER BY profile_name, horizon_name;
-
--- @block
--- Coverage analysis - which profiles cover which stocks most consistently
+GROUP BY profile_name,
+    horizon_name
+ORDER BY profile_name,
+    horizon_name;
+-- @block q_pool_coverage_analysis
 WITH coverage_stats AS (
-    SELECT
-        symbol,
-        MAX(company) as company,
-        MAX(sector) as sector,
-        COUNT(DISTINCT profile_name) as profiles_covering,
-        COUNT(DISTINCT run_id) as runs_present,
-        AVG(coverage) as avg_coverage
+    SELECT symbol,
+        MAX(company) AS company,
+        MAX(sector) AS sector,
+        COUNT(DISTINCT profile_name) AS profiles_covering,
+        COUNT(DISTINCT run_id) AS runs_present,
+        AVG(coverage) AS avg_coverage
     FROM pool_profile_horizon_scores
     WHERE horizon_name = 'weeks'
     GROUP BY symbol
 )
-SELECT
-    symbol,
+SELECT symbol,
     company,
     sector,
     profiles_covering,
@@ -565,64 +1016,72 @@ SELECT
         WHEN profiles_covering >= 5 THEN 'HIGH_COVERAGE'
         WHEN profiles_covering >= 3 THEN 'MODERATE_COVERAGE'
         ELSE 'LOW_COVERAGE'
-    END as coverage_tier
+    END AS coverage_tier
 FROM coverage_stats
-ORDER BY profiles_covering DESC, runs_present DESC
+ORDER BY profiles_covering DESC,
+    runs_present DESC
 LIMIT 100;
-
 -- ============================================================
 -- 9. MANAGER ACTION SIGNAL ANALYSIS
 -- ============================================================
--- @block
--- Manager action signal distribution by profile
-SELECT
-    profile_name,
+-- @block q_pool_manager_action_distribution
+SELECT profile_name,
     manager_action_signal,
-    COUNT(*) as count,
-    AVG(score) as avg_score,
-    AVG(risk_adjusted_score) as avg_risk_adj,
-    AVG(confidence) as avg_confidence,
-    COUNT(DISTINCT symbol) as unique_symbols
+    COUNT(*) AS count,
+    AVG(score) AS avg_score,
+    AVG(risk_adjusted_score) AS avg_risk_adj,
+    AVG(confidence) AS avg_confidence,
+    COUNT(DISTINCT symbol) AS unique_symbols
 FROM pool_profile_horizon_scores
 WHERE horizon_name = 'weeks'
     AND manager_action_signal IS NOT NULL
-GROUP BY profile_name, manager_action_signal
+GROUP BY profile_name,
+    manager_action_signal
 ORDER BY profile_name,
-    CASE manager_action_signal
-        WHEN 'STRONG_BUY' THEN 1
-        WHEN 'BUY' THEN 2
-        WHEN 'HOLD' THEN 3
-        WHEN 'REDUCE' THEN 4
-        WHEN 'SELL' THEN 5
-        ELSE 6
+    CASE
+        manager_action_signal
+        WHEN 'add_long_breakout' THEN 1
+        WHEN 'accumulate_value_catalyst' THEN 2
+        WHEN 'promote_to_breakout' THEN 3
+        WHEN 'hold_quality_long' THEN 4
+        WHEN 'watch_value_reversal' THEN 5
+        WHEN 'mean_reversion_watch' THEN 6
+        WHEN 'neutral_watch' THEN 7
+        WHEN 'trim_extended_long' THEN 8
+        WHEN 'avoid_value_trap' THEN 9
+        WHEN 'hedge_or_short' THEN 10
+        ELSE 11
     END;
-
--- @block
--- Strong signals consensus (symbols with multiple STRONG_BUY signals)
+-- @block q_pool_strong_long_action_consensus
 WITH strong_signals AS (
-    SELECT
-        symbol,
-        MAX(company) as company,
-        MAX(sector) as sector,
-        COUNT(*) as strong_buy_signals,
-        COUNT(DISTINCT profile_name) as unique_profiles,
-        AVG(score) as avg_score,
-        AVG(risk_adjusted_score) as avg_risk_adj
+    SELECT symbol,
+        MAX(company) AS company,
+        MAX(sector) AS sector,
+        COUNT(*) AS long_action_signals,
+        COUNT(DISTINCT profile_name) AS unique_profiles,
+        AVG(score) AS avg_score,
+        AVG(risk_adjusted_score) AS avg_risk_adj
     FROM pool_profile_horizon_scores
     WHERE horizon_name = 'weeks'
-        AND manager_action_signal IN ('STRONG_BUY', 'BUY')
+        AND manager_action_signal IN (
+            'add_long_breakout',
+            'accumulate_value_catalyst',
+            'promote_to_breakout',
+            'hold_quality_long'
+        )
     GROUP BY symbol
     HAVING COUNT(*) >= 2
 )
-SELECT
-    symbol,
+SELECT symbol,
     company,
     sector,
-    strong_buy_signals,
+    long_action_signals,
     unique_profiles,
     avg_score,
     avg_risk_adj,
-    DENSE_RANK() OVER (ORDER BY avg_risk_adj DESC) as rank
+    DENSE_RANK() OVER (
+        ORDER BY avg_risk_adj DESC
+    ) AS rank
 FROM strong_signals
 ORDER BY avg_risk_adj DESC NULLS LAST
 LIMIT 50;

@@ -1,6 +1,7 @@
 documentation/edgarBulkDataSample/
 documentation/nyuData/
 documentation/data_analysis_screens/
+sql_connections_space/query_saved_results/
 savedData
 logs
 venv39

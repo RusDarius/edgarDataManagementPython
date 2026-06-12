@@ -62,11 +62,13 @@ DEFAULT_POOL_ROOT = DEFAULT_PREDICTION_ROOT / "multi_run_pool"
 DEFAULT_ANALYSIS_OUTPUT_ROOT = DEFAULT_PREDICTION_ROOT / "pool_analysis"
 
 # Default analysis parameters
-DEFAULT_MIN_SCORE_THRESHOLD = 60.0
+# Score scale: -3.0 to +3.0 (breakout thresholds: 0.35 directional, 1.10 STRONG_UP, 1.50 VERY_HIGH, 2.00 ELITE)
+DEFAULT_MIN_SCORE_THRESHOLD = 0.35  # DIRECTIONAL_MOVE_SCORE_THRESHOLD equivalent
 DEFAULT_TOP_N_PROFILES = 15
 DEFAULT_TOP_N_STOCKS = 200
-DEFAULT_CONFIDENCE_THRESHOLD = 0.5
-DEFAULT_COVERAGE_THRESHOLD = 0.3
+# Confidence scale: 5-99 (high >= 70)
+DEFAULT_CONFIDENCE_THRESHOLD = 60.0  # confidence >= 60 (was 0.6 on wrong scale)
+DEFAULT_COVERAGE_THRESHOLD = 0.3  # coverage is 0.0-1.0 ratio, this threshold is correct
 
 
 @dataclass(frozen=True)
@@ -81,9 +83,9 @@ class ProfilePerformanceMetrics:
     avg_confidence: float | None
     avg_coverage: float | None
     score_std_dev: float | None
-    positive_direction_ratio: float | None
-    high_confidence_ratio: float | None  # confidence >= 0.7
-    high_score_ratio: float | None  # score >= 80
+    bullish_direction_ratio: float | None  # direction IN ('Strong Up', 'Up')
+    high_confidence_ratio: float | None  # confidence >= 70 (5-99 scale, high >= 70)
+    strong_up_ratio: float | None  # score >= 1.10 (STRONG_UP threshold on -3..+3 scale)
     top_decile_capture_rate: float | None  # how often profile picks end up in top decile performers
     price_performance_correlation: float | None
     sector_diversity_score: float | None  # normalized entropy of sector distribution
@@ -249,9 +251,9 @@ def _analyze_profile_performance(
                 AVG(confidence) as avg_confidence,
                 AVG(coverage) as avg_coverage,
                 STDDEV(score) as score_std_dev,
-                AVG(CASE WHEN direction > 0 THEN 1.0 ELSE 0.0 END) as positive_direction_ratio,
-                AVG(CASE WHEN confidence >= 0.7 THEN 1.0 ELSE 0.0 END) as high_confidence_ratio,
-                AVG(CASE WHEN score >= 80 THEN 1.0 ELSE 0.0 END) as high_score_ratio
+                AVG(CASE WHEN direction IN ('Strong Up', 'Up') THEN 1.0 ELSE 0.0 END) as bullish_direction_ratio,
+                AVG(CASE WHEN confidence >= 70 THEN 1.0 ELSE 0.0 END) as high_confidence_ratio,
+                AVG(CASE WHEN score >= 1.10 THEN 1.0 ELSE 0.0 END) as strong_up_ratio
             FROM pool_profile_horizon_scores
             WHERE profile_name = ?
                 AND horizon_name = 'weeks'
@@ -294,9 +296,9 @@ def _analyze_profile_performance(
                 avg_confidence=row[4],
                 avg_coverage=row[5],
                 score_std_dev=row[6],
-                positive_direction_ratio=row[7],
+                bullish_direction_ratio=row[7],
                 high_confidence_ratio=row[8],
-                high_score_ratio=row[9],
+                strong_up_ratio=row[9],
                 top_decile_capture_rate=None,  # Would need price performance data
                 price_performance_correlation=None,  # Calculated separately
                 sector_diversity_score=sector_diversity,
@@ -330,9 +332,9 @@ def _analyze_stock_composite_rankings(
             MAX(CASE WHEN score = max_score THEN profile_name END) as best_profile,
             AVG(risk_adjusted_score) as avg_risk_adjusted_score,
             AVG(confidence) as avg_confidence,
-            AVG(direction) as avg_direction,
-            SUM(CASE WHEN direction > 0 THEN 1 ELSE 0 END) as long_count,
-            SUM(CASE WHEN direction < 0 THEN 1 ELSE 0 END) as short_count
+            AVG(CASE WHEN direction IN ('Strong Up', 'Up') THEN 1.0 ELSE 0.0 END) as bullish_ratio,
+            SUM(CASE WHEN direction IN ('Strong Up', 'Up') THEN 1 ELSE 0 END) as long_count,
+            SUM(CASE WHEN direction IN ('Strong Down', 'Down') THEN 1 ELSE 0 END) as short_count
         FROM pool_profile_horizon_scores
         WHERE horizon_name = 'weeks'
             AND score IS NOT NULL
@@ -766,11 +768,10 @@ WHERE horizon_name = 'weeks'
 GROUP BY profile_name
 ORDER BY avg_risk_adj_score DESC NULLS LAST;
 
--- Profiles with highest positive direction ratio (bullish bias)
+-- Profiles with highest bullish direction ratio
 SELECT
     profile_name,
-    AVG(CASE WHEN direction > 0 THEN 1.0 ELSE 0.0 END) as bullish_ratio,
-    AVG(direction) as avg_direction,
+    AVG(CASE WHEN direction IN ('Strong Up', 'Up') THEN 1.0 ELSE 0.0 END) as bullish_ratio,
     AVG(score) as avg_score
 FROM pool_profile_horizon_scores
 WHERE horizon_name = 'weeks'
@@ -793,8 +794,8 @@ WITH stock_stats AS (
         AVG(risk_adjusted_score) as avg_risk_adj,
         AVG(confidence) as avg_confidence,
         MAX(risk_adjusted_score) as max_risk_adj,
-        SUM(CASE WHEN direction > 0 THEN 1 ELSE 0 END) as long_votes,
-        SUM(CASE WHEN direction < 0 THEN 1 ELSE 0 END) as short_votes
+        SUM(CASE WHEN direction IN ('Strong Up', 'Up') THEN 1 ELSE 0 END) as long_votes,
+        SUM(CASE WHEN direction IN ('Strong Down', 'Down') THEN 1 ELSE 0 END) as short_votes
     FROM pool_profile_horizon_scores
     WHERE horizon_name = 'weeks'
         AND score IS NOT NULL
@@ -831,9 +832,9 @@ SELECT
     STRING_AGG(DISTINCT profile_name, ', ' ORDER BY profile_name) as profiles
 FROM pool_profile_horizon_scores
 WHERE horizon_name = 'weeks'
-    AND direction > 0
-    AND score >= 70
-    AND confidence >= 0.6
+    AND direction IN ('Strong Up', 'Up')
+    AND score >= 0.35
+    AND confidence >= 60
 GROUP BY symbol
 HAVING COUNT(DISTINCT profile_name) >= 3
 ORDER BY bullish_profiles DESC, avg_risk_adj DESC NULLS LAST
@@ -901,7 +902,7 @@ WITH high_scorers AS (
     SELECT DISTINCT symbol, MAX(risk_adjusted_score) as max_score
     FROM pool_profile_horizon_scores
     WHERE horizon_name = 'weeks'
-        AND risk_adjusted_score >= 80
+        AND risk_adjusted_score >= 1.10
     GROUP BY symbol
 ),
 price_performers AS (
@@ -958,7 +959,7 @@ SELECT
     AVG(score) as avg_score,
     AVG(risk_adjusted_score) as avg_risk_adj,
     COUNT(DISTINCT symbol) as symbols_scored,
-    AVG(CASE WHEN direction > 0 THEN 1.0 ELSE 0.0 END) as bullish_pct
+    AVG(CASE WHEN direction IN ('Strong Up', 'Up') THEN 1.0 ELSE 0.0 END) as bullish_pct
 FROM pool_profile_horizon_scores
     JOIN pool_run_metadata USING (run_id, pool_aggregation_id, source_database_path)
 WHERE horizon_name = 'weeks'
@@ -973,7 +974,7 @@ SELECT
     COUNT(DISTINCT profile_name) as profile_count,
     AVG(score) as avg_score,
     AVG(risk_adjusted_score) as avg_risk_adj,
-    SUM(CASE WHEN direction > 0 THEN 1 ELSE 0 END) as long_votes
+    SUM(CASE WHEN direction IN ('Strong Up', 'Up') THEN 1 ELSE 0 END) as long_votes
 FROM pool_profile_horizon_scores
     JOIN pool_run_metadata USING (run_id, pool_aggregation_id, source_database_path)
 WHERE horizon_name = 'weeks'
@@ -1141,6 +1142,133 @@ def _print_analysis_summary(result: PoolAnalysisResult, file: TextIO = sys.stdou
     print(file=file)
 
     print("=" * 70, file=file)
+
+
+def export_profile_threshold_calibration(
+    database_path: str | Path,
+    profile_name: str = "breakout_long",
+    horizon_name: str = "weeks",
+    output_path: str | Path | None = None,
+) -> Path:
+    """Export threshold ladder calibration for a profile (SQL q_pool_profile_strongest_score_price_corr port).
+
+    Analyzes score-price correlation at different threshold slices:
+    - ALL (baseline)
+    - BULLISH_UP (>= 0.35)
+    - STRONG_UP (>= 1.10)
+    - VERY_HIGH (>= 1.50)
+    - ELITE (>= 2.00)
+
+    Returns path to exported JSON with recommended thresholds.
+    """
+    from pathlib import Path
+    import json
+
+    db_path = Path(database_path)
+    if output_path is None:
+        output_path = db_path.parent / f"{profile_name}_{horizon_name}_threshold_calibration.json"
+    else:
+        output_path = Path(output_path)
+
+    conn = open_move_prediction_duckdb_connection(db_path, read_only=True)
+    try:
+        # Threshold slices matching SQL logic
+        slices = [
+            ("ALL", None, 0),
+            ("BULLISH_UP", 0.35, 1),
+            ("STRONG_UP", 1.10, 2),
+            ("VERY_HIGH", 1.50, 3),
+            ("ELITE", 2.00, 4),
+        ]
+
+        results = []
+        for slice_name, min_score, slice_order in slices:
+            # Build score filter
+            score_filter = "AND score IS NOT NULL" if min_score is None else f"AND score >= {min_score}"
+            min_pairs = 50 if slice_name == "ALL" else (10 if slice_name == "ELITE" else 20)
+
+            query = f"""
+                SELECT
+                    COUNT(*) as pair_count,
+                    AVG(score) as avg_score,
+                    AVG(risk_adjusted_score) as avg_ras,
+                    AVG(TRY_CAST(r."Perf.W" AS DOUBLE)) as avg_perf_w,
+                    CORR(score, TRY_CAST(r."Perf.W" AS DOUBLE)) as score_vs_perf_w_corr,
+                    CORR(risk_adjusted_score, TRY_CAST(r."Perf.W" AS DOUBLE)) as ras_vs_perf_w_corr,
+                    AVG(CASE WHEN direction IN ('Strong Up', 'Up') AND TRY_CAST(r."Perf.W" AS DOUBLE) > 0 THEN 1.0 ELSE 0.0 END) as bullish_hit_rate
+                FROM pool_profile_horizon_scores s
+                JOIN pool_raw_scan_rows r
+                    ON s.pool_aggregation_id = r.pool_aggregation_id
+                    AND s.source_database_path = r.source_database_path
+                    AND s.run_id = r.run_id
+                    AND (s.symbol = r.symbol OR r.symbol LIKE '%:' || s.symbol OR s.symbol LIKE '%:' || r.symbol)
+                WHERE s.horizon_name = '{horizon_name}'
+                    AND s.profile_name = '{profile_name}'
+                    {score_filter}
+            """
+
+            row = conn.execute(query).fetchone()
+            if row is None or row[0] < min_pairs:
+                continue
+
+            pair_count, avg_score, avg_ras, avg_perf_w, score_corr, ras_corr, hit_rate = row
+
+            results.append(
+                {
+                    "slice": slice_name,
+                    "slice_order": slice_order,
+                    "min_score": min_score,
+                    "pair_count": pair_count,
+                    "avg_score": avg_score,
+                    "avg_ras": avg_ras,
+                    "avg_perf_w_pct": avg_perf_w,
+                    "score_vs_perf_w_corr": score_corr,
+                    "ras_vs_perf_w_corr": ras_corr,
+                    "bullish_hit_rate": hit_rate,
+                }
+            )
+
+        # Calculate lift vs baseline (ALL slice)
+        baseline = next((r for r in results if r["slice"] == "ALL"), None)
+        if baseline:
+            for r in results:
+                if r["slice"] != "ALL":
+                    r["score_perf_w_lift_vs_all"] = (r["score_vs_perf_w_corr"] or 0) - (
+                        baseline["score_vs_perf_w_corr"] or 0
+                    )
+                    r["bullish_hit_lift_vs_all"] = (r["bullish_hit_rate"] or 0) - (
+                        baseline["bullish_hit_rate"] or 0
+                    )
+
+        # Recommended threshold based on hit rate improvement
+        recommended = None
+        for r in sorted(results, key=lambda x: x.get("bullish_hit_lift_vs_all", 0), reverse=True):
+            if r["slice"] != "ALL" and r["pair_count"] >= 20:
+                recommended = r["slice"]
+                break
+
+        output = {
+            "profile_name": profile_name,
+            "horizon_name": horizon_name,
+            "database_path": str(db_path),
+            "exported_at_utc": datetime.now(timezone.utc).isoformat(),
+            "recommended_threshold_slice": recommended,
+            "threshold_slices": results,
+            "methodology": (
+                "Threshold ladder analysis based on q_pool_profile_strongest_score_price_corr. "
+                "Compares score-to-price correlation and bullish hit rate at different score cutoffs. "
+                "Recommended threshold = slice with highest hit-rate lift vs baseline (ALL), "
+                "requiring minimum 20 pairs for statistical relevance."
+            ),
+        }
+
+        with open(output_path, "w") as f:
+            json.dump(output, f, indent=2, default=str)
+
+        return output_path
+
+    finally:
+        conn.close()
 
 
 def main() -> int:

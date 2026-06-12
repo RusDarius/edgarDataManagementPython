@@ -1,0 +1,170 @@
+Move Prediction Pool Analysis — SQL Block Reference
+File: move_prediction_pool_analysis.session.sql
+Connection: pooled_move_prediction_runs.duckdb (move_prediction_run_pool)
+
+HOW TO RUN (DBCode / SQLTools)
+  - Click "Run block" on the line: -- @block <block_name>
+  - Do NOT run explainer/section comment lines (they are not SQL).
+  - Full documentation for each block lives in this file.
+
+SCORE CONVENTIONS
+  score / risk_adjusted_score: roughly -3.00 to +3.00
+  directional up: score >= 0.35 | strong up: score >= 1.10
+  confidence: 5-99 (high >= 70)
+  direction: Strong Up, Up, Neutral, Down, Strong Down, N/A
+  manager_action_signal: add_long_breakout, accumulate_value_catalyst, neutral_watch, ...
+
+
+========================================================================
+1. DATABASE INVENTORY & METADATA
+========================================================================
+
+BLOCK: q_pool_list_tables
+----------------------------------------
+Show all tables in the pooled database.
+
+BLOCK: q_pool_aggregation_summary
+----------------------------------------
+Latest pool aggregation runs (source DB count, run count, chunk metadata).
+
+BLOCK: q_pool_source_inventory
+----------------------------------------
+Source databases inventory grouped by ISO year/week.
+
+
+========================================================================
+2. TOP PERFORMING PROFILES - BY SCORE METRICS
+========================================================================
+
+BLOCK: q_pool_profile_performance_weeks
+----------------------------------------
+Profile performance ranking (weeks horizon primary).
+
+BLOCK: q_pool_profile_performance_by_horizon
+----------------------------------------
+Profile performance by horizon (days/weeks/months/years).
+
+BLOCK: q_pool_profile_weekly_score_price_layer
+----------------------------------------
+Profile score vs realized price performance by ISO week (layered time series).
+Joins each run's scores to same-run raw price fields. Default horizon: weeks (change horizon_name to compare).
+
+BLOCK: q_pool_profile_strongest_score_price_corr
+----------------------------------------
+Score-threshold correlation ladder per profile to verify actionable cutoffs.
+Slices: ALL (baseline), BULLISH_UP (>=0.35), STRONG_UP (>=1.10), VERY_HIGH (>=1.50), ELITE (>=2.00), TOP_DECILE (best tickers per ISO week).
+Compares each slice to ALL via *_lift_vs_all columns; adds weekly snapshot consistency (mean/median weekly corr, pct_weeks_*_aligned).
+RUN: use "Run block" codelens on the @block line, or cursor on WITH below.
+Requires pool_raw_scan_rows with change, Perf.W, Perf.1M, Perf.5D. Default horizon: weeks.
+Min pair_count: ALL>=50, mid tiers>=20, ELITE>=10, TOP_DECILE>=15 — lower in SQL if your pool is smaller.
+Key columns: score_slice, strongest_metric, strongest_corr, score_perf_w_lift_vs_all, pct_weeks_strong_aligned, null_diag_note.
+NaN fix: direction_vs_perf_w_corr excluded when direction_sign is constant; non-finite corrs filtered from ranking.
+
+
+========================================================================
+3. STOCK COMPOSITE RANKINGS - MULTI-PROFILE CONSENSUS
+========================================================================
+
+BLOCK: q_pool_composite_stock_rankings
+----------------------------------------
+Top stocks by composite ranking (appears in multiple profiles).
+
+BLOCK: q_pool_best_stocks_by_profile
+----------------------------------------
+Best stocks by specific profile (change profile_name as needed).
+
+BLOCK: q_pool_sector_leaders
+----------------------------------------
+Sector leaders by composite score (top 10 per sector).
+
+
+========================================================================
+4. PATTERN PREDICTOR DISCOVERY - RAW FIELD CORRELATIONS
+========================================================================
+
+BLOCK: q_pool_raw_momentum_correlations
+----------------------------------------
+Correlation between raw momentum fields and profile scores.
+Requires vw_pool_profile_scores_with_raw (create_views=True during pool build).
+
+BLOCK: q_pool_raw_numeric_columns
+----------------------------------------
+List numeric raw scan columns available for manual predictor exploration.
+
+BLOCK: q_pool_component_analysis
+----------------------------------------
+Component analysis for a specific profile; relates component scores to final score.
+
+
+========================================================================
+5. SCORE vs PRICE PERFORMANCE INTERSECTION ANALYSIS
+========================================================================
+
+BLOCK: q_pool_high_score_positive_momentum
+----------------------------------------
+High score + positive momentum intersection (winners).
+
+BLOCK: q_pool_high_score_poor_momentum
+----------------------------------------
+High score but poor momentum (potential false positives / early signals).
+
+BLOCK: q_pool_score_price_divergence
+----------------------------------------
+Score/price divergence analysis by profile (alignment vs contrarian).
+
+
+========================================================================
+6. TEMPORAL ANALYSIS - PERFORMANCE ACROSS WEEKS
+========================================================================
+
+BLOCK: q_pool_profile_weekly_consistency
+----------------------------------------
+Profile performance consistency across weeks (weeks horizon).
+
+BLOCK: q_pool_weekly_consensus_leaders
+----------------------------------------
+Week-by-week consensus leaders (top 20 per ISO week).
+
+BLOCK: q_pool_profile_persistence
+----------------------------------------
+Profile persistence score (consistency across weeks).
+
+
+========================================================================
+7. SECTOR & INDUSTRY ANALYSIS
+========================================================================
+
+BLOCK: q_pool_sector_by_profile
+----------------------------------------
+Sector performance by profile (ranked within each profile).
+
+BLOCK: q_pool_top_industries
+----------------------------------------
+Best performing industries (multi-profile consensus).
+
+
+========================================================================
+8. CONFIDENCE & COVERAGE ANALYSIS
+========================================================================
+
+BLOCK: q_pool_confidence_stats
+----------------------------------------
+Profile confidence statistics by profile and horizon.
+
+BLOCK: q_pool_coverage_analysis
+----------------------------------------
+Coverage analysis — which profiles cover which stocks most consistently.
+
+
+========================================================================
+9. MANAGER ACTION SIGNAL ANALYSIS
+========================================================================
+
+BLOCK: q_pool_manager_action_distribution
+----------------------------------------
+Manager action signal distribution by profile.
+
+BLOCK: q_pool_strong_long_action_consensus
+----------------------------------------
+Strong long-action consensus (symbols with multiple bullish manager_action_signal hits).
+

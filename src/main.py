@@ -21,6 +21,7 @@ from data_analysis_scripts.trading_view_cross_scanner_aggregator import (
     run_cross_scanner_aggregate,
 )
 from data_analysis_scripts.trading_view_export_all_tdfields import (
+    backfill_historical_all_fields_csv_folders_to_duckdb,
     export_all_tradingview_fields,
     export_all_tradingview_fields_duckdb,
 )
@@ -380,27 +381,27 @@ def main():
     # )
 
     # # # # Model Analysis scan with duckdb storage solution
-    # move_prediction_scan_response = (
-    #     TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-    #         min_market_cap_usd=1_000_000_000,
-    #         markets=PREFERRED_MARKETS,
-    #     )
-    # )
-    # # Default (omit profile_suite_path): built-in 10-profile baseline — unchanged behavior.
-    # # Active-manager pass: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1
-    # base_duckdb_result = run_full_analysis_suite_duckdb(
-    #     scan_data=move_prediction_scan_response,
-    #     min_market_cap_usd=1_000_000_000,
-    #     include_blind_spot_sections=True,
-    #     # profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1,
-    # )
-    # run_full_analysis_suite_with_earnings_priority_duckdb(
-    #     scan_data=move_prediction_scan_response,
-    #     min_market_cap_usd=1_000_000_000,
-    #     include_blind_spot_sections=True,
-    #     base_result=base_duckdb_result,
-    #     # profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1,
-    # )
+    move_prediction_scan_response = (
+        TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+            min_market_cap_usd=1_000_000_000,
+            markets=PREFERRED_MARKETS,
+        )
+    )
+    # Default (omit profile_suite_path): built-in 10-profile baseline — unchanged behavior.
+    # Active-manager pass: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1
+    base_duckdb_result = run_full_analysis_suite_duckdb(
+        scan_data=move_prediction_scan_response,
+        min_market_cap_usd=1_000_000_000,
+        include_blind_spot_sections=True,
+        # profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1,
+    )
+    run_full_analysis_suite_with_earnings_priority_duckdb(
+        scan_data=move_prediction_scan_response,
+        min_market_cap_usd=1_000_000_000,
+        include_blind_spot_sections=True,
+        base_result=base_duckdb_result,
+        # profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1,
+    )
     # export_all_tradingview_fields_duckdb()
 
     # run_full_analysis_suite(
@@ -563,6 +564,65 @@ def main():
     #     export_sql=True,
     # )
     # print(f"Analysis reports exported: {list(exported.keys())}")
+
+    # backfill_historical_all_fields_csv_folders_to_duckdb(
+    #     day_folder_labels=[
+    #         # "29_03_2026",
+    #         # "30_03_2026",
+    #         # "31_03_2026",
+    #         # "01_04_2026",
+    #         # "02_04_2026",
+    #         # "06_04_2026",
+    #         # "07_04_2026",
+    #         # "08_04_2026",
+    #         # "09_04_2026",
+    #         # "10_04_2026",
+    #         # "13_04_2026",
+    #         # "14_04_2026",
+    #         # "15_04_2026",
+    #         # "16_04_2026",
+    #         # "17_04_2026",
+    #         # "20_04_2026",
+    #         # "21_04_2026",
+    #         # "22_04_2026",
+    #         # "23_04_2026",
+    #         # "24_04_2026",
+    #         # "27_04_2026",
+    #         # "28_04_2026",
+    #         # "29_04_2026",
+    #         # "30_04_2026",
+    #         # "01_05_2026",
+    #         # "04_05_2026",
+    #         # "05_05_2026",
+    #         # "06_05_2026",
+    #         # "07_05_2026",
+    #         # "08_05_2026",
+    #         # "11_05_2026",
+    #         # "12_05_2026",
+    #         # "13_05_2026",
+    #         # "14_05_2026",
+    #         # "15_05_2026",
+    #         "18_05_2026",
+    #         "19_05_2026",
+    #         "20_05_2026",
+    #         "21_05_2026",
+    #         "22_05_2026",
+    #         "26_05_2026",
+    #         # "27_05_2026",
+    #         # "28_05_2026",
+    #         # "29_05_2026",
+    #         # "01_06_2026",
+    #         # "02_06_2026",
+    #     ],
+    #     max_parallel_workers=3,
+    #     export_parquet=True,
+    #     export_all_fields_parquet=False,
+    #     skip_existing=True,
+    #     max_system_memory_gb=30.0,
+    #     memory_reserve_gb=4.0,
+    #     duckdb_memory_limit_gb=10.0,
+    #     duckdb_threads=8,
+    # )
 
     pass
 

@@ -505,6 +505,17 @@ COMPONENT_LABELS = {
 STRONG_MOVE_SCORE_THRESHOLD = 1.10
 DIRECTIONAL_MOVE_SCORE_THRESHOLD = 0.35
 
+# Dual-horizon gate thresholds for breakout_long active management
+# Based on pool calibration (q_pool_profile_strongest_score_price_corr):
+# - STRONG_UP hit rate: 0.95 at weeks >= 1.10, avg Perf.W 40.9%
+# - VERY_HIGH hit rate: 0.987 at weeks >= 1.50 (conviction tier)
+BREAKOUT_WEEKS_CONVICT_THRESHOLD = 1.10  # STRONG_UP - primary conviction gate
+BREAKOUT_WEEKS_HIGH_CONVICT_THRESHOLD = 1.50  # VERY_HIGH - high conviction tier
+BREAKOUT_DAYS_ENTRY_THRESHOLD = 0.35  # DIRECTIONAL - minimum entry timing
+BREAKOUT_DAYS_STRONG_ENTRY_THRESHOLD = 0.75  # Strong entry timing
+BREAKOUT_COVERAGE_FLOOR = 0.70  # Minimum coverage for validated leaders
+BREAKOUT_CONFIDENCE_FLOOR = 60.0  # Minimum confidence (5-99 scale)
+
 DEFAULT_HORIZON_WEIGHTS = {
     "days": {
         "attention": 0.16,
@@ -4507,6 +4518,103 @@ def _risk_adjusted_score(
     return _clamp(score * (1.0 + short_bonus) / (1.0 + short_penalty), -3.0, 3.0)
 
 
+def _breakout_composite_risk_score(
+    component_scores: dict[str, float | None],
+    derived_row: dict[str, float | None] | None,
+    horizons: dict[str, dict[str, Any]],
+    earnings_days_to_next: int | None,
+    profile_scores: dict[str, dict[str, dict[str, Any]]] | None = None,
+) -> tuple[int, str, dict[str, float]]:
+    """Compute breakout-specific composite risk score (0-100) and label.
+
+    Combines:
+    - Safety component (25%): balance-sheet/financial risk
+    - Extended tape exhaustion (25%): Perf.1M high + RSI>70 + falling volume
+    - Event/catalyst risk (20%): earnings within 7 days, gap severity
+    - False breakout pattern (20%): high days score but weak weeks/safety
+    - Cross-profile conflict (10%): fragility_short disagreement
+
+    Returns (score, label, component_breakdown).
+    """
+    if not derived_row:
+        derived_row = {}
+
+    # Component 1: Safety (25% weight) - already -1 to +1 scale, invert for risk
+    safety = component_scores.get("safety")
+    if safety is not None:
+        # Map safety -1..+1 to risk 0..25 (lower safety = higher risk)
+        safety_risk = _clamp((1.0 - safety) / 2.0 * 25.0, 0.0, 25.0)
+    else:
+        safety_risk = 15.0  # Unknown = moderate risk
+
+    # Component 2: Extended tape exhaustion (25% weight)
+    perf_1m = derived_row.get("Perf.1M")
+    rsi = derived_row.get("RSI")
+    volume_trend = derived_row.get("volume_trend")
+    extended_tape = 0.0
+    if perf_1m is not None and rsi is not None:
+        # Extended if high trailing perf + high RSI + volume falling
+        perf_factor = _clamp((perf_1m - 30.0) / 30.0, 0.0, 1.0) if perf_1m > 30 else 0.0
+        rsi_factor = _clamp((rsi - 70.0) / 20.0, 0.0, 1.0) if rsi > 70 else 0.0
+        volume_factor = _clamp((1.0 - volume_trend) / 0.5, 0.0, 1.0) if volume_trend is not None and volume_trend < 1.0 else 0.0
+        extended_tape = (perf_factor * 0.4 + rsi_factor * 0.4 + volume_factor * 0.2) * 25.0
+
+    # Component 3: Event/catalyst risk (20% weight)
+    event_risk = 0.0
+    if earnings_days_to_next is not None and 0 <= earnings_days_to_next <= 7:
+        # High risk in immediate earnings window
+        event_risk = (1.0 - earnings_days_to_next / 7.0) * 20.0
+    gap_severity = derived_row.get("gap_severity")
+    if gap_severity is not None and gap_severity > 2.0:
+        # Large gap adds event risk
+        event_risk = max(event_risk, _clamp((gap_severity - 2.0) / 3.0 * 10.0, 0.0, 10.0))
+
+    # Component 4: False breakout pattern (20% weight)
+    false_breakout = 0.0
+    days_score = horizons.get("days", {}).get("score")
+    weeks_score = horizons.get("weeks", {}).get("score")
+    days_strong = days_score is not None and days_score >= 0.75
+    weeks_weak = weeks_score is not None and weeks_score < 0.35
+    safety_weak = (component_scores.get("safety") or 0.0) < -0.35
+    if days_strong and (weeks_weak or safety_weak):
+        # High days but weak weeks structure - potential false breakout
+        false_breakout = 15.0 if weeks_weak else 10.0
+        if safety_weak:
+            false_breakout += 5.0
+
+    # Component 5: Cross-profile conflict (10% weight)
+    fragility_conflict = 0.0
+    if profile_scores:
+        fragility = profile_scores.get("fragility_short", {}).get("weeks", {}).get("score")
+        if fragility is not None and fragility >= 0.50:
+            # Structural fragility disagrees with breakout thesis
+            fragility_conflict = 5.0 + _clamp((fragility - 0.50) / 0.50 * 5.0, 0.0, 5.0)
+
+    # Total composite score
+    total_risk = safety_risk + extended_tape + event_risk + false_breakout + fragility_conflict
+    total_risk = _clamp(total_risk, 0.0, 100.0)
+
+    # Risk label buckets
+    if total_risk < 20:
+        label = "low"
+    elif total_risk < 40:
+        label = "moderate"
+    elif total_risk < 60:
+        label = "elevated"
+    else:
+        label = "severe"
+
+    breakdown = {
+        "safety_risk": safety_risk,
+        "extended_tape_risk": extended_tape,
+        "event_risk": event_risk,
+        "false_breakout_risk": false_breakout,
+        "fragility_conflict_risk": fragility_conflict,
+    }
+
+    return int(total_risk), label, breakdown
+
+
 def _profile_action_family(profile_name: str | None) -> str | None:
     if not profile_name:
         return None
@@ -4531,6 +4639,258 @@ def _count_bullish_long_profiles(
         if score is not None and score >= threshold:
             bullish_count += 1
     return bullish_count
+
+
+def _breakout_tape_confirms(
+    derived_row: dict[str, float | None] | None,
+    min_confirms: int = 3,
+) -> tuple[bool, dict[str, bool]]:
+    """Check tape confirmation signals for breakout validation.
+
+    Returns (overall_pass, details) where details has individual flags.
+    Based on SQL q_breakout_long_raw_* validation blocks:
+    - volume_trend > 1.05 (sustained accumulation)
+    - relative_volume_10d_calc > 1.3 (above-average participation)
+    - adx_directional_spread > 0 (ADX+DI > ADX-DI)
+    - aroon_spread > 20 (new uptrend formation)
+    - not_coiled (BB width >= universe P25)
+
+    Also checks CMF/Donchian via derived metrics when available.
+    """
+    if not derived_row:
+        return False, {}
+
+    volume_trend = derived_row.get("volume_trend")
+    rel_vol = derived_row.get("relative_volume_10d_calc")
+    adx_spread = derived_row.get("adx_directional_spread")
+    aroon_spread = derived_row.get("aroon_spread")
+    bb_width = derived_row.get("bb_width")
+    bb_width_percentile = derived_row.get("bb_width_percentile")
+    cmf_signal = derived_row.get("chaikin_money_flow_signal")
+    donchian_pos = derived_row.get("donchian_position")
+
+    confirms = {
+        "volume_trend": volume_trend is not None and volume_trend > 1.05,
+        "relative_volume": rel_vol is not None and rel_vol > 1.3,
+        "adx_directional": adx_spread is not None and adx_spread > 0,
+        "aroon_spread": aroon_spread is not None and aroon_spread > 20,
+        "not_coiled": bb_width is not None
+        and bb_width_percentile is not None
+        and bb_width_percentile >= 25,
+        "cmf_positive": cmf_signal is not None and cmf_signal > 0,
+        "donchian_breakout": donchian_pos is not None and donchian_pos > 0.5,
+    }
+
+    # Primary confirms: volume + ADX + Aroon + not coiled
+    primary_checks = [
+        confirms["volume_trend"] or confirms["relative_volume"],
+        confirms["adx_directional"],
+        confirms["aroon_spread"],
+        confirms["not_coiled"],
+    ]
+    # Secondary: CMF/Donchian
+    secondary_checks = [confirms["cmf_positive"], confirms["donchian_breakout"]]
+
+    total_pass = sum(primary_checks) + sum(secondary_checks)
+    return total_pass >= min_confirms, confirms
+
+
+def _build_breakout_investment_story(
+    prediction: dict[str, Any],
+    profile_scores: dict[str, dict[str, dict[str, Any]]] | None = None,
+    long_consensus_profiles: frozenset[str] | None = None,
+) -> dict[str, Any]:
+    """Build an active-management narrative for a breakout_long candidate.
+
+    Returns a structured story with conviction tier, entry readiness,
+    thesis bullets, tape confirmations, risk flags, and suggested size tier.
+    Mirrors SQL q_breakout_long_* validation blocks in Python.
+    """
+    horizons = prediction.get("horizons", {})
+    components = prediction.get("components", {})
+    derived = prediction.get("derived", {})
+    row = prediction.get("row", {})
+    earnings_days = prediction.get("earnings_days_to_next")
+    manager_action = prediction.get("manager_action_signal", "neutral_watch")
+
+    weeks = horizons.get("weeks", {})
+    days = horizons.get("days", {})
+    weeks_score = weeks.get("score")
+    days_score = days.get("score")
+    weeks_confidence = weeks.get("confidence")
+    weeks_coverage = weeks.get("coverage")
+    weeks_ras = weeks.get("risk_adjusted_score")
+
+    # Conviction tier from weeks score
+    if weeks_score is not None:
+        if weeks_score >= BREAKOUT_WEEKS_HIGH_CONVICT_THRESHOLD:
+            conviction_tier = "high_conviction"
+        elif weeks_score >= BREAKOUT_WEEKS_CONVICT_THRESHOLD:
+            conviction_tier = "actionable"
+        elif weeks_score >= DIRECTIONAL_MOVE_SCORE_THRESHOLD:
+            conviction_tier = "watch"
+        else:
+            conviction_tier = "none"
+    else:
+        conviction_tier = "none"
+
+    # Entry readiness from days + raw confirms
+    tape_pass, tape_details = _breakout_tape_confirms(derived, min_confirms=3)
+    days_strong = days_score is not None and days_score >= BREAKOUT_DAYS_STRONG_ENTRY_THRESHOLD
+    days_pass = days_score is not None and days_score >= BREAKOUT_DAYS_ENTRY_THRESHOLD
+
+    if conviction_tier == "none":
+        entry_readiness = "none"
+    elif days_strong and tape_pass:
+        entry_readiness = "ready_now"
+    elif days_pass and tape_pass:
+        entry_readiness = "ready"
+    elif days_pass and not tape_pass:
+        entry_readiness = "await_tape"
+    elif conviction_tier in ("actionable", "high_conviction"):
+        entry_readiness = "await_entry"
+    else:
+        entry_readiness = "watch"
+
+    # Extended tape exhaustion check
+    perf_1m = derived.get("Perf.1M")
+    rsi = derived.get("RSI")
+    volume_trend = derived.get("volume_trend")
+    extended_tape = (
+        perf_1m is not None
+        and rsi is not None
+        and perf_1m > 30
+        and rsi > 70
+        and volume_trend is not None
+        and volume_trend < 1.0
+    )
+
+    # Thesis bullets (component-driven narrative)
+    bullets: list[str] = []
+    attention = components.get("attention") or 0.0
+    momentum = components.get("momentum") or 0.0
+    trend = components.get("trend") or 0.0
+    event = components.get("event") or 0.0
+    quality = components.get("quality") or 0.0
+    valuation = components.get("valuation") or 0.0
+
+    # Primary thesis: what drives the breakout signal
+    top_components = [
+        ("momentum", momentum),
+        ("attention", attention),
+        ("trend", trend),
+        ("event", event),
+    ]
+    top_components.sort(key=lambda x: x[1], reverse=True)
+    active_components = [c for c, v in top_components if v > 0.2]
+    if len(active_components) >= 2:
+        bullets.append(
+            f"{', '.join(active_components[:3])} dominate; "
+            f"quality/valuation near baseline"
+        )
+    elif momentum > 0.35:
+        bullets.append("Momentum leading breakout with volume participation")
+    elif attention > 0.35:
+        bullets.append("Attention-driven accumulation pattern")
+
+    # Tape confirmation narrative
+    tape_summary = []
+    if tape_details.get("volume_trend"):
+        tape_summary.append("sustained volume")
+    if tape_details.get("relative_volume"):
+        tape_summary.append("above-avg participation")
+    if tape_details.get("adx_directional"):
+        tape_summary.append("ADX trend strength")
+    if tape_details.get("aroon_spread"):
+        tape_summary.append("Aroon uptrend formation")
+    if tape_details.get("not_coiled"):
+        tape_summary.append("post-coil breakout")
+    if tape_summary:
+        bullets.append("Tape confirms: " + "; ".join(tape_summary[:3]))
+    elif not tape_pass and entry_readiness in ("await_tape", "await_entry"):
+        bullets.append("Tape mixed: awaiting volume/ADX confirmation")
+
+    # Risk flags
+    risk_flags: dict[str, bool] = {
+        "false_breakout_risk": False,
+        "fragility_conflict": False,
+        "earnings_within_7d": False,
+        "extended_tape": extended_tape,
+        "low_coverage": (weeks_coverage is not None and weeks_coverage < BREAKOUT_COVERAGE_FLOOR),
+        "low_confidence": (weeks_confidence is not None and weeks_confidence < BREAKOUT_CONFIDENCE_FLOOR),
+    }
+
+    # False breakout: high days score but weak weeks/safety
+    days_strong_raw = days_score is not None and days_score >= 0.75
+    weeks_weak = weeks_score is not None and weeks_score < 0.35
+    safety_weak = (components.get("safety") or 0.0) < -0.35
+    risk_flags["false_breakout_risk"] = days_strong_raw and (weeks_weak or safety_weak)
+
+    # Earnings window
+    if earnings_days is not None and earnings_days <= 7 and earnings_days >= 0:
+        risk_flags["earnings_within_7d"] = True
+        bullets.append(f"Earnings catalyst in {earnings_days}d — event risk elevated")
+
+    # Fragility conflict (check cross-profile if available)
+    if profile_scores:
+        fragility = profile_scores.get("fragility_short", {}).get("weeks", {}).get("score")
+        if fragility is not None and fragility >= 0.50:
+            risk_flags["fragility_conflict"] = True
+            bullets.append("Structural fragility flagged — consider size reduction")
+
+    if extended_tape:
+        bullets.append("Extended tape exhaustion pattern — trim risk elevated")
+
+    # Composite risk score for precise risk measurement
+    risk_score, risk_label, risk_breakdown = _breakout_composite_risk_score(
+        components, derived, horizons, earnings_days, profile_scores
+    )
+
+    # Update risk flags from composite breakdown for DuckDB export
+    risk_flags["extended_tape"] = risk_breakdown["extended_tape_risk"] > 10.0
+    risk_flags["false_breakout_risk"] = risk_breakdown["false_breakout_risk"] > 10.0
+    risk_flags["fragility_conflict"] = risk_breakdown["fragility_conflict_risk"] > 0.0
+
+    # Size tier mapping (conviction × composite risk label)
+    # Risk tiers: low (<20), moderate (20-40), elevated (40-60), severe (60+)
+    if risk_label == "severe":
+        size_tier = "reject"
+    elif risk_label == "elevated":
+        size_tier = "watchlist"
+    elif risk_label == "moderate" and conviction_tier in ("actionable", "high_conviction"):
+        size_tier = "half"
+    elif risk_label == "low":
+        # Low risk: full size if actionable and ready
+        if conviction_tier == "high_conviction" and entry_readiness in ("ready", "ready_now"):
+            size_tier = "full"
+        elif conviction_tier == "actionable" and entry_readiness in ("ready", "ready_now"):
+            size_tier = "full"
+        elif conviction_tier in ("actionable", "high_conviction"):
+            size_tier = "watchlist"
+        else:
+            size_tier = "reject"
+    else:
+        # Moderate risk with low conviction or not ready
+        size_tier = "watchlist"
+
+    return {
+        "conviction_tier": conviction_tier,
+        "entry_readiness": entry_readiness,
+        "thesis_bullets": bullets,
+        "tape_confirms": tape_details,
+        "tape_pass": tape_pass,
+        "risk_flags": risk_flags,
+        "size_tier": size_tier,
+        "manager_action": manager_action,
+        "weeks_score": weeks_score,
+        "days_score": days_score,
+        "weeks_ras": weeks_ras,
+        "weeks_coverage": weeks_coverage,
+        "weeks_confidence": weeks_confidence,
+        "composite_risk_score": risk_score,
+        "composite_risk_label": risk_label,
+        "composite_risk_breakdown": risk_breakdown,
+    }
 
 
 def _manager_action_signal(
@@ -4594,6 +4954,7 @@ def _manager_action_signal(
 
     if valuation >= 0.55 and (quality <= -0.35 or safety <= -0.55):
         return "avoid_value_trap"
+    # Generic add_long_breakout (lower threshold, any profile)
     if (
         weeks is not None
         and days is not None
@@ -4604,6 +4965,61 @@ def _manager_action_signal(
         and safety >= -0.35
     ):
         return "add_long_breakout"
+
+    # Breakout-specific dual-gate active management (higher threshold, validated)
+    # Pool calibration: STRONG_UP (>=1.10) hit rate 0.95, VERY_HIGH (>=1.50) hit 0.987
+    if profile_family == "breakout_long":
+        # Extract derived fields for breakout validation
+        volume_trend_brk = (derived_row or {}).get("volume_trend")
+        perf_1m_brk = (derived_row or {}).get("Perf.1M")
+        rsi_brk = (derived_row or {}).get("RSI")
+
+        # Weeks conviction gate + days entry gate + component floors
+        weeks_pass = weeks is not None and weeks >= BREAKOUT_WEEKS_CONVICT_THRESHOLD
+        days_pass = days is not None and days >= BREAKOUT_DAYS_ENTRY_THRESHOLD
+        weeks_high = weeks is not None and weeks >= BREAKOUT_WEEKS_HIGH_CONVICT_THRESHOLD
+        days_strong = days is not None and days >= BREAKOUT_DAYS_STRONG_ENTRY_THRESHOLD
+
+        # Check for extended tape (trim signal) - exhaustion screen
+        extended_tape = (
+            perf_1m_brk is not None
+            and rsi_brk is not None
+            and perf_1m_brk > 30  # Top decile proxy
+            and rsi_brk > 70
+            and volume_trend_brk is not None
+            and volume_trend_brk < 1.0  # Falling volume trend
+        )
+
+        if weeks_high and extended_tape:
+            return "trim_extended_long"
+
+        # Dual gate with tape confirmation
+        if weeks_pass and days_pass:
+            # Component floors for breakout momentum/trend
+            component_ok = (
+                momentum >= 0.45
+                and trend >= 0.35
+                and safety >= -0.35
+            )
+
+            if component_ok:
+                # Check tape confirms (3/5 minimum)
+                tape_confirms, _ = _breakout_tape_confirms(derived_row, min_confirms=3)
+
+                if tape_confirms:
+                    # High conviction tier
+                    if weeks_high or days_strong:
+                        return "add_long_breakout_high_conviction"
+                    return "add_long_breakout"
+
+                # Weak tape but strong components: watch for entry
+                return "watch_breakout_await_tape"
+
+        # Single-gate near-miss tracking
+        if weeks_pass and not days_pass:
+            return "watch_conviction_await_entry"
+        if days_pass and not weeks_pass:
+            return "watch_momentum_await_conviction"
     if (
         months is not None
         and months >= 0.55
@@ -4749,8 +5165,13 @@ def _build_prediction_rows(
     derived_metrics: list[dict[str, float | None]],
     scoring_profile: ScoringProfile,
 ) -> list[dict[str, Any]]:
+    """Build prediction rows with optional investment story for breakout profiles."""
     prediction_rows: list[dict[str, Any]] = []
     horizon_weights = _resolve_horizon_weights(scoring_profile)
+
+    # Determine if this is a breakout profile that needs story enrichment
+    profile_family = _profile_action_family(scoring_profile.name)
+    is_breakout_profile = profile_family == "breakout_long"
 
     for row, derived_row in zip(scan_data, derived_metrics):
         component_scores = _build_component_scores(
@@ -4767,23 +5188,33 @@ def _build_prediction_rows(
             )
             for horizon_name in horizon_weights
         }
-        prediction_rows.append(
-            {
-                "row": row,
-                "derived": derived_row,
-                "components": component_scores,
-                "horizons": horizons,
-                "earnings_days_to_next": earnings_days_to_next,
-                "scoring_profile": scoring_profile.name,
-                "manager_action_signal": _manager_action_signal(
-                    horizons,
-                    component_scores,
-                    scoring_profile_name=scoring_profile.name,
-                    derived_row=derived_row,
-                    earnings_days_to_next=earnings_days_to_next,
-                ),
-            }
-        )
+
+        # Build initial prediction dict
+        prediction: dict[str, Any] = {
+            "row": row,
+            "derived": derived_row,
+            "components": component_scores,
+            "horizons": horizons,
+            "earnings_days_to_next": earnings_days_to_next,
+            "scoring_profile": scoring_profile.name,
+            "manager_action_signal": _manager_action_signal(
+                horizons,
+                component_scores,
+                scoring_profile_name=scoring_profile.name,
+                derived_row=derived_row,
+                earnings_days_to_next=earnings_days_to_next,
+            ),
+        }
+
+        # Add investment story for breakout profiles
+        if is_breakout_profile:
+            prediction["investment_story"] = _build_breakout_investment_story(
+                prediction,
+                profile_scores=None,  # Single-profile run, no cross-profile scores
+                long_consensus_profiles=LONG_CONSENSUS_PROFILES,
+            )
+
+        prediction_rows.append(prediction)
 
     return prediction_rows
 
@@ -6522,6 +6953,192 @@ def _build_profile_performance_tracking_records(
     return records
 
 
+def _build_breakout_story_records(
+    prediction_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build breakout investment story records for DuckDB persistence.
+
+    Returns list of dicts with conviction tier, entry readiness, thesis,
+    risk flags, and size tier for active management decisions.
+    """
+    records: list[dict[str, Any]] = []
+    # Only process rows with investment story (breakout profiles)
+    for row_number, prediction in enumerate(prediction_rows, start=1):
+        story = prediction.get("investment_story")
+        if not story:
+            continue
+
+        row = prediction["row"]
+        tape_confirms = story.get("tape_confirms", {})
+        risk_flags = story.get("risk_flags", {})
+
+        records.append(
+            {
+                "prediction_row_number": row_number,
+                "symbol": _get_symbol_name(row),
+                "company": _get_company_name(row),
+                "sector": str(row.get("sector") or ""),
+                "industry": str(row.get("industry") or ""),
+                "conviction_tier": story.get("conviction_tier"),
+                "entry_readiness": story.get("entry_readiness"),
+                "tape_pass": story.get("tape_pass", False),
+                "volume_trend_ok": tape_confirms.get("volume_trend", False),
+                "relative_volume_ok": tape_confirms.get("relative_volume", False),
+                "adx_ok": tape_confirms.get("adx_directional", False),
+                "aroon_ok": tape_confirms.get("aroon_spread", False),
+                "not_coiled": tape_confirms.get("not_coiled", False),
+                "cmf_ok": tape_confirms.get("cmf_positive", False),
+                "donchian_ok": tape_confirms.get("donchian_breakout", False),
+                "risk_false_breakout": risk_flags.get("false_breakout_risk", False),
+                "risk_fragility_conflict": risk_flags.get("fragility_conflict", False),
+                "risk_earnings_7d": risk_flags.get("earnings_within_7d", False),
+                "risk_extended_tape": risk_flags.get("extended_tape", False),
+                "risk_low_coverage": risk_flags.get("low_coverage", False),
+                "risk_low_confidence": risk_flags.get("low_confidence", False),
+                "composite_risk_score": story.get("composite_risk_score"),
+                "composite_risk_label": story.get("composite_risk_label"),
+                "weeks_score": story.get("weeks_score"),
+                "days_score": story.get("days_score"),
+                "weeks_ras": story.get("weeks_ras"),
+                "size_tier": story.get("size_tier"),
+                "manager_action": story.get("manager_action"),
+                "thesis_1": story.get("thesis_bullets", [""])[0] if story.get("thesis_bullets") else "",
+                "thesis_2": story.get("thesis_bullets", ["", ""])[1] if len(story.get("thesis_bullets", [])) > 1 else "",
+            }
+        )
+    return records
+
+
+def _log_breakout_narrative_sections(
+    log_file: Path,
+    prediction_rows: list[dict[str, Any]],
+    top_n: int = 30,
+) -> None:
+    """Log validated leaders and rejected near-misses for breakout profiles."""
+    # Collect rows with investment stories
+    stories = [(pred, pred.get("investment_story", {})) for pred in prediction_rows if pred.get("investment_story")]
+    if not stories:
+        return
+
+    # Validated leaders: actionable/high_conviction + ready/ready_now + no critical risk
+    validated = [
+        (pred, story) for pred, story in stories
+        if story.get("conviction_tier") in ("actionable", "high_conviction")
+        and story.get("entry_readiness") in ("ready", "ready_now")
+        and story.get("size_tier") in ("full", "half")
+        and not story.get("risk_flags", {}).get("false_breakout_risk", False)
+        and not story.get("risk_flags", {}).get("fragility_conflict", False)
+    ]
+
+    # Sort by weeks_ras descending
+    validated.sort(key=lambda x: x[1].get("weeks_ras") or -999, reverse=True)
+
+    log_to_file(log_file, "")
+    log_to_file(log_file, "=" * 120)
+    log_to_file(log_file, "BREAKOUT ACTIVE MANAGEMENT — VALIDATED LEADERS")
+    log_to_file(log_file, f"Dual-gate: weeks>={BREAKOUT_WEEKS_CONVICT_THRESHOLD}, days>={BREAKOUT_DAYS_ENTRY_THRESHOLD}")
+    log_to_file(log_file, f"Tape confirms (3/5): volume_trend>1.05, rel_vol>1.3, ADX>0, Aroon>20, not_coiled")
+    log_to_file(log_file, "-" * 120)
+
+    if not validated:
+        log_to_file(log_file, "No validated leaders meet dual-gate + tape criteria this run.")
+    else:
+        log_to_file(
+            log_file,
+            f"{'Rank':<5} {'Symbol':<8} {'Company':<25} {'Weeks':>6} {'Days':>6} {'RAS':>6} {'Risk':>5} {'Entry':<12} {'Size':<8} {'Composite Risk':<15}"
+        )
+        log_to_file(log_file, "-" * 120)
+        for i, (pred, story) in enumerate(validated[:top_n], 1):
+            row = pred["row"]
+            company = _get_company_name(row)[:23]
+            risk_flags = []
+            if story.get("risk_flags", {}).get("earnings_within_7d"):
+                risk_flags.append("earn")
+            if story.get("risk_flags", {}).get("extended_tape"):
+                risk_flags.append("ext")
+            if story.get("risk_flags", {}).get("low_coverage"):
+                risk_flags.append("cov")
+            if story.get("risk_flags", {}).get("low_confidence"):
+                risk_flags.append("conf")
+            risk_str = ", ".join(risk_flags) if risk_flags else "-"
+
+            comp_risk_score = story.get("composite_risk_score")
+            comp_risk_label = story.get("composite_risk_label", "unknown")
+            risk_display = f"{comp_risk_score}/{comp_risk_label}" if comp_risk_score is not None else comp_risk_label
+
+            log_to_file(
+                log_file,
+                f"{i:<5} {_get_symbol_name(row):<8} {company:<25} "
+                f"{story.get('weeks_score', 0):>6.2f} "
+                f"{story.get('days_score', 0):>6.2f} "
+                f"{story.get('weeks_ras', 0):>6.2f} "
+                f"{risk_str:>5} "
+                f"{story.get('entry_readiness', 'unknown'):<12} "
+                f"{story.get('size_tier', 'reject'):<8} "
+                f"{risk_display:<15}"
+            )
+            # Thesis bullets
+            for bullet in story.get("thesis_bullets", [])[:2]:
+                log_to_file(log_file, f"      • {bullet}")
+
+    # Rejected near-misses: high RAS but failed one gate
+    near_misses = [
+        (pred, story) for pred, story in stories
+        if (story.get("weeks_ras") or 0) >= 0.75  # Strong RAS but rejected
+        and story.get("size_tier") not in ("full", "half")
+        and story.get("conviction_tier") != "none"
+    ]
+    near_misses.sort(key=lambda x: x[1].get("weeks_ras") or -999, reverse=True)
+
+    log_to_file(log_file, "")
+    log_to_file(log_file, "-" * 120)
+    log_to_file(log_file, "BREAKOUT ACTIVE MANAGEMENT — REJECTED NEAR-MISSES (Why not actionable)")
+    log_to_file(log_file, f"Top {min(20, len(near_misses))} by RAS that failed validation gates")
+    log_to_file(log_file, "-" * 120)
+
+    if not near_misses:
+        log_to_file(log_file, "No near-misses — all high-RAS names passed validation or were low conviction.")
+    else:
+        log_to_file(
+            log_file,
+            f"{'Rank':<5} {'Symbol':<8} {'Company':<25} {'Weeks':>6} {'Days':>6} {'RAS':>6} {'Risk':>6} {'Reject Reason':<25} {'Entry':<12}"
+        )
+        log_to_file(log_file, "-" * 120)
+        for i, (pred, story) in enumerate(near_misses[:20], 1):
+            row = pred["row"]
+            company = _get_company_name(row)[:23]
+            # Determine reject reason
+            reasons = []
+            if story.get("risk_flags", {}).get("false_breakout_risk"):
+                reasons.append("false_breakout")
+            if story.get("risk_flags", {}).get("fragility_conflict"):
+                reasons.append("fragility")
+            if not story.get("tape_pass", False):
+                reasons.append("weak_tape")
+            if story.get("entry_readiness") == "await_tape":
+                reasons.append("await_tape")
+            if story.get("entry_readiness") == "await_entry":
+                reasons.append("await_entry")
+            reason_str = ", ".join(reasons) if reasons else story.get("size_tier", "reject")
+
+            comp_risk_score = story.get("composite_risk_score")
+            comp_risk_label = story.get("composite_risk_label", "unknown")
+            risk_display = f"{comp_risk_score}" if comp_risk_score is not None else comp_risk_label[:6]
+
+            log_to_file(
+                log_file,
+                f"{i:<5} {_get_symbol_name(row):<8} {company:<25} "
+                f"{story.get('weeks_score', 0):>6.2f} "
+                f"{story.get('days_score', 0):>6.2f} "
+                f"{story.get('weeks_ras', 0):>6.2f} "
+                f"{risk_display:>6} "
+                f"{reason_str:<25} "
+                f"{story.get('entry_readiness', 'unknown'):<12}"
+            )
+
+    log_to_file(log_file, "=" * 120)
+
+
 def _consensus_base_record(
     run_id: str,
     row_number: int,
@@ -6698,6 +7315,23 @@ def _analyze_move_prediction_scan_duckdb(
             resolved_profile,
         )
     )
+
+    # Persist breakout investment stories and log narrative sections
+    profile_family = _profile_action_family(resolved_profile.name)
+    if profile_family == "breakout_long":
+        story_records = _build_breakout_story_records(prediction_rows)
+        if story_records:
+            duckdb_store.append_tabular_output(
+                "breakout_investment_stories",
+                list(story_records[0].keys()),
+                [list(r.values()) for r in story_records],
+                context={
+                    "run_id": run_id,
+                    "profile_name": resolved_profile.name,
+                    "story_count": len(story_records),
+                },
+            )
+        _log_breakout_narrative_sections(log_file, prediction_rows, top_n=30)
 
     _log_methodology(log_file, resolved_profile)
     _log_scoring_profile_details(log_file, resolved_profile)

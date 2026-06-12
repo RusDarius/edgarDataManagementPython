@@ -60,6 +60,7 @@ DEFAULT_HORIZON_NAME = "weeks"
 
 CALIBRATION_GATES = {
     "aligned_positive_ratio_min": 0.55,
+    "conditional_hit_rate_min": 0.65,  # Alternative: hit rate among score-improved symbols only
     "score_price_corr_min": 0.15,
     "false_positive_rate_max": 0.35,
     "persistence_presence_ratio_min": 0.5,
@@ -853,17 +854,29 @@ def export_calibration_reports(
     exports: dict[str, Any] = {"history_database_path": str(history_database_path)}
 
     alignment_sql = """
-        SELECT profile_name,
-            horizon_name,
-            symbol_count,
-            aligned_positive_count,
-            false_positive_count,
+        SELECT a.profile_name,
+            a.horizon_name,
+            a.symbol_count,
+            a.aligned_positive_count,
+            a.false_positive_count,
             ROUND(
-                aligned_positive_count * 1.0 / NULLIF(symbol_count, 0),
+                a.aligned_positive_count * 1.0 / NULLIF(a.symbol_count, 0),
                 4
             ) AS aligned_positive_ratio,
-            ROUND(score_price_corr, 4) AS score_price_corr
-        FROM vw_profile_horizon_alignment_stats
+            -- Conditional hit rate: among symbols with score improvement, what % had price up?
+            ROUND(
+                a.aligned_positive_count * 1.0 / NULLIF(p.score_improved_count, 0),
+                4
+            ) AS conditional_hit_rate,
+            p.score_improved_count,
+            ROUND(a.score_price_corr, 4) AS score_price_corr
+        FROM vw_profile_horizon_alignment_stats a
+        LEFT JOIN (
+            SELECT profile_name, horizon_name, COUNT(*) AS score_improved_count
+            FROM vw_profile_horizon_progression_core
+            WHERE score_delta_total > 0
+            GROUP BY profile_name, horizon_name
+        ) p ON a.profile_name = p.profile_name AND a.horizon_name = p.horizon_name
         ORDER BY aligned_positive_ratio DESC
     """
     persistence_sql = f"""
@@ -922,14 +935,28 @@ def export_calibration_reports(
     for row in alignment_rows:
         horizon_name = row.get("horizon_name")
         aligned_ratio = float(row.get("aligned_positive_ratio") or 0.0)
+        conditional_hit_rate = float(row.get("conditional_hit_rate") or 0.0)
+        score_improved_count = int(row.get("score_improved_count") or 0)
         score_corr = float(row.get("score_price_corr") or 0.0)
         symbol_count = int(row.get("symbol_count") or 0)
         false_positive_count = int(row.get("false_positive_count") or 0)
         false_positive_rate = (
             false_positive_count / symbol_count if symbol_count else None
         )
+
+        # Dual gate evaluation:
+        # - aligned_positive_ratio >= 0.55 (universe-wide alignment)
+        # - OR conditional_hit_rate >= 0.65 (hit rate among score-improved cohort)
+        # The conditional gate is more lenient but requires meaningful sample size
+        passes_aligned_ratio = aligned_ratio >= CALIBRATION_GATES["aligned_positive_ratio_min"]
+        passes_conditional = (
+            score_improved_count >= 20  # Minimum sample size for conditional gate
+            and conditional_hit_rate >= CALIBRATION_GATES["conditional_hit_rate_min"]
+        )
+        passes_alignment = passes_aligned_ratio or passes_conditional
+
         passes = (
-            aligned_ratio >= CALIBRATION_GATES["aligned_positive_ratio_min"]
+            passes_alignment
             and (
                 horizon_name not in {DEFAULT_HORIZON_NAME, "months"}
                 or score_corr >= CALIBRATION_GATES["score_price_corr_min"]
@@ -944,9 +971,14 @@ def export_calibration_reports(
                 "profile_name": row.get("profile_name"),
                 "horizon_name": horizon_name,
                 "aligned_positive_ratio": aligned_ratio,
+                "conditional_hit_rate": conditional_hit_rate,
+                "score_improved_count": score_improved_count,
                 "score_price_corr": score_corr,
                 "false_positive_rate": false_positive_rate,
+                "passes_aligned_ratio_gate": passes_aligned_ratio,
+                "passes_conditional_hit_gate": passes_conditional,
                 "passes_calibration_gates": passes,
+                "gate_used": "aligned_ratio" if passes_aligned_ratio else ("conditional_hit" if passes_conditional else "none"),
             }
         )
     exports["calibration_gate_summary_csv"] = str(
