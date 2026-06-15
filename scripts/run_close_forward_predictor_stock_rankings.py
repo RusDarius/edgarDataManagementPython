@@ -56,6 +56,23 @@ BEARISH_WARNING_PREDICTORS = (
     "ebitda_ttm",
 )
 
+# Advice buckets mirror close_forward_*_advised_conclusions.md playbooks.
+ADVISED_PREDICTOR_ADVICE: dict[str, tuple[str, str]] = {
+    "ATRP|1W": ("volatility_bullish", "Playbook A primary — rank high"),
+    "ATRP": ("volatility_bullish", "Playbook A — rank high"),
+    "ADRP|15": ("volatility_bullish", "Volatility tilt — rank high"),
+    "ADRP|1W": ("volatility_bullish", "Volatility tilt — rank high"),
+    "ADX-DI|1M": ("adx_pressure_bullish", "Playbook A optional — rank high"),
+    "ADX-DI_50|1M": ("adx_pressure_bullish", "Confirmation filter — rank high"),
+    "relative_volume": ("volatility_bullish", "Playbook A optional — rank high"),
+    "RSI21[1]|1M": ("oversold_warning", "Playbook C — rank low (avoid oversold long)"),
+    "Stoch.K_14_1_3|1M": ("oversold_warning", "Playbook C — bottom quintile avoid"),
+    "W.R|1M": ("oversold_warning", "Playbook C — bottom quintile avoid"),
+    "Recommend.MA|1M": ("crowded_consensus_warning", "Playbook C — rank low (bullish MA = headwind)"),
+    "oper_income_ttm": ("mega_cap_warning", "Playbook C — rank low (size headwind)"),
+    "ebitda_ttm": ("mega_cap_warning", "Playbook C — rank low (size headwind)"),
+}
+
 PREFERRED_MARKETS = (
     "america",
     "canada",
@@ -127,6 +144,417 @@ def _fetch_predictor_weights(
         list(predictor_fields),
     ).fetchall()
     return [(str(field), float(rss), float(weight)) for field, rss, weight in rows]
+
+
+def _build_enr_unpivot_sql(predictor_fields: list[str]) -> str:
+    parts: list[str] = []
+    for field in predictor_fields:
+        col = _quote_identifier(field)
+        escaped = field.replace("'", "''")
+        parts.append(
+            f"""
+    SELECT run_id,
+           symbol,
+           '{escaped}' AS predictor_field,
+           TRY_CAST({col} AS DOUBLE) AS pred_value,
+           TRY_CAST(close_forward_return_pct AS DOUBLE) AS fwd_ret
+    FROM filtered
+    WHERE TRY_CAST({col} AS DOUBLE) IS NOT NULL
+      AND isfinite(TRY_CAST({col} AS DOUBLE))
+            """.strip()
+        )
+    return "\n    UNION ALL\n".join(parts)
+
+
+def _top_stable_predictors_sql(*, top_n: int) -> str:
+    return f"""
+SELECT predictor_field,
+       runs_seen,
+       ROUND(sign_consistency_ratio, 3) AS sign_consistency,
+       ROUND(median_pearson, 4) AS median_pearson,
+       ROUND(mean_pearson, 4) AS mean_pearson,
+       ROUND(median_quintile_spread, 2) AS median_q_spread_pp,
+       ROUND(mean_quintile_spread, 2) AS mean_q_spread_pp,
+       ROUND(rank_stability_score, 3) AS rank_stability_score,
+       CASE
+           WHEN rank_stability_score >= 0 THEN 'rank_high_in_universe'
+           ELSE 'rank_low_in_universe'
+       END AS scout_direction,
+       CASE
+           WHEN median_quintile_spread >= 0.4
+                AND sign_consistency_ratio >= 0.65 THEN 'bullish_tilt'
+           WHEN median_quintile_spread <= -0.3
+                AND sign_consistency_ratio >= 0.65 THEN 'avoid_warning'
+           WHEN ABS(median_quintile_spread) >= 0.3 THEN 'moderate_mixed'
+           ELSE 'weak_sparse'
+       END AS advice_bucket
+FROM agg.cross_run_field_stability
+WHERE performance_field = 'close_forward_return_pct'
+  AND runs_seen >= 10
+  AND sign_consistency_ratio >= 0.65
+  AND predictor_field NOT ILIKE '%gap%'
+  AND predictor_field NOT ILIKE '%change%'
+  AND predictor_field NOT ILIKE '%Mom%'
+  AND predictor_field NOT ILIKE '%ROC%'
+  AND ABS(median_quintile_spread) >= 0.3
+ORDER BY ABS(rank_stability_score) DESC NULLS LAST
+LIMIT {top_n}
+"""
+
+
+def _advised_predictor_profile_sql(
+    weights: list[tuple[str, float, float]],
+) -> str:
+    rows = ",\n                ".join(
+        f"('{field.replace(chr(39), chr(39)+chr(39))}', '{ADVISED_PREDICTOR_ADVICE.get(field, ('unknown', ''))[0]}', "
+        f"'{ADVISED_PREDICTOR_ADVICE.get(field, ('', 'unknown'))[1].replace(chr(39), chr(39)+chr(39))}')"
+        for field, _, _ in weights
+    )
+    return f"""
+WITH advised_meta AS (
+    SELECT predictor_field, advice_category, active_mgmt_note
+    FROM (
+            VALUES
+                {rows}
+        ) AS t(predictor_field, advice_category, active_mgmt_note)
+),
+stability AS (
+    SELECT predictor_field,
+           runs_seen,
+           ROUND(sign_consistency_ratio, 3) AS sign_consistency,
+           ROUND(median_pearson, 4) AS median_pearson,
+           ROUND(median_quintile_spread, 2) AS median_q_spread_pp,
+           ROUND(rank_stability_score, 3) AS rank_stability_score,
+           CASE
+               WHEN rank_stability_score >= 0 THEN 'rank_high_in_universe'
+               ELSE 'rank_low_in_universe'
+           END AS scout_direction
+    FROM agg.cross_run_field_stability
+    WHERE performance_field = 'close_forward_return_pct'
+)
+SELECT m.predictor_field,
+       m.advice_category,
+       m.active_mgmt_note,
+       s.runs_seen,
+       s.sign_consistency,
+       s.median_pearson,
+       s.median_q_spread_pp,
+       s.rank_stability_score,
+       s.scout_direction,
+       ABS(s.rank_stability_score) AS composite_weight
+FROM advised_meta m
+    LEFT JOIN stability s USING (predictor_field)
+ORDER BY ABS(COALESCE(s.rank_stability_score, 0)) DESC NULLS LAST,
+    m.predictor_field
+"""
+
+
+def _quintile_fwd_perf_pooled_sql(predictor_fields: list[str]) -> str:
+    return f"""
+WITH filtered AS (
+    SELECT a.run_id,
+           a.symbol,
+           a.close_forward_return_pct,
+           a.*
+    FROM enr.all_fields_rows a
+        INNER JOIN cr.cross_run_close_returns cr USING (run_id, symbol)
+    WHERE TRY_CAST(a.close_forward_return_pct AS DOUBLE) BETWEEN -25 AND 25
+      AND cr.close_price >= {MIN_CLOSE}
+),
+long_vals AS (
+{_build_enr_unpivot_sql(predictor_fields)}
+),
+quintiled AS (
+    SELECT run_id,
+           symbol,
+           predictor_field,
+           pred_value,
+           fwd_ret,
+           NTILE(5) OVER (
+               PARTITION BY run_id, predictor_field
+               ORDER BY pred_value
+           ) AS pred_quintile
+    FROM long_vals
+    WHERE fwd_ret IS NOT NULL
+),
+pooled AS (
+    SELECT predictor_field,
+           pred_quintile,
+           COUNT(*) AS n_symbol_days,
+           COUNT(DISTINCT run_id) AS n_runs,
+           ROUND(AVG(fwd_ret), 3) AS avg_fwd_pct,
+           ROUND(MEDIAN(fwd_ret), 3) AS median_fwd_pct,
+           ROUND(STDDEV(fwd_ret), 3) AS stdev_fwd_pct,
+           ROUND(AVG(CASE WHEN fwd_ret > 0 THEN 1.0 ELSE 0.0 END), 3) AS win_rate
+    FROM quintiled
+    GROUP BY predictor_field, pred_quintile
+)
+SELECT predictor_field,
+       pred_quintile,
+       n_symbol_days,
+       n_runs,
+       avg_fwd_pct,
+       median_fwd_pct,
+       stdev_fwd_pct,
+       win_rate
+FROM pooled
+ORDER BY predictor_field, pred_quintile
+"""
+
+
+def _quintile_spread_summary_sql(predictor_fields: list[str]) -> str:
+    return f"""
+WITH filtered AS (
+    SELECT a.run_id,
+           a.symbol,
+           a.close_forward_return_pct,
+           a.*
+    FROM enr.all_fields_rows a
+        INNER JOIN cr.cross_run_close_returns cr USING (run_id, symbol)
+    WHERE TRY_CAST(a.close_forward_return_pct AS DOUBLE) BETWEEN -25 AND 25
+      AND cr.close_price >= {MIN_CLOSE}
+),
+long_vals AS (
+{_build_enr_unpivot_sql(predictor_fields)}
+),
+quintiled AS (
+    SELECT run_id,
+           symbol,
+           predictor_field,
+           pred_value,
+           fwd_ret,
+           NTILE(5) OVER (
+               PARTITION BY run_id, predictor_field
+               ORDER BY pred_value
+           ) AS pred_quintile
+    FROM long_vals
+    WHERE fwd_ret IS NOT NULL
+),
+pooled AS (
+    SELECT predictor_field,
+           pred_quintile,
+           ROUND(AVG(fwd_ret), 3) AS avg_fwd_pct
+    FROM quintiled
+    GROUP BY predictor_field, pred_quintile
+),
+pooled_wide AS (
+    SELECT predictor_field,
+           MAX(CASE WHEN pred_quintile = 1 THEN avg_fwd_pct END) AS q1_avg_fwd_pct,
+           MAX(CASE WHEN pred_quintile = 2 THEN avg_fwd_pct END) AS q2_avg_fwd_pct,
+           MAX(CASE WHEN pred_quintile = 3 THEN avg_fwd_pct END) AS q3_avg_fwd_pct,
+           MAX(CASE WHEN pred_quintile = 4 THEN avg_fwd_pct END) AS q4_avg_fwd_pct,
+           MAX(CASE WHEN pred_quintile = 5 THEN avg_fwd_pct END) AS q5_avg_fwd_pct,
+           MAX(CASE WHEN pred_quintile = 5 THEN avg_fwd_pct END)
+               - MAX(CASE WHEN pred_quintile = 1 THEN avg_fwd_pct END) AS pooled_q5_minus_q1_pp
+    FROM pooled
+    GROUP BY predictor_field
+),
+per_run_quintile AS (
+    SELECT run_id,
+           predictor_field,
+           pred_quintile,
+           AVG(fwd_ret) AS avg_fwd_pct
+    FROM quintiled
+    GROUP BY run_id, predictor_field, pred_quintile
+),
+per_run_spread AS (
+    SELECT run_id,
+           predictor_field,
+           MAX(CASE WHEN pred_quintile = 5 THEN avg_fwd_pct END)
+               - MAX(CASE WHEN pred_quintile = 1 THEN avg_fwd_pct END) AS quintile_spread_pp
+    FROM per_run_quintile
+    GROUP BY run_id, predictor_field
+),
+per_run_summary AS (
+    SELECT predictor_field,
+           COUNT(*) AS n_runs,
+           ROUND(MEDIAN(quintile_spread_pp), 3) AS median_per_run_spread_pp,
+           ROUND(AVG(quintile_spread_pp), 3) AS mean_per_run_spread_pp,
+           ROUND(AVG(CASE WHEN quintile_spread_pp > 0 THEN 1.0 ELSE 0.0 END), 3) AS pct_runs_spread_positive
+    FROM per_run_spread
+    GROUP BY predictor_field
+)
+SELECT pw.predictor_field,
+       pw.q1_avg_fwd_pct,
+       pw.q2_avg_fwd_pct,
+       pw.q3_avg_fwd_pct,
+       pw.q4_avg_fwd_pct,
+       pw.q5_avg_fwd_pct,
+       pw.pooled_q5_minus_q1_pp,
+       pr.n_runs,
+       pr.median_per_run_spread_pp,
+       pr.mean_per_run_spread_pp,
+       pr.pct_runs_spread_positive,
+       st.runs_seen AS aggregate_runs_seen,
+       ROUND(st.sign_consistency_ratio, 3) AS aggregate_sign_consistency,
+       ROUND(st.median_quintile_spread, 2) AS aggregate_median_q_spread_pp,
+       ROUND(st.median_pearson, 4) AS aggregate_median_pearson,
+       CASE
+           WHEN st.rank_stability_score >= 0 THEN 'rank_high_in_universe'
+           ELSE 'rank_low_in_universe'
+       END AS scout_direction
+FROM pooled_wide pw
+    LEFT JOIN per_run_summary pr USING (predictor_field)
+    LEFT JOIN agg.cross_run_field_stability st
+        ON st.predictor_field = pw.predictor_field
+        AND st.performance_field = 'close_forward_return_pct'
+ORDER BY ABS(COALESCE(st.rank_stability_score, pr.median_per_run_spread_pp)) DESC NULLS LAST,
+    pw.predictor_field
+"""
+
+
+def _per_run_quintile_spread_sql(predictor_fields: list[str]) -> str:
+    return f"""
+WITH filtered AS (
+    SELECT a.run_id,
+           a.symbol,
+           a.close_forward_return_pct,
+           a.*
+    FROM enr.all_fields_rows a
+        INNER JOIN cr.cross_run_close_returns cr USING (run_id, symbol)
+    WHERE TRY_CAST(a.close_forward_return_pct AS DOUBLE) BETWEEN -25 AND 25
+      AND cr.close_price >= {MIN_CLOSE}
+),
+long_vals AS (
+{_build_enr_unpivot_sql(predictor_fields)}
+),
+quintiled AS (
+    SELECT run_id,
+           symbol,
+           predictor_field,
+           pred_value,
+           fwd_ret,
+           NTILE(5) OVER (
+               PARTITION BY run_id, predictor_field
+               ORDER BY pred_value
+           ) AS pred_quintile
+    FROM long_vals
+    WHERE fwd_ret IS NOT NULL
+),
+per_run_quintile AS (
+    SELECT run_id,
+           predictor_field,
+           pred_quintile,
+           AVG(fwd_ret) AS avg_fwd_pct,
+           COUNT(*) AS n_symbols
+    FROM quintiled
+    GROUP BY run_id, predictor_field, pred_quintile
+),
+per_run_spread AS (
+    SELECT run_id,
+           predictor_field,
+           MAX(CASE WHEN pred_quintile = 5 THEN avg_fwd_pct END)
+               - MAX(CASE WHEN pred_quintile = 1 THEN avg_fwd_pct END) AS quintile_spread_pp,
+           MAX(CASE WHEN pred_quintile = 5 THEN n_symbols END) AS q5_n,
+           MAX(CASE WHEN pred_quintile = 1 THEN n_symbols END) AS q1_n
+    FROM per_run_quintile
+    GROUP BY run_id, predictor_field
+)
+SELECT pr.run_id,
+       rm.run_label,
+       pr.predictor_field,
+       ROUND(pr.quintile_spread_pp, 3) AS quintile_spread_pp,
+       pr.q1_n,
+       pr.q5_n,
+       CASE WHEN pr.quintile_spread_pp > 0 THEN 1 ELSE 0 END AS spread_positive
+FROM per_run_spread pr
+    LEFT JOIN enr.run_metadata rm USING (run_id)
+ORDER BY pr.predictor_field, rm.run_label, pr.run_id
+"""
+
+
+def _active_management_candidates_sql(
+    *,
+    weights: list[tuple[str, float, float]],
+    min_signals: int,
+    daily_run_id: str,
+) -> str:
+    escaped_run_id = daily_run_id.replace("'", "''")
+    composite_sql = _bind_run_id(
+        _composite_score_sql(weights=weights, min_signals=min_signals).strip(),
+        escaped_run_id,
+    )
+    playbook_a_sql = _bind_run_id(_playbook_a_sql().strip(), escaped_run_id)
+    warning_sql = _bind_run_id(_warning_overlay_sql().strip(), escaped_run_id)
+    return f"""
+WITH composite AS (
+{composite_sql}
+),
+hist AS (
+    SELECT symbol,
+           COUNT(*) AS n_days,
+           ROUND(AVG(fwd), 2) AS avg_fwd_pct,
+           ROUND(AVG(CASE WHEN fwd > 0 THEN 1.0 ELSE 0.0 END), 2) AS win_rate
+    FROM (
+            SELECT cr.symbol,
+                   cr.close_forward_return_pct AS fwd
+            FROM cr.cross_run_close_returns cr
+                INNER JOIN enr.all_fields_rows a USING (run_id, symbol)
+            WHERE TRY_CAST(a.market_cap_basic AS DOUBLE) >= {MIN_MCAP}
+              AND cr.close_forward_return_pct BETWEEN -25 AND 25
+              AND cr.close_price >= {MIN_CLOSE}
+        ) x
+    GROUP BY symbol
+),
+trim AS (
+    SELECT symbol
+    FROM hist
+    WHERE n_days >= 8
+      AND avg_fwd_pct < -2
+),
+playbook_a AS (
+    SELECT symbol
+    FROM (
+            {playbook_a_sql}
+        ) pa
+),
+warnings AS (
+    SELECT symbol,
+           warning_flag_count
+    FROM (
+            {warning_sql}
+        ) w
+)
+SELECT c.symbol,
+       c.name,
+       c.market,
+       c.sector,
+       c.close,
+       c.mcap_b_usd,
+       c.atrp_1w,
+       c.relative_volume,
+       c.close_fwd_fit_score,
+       c.rank AS composite_rank,
+       h.n_days,
+       h.avg_fwd_pct,
+       h.win_rate,
+       CASE WHEN pa.symbol IS NOT NULL THEN 1 ELSE 0 END AS playbook_a_fit,
+       COALESCE(w.warning_flag_count, 0) AS warning_flag_count,
+       CASE
+           WHEN trim.symbol IS NOT NULL THEN 'trim_avoid'
+           WHEN COALESCE(w.warning_flag_count, 0) >= 2 THEN 'warning_overlay'
+           WHEN pa.symbol IS NOT NULL
+                AND COALESCE(h.avg_fwd_pct, 0) >= 1.5
+                AND COALESCE(h.win_rate, 0) >= 0.60 THEN 'playbook_b_quality_drift'
+           WHEN pa.symbol IS NOT NULL THEN 'playbook_a_vol_continuation'
+           WHEN COALESCE(h.avg_fwd_pct, 0) >= 1.5
+                AND COALESCE(h.win_rate, 0) >= 0.60 THEN 'playbook_b_watch'
+           ELSE 'composite_only'
+       END AS active_mgmt_tier
+FROM composite c
+    LEFT JOIN hist h USING (symbol)
+    LEFT JOIN playbook_a pa USING (symbol)
+    LEFT JOIN warnings w USING (symbol)
+    LEFT JOIN trim USING (symbol)
+WHERE trim.symbol IS NULL
+  AND COALESCE(w.warning_flag_count, 0) < 2
+  AND (
+      pa.symbol IS NOT NULL
+      OR COALESCE(h.avg_fwd_pct, 0) >= 1.5
+  )
+ORDER BY c.close_fwd_fit_score DESC,
+    COALESCE(h.avg_fwd_pct, -999) DESC
+"""
 
 
 def _build_long_vals_sql(predictor_fields: list[str], source_alias: str = "day") -> str:
@@ -550,6 +978,21 @@ ORDER BY b.fwd DESC
 """
 
 
+def _bind_run_id(sql: str, escaped_run_id: str) -> str:
+    return sql.replace("?", f"'{escaped_run_id}'")
+
+
+def _query_all(
+    con: duckdb.DuckDBPyConnection,
+    sql: str,
+    params: list | None = None,
+) -> tuple[list[str], list[tuple]]:
+    result = con.execute(sql, list(params or []))
+    columns = [col[0] for col in result.description]
+    rows = result.fetchall()
+    return columns, rows
+
+
 def _write_csv(path: Path, rows: list[tuple], columns: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -601,6 +1044,19 @@ Unlimited SQL replays live in:
 `sql_connections_space/tradingview_all_fields_pattern_analysis.session.sql`
 section `[CF DD898100]` (remove `LIMIT` clauses as needed).
 
+## Indicator / correlation CSVs (`indicator_perf/`)
+
+Use these to chart TOP predictors and verify quintile forward-return behavior yourself:
+
+- `00_top_stable_close_forward_predictors.csv` — ranked stable fields (no gap/change noise)
+- `00_advised_active_manager_predictor_profile.csv` — composite weights + Playbook A/B/C advice tags
+- `00_quintile_fwd_perf_by_advised_predictor.csv` — pooled avg 7d fwd return by quintile (long format; pivot in Excel)
+- `00_quintile_spread_by_advised_predictor.csv` — Q5−Q1 spread vs aggregate stability metrics
+- `00_per_run_quintile_spread_by_advised_predictor.csv` — per-scan-day spread (sign-consistency lens)
+
+Active-management stock overlay: `07_active_management_candidates_top*.csv`
+(composite fit + Playbook A/B filters, excluding trim list and warning overlay).
+
 ## Output files
 
 {chr(10).join(f'- `{name}`' for name in outputs)}
@@ -645,6 +1101,44 @@ def run_rankings(
 
     min_signals = max(3, len(weights) // 2)
     outputs: dict[str, Path] = {}
+    indicator_dir = out_dir / "indicator_perf"
+    indicator_dir.mkdir(parents=True, exist_ok=True)
+
+    columns, rows = _query_all(
+        con, _top_stable_predictors_sql(top_n=max(top_n, 60)), None
+    )
+    path = indicator_dir / "00_top_stable_close_forward_predictors.csv"
+    _write_csv(path, rows, columns)
+    outputs["top_stable_predictors"] = path
+
+    columns, rows = _query_all(
+        con, _advised_predictor_profile_sql(weights), None
+    )
+    path = indicator_dir / "00_advised_active_manager_predictor_profile.csv"
+    _write_csv(path, rows, columns)
+    outputs["advised_predictor_profile"] = path
+
+    advised_fields = [field for field, _, _ in weights]
+    columns, rows = _query_all(
+        con, _quintile_fwd_perf_pooled_sql(advised_fields), None
+    )
+    path = indicator_dir / "00_quintile_fwd_perf_by_advised_predictor.csv"
+    _write_csv(path, rows, columns)
+    outputs["quintile_fwd_perf"] = path
+
+    columns, rows = _query_all(
+        con, _quintile_spread_summary_sql(advised_fields), None
+    )
+    path = indicator_dir / "00_quintile_spread_by_advised_predictor.csv"
+    _write_csv(path, rows, columns)
+    outputs["quintile_spread_summary"] = path
+
+    columns, rows = _query_all(
+        con, _per_run_quintile_spread_sql(advised_fields), None
+    )
+    path = indicator_dir / "00_per_run_quintile_spread_by_advised_predictor.csv"
+    _write_csv(path, rows, columns)
+    outputs["per_run_quintile_spread"] = path
 
     composite_sql = _composite_score_sql(
         weights=weights,
@@ -683,6 +1177,20 @@ def run_rankings(
     path = out_dir / f"06_playbook_a_realized_{latest_scored_day}_top{top_n}.csv"
     _write_csv(path, rows, columns)
     outputs["playbook_a_realized"] = path
+
+    columns, rows = _query_limited(
+        con,
+        _active_management_candidates_sql(
+            weights=weights,
+            min_signals=min_signals,
+            daily_run_id=daily_run_id,
+        ),
+        None,
+        top_n,
+    )
+    path = out_dir / f"07_active_management_candidates_top{top_n}.csv"
+    _write_csv(path, rows, columns)
+    outputs["active_management"] = path
 
     for field in BULLISH_PREDICTORS:
         columns, rows = _query_limited(

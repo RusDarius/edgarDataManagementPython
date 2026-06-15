@@ -64,13 +64,28 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MOVE_PREDICTION_PROFILE_SUITE_BASELINE = (
     PROJECT_ROOT / "config" / "move_prediction_profiles" / "suites" / "baseline.json"
 )
-MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1 = (
+MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1 = (
     PROJECT_ROOT
     / "config"
     / "move_prediction_profiles"
     / "suites"
-    / "active_manager_v1.json"
+    / "swing_reversal_v1.json"
 )
+MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2 = (
+    PROJECT_ROOT
+    / "config"
+    / "move_prediction_profiles"
+    / "suites"
+    / "active_manager_v2.json"
+)
+PREDICTION_MODULE2_SUITE_ACTIVE_MANAGER_V1 = (
+    PROJECT_ROOT
+    / "config"
+    / "prediction_module2_profiles"
+    / "suites"
+    / "active_manager_module2_v1.json"
+)
+from data_analysis_scripts.analysis_prediction_module2 import run_module2_suite_duckdb
 from data_analysis_scripts.trading_view_move_prediction_duckdb_backfill import (
     replay_historical_raw_csvs_into_duckdb_runs,
 )
@@ -398,21 +413,37 @@ def main():
     #         markets=PREFERRED_MARKETS,
     #     )
     # )
-    # # Default (omit profile_suite_path): built-in 10-profile baseline — unchanged behavior.
-    # # Active-manager pass: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1
+    # # Default (omit profile_suite_path): built-in 10-profile baseline — see DEFAULT_MOVE_PREDICTION_PROFILE_SUITE.
+    # # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
+    # # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
     # base_duckdb_result = run_full_analysis_suite_duckdb(
     #     scan_data=move_prediction_scan_response,
     #     min_market_cap_usd=1_000_000_000,
     #     include_blind_spot_sections=True,
-    #     # profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1,
+    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2,
     # )
     # run_full_analysis_suite_with_earnings_priority_duckdb(
     #     scan_data=move_prediction_scan_response,
     #     min_market_cap_usd=1_000_000_000,
     #     include_blind_spot_sections=True,
     #     base_result=base_duckdb_result,
-    #     # profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1,
+    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2,
     # )
+
+    # # Module2 orthogonal outlook scoring (separate from v1 move-prediction profiles)
+    # move_prediction_scan_response = (
+    #     TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+    #         min_market_cap_usd=1_000_000_000,
+    #         markets=PREFERRED_MARKETS,
+    #     )
+    # )
+    # run_module2_suite_duckdb(
+    #     scan_data=move_prediction_scan_response,
+    #     min_market_cap_usd=1_000_000_000,
+    #     profile_suite_path=PREDICTION_MODULE2_SUITE_ACTIVE_MANAGER_V1,
+    # )
+
+    # ALL FIELDS DUCKDB EXPORT
     # export_all_tradingview_fields_duckdb()
 
     # all-view trading view data analysis
@@ -442,7 +473,7 @@ def main():
     # - explicit predictor_fields subset (20-50 fields)
     # - stricter gates (min_fill_rate=0.20, min_pair_n=50)
     # run_scan_period_close_forward_predictor_tracking(
-    #     start_day_label="25_05_2026",
+    #     start_day_label="29_03_2026",
     #     end_day_label="12_06_2026",
     #     close_forward_days=7,
     #     min_runs_for_stability=3,
@@ -459,20 +490,20 @@ def main():
     #     },
     # )
 
-    # --- Single day (smoke / one snapshot) ---
-    analyze_all_fields_run_performance_patterns(
-        database_path=Path(
-            r"D:\FinanceProjects\edgarDataManagementPython\logs\tradingview_analysis\trading_view_all_fields_data\12_06_2026\tradingview_all_fields_12_06_2026.duckdb"
-        ),
-        duckdb_threads=6,
-        field_batch_size=100,
-        max_parallel_chunks=4,
-        duckdb_memory_limit="9GB",
-        universe_filter={
-            **market_cap_basic_universe_filter(500_000_000),
-            **preferred_markets_universe_filter(PREFERRED_MARKETS),
-        },
-    )
+    # # --- Single day (smoke / one snapshot) ---
+    # analyze_all_fields_run_performance_patterns(
+    #     database_path=Path(
+    #         r"D:\FinanceProjects\edgarDataManagementPython\logs\tradingview_analysis\trading_view_all_fields_data\12_06_2026\tradingview_all_fields_12_06_2026.duckdb"
+    #     ),
+    #     duckdb_threads=6,
+    #     field_batch_size=100,
+    #     max_parallel_chunks=4,
+    #     duckdb_memory_limit="9GB",
+    #     universe_filter={
+    #         **market_cap_basic_universe_filter(500_000_000),
+    #         **preferred_markets_universe_filter(PREFERRED_MARKETS),
+    #     },
+    # )
 
     # run_all_fields_pattern_analysis_batch(
     #     start_day_label="01_03_2026",

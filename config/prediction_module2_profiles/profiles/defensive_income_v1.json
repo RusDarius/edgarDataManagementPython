@@ -1,0 +1,53 @@
+{
+  "schema_version": "prediction_module2_profile_v1",
+  "profile_id": "defensive_income_v1",
+  "base_profile_id": "defensive_income",
+  "outlook_family": "defensive_income",
+  "version": "1.0.0",
+  "effective_from": "2026-06-15",
+  "changelog": "Defensive income compounder lens.",
+  "description": "Defensive names with income, low beta, and balance-sheet resilience.",
+  "regime_gates": {
+    "hard": [],
+    "soft": []
+  },
+  "anti_signals": {
+    "beta_1_year": {"min_z": 0.8, "source": "raw", "penalty": 0.5}
+  },
+  "pillars": {
+    "income": {
+      "weight": 0.35,
+      "derived": {
+        "dividend_yield_recent": 1.2,
+        "shareholder_yield": 1.1
+      }
+    },
+    "defensive_quality": {
+      "weight": 0.35,
+      "derived": {
+        "quality_stability": 1.2,
+        "distress_floor": 1.1
+      }
+    },
+    "low_volatility": {
+      "weight": 0.30,
+      "fields": {
+        "beta_1_year": 1.0,
+        "ATRP": 0.9
+      }
+    }
+  },
+  "horizon_weights": {
+    "days": 0.05,
+    "weeks": 0.15,
+    "months": 0.35,
+    "years": 0.45
+  },
+  "directional_bias": {
+    "positive_multiplier": 1.0,
+    "negative_multiplier": 1.1
+  },
+  "intro_metric_notes": [
+    "Defensive income — prioritizes yield and stability over momentum."
+  ]
+}

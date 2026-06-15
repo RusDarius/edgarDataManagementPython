@@ -1,0 +1,74 @@
+{
+  "schema_version": "prediction_module2_profile_v1",
+  "profile_id": "breakout_continuation_v1",
+  "base_profile_id": "breakout_continuation",
+  "outlook_family": "continuation_momentum",
+  "version": "1.0.0",
+  "effective_from": "2026-06-15",
+  "changelog": "Continuation lens using vol expansion and trend strength, gated away from depressed range.",
+  "description": "Confirmed upside continuation with volume and volatility expansion. Requires extension context and rejects depressed-range oversold setups.",
+  "regime_gates": {
+    "hard": [
+      {"field": "range_position_52w", "min_z": 0.2, "source": "derived"},
+      {"field": "continuation_strength", "min_z": 0.3, "source": "derived"}
+    ],
+    "soft": []
+  },
+  "anti_signals": {
+    "regime_oversold_daily": {"min_z": 0.5, "source": "derived", "penalty": 0.7}
+  },
+  "pillars": {
+    "participation": {
+      "weight": 0.30,
+      "fields": {
+        "relative_volume_10d_calc": 1.4,
+        "Value.Traded": 1.1
+      },
+      "derived": {
+        "volume_trend": 1.5,
+        "intraday_momentum": 1.2
+      }
+    },
+    "continuation": {
+      "weight": 0.40,
+      "derived": {
+        "continuation_strength": 1.6,
+        "aroon_spread": 1.3,
+        "adx_directional_spread": 1.3,
+        "short_trend_emergence": 1.2
+      }
+    },
+    "extension": {
+      "weight": 0.20,
+      "derived": {
+        "near_52w_high_score": 1.3,
+        "trend_alignment": 1.2
+      },
+      "fields": {
+        "Perf.3M": 1.1,
+        "Perf.6M": 0.9
+      }
+    },
+    "risk_control": {
+      "weight": 0.10,
+      "derived": {
+        "beta_adjusted_atrp": 0.8
+      }
+    }
+  },
+  "horizon_weights": {
+    "days": 0.40,
+    "weeks": 0.35,
+    "months": 0.20,
+    "years": 0.05
+  },
+  "directional_bias": {
+    "positive_multiplier": 1.4,
+    "negative_multiplier": 0.6
+  },
+  "intro_metric_notes": [
+    "Continuation breakout lens — requires elevated range_position and continuation_strength gate.",
+    "Primary drivers: ATRP/volume trend, aroon/adx spread, short trend emergence.",
+    "Anti-signal penalizes oversold daily regime to reduce overlap with upside_swing_v1."
+  ]
+}

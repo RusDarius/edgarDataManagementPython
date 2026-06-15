@@ -1,0 +1,55 @@
+{
+  "schema_version": "prediction_module2_profile_v1",
+  "profile_id": "fragility_risk_v1",
+  "base_profile_id": "fragility_risk",
+  "outlook_family": "fragility_risk",
+  "version": "1.0.0",
+  "effective_from": "2026-06-15",
+  "changelog": "Fragility/risk overlay for consensus inversion.",
+  "description": "High-risk, extended, or deteriorating setups — inverted in family-orthogonal consensus.",
+  "regime_gates": {
+    "hard": [],
+    "soft": []
+  },
+  "anti_signals": {},
+  "pillars": {
+    "extension_risk": {
+      "weight": 0.40,
+      "derived": {
+        "regime_extended_tape": 1.5,
+        "near_52w_high_score": 1.2,
+        "exhaustion_range_position": 1.1
+      }
+    },
+    "distress": {
+      "weight": 0.35,
+      "fields": {
+        "total_debt_to_ebitda_fq": 1.2,
+        "altman_z_score_ttm": -1.0
+      },
+      "derived": {
+        "distress_floor": -1.0
+      }
+    },
+    "crowding": {
+      "weight": 0.25,
+      "fields": {
+        "Recommend.MA|1M": 1.0,
+        "Recommend.All": 0.8
+      }
+    }
+  },
+  "horizon_weights": {
+    "days": 0.35,
+    "weeks": 0.35,
+    "months": 0.20,
+    "years": 0.10
+  },
+  "directional_bias": {
+    "positive_multiplier": 1.0,
+    "negative_multiplier": 1.0
+  },
+  "intro_metric_notes": [
+    "Fragility risk overlay — sign-inverted in consensus for trim/avoid signals."
+  ]
+}

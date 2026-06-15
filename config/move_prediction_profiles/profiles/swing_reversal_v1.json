@@ -1,0 +1,221 @@
+{
+  "schema_version": "move_prediction_profile_file_v1",
+  "profile_id": "swing_reversal_v1",
+  "base_profile_id": "swing_reversal",
+  "version": "1.0.0",
+  "effective_from": "2026-06-15",
+  "changelog": "Technical oversold swing-reversal lens with fundamental safety floor.",
+  "profile": {
+    "name": "swing_reversal_v1",
+    "description": "Technical swing-reversal profile for names showing oversold tape positioning with early repair confirmation. Unlike value_recovery, this lens does not require operating turnaround evidence — fundamentals serve as a safety and downside-risk floor only. The model prioritizes reversal triggers (stoch_rsi_crossover, short_trend_emergence, bbpower_divergence), support proximity (Camarilla, Bollinger lower band, Donchian/PSAR), and structural depression (52-week range floor), while filtering value traps via distress and leverage scores. Short horizons emphasize entry timing; longer horizons increase safety and quality weight for hold conviction.",
+    "horizon_weights": {
+      "days": {
+        "attention": 0.08,
+        "event": 0.03,
+        "momentum": 0.3,
+        "trend": 0.28,
+        "quality": 0.06,
+        "valuation": 0.1,
+        "safety": 0.15
+      },
+      "weeks": {
+        "attention": 0.06,
+        "event": 0.02,
+        "momentum": 0.26,
+        "trend": 0.26,
+        "quality": 0.1,
+        "valuation": 0.12,
+        "safety": 0.18
+      },
+      "months": {
+        "attention": 0.05,
+        "event": 0.03,
+        "momentum": 0.18,
+        "trend": 0.24,
+        "quality": 0.14,
+        "valuation": 0.14,
+        "safety": 0.22
+      },
+      "years": {
+        "attention": 0.03,
+        "event": 0.05,
+        "momentum": 0.08,
+        "trend": 0.16,
+        "quality": 0.2,
+        "valuation": 0.18,
+        "safety": 0.3
+      }
+    },
+    "component_signal_weights": {
+      "attention": {
+        "relative_volume_10d_calc": 1.0,
+        "float_turnover": 0.85,
+        "dollar_turnover_intensity": 0.85,
+        "volume_trend": 1.25,
+        "chaikin_money_flow_signal": 1.2,
+        "bb_squeeze": 0.85,
+        "intraday_momentum": 0.75
+      },
+      "event": {
+        "gap": 0.9,
+        "gap_down": 0.85,
+        "premarket_change": 0.8,
+        "postmarket_change": 0.8,
+        "event_intensity": 0.75
+      },
+      "momentum": {
+        "change": 1.0,
+        "Perf.5D": 1.15,
+        "Perf.W": 1.2,
+        "Perf.1M": 0.45,
+        "Perf.3M": 0.35,
+        "Perf.6M": 0.1,
+        "Perf.YTD": 0.15,
+        "Perf.Y": 0.05,
+        "ROC": 0.85,
+        "Mom": 0.8,
+        "macd_spread": 1.25,
+        "Recommend.All": 0.55,
+        "Recommend.MA": 0.5,
+        "Recommend.Other": 0.55,
+        "rsi_centered": 1.15,
+        "rsi7_centered": 1.2,
+        "stoch_rsi_centered": 1.25,
+        "stoch_rsi_crossover": 1.65,
+        "bbpower_divergence": 1.45,
+        "aroon_spread": 1.4,
+        "adx_directional_spread": 1.35,
+        "CCI20": 0.95
+      },
+      "trend": {
+        "close_vs_sma10": 1.35,
+        "close_vs_sma20": 1.15,
+        "close_vs_sma30": 1.0,
+        "close_vs_sma50": 0.75,
+        "close_vs_sma200": 0.45,
+        "close_vs_ema10": 1.35,
+        "close_vs_ema20": 1.15,
+        "close_vs_ema30": 1.0,
+        "close_vs_ema50": 0.75,
+        "close_vs_ema200": 0.45,
+        "close_vs_vwap": 0.9,
+        "close_vs_vwma": 0.85,
+        "trend_alignment": 0.65,
+        "pivot_distance": 1.15,
+        "short_trend_emergence": 1.5,
+        "bb_position": 1.4,
+        "donchian_position": 1.25,
+        "close_vs_psar": 1.3,
+        "close_vs_camarilla_s1": 1.45,
+        "close_vs_camarilla_s2": 1.35
+      },
+      "valuation": {
+        "range_position_52w": 1.3,
+        "distance_from_52w_high": 1.25,
+        "price_target_downside_floor": 1.2,
+        "earnings_yield": 1.15,
+        "book_value_discount": 0.95,
+        "price_earnings_ttm": 0.9,
+        "price_book_fq": 0.95,
+        "enterprise_value_ebitda_ttm": 0.9,
+        "price_target_upside_median": 0.85
+      },
+      "quality": {
+        "piotroski_f_score_ttm": 1.25,
+        "altman_z_score_ttm": 1.2,
+        "operating_margin": 0.85,
+        "operating_margin_ttm": 0.8,
+        "return_on_invested_capital": 0.75,
+        "free_cash_flow_margin_ttm": 0.8,
+        "operating_turnaround_score": 0.65,
+        "eps_forward_growth": 0.7,
+        "total_revenue_qoq_growth_fq": 0.55,
+        "free_cash_flow_qoq_growth_fq": 0.6
+      },
+      "safety": {
+        "altman_z_score_ttm": 1.35,
+        "total_debt_to_ebitda_fq": 1.35,
+        "net_cash_to_market_cap": 1.25,
+        "short_term_cash_coverage": 1.3,
+        "zmijewski_score_ttm": 1.15,
+        "beta_adjusted_atrp": 1.15,
+        "current_ratio": 1.1,
+        "quick_ratio": 1.05,
+        "cash_ratio": 1.0,
+        "debt_to_equity": 1.15,
+        "net_debt": 1.1,
+        "beta_1_year": 0.9,
+        "total_debt_to_ebitda_fy": 1.2,
+        "net_debt_to_ebitda_fq": 1.2,
+        "interst_cover_ttm": 1.1,
+        "price_target_dispersion": 0.7
+      }
+    },
+    "component_directional_bias": {
+      "attention": {
+        "positive_multiplier": 0.85,
+        "negative_multiplier": 1.15
+      },
+      "momentum": {
+        "positive_multiplier": 1.3,
+        "negative_multiplier": 0.4
+      },
+      "trend": {
+        "positive_multiplier": 1.3,
+        "negative_multiplier": 0.7
+      },
+      "valuation": {
+        "positive_multiplier": 1.15,
+        "negative_multiplier": 1.05
+      },
+      "quality": {
+        "positive_multiplier": 1.1,
+        "negative_multiplier": 1.35
+      },
+      "safety": {
+        "positive_multiplier": 1.2,
+        "negative_multiplier": 1.45
+      }
+    },
+    "missing_component_scores_by_horizon": {
+      "days": {
+        "attention": -0.2,
+        "valuation": -0.65,
+        "quality": -0.7,
+        "safety": -0.85
+      },
+      "weeks": {
+        "attention": -0.15,
+        "valuation": -0.75,
+        "quality": -0.85,
+        "safety": -1.0
+      },
+      "months": {
+        "attention": -0.1,
+        "valuation": -0.85,
+        "quality": -1.0,
+        "safety": -1.15
+      },
+      "years": {
+        "valuation": -0.95,
+        "quality": -1.1,
+        "safety": -1.25
+      }
+    },
+    "performance_tracking_periods": {},
+    "intro_metric_notes": [
+      "Technical swing-reversal profile — oversold tape with early repair confirmation, not operating turnaround required.",
+      "Primary reversal triggers: stoch_rsi_crossover=1.65, bbpower_divergence=1.45, short_trend_emergence=1.50, aroon_spread=1.40, adx_directional_spread=1.35.",
+      "Oversold context: stoch_rsi_centered=1.25, rsi_centered=1.15, rsi7_centered=1.20, bb_position=1.40, range_position_52w=1.30.",
+      "Support proximity: close_vs_camarilla_s1=1.45, close_vs_camarilla_s2=1.35, donchian_position=1.25, close_vs_psar=1.30.",
+      "Legacy weakness damped: Perf.Y=0.05, Perf.6M=0.10, Perf.1M=0.45. Fresh bounce rewarded: Perf.5D=1.15, Perf.W=1.20.",
+      "Momentum bias forgives oversold tape: positive=1.30x, negative=0.40x — prior weakness does not dominate; repair signals do.",
+      "Valuation is an anchor not a gate: earnings_yield=1.15, price_target_downside_floor=1.20. Cheap helps but is not required like deep_value_momentum.",
+      "Quality floor is light: operating_turnaround_score=0.65 (bonus only vs 1.75 in value_recovery). QoQ growth weights are minimal.",
+      "Safety for downside sizing: altman_z=1.35, total_debt_to_ebitda_fq=1.35, net_cash_to_market_cap=1.25, beta_adjusted_atrp=1.15.",
+      "Horizon shift: days/weeks are momentum+trend dominant (56–58%); months/years increase safety to 22–30% for hold conviction and trap filtering."
+    ],
+    "confidence_multiplier": 1.0,
+    "confidence_offset": 0.0
+  }
+}

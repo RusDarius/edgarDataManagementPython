@@ -1651,6 +1651,7 @@ ORDER BY qs.wr_quintile;
 -- =============================================================================
 -- Source advice: pattern_analysis/advised_conclusions/close_forward_25may_12jun2026_dd898100_advised_conclusions.md
 -- CSV exports: .../runs/scan_period_close_forward_tracking_25may_12jun2026_dd898100/predictor_stock_rankings/
+--   indicator_perf/00_*.csv — TOP predictors + quintile correlation/perf (pivot in Excel for charts)
 -- Re-generate CSVs: python scripts/run_close_forward_predictor_stock_rankings.py --top-n 100
 --
 -- WHICH DUCKDB TO TARGET
@@ -1959,3 +1960,231 @@ SELECT symbol, name, market,
     RANK() OVER (ORDER BY predictor_value ASC) AS rank
 FROM base
 ORDER BY predictor_value ASC;
+-- @block
+-- [CF DD898100 R9] TOP stable close_forward predictors — actionable only (export to CSV for charts).
+SELECT predictor_field,
+    runs_seen,
+    ROUND(sign_consistency_ratio, 3) AS sign_consistency,
+    ROUND(median_pearson, 4) AS median_pearson,
+    ROUND(median_quintile_spread, 2) AS median_q_spread_pp,
+    ROUND(rank_stability_score, 3) AS rank_stability_score,
+    CASE
+        WHEN rank_stability_score >= 0 THEN 'rank_high_in_universe'
+        ELSE 'rank_low_in_universe'
+    END AS scout_direction,
+    CASE
+        WHEN median_quintile_spread >= 0.4
+            AND sign_consistency_ratio >= 0.65 THEN 'bullish_tilt'
+        WHEN median_quintile_spread <= -0.3
+            AND sign_consistency_ratio >= 0.65 THEN 'avoid_warning'
+        WHEN ABS(median_quintile_spread) >= 0.3 THEN 'moderate_mixed'
+        ELSE 'weak_sparse'
+    END AS advice_bucket
+FROM agg.cross_run_field_stability
+WHERE performance_field = 'close_forward_return_pct'
+    AND runs_seen >= 10
+    AND sign_consistency_ratio >= 0.65
+    AND predictor_field NOT ILIKE '%gap%'
+    AND predictor_field NOT ILIKE '%change%'
+    AND predictor_field NOT ILIKE '%Mom%'
+    AND predictor_field NOT ILIKE '%ROC%'
+    AND ABS(median_quintile_spread) >= 0.3
+ORDER BY ABS(rank_stability_score) DESC NULLS LAST;
+-- @block
+-- [CF DD898100 R10] Advised active-manager predictors — stability + playbook tags.
+WITH advised_meta AS (
+    SELECT predictor_field, advice_category, active_mgmt_note
+    FROM (
+            VALUES ('ATRP|1W', 'volatility_bullish', 'Playbook A primary — rank high'),
+                ('ATRP', 'volatility_bullish', 'Playbook A — rank high'),
+                ('ADRP|15', 'volatility_bullish', 'Volatility tilt — rank high'),
+                ('ADRP|1W', 'volatility_bullish', 'Volatility tilt — rank high'),
+                ('ADX-DI|1M', 'adx_pressure_bullish', 'Playbook A optional — rank high'),
+                ('ADX-DI_50|1M', 'adx_pressure_bullish', 'Confirmation filter — rank high'),
+                ('relative_volume', 'volatility_bullish', 'Playbook A optional — rank high'),
+                ('RSI21[1]|1M', 'oversold_warning', 'Playbook C — rank low (avoid oversold long)'),
+                ('Stoch.K_14_1_3|1M', 'oversold_warning', 'Playbook C — bottom quintile avoid'),
+                ('W.R|1M', 'oversold_warning', 'Playbook C — bottom quintile avoid'),
+                ('Recommend.MA|1M', 'crowded_consensus_warning', 'Playbook C — rank low (bullish MA = headwind)'),
+                ('oper_income_ttm', 'mega_cap_warning', 'Playbook C — rank low (size headwind)'),
+                ('ebitda_ttm', 'mega_cap_warning', 'Playbook C — rank low (size headwind)')
+        ) AS t(predictor_field, advice_category, active_mgmt_note)
+),
+stability AS (
+    SELECT predictor_field,
+        runs_seen,
+        ROUND(sign_consistency_ratio, 3) AS sign_consistency,
+        ROUND(median_pearson, 4) AS median_pearson,
+        ROUND(median_quintile_spread, 2) AS median_q_spread_pp,
+        ROUND(rank_stability_score, 3) AS rank_stability_score
+    FROM agg.cross_run_field_stability
+    WHERE performance_field = 'close_forward_return_pct'
+)
+SELECT m.predictor_field,
+    m.advice_category,
+    m.active_mgmt_note,
+    s.runs_seen,
+    s.sign_consistency,
+    s.median_pearson,
+    s.median_q_spread_pp,
+    s.rank_stability_score,
+    CASE
+        WHEN s.rank_stability_score >= 0 THEN 'rank_high_in_universe'
+        ELSE 'rank_low_in_universe'
+    END AS scout_direction
+FROM advised_meta m
+    LEFT JOIN stability s USING (predictor_field)
+ORDER BY ABS(COALESCE(s.rank_stability_score, 0)) DESC NULLS LAST,
+    m.predictor_field;
+-- @block
+-- [CF DD898100 R11] Pooled quintile forward-return perf — advised predictors (pivot pred_quintile in Excel).
+-- Long format: one row per (predictor_field, quintile). Q5 = highest predictor value each scan day.
+WITH filtered AS (
+    SELECT a.run_id,
+        a.symbol,
+        TRY_CAST(a.close_forward_return_pct AS DOUBLE) AS fwd_ret,
+        TRY_CAST(a."ATRP|1W" AS DOUBLE) AS "ATRP|1W",
+        TRY_CAST(a.ATRP AS DOUBLE) AS ATRP,
+        TRY_CAST(a."ADRP|15" AS DOUBLE) AS "ADRP|15",
+        TRY_CAST(a."ADRP|1W" AS DOUBLE) AS "ADRP|1W",
+        TRY_CAST(a."ADX-DI|1M" AS DOUBLE) AS "ADX-DI|1M",
+        TRY_CAST(a."ADX-DI_50|1M" AS DOUBLE) AS "ADX-DI_50|1M",
+        TRY_CAST(a.relative_volume AS DOUBLE) AS relative_volume,
+        TRY_CAST(a."RSI21[1]|1M" AS DOUBLE) AS "RSI21[1]|1M",
+        TRY_CAST(a."Stoch.K_14_1_3|1M" AS DOUBLE) AS "Stoch.K_14_1_3|1M",
+        TRY_CAST(a."W.R|1M" AS DOUBLE) AS "W.R|1M",
+        TRY_CAST(a."Recommend.MA|1M" AS DOUBLE) AS "Recommend.MA|1M",
+        TRY_CAST(a.oper_income_ttm AS DOUBLE) AS oper_income_ttm,
+        TRY_CAST(a.ebitda_ttm AS DOUBLE) AS ebitda_ttm
+    FROM enr.all_fields_rows a
+        INNER JOIN cr.cross_run_close_returns cr USING (run_id, symbol)
+    WHERE TRY_CAST(a.close_forward_return_pct AS DOUBLE) BETWEEN -25 AND 25
+        AND cr.close_price >= 10
+),
+long_vals AS (
+    SELECT run_id, symbol, 'ATRP|1W' AS predictor_field, "ATRP|1W" AS pred_value, fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'ATRP', ATRP, fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'ADRP|15', "ADRP|15", fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'ADRP|1W', "ADRP|1W", fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'ADX-DI|1M', "ADX-DI|1M", fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'ADX-DI_50|1M', "ADX-DI_50|1M", fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'relative_volume', relative_volume, fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'RSI21[1]|1M', "RSI21[1]|1M", fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'Stoch.K_14_1_3|1M', "Stoch.K_14_1_3|1M", fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'W.R|1M', "W.R|1M", fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'Recommend.MA|1M', "Recommend.MA|1M", fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'oper_income_ttm', oper_income_ttm, fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'ebitda_ttm', ebitda_ttm, fwd_ret FROM filtered
+),
+quintiled AS (
+    SELECT run_id,
+        symbol,
+        predictor_field,
+        pred_value,
+        fwd_ret,
+        NTILE(5) OVER (
+            PARTITION BY run_id, predictor_field
+            ORDER BY pred_value
+        ) AS pred_quintile
+    FROM long_vals
+    WHERE pred_value IS NOT NULL
+        AND isfinite(pred_value)
+        AND fwd_ret IS NOT NULL
+)
+SELECT predictor_field,
+    pred_quintile,
+    COUNT(*) AS n_symbol_days,
+    COUNT(DISTINCT run_id) AS n_runs,
+    ROUND(AVG(fwd_ret), 3) AS avg_fwd_pct,
+    ROUND(MEDIAN(fwd_ret), 3) AS median_fwd_pct,
+    ROUND(STDDEV(fwd_ret), 3) AS stdev_fwd_pct,
+    ROUND(AVG(CASE WHEN fwd_ret > 0 THEN 1.0 ELSE 0 END), 3) AS win_rate
+FROM quintiled
+GROUP BY predictor_field, pred_quintile
+ORDER BY predictor_field, pred_quintile;
+-- @block
+-- [CF DD898100 R12] Quintile spread summary — advised predictors vs aggregate stability (self-check CSV).
+WITH filtered AS (
+    SELECT a.run_id,
+        a.symbol,
+        TRY_CAST(a.close_forward_return_pct AS DOUBLE) AS fwd_ret,
+        TRY_CAST(a."ATRP|1W" AS DOUBLE) AS "ATRP|1W",
+        TRY_CAST(a.ATRP AS DOUBLE) AS ATRP,
+        TRY_CAST(a."ADRP|15" AS DOUBLE) AS "ADRP|15",
+        TRY_CAST(a."ADRP|1W" AS DOUBLE) AS "ADRP|1W",
+        TRY_CAST(a."ADX-DI|1M" AS DOUBLE) AS "ADX-DI|1M",
+        TRY_CAST(a."ADX-DI_50|1M" AS DOUBLE) AS "ADX-DI_50|1M",
+        TRY_CAST(a.relative_volume AS DOUBLE) AS relative_volume,
+        TRY_CAST(a."RSI21[1]|1M" AS DOUBLE) AS "RSI21[1]|1M",
+        TRY_CAST(a."Stoch.K_14_1_3|1M" AS DOUBLE) AS "Stoch.K_14_1_3|1M",
+        TRY_CAST(a."W.R|1M" AS DOUBLE) AS "W.R|1M",
+        TRY_CAST(a."Recommend.MA|1M" AS DOUBLE) AS "Recommend.MA|1M",
+        TRY_CAST(a.oper_income_ttm AS DOUBLE) AS oper_income_ttm,
+        TRY_CAST(a.ebitda_ttm AS DOUBLE) AS ebitda_ttm
+    FROM enr.all_fields_rows a
+        INNER JOIN cr.cross_run_close_returns cr USING (run_id, symbol)
+    WHERE TRY_CAST(a.close_forward_return_pct AS DOUBLE) BETWEEN -25 AND 25
+        AND cr.close_price >= 10
+),
+long_vals AS (
+    SELECT run_id, symbol, 'ATRP|1W' AS predictor_field, "ATRP|1W" AS pred_value, fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'ATRP', ATRP, fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'ADRP|15', "ADRP|15", fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'ADRP|1W', "ADRP|1W", fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'ADX-DI|1M', "ADX-DI|1M", fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'ADX-DI_50|1M', "ADX-DI_50|1M", fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'relative_volume', relative_volume, fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'RSI21[1]|1M', "RSI21[1]|1M", fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'Stoch.K_14_1_3|1M', "Stoch.K_14_1_3|1M", fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'W.R|1M', "W.R|1M", fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'Recommend.MA|1M', "Recommend.MA|1M", fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'oper_income_ttm', oper_income_ttm, fwd_ret FROM filtered
+    UNION ALL SELECT run_id, symbol, 'ebitda_ttm', ebitda_ttm, fwd_ret FROM filtered
+),
+quintiled AS (
+    SELECT run_id,
+        predictor_field,
+        fwd_ret,
+        NTILE(5) OVER (
+            PARTITION BY run_id, predictor_field
+            ORDER BY pred_value
+        ) AS pred_quintile
+    FROM long_vals
+    WHERE pred_value IS NOT NULL
+        AND isfinite(pred_value)
+        AND fwd_ret IS NOT NULL
+),
+pooled AS (
+    SELECT predictor_field,
+        pred_quintile,
+        AVG(fwd_ret) AS avg_fwd_pct
+    FROM quintiled
+    GROUP BY predictor_field, pred_quintile
+),
+spreads AS (
+    SELECT predictor_field,
+        MAX(CASE WHEN pred_quintile = 5 THEN avg_fwd_pct END) AS q5_avg_fwd_pct,
+        MAX(CASE WHEN pred_quintile = 1 THEN avg_fwd_pct END) AS q1_avg_fwd_pct,
+        MAX(CASE WHEN pred_quintile = 5 THEN avg_fwd_pct END)
+            - MAX(CASE WHEN pred_quintile = 1 THEN avg_fwd_pct END) AS q5_minus_q1_spread_pp
+    FROM pooled
+    GROUP BY predictor_field
+)
+SELECT s.predictor_field,
+    ROUND(s.q1_avg_fwd_pct, 3) AS q1_avg_fwd_pct,
+    ROUND(s.q5_avg_fwd_pct, 3) AS q5_avg_fwd_pct,
+    ROUND(s.q5_minus_q1_spread_pp, 3) AS q5_minus_q1_spread_pp,
+    st.runs_seen,
+    ROUND(st.sign_consistency_ratio, 3) AS sign_consistency,
+    ROUND(st.median_quintile_spread, 2) AS aggregate_median_q_spread_pp,
+    ROUND(st.median_pearson, 4) AS aggregate_median_pearson,
+    CASE
+        WHEN st.rank_stability_score >= 0 THEN 'rank_high_in_universe'
+        ELSE 'rank_low_in_universe'
+    END AS scout_direction
+FROM spreads s
+    LEFT JOIN agg.cross_run_field_stability st
+        ON st.predictor_field = s.predictor_field
+        AND st.performance_field = 'close_forward_return_pct'
+ORDER BY ABS(COALESCE(st.rank_stability_score, s.q5_minus_q1_spread_pp)) DESC NULLS LAST,
+    s.predictor_field;

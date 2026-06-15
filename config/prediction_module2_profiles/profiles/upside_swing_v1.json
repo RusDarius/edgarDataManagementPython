@@ -1,0 +1,81 @@
+{
+  "schema_version": "prediction_module2_profile_v1",
+  "profile_id": "upside_swing_v1",
+  "base_profile_id": "upside_swing",
+  "outlook_family": "mean_reversion_repair",
+  "version": "1.0.0",
+  "effective_from": "2026-06-15",
+  "changelog": "Upside swing lens with hard extension gates and repair confirmation pillars.",
+  "description": "Depressed names with confirmed short-term repair and upside room. Hard-filters extended momentum leaders; monthly oversold alone is insufficient without repair confirmation.",
+  "regime_gates": {
+    "hard": [
+      {"field": "range_position_52w", "max_z": -0.3, "source": "derived"},
+      {"field": "regime_extended_tape", "max_z": 0.0, "source": "derived"}
+    ],
+    "soft": [
+      {"field": "repair_confirmation_score", "min_z": 0.2, "source": "derived", "weight": 1.0}
+    ]
+  },
+  "anti_signals": {
+    "near_52w_high_score": {"max_z": 0.3, "source": "derived", "penalty": 0.8},
+    "trend_alignment": {"max_z": 0.8, "source": "derived", "penalty": 0.6},
+    "Recommend.MA|1M": {"max_z": 0.5, "source": "raw", "penalty": 0.5}
+  },
+  "pillars": {
+    "oversold_context": {
+      "weight": 0.30,
+      "derived": {
+        "regime_oversold_daily": 1.5,
+        "rsi_centered": 1.2,
+        "stoch_rsi_centered": 1.3,
+        "bb_position": 1.4,
+        "range_position_52w": 1.5
+      }
+    },
+    "repair_trigger": {
+      "weight": 0.35,
+      "fields": {
+        "Perf.5D": 1.3,
+        "Perf.W": 1.2,
+        "relative_volume_10d_calc": 1.1
+      },
+      "derived": {
+        "repair_confirmation_score": 1.6
+      }
+    },
+    "upside_room": {
+      "weight": 0.20,
+      "derived": {
+        "upside_room_score": 1.5,
+        "distance_from_52w_high": 1.2
+      }
+    },
+    "safety_floor": {
+      "weight": 0.15,
+      "fields": {
+        "altman_z_score_ttm": 1.2,
+        "total_debt_to_ebitda_fq": 1.1
+      },
+      "derived": {
+        "distress_floor": 1.0
+      }
+    }
+  },
+  "horizon_weights": {
+    "days": 0.45,
+    "weeks": 0.40,
+    "months": 0.10,
+    "years": 0.05
+  },
+  "directional_bias": {
+    "positive_multiplier": 1.2,
+    "negative_multiplier": 0.5
+  },
+  "intro_metric_notes": [
+    "Upside swing — depressed 52w range with repair confirmation, not extended momentum.",
+    "Hard gates reject regime_extended_tape and elevated range_position_52w.",
+    "Repair pillar requires fresh Perf.5D/W bounce plus volume confirmation.",
+    "Upside room uses distance from 52w high and analyst/Camarilla headroom.",
+    "Avoids aroon/adx primary weighting used by breakout/forward_edge v1 profiles."
+  ]
+}

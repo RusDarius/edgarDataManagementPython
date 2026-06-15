@@ -60,6 +60,46 @@ class TestProfileConfigLoader(unittest.TestCase):
             v1.component_signal_weights,
         )
 
+    def test_swing_reversal_v1_profile_loads(self):
+        meta = load_profile_config_file(
+            CONFIG_ROOT / "profiles" / "swing_reversal_v1.json"
+        )
+        profile = resolve_move_prediction_scoring_profile("swing_reversal_v1")
+        self.assertEqual(meta["profile_id"], "swing_reversal_v1")
+        self.assertEqual(meta["base_profile_id"], "swing_reversal")
+        self.assertEqual(profile.name, "swing_reversal_v1")
+        momentum_weights = profile.component_signal_weights.get("momentum", {})
+        trend_weights = profile.component_signal_weights.get("trend", {})
+        self.assertGreaterEqual(momentum_weights.get("stoch_rsi_crossover", 0.0), 1.6)
+        self.assertGreaterEqual(trend_weights.get("close_vs_camarilla_s1", 0.0), 1.4)
+
+    def test_swing_reversal_v1_standalone_suite_weights_sum_to_one(self):
+        suite = load_profile_suite(
+            CONFIG_ROOT / "suites" / "swing_reversal_v1.json"
+        )
+        self.assertEqual(suite["suite_id"], "swing_reversal_v1")
+        self.assertEqual(suite["profile_names"], ["swing_reversal_v1"])
+        self.assertAlmostEqual(
+            sum(suite["consensus_profile_weights"].values()), 1.0, places=6
+        )
+
+    def test_active_manager_v2_includes_swing_reversal_v1(self):
+        suite = load_profile_suite(
+            CONFIG_ROOT / "suites" / "active_manager_v2.json"
+        )
+        self.assertEqual(suite["suite_id"], "active_manager_v2")
+        self.assertIn("swing_reversal_v1", suite["profile_names"])
+        self.assertIn("swing_reversal_v1", suite["long_consensus_profiles"])
+        self.assertNotIn(
+            "swing_reversal_v1", suite["inverted_consensus_profiles"]
+        )
+        self.assertAlmostEqual(
+            sum(suite["consensus_profile_weights"].values()), 1.0, places=6
+        )
+        self.assertAlmostEqual(
+            suite["consensus_profile_weights"]["swing_reversal_v1"], 0.06, places=6
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

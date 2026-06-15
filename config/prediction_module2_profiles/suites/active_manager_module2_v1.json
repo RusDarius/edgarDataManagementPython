@@ -1,0 +1,45 @@
+{
+  "schema_version": "prediction_module2_suite_v1",
+  "suite_id": "active_manager_module2_v1",
+  "suite_version": "1.0.0",
+  "description": "Module2 active-manager suite with family-orthogonal consensus and de-overlapped outlook lenses.",
+  "consensus_mode": "family_orthogonal",
+  "profile_names": [
+    "upside_swing_v1",
+    "breakout_continuation_v1",
+    "forward_fundamental_edge_v1",
+    "quality_compounder_v1",
+    "value_recovery_v1",
+    "defensive_income_v1",
+    "fragility_risk_v1"
+  ],
+  "consensus_profile_weights": {
+    "upside_swing_v1": 0.18,
+    "breakout_continuation_v1": 0.16,
+    "forward_fundamental_edge_v1": 0.14,
+    "quality_compounder_v1": 0.14,
+    "value_recovery_v1": 0.12,
+    "defensive_income_v1": 0.12,
+    "fragility_risk_v1": 0.14
+  },
+  "outlook_families": {
+    "mean_reversion_repair": ["upside_swing_v1"],
+    "continuation_momentum": ["breakout_continuation_v1"],
+    "fundamental_inflection": ["forward_fundamental_edge_v1"],
+    "quality_compounding": ["quality_compounder_v1"],
+    "value_recovery": ["value_recovery_v1"],
+    "defensive_income": ["defensive_income_v1"],
+    "fragility_risk": ["fragility_risk_v1"]
+  },
+  "inverted_consensus_profiles": [
+    "fragility_risk_v1"
+  ],
+  "long_consensus_profiles": [
+    "upside_swing_v1",
+    "breakout_continuation_v1",
+    "forward_fundamental_edge_v1",
+    "quality_compounder_v1",
+    "value_recovery_v1",
+    "defensive_income_v1"
+  ]
+}

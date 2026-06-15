@@ -6,6 +6,7 @@ savedData
 logs
 venv39
 venv
+src/tests/_tmp_module2_run
 
 # Python cache directories
 __pycache__/
