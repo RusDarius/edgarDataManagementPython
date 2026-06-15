@@ -21,7 +21,6 @@ from data_analysis_scripts.trading_view_cross_scanner_aggregator import (
     run_cross_scanner_aggregate,
 )
 from data_analysis_scripts.trading_view_export_all_tdfields import (
-    backfill_historical_all_fields_csv_folders_to_duckdb,
     export_all_tradingview_fields,
     export_all_tradingview_fields_duckdb,
 )
@@ -35,6 +34,18 @@ from data_analysis_scripts.trading_view_move_prediction_pool_analyzer import (
     analyze_pool_database,
     export_analysis_reports,
     run_pool_analysis_from_path,
+)
+from data_analysis_scripts.trading_view_all_fields_metric_pattern_analyzer import (
+    analyze_all_fields_run_performance_patterns,
+    analyze_cross_run_close_performance_patterns,
+    benchmark_all_fields_pattern_analysis,
+    compute_cross_run_close_returns,
+    resolve_performance_fields,
+    run_all_fields_multi_day_pattern_suite,
+    run_all_fields_pattern_analysis_batch,
+    run_scan_period_close_forward_predictor_tracking,
+    market_cap_basic_universe_filter,
+    preferred_markets_universe_filter,
 )
 from data_analysis_scripts.trading_view_priceperf_analysis import (
     analyze_global_price_performance,
@@ -381,28 +392,118 @@ def main():
     # )
 
     # # # # Model Analysis scan with duckdb storage solution
-    move_prediction_scan_response = (
-        TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-            min_market_cap_usd=1_000_000_000,
-            markets=PREFERRED_MARKETS,
-        )
-    )
-    # Default (omit profile_suite_path): built-in 10-profile baseline — unchanged behavior.
-    # Active-manager pass: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1
-    base_duckdb_result = run_full_analysis_suite_duckdb(
-        scan_data=move_prediction_scan_response,
-        min_market_cap_usd=1_000_000_000,
-        include_blind_spot_sections=True,
-        # profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1,
-    )
-    run_full_analysis_suite_with_earnings_priority_duckdb(
-        scan_data=move_prediction_scan_response,
-        min_market_cap_usd=1_000_000_000,
-        include_blind_spot_sections=True,
-        base_result=base_duckdb_result,
-        # profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1,
-    )
+    # move_prediction_scan_response = (
+    #     TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+    #         min_market_cap_usd=1_000_000_000,
+    #         markets=PREFERRED_MARKETS,
+    #     )
+    # )
+    # # Default (omit profile_suite_path): built-in 10-profile baseline — unchanged behavior.
+    # # Active-manager pass: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1
+    # base_duckdb_result = run_full_analysis_suite_duckdb(
+    #     scan_data=move_prediction_scan_response,
+    #     min_market_cap_usd=1_000_000_000,
+    #     include_blind_spot_sections=True,
+    #     # profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1,
+    # )
+    # run_full_analysis_suite_with_earnings_priority_duckdb(
+    #     scan_data=move_prediction_scan_response,
+    #     min_market_cap_usd=1_000_000_000,
+    #     include_blind_spot_sections=True,
+    #     base_result=base_duckdb_result,
+    #     # profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1,
+    # )
     # export_all_tradingview_fields_duckdb()
+
+    # all-view trading view data analysis
+    #
+    # --- One-week pilot (5+ daily DuckDB files required under all_fields_root) ---
+    # Trailing Perf.* (Perf.5D … Perf.YTD) + cross-run stability + actual close forward returns.
+    # duckdb_memory_limit is adjusted depending on max_parallel_runs - max_parallel_runs x duckdb_memory_limit
+    # run_all_fields_multi_day_pattern_suite(
+    #     start_day_label="08_06_2026",
+    #     end_day_label="12_06_2026",
+    #     close_forward_days=7,
+    #     min_runs_for_stability=3,
+    #     max_parallel_runs=3,
+    #     duckdb_threads=20,
+    #     field_batch_size=100,
+    #     max_parallel_chunks=1,
+    #     duckdb_memory_limit="9GB",
+    #     max_system_memory_gb=30.0,
+    #     memory_reserve_gb=4.0,
+    #     performance_fields=["Perf.1M", "Perf.3M"],
+    # )
+
+    # --- Scan-period close-forward predictor tracking (close price perf ONLY) ---
+    # Pools all eligible fields across the period; performance target is close_forward_return_pct.
+    # Fast pilot option for faster runtime:
+    # - narrow date window
+    # - explicit predictor_fields subset (20-50 fields)
+    # - stricter gates (min_fill_rate=0.20, min_pair_n=50)
+    # run_scan_period_close_forward_predictor_tracking(
+    #     start_day_label="25_05_2026",
+    #     end_day_label="12_06_2026",
+    #     close_forward_days=7,
+    #     min_runs_for_stability=3,
+    #     max_parallel_runs=4,
+    #     duckdb_threads=6,
+    #     field_batch_size=100,
+    #     max_parallel_chunks=1,
+    #     duckdb_memory_limit="9GB",
+    #     max_system_memory_gb=30.0,
+    #     memory_reserve_gb=4.0,
+    #     universe_filter={
+    #         **market_cap_basic_universe_filter(500_000_000),
+    #         **preferred_markets_universe_filter(PREFERRED_MARKETS),
+    #     },
+    # )
+
+    # --- Single day (smoke / one snapshot) ---
+    analyze_all_fields_run_performance_patterns(
+        database_path=Path(
+            r"D:\FinanceProjects\edgarDataManagementPython\logs\tradingview_analysis\trading_view_all_fields_data\12_06_2026\tradingview_all_fields_12_06_2026.duckdb"
+        ),
+        duckdb_threads=6,
+        field_batch_size=100,
+        max_parallel_chunks=4,
+        duckdb_memory_limit="9GB",
+        universe_filter={
+            **market_cap_basic_universe_filter(500_000_000),
+            **preferred_markets_universe_filter(PREFERRED_MARKETS),
+        },
+    )
+
+    # run_all_fields_pattern_analysis_batch(
+    #     start_day_label="01_03_2026",
+    #     end_day_label="13_06_2026",
+    #     duckdb_threads=20,
+    #     field_batch_size=80,
+    #     max_parallel_runs=2,
+    #     max_parallel_chunks=1,
+    #     duckdb_memory_limit="28GB",
+    #     max_system_memory_gb=30.0,
+    #     memory_reserve_gb=4.0,
+    # )
+    # benchmark_all_fields_pattern_analysis(
+    #     database_path=Path(
+    #         r"D:\FinanceProjects\edgarDataManagementPython\logs\tradingview_analysis\trading_view_all_fields_data\12_06_2026\tradingview_all_fields_12_06_2026.duckdb"
+    #     ),
+    #     duckdb_threads=20,
+    #     field_batch_size=80,
+    #     max_parallel_chunks=1,
+    #     duckdb_memory_limit="28GB",
+    # )
+    # close_forward = compute_cross_run_close_returns(
+    #     start_day_label="01_03_2026",
+    #     end_day_label="13_06_2026",
+    #     max_forward_days=40,
+    # )
+    # analyze_cross_run_close_performance_patterns(
+    #     start_day_label="01_03_2026",
+    #     end_day_label="13_06_2026",
+    #     close_forward_days=40,
+    # )
 
     # run_full_analysis_suite(
     #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
@@ -564,65 +665,6 @@ def main():
     #     export_sql=True,
     # )
     # print(f"Analysis reports exported: {list(exported.keys())}")
-
-    # backfill_historical_all_fields_csv_folders_to_duckdb(
-    #     day_folder_labels=[
-    #         # "29_03_2026",
-    #         # "30_03_2026",
-    #         # "31_03_2026",
-    #         # "01_04_2026",
-    #         # "02_04_2026",
-    #         # "06_04_2026",
-    #         # "07_04_2026",
-    #         # "08_04_2026",
-    #         # "09_04_2026",
-    #         # "10_04_2026",
-    #         # "13_04_2026",
-    #         # "14_04_2026",
-    #         # "15_04_2026",
-    #         # "16_04_2026",
-    #         # "17_04_2026",
-    #         # "20_04_2026",
-    #         # "21_04_2026",
-    #         # "22_04_2026",
-    #         # "23_04_2026",
-    #         # "24_04_2026",
-    #         # "27_04_2026",
-    #         # "28_04_2026",
-    #         # "29_04_2026",
-    #         # "30_04_2026",
-    #         # "01_05_2026",
-    #         # "04_05_2026",
-    #         # "05_05_2026",
-    #         # "06_05_2026",
-    #         # "07_05_2026",
-    #         # "08_05_2026",
-    #         # "11_05_2026",
-    #         # "12_05_2026",
-    #         # "13_05_2026",
-    #         # "14_05_2026",
-    #         # "15_05_2026",
-    #         "18_05_2026",
-    #         "19_05_2026",
-    #         "20_05_2026",
-    #         "21_05_2026",
-    #         "22_05_2026",
-    #         "26_05_2026",
-    #         # "27_05_2026",
-    #         # "28_05_2026",
-    #         # "29_05_2026",
-    #         # "01_06_2026",
-    #         # "02_06_2026",
-    #     ],
-    #     max_parallel_workers=3,
-    #     export_parquet=True,
-    #     export_all_fields_parquet=False,
-    #     skip_existing=True,
-    #     max_system_memory_gb=30.0,
-    #     memory_reserve_gb=4.0,
-    #     duckdb_memory_limit_gb=10.0,
-    #     duckdb_threads=8,
-    # )
 
     pass
 

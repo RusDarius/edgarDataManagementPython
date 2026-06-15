@@ -484,22 +484,23 @@ def _parse_date_label(label: str) -> datetime | None:
 
 def _discover_main_csv_in_dated_folder(folder_path: Path) -> Path:
     """Discover one main (non-chunk) CSV in a dated folder.
-    
+
     Raises:
         FileNotFoundError: If no CSV or multiple main CSVs found.
     """
     if not folder_path.is_dir():
         raise FileNotFoundError(f"Dated folder not found: {folder_path}")
-    
+
     candidates = [
-        candidate for candidate in sorted(folder_path.glob(BACKFILL_CSV_GLOB))
+        candidate
+        for candidate in sorted(folder_path.glob(BACKFILL_CSV_GLOB))
         if not _is_tdfields_chunk_csv(candidate)
     ]
-    
+
     if not candidates:
         all_csv = sorted(folder_path.glob("*.csv"))
         candidates = [c for c in all_csv if not _is_tdfields_chunk_csv(c)]
-    
+
     if not candidates:
         raise FileNotFoundError(
             f"No main CSV found in {folder_path} matching {BACKFILL_CSV_GLOB}"
@@ -592,6 +593,7 @@ def _progress_bar(completed: int, total: int, width: int = 20) -> str:
 @dataclass
 class _BackfillDayResult:
     """Result of backfilling a single day."""
+
     day_label: str
     status: str  # 'completed', 'skipped', 'error'
     skip_reason: str
@@ -607,27 +609,32 @@ class _BackfillDayResult:
 
 class _AllFieldsCsvDuckDBBackfillProgress:
     """Progress reporter for Git Bash visualization."""
-    
+
     def __init__(self, total_days: int) -> None:
         self.total_days = total_days
         self.completed = 0
         self.started_at = datetime.now(tz=timezone.utc)
         self._day_times: list[float] = []
-    
+
     def _elapsed(self) -> float:
         return (datetime.now(tz=timezone.utc) - self.started_at).total_seconds()
-    
+
     def _eta_seconds(self) -> float:
         if not self._day_times or self.completed >= self.total_days:
             return 0.0
         avg = sum(self._day_times) / len(self._day_times)
         remaining = self.total_days - self.completed
         return avg * remaining
-    
+
     def day_started(self, day_label: str) -> None:
-        print(f"[{_progress_bar(self.completed, self.total_days)}] Starting {day_label}...", flush=True)
-    
-    def day_finished(self, day_label: str, status: str, rows: int, elapsed: float) -> None:
+        print(
+            f"[{_progress_bar(self.completed, self.total_days)}] Starting {day_label}...",
+            flush=True,
+        )
+
+    def day_finished(
+        self, day_label: str, status: str, rows: int, elapsed: float
+    ) -> None:
         self.completed += 1
         self._day_times.append(elapsed)
         eta = self._eta_seconds()
@@ -637,8 +644,10 @@ class _AllFieldsCsvDuckDBBackfillProgress:
             f"({rows:,} rows in {elapsed:.1f}s){eta_str}",
             flush=True,
         )
-    
-    def summary(self, processed: int, skipped: int, errors: int, total_seconds: float) -> None:
+
+    def summary(
+        self, processed: int, skipped: int, errors: int, total_seconds: float
+    ) -> None:
         print("=" * 80, flush=True)
         print(
             f"Backfill complete: {processed} processed, {skipped} skipped, {errors} errors "
@@ -843,26 +852,26 @@ def _backfill_single_day_duckdb_native(
     duckdb_temp_directory: Path | None = None,
 ) -> _BackfillDayResult:
     """Backfill a single day using DuckDB native read_csv for performance.
-    
+
     Uses INSERT...SELECT FROM read_csv to avoid loading multi-GB CSV into Python.
     """
     import duckdb as _duckdb_module
-    
+
     started_at = datetime.now(tz=timezone.utc)
-    
+
     # Build list of data field names (excluding symbol)
     data_field_names = [fn for fn in field_names if fn != "symbol"]
     csv_columns = _read_csv_header_columns(csv_path)
     column_coverage = _analyze_backfill_column_coverage(data_field_names, csv_columns)
     _log_backfill_column_coverage(csv_path, column_coverage)
     csv_column_set = set(csv_columns)
-    
+
     # Ensure directories exist
     storage_layout.run_output_dir.mkdir(parents=True, exist_ok=True)
     storage_layout.database_path.parent.mkdir(parents=True, exist_ok=True)
     if export_parquet:
         storage_layout.parquet_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Acquire write lock
     with _duckdb_daily_writer_lock(storage_layout.database_path):
         # Build metadata for backfill
@@ -873,17 +882,19 @@ def _backfill_single_day_duckdb_native(
             "scan_input_type": "historical_all_fields_csv_backfill",
             "source_csv": str(csv_path),
             "source_csv_sha256": source_csv_sha256,
-            "source_csv_size_bytes": csv_path.stat().st_size if csv_path.exists() else None,
+            "source_csv_size_bytes": (
+                csv_path.stat().st_size if csv_path.exists() else None
+            ),
             "field_count": len(data_field_names),
             **_build_backfill_column_coverage_metadata(column_coverage),
         }
-        
+
         # Build SQL for field columns: use CSV values when present, else NULL.
         field_selects = _build_backfill_field_select_expressions(
             data_field_names,
             csv_column_set,
         )
-        
+
         field_sql = ",\n    ".join(field_selects) if field_selects else ""
         resolved_parquet_tables = _resolve_backfill_parquet_table_names(
             export_parquet=export_parquet,
@@ -896,9 +907,9 @@ def _backfill_single_day_duckdb_native(
             else storage_layout.period_dir / ".duckdb_temp"
         )
         resolved_temp_directory.mkdir(parents=True, exist_ok=True)
-        
+
         parquet_exports: dict[str, Path] = {}
-        
+
         with TradingViewAllFieldsDuckDBStore(
             database_path=storage_layout.database_path,
             parquet_dir=storage_layout.parquet_dir if export_parquet else None,
@@ -909,14 +920,14 @@ def _backfill_single_day_duckdb_native(
             temp_directory=resolved_temp_directory,
         ) as duckdb_store:
             duckdb_store.delete_run_data(run_id)
-            
+
             # Ensure all_fields_rows table exists by calling append with empty iterator
             duckdb_store.append_all_fields_rows(
                 run_id=run_id,
                 field_names=data_field_names,
                 rows=iter([]),
             )
-            
+
             csv_read_sql = f"""
                 read_csv(
                     {str(csv_path)!r},
@@ -925,10 +936,8 @@ def _backfill_single_day_duckdb_native(
                     strict_mode=false
                 )
             """
-            symbol_filter_sql = (
-                "TRIM(COALESCE(CAST(\"symbol\" AS VARCHAR), '')) <> ''"
-            )
-            
+            symbol_filter_sql = "TRIM(COALESCE(CAST(\"symbol\" AS VARCHAR), '')) <> ''"
+
             if data_field_names:
                 source_select_sql = f"""
                     SELECT
@@ -943,7 +952,7 @@ def _backfill_single_day_duckdb_native(
                     FROM {csv_read_sql}
                     WHERE {symbol_filter_sql}
                 """
-            
+
             duckdb_store.conn.execute(
                 "CREATE OR REPLACE TEMP TABLE backfill_csv_source AS "
                 f"{source_select_sql}"
@@ -952,7 +961,7 @@ def _backfill_single_day_duckdb_native(
                 "SELECT COUNT(*) FROM backfill_csv_source"
             ).fetchone()
             expected_rows = int(pre_count_result[0]) if pre_count_result else 0
-            
+
             # Register the run
             duckdb_store.begin_transaction()
             try:
@@ -979,7 +988,7 @@ def _backfill_single_day_duckdb_native(
             except Exception:
                 duckdb_store.rollback()
                 raise
-            
+
             if data_field_names:
                 columns_sql = ", ".join(
                     f"{_quote_identifier_sqlite(fn)}"
@@ -1003,29 +1012,29 @@ def _backfill_single_day_duckdb_native(
                         symbol
                     FROM backfill_csv_source
                 """
-            
+
             duckdb_store.conn.execute(insert_sql)
             duckdb_store.conn.execute("DROP TABLE IF EXISTS backfill_csv_source")
             duckdb_store.conn.execute("CHECKPOINT")
-            
+
             verify_result = duckdb_store.conn.execute(
                 "SELECT COUNT(*) FROM all_fields_rows WHERE run_id = ?",
                 [run_id],
             ).fetchone()
             actual_rows = int(verify_result[0]) if verify_result else 0
-            
+
             if actual_rows != expected_rows:
                 raise RuntimeError(
                     f"Row count mismatch for {csv_path}: expected {expected_rows}, got {actual_rows}"
                 )
-            
+
             if create_indexes or export_parquet:
                 duckdb_store.close()
                 duckdb_store.open()
-            
+
             if create_indexes:
                 duckdb_store.create_analysis_indexes()
-            
+
             # Write overview log
             overview_log = storage_layout.run_output_dir / "_duckdb_run_overview.log"
             _log_all_fields_duckdb_run_overview(
@@ -1041,23 +1050,23 @@ def _backfill_single_day_duckdb_native(
                 row_count=actual_rows,
                 parquet_exports=parquet_exports,
             )
-            
+
             duckdb_store.register_report(
                 run_id=run_id,
                 report_key="_duckdb_run_overview",
                 report_type="duckdb_overview_log",
                 file_path=overview_log,
             )
-            
+
             if export_parquet:
                 parquet_exports = duckdb_store.export_tables_to_parquet(
                     run_id=run_id,
                     parquet_dir=storage_layout.parquet_dir,
                     table_names=resolved_parquet_tables,
                 )
-    
+
     elapsed = (datetime.now(tz=timezone.utc) - started_at).total_seconds()
-    
+
     return _BackfillDayResult(
         day_label=storage_layout.period_dir.name,
         status="completed",
@@ -1097,13 +1106,13 @@ def _backfill_single_day_fallback(
         )
 
     _set_safe_csv_field_size_limit()
-    
+
     started_at = datetime.now(tz=timezone.utc)
     data_field_names = [fn for fn in field_names if fn != "symbol"]
     csv_columns = _read_csv_header_columns(csv_path)
     column_coverage = _analyze_backfill_column_coverage(data_field_names, csv_columns)
     _log_backfill_column_coverage(csv_path, column_coverage)
-    
+
     # Read CSV using Python csv
     rows: list[dict[str, Any]] = []
     with csv_path.open("r", encoding="utf-8-sig", newline="") as f:
@@ -1118,9 +1127,9 @@ def _backfill_single_day_fallback(
                 # Normalize blank to None
                 row[field] = val if val and val.strip() else None
             rows.append(row)
-    
+
     expected_rows = len(rows)
-    
+
     # Build insert records
     def _iter_records():
         for row_number, row in enumerate(rows, start=1):
@@ -1132,13 +1141,13 @@ def _backfill_single_day_fallback(
             for field in data_field_names:
                 record[field] = row.get(field)
             yield record
-    
+
     # Ensure directories
     storage_layout.run_output_dir.mkdir(parents=True, exist_ok=True)
     storage_layout.database_path.parent.mkdir(parents=True, exist_ok=True)
     if export_parquet:
         storage_layout.parquet_dir.mkdir(parents=True, exist_ok=True)
-    
+
     with _duckdb_daily_writer_lock(storage_layout.database_path):
         code_version_metadata = _collect_all_fields_code_version_metadata()
         api_request_metadata = {
@@ -1147,12 +1156,14 @@ def _backfill_single_day_fallback(
             "scan_input_type": "historical_all_fields_csv_backfill",
             "source_csv": str(csv_path),
             "source_csv_sha256": source_csv_sha256,
-            "source_csv_size_bytes": csv_path.stat().st_size if csv_path.exists() else None,
+            "source_csv_size_bytes": (
+                csv_path.stat().st_size if csv_path.exists() else None
+            ),
             "field_count": len(data_field_names),
             "ingest_method": "fallback_python_iteration",
             **_build_backfill_column_coverage_metadata(column_coverage),
         }
-        
+
         parquet_exports: dict[str, Path] = {}
         resolved_parquet_tables = _resolve_backfill_parquet_table_names(
             export_parquet=export_parquet,
@@ -1165,7 +1176,7 @@ def _backfill_single_day_fallback(
             else storage_layout.period_dir / ".duckdb_temp"
         )
         resolved_temp_directory.mkdir(parents=True, exist_ok=True)
-        
+
         with TradingViewAllFieldsDuckDBStore(
             database_path=storage_layout.database_path,
             parquet_dir=storage_layout.parquet_dir if export_parquet else None,
@@ -1176,7 +1187,7 @@ def _backfill_single_day_fallback(
             temp_directory=resolved_temp_directory,
         ) as duckdb_store:
             duckdb_store.delete_run_data(run_id)
-            
+
             duckdb_store.begin_transaction()
             try:
                 duckdb_store.register_run(
@@ -1202,31 +1213,31 @@ def _backfill_single_day_fallback(
             except Exception:
                 duckdb_store.rollback()
                 raise
-            
+
             # Append rows
             duckdb_store.append_all_fields_rows(
                 run_id=run_id,
                 field_names=data_field_names,
                 rows=_iter_records(),
             )
-            
+
             # Verify
             verify_sql = "SELECT COUNT(*) FROM all_fields_rows WHERE run_id = ?"
             verify_result = duckdb_store.conn.execute(verify_sql, [run_id]).fetchone()
             actual_rows = int(verify_result[0]) if verify_result else 0
-            
+
             if actual_rows != expected_rows:
                 raise RuntimeError(
                     f"Row count mismatch for {csv_path}: expected {expected_rows}, got {actual_rows}"
                 )
-            
+
             if create_indexes or export_parquet:
                 duckdb_store.close()
                 duckdb_store.open()
-            
+
             if create_indexes:
                 duckdb_store.create_analysis_indexes()
-            
+
             overview_log = storage_layout.run_output_dir / "_duckdb_run_overview.log"
             _log_all_fields_duckdb_run_overview(
                 overview_log=overview_log,
@@ -1241,23 +1252,23 @@ def _backfill_single_day_fallback(
                 row_count=actual_rows,
                 parquet_exports=parquet_exports,
             )
-            
+
             duckdb_store.register_report(
                 run_id=run_id,
                 report_key="_duckdb_run_overview",
                 report_type="duckdb_overview_log",
                 file_path=overview_log,
             )
-            
+
             if export_parquet:
                 parquet_exports = duckdb_store.export_tables_to_parquet(
                     run_id=run_id,
                     parquet_dir=storage_layout.parquet_dir,
                     table_names=resolved_parquet_tables,
                 )
-    
+
     elapsed = (datetime.now(tz=timezone.utc) - started_at).total_seconds()
-    
+
     return _BackfillDayResult(
         day_label=storage_layout.period_dir.name,
         status="completed",
@@ -1289,13 +1300,13 @@ def _backfill_single_day(
     force_rerun: bool,
 ) -> _BackfillDayResult:
     """Backfill a single day from CSV to DuckDB.
-    
+
     Returns _BackfillDayResult with status 'completed', 'skipped', or 'error'.
     """
     import time
-    
+
     started_at = time.perf_counter()
-    
+
     try:
         # Validate day label format
         source_date_utc = _parse_date_label(day_label)
@@ -1313,7 +1324,7 @@ def _backfill_single_day(
                 execution_seconds=time.perf_counter() - started_at,
                 error_message=f"Invalid day label format: {day_label} (expected dd_mm_yyyy)",
             )
-        
+
         # Resolve folder and CSV
         folder_path = base_data_dir / day_label
         try:
@@ -1332,13 +1343,18 @@ def _backfill_single_day(
                 execution_seconds=time.perf_counter() - started_at,
                 error_message=str(e),
             )
-        
+
         # Compute SHA256 for idempotency
         source_csv_sha256 = _compute_file_sha256(csv_path)
-        
+
         # Check skip conditions
         should_skip, skip_reason = _should_skip_day(
-            day_label, csv_path, source_csv_sha256, manifest_rows, skip_existing, force_rerun
+            day_label,
+            csv_path,
+            source_csv_sha256,
+            manifest_rows,
+            skip_existing,
+            force_rerun,
         )
         if should_skip:
             return _BackfillDayResult(
@@ -1353,7 +1369,7 @@ def _backfill_single_day(
                 database_path=Path(),
                 execution_seconds=time.perf_counter() - started_at,
             )
-        
+
         # Load field catalog
         field_names = _load_field_names(field_catalog_csv)
         if not field_names:
@@ -1370,17 +1386,17 @@ def _backfill_single_day(
                 execution_seconds=time.perf_counter() - started_at,
                 error_message=f"No field names found in {field_catalog_csv}",
             )
-        
+
         # Build storage layout and run ID
         run_label = f"{run_label_prefix}_{day_label}"
         run_id = _build_all_fields_duckdb_run_id(run_label, source_date_utc)
-        
+
         storage_layout = _build_all_fields_daily_storage_layout(
             run_id=run_id,
             created_at_utc=source_date_utc,
             output_dir=base_data_dir,
         )
-        
+
         # Attempt native DuckDB ingest first, fallback to Python iteration
         try:
             result = _backfill_single_day_duckdb_native(
@@ -1401,7 +1417,10 @@ def _backfill_single_day(
             )
         except Exception as native_exc:
             # Log native failure and try fallback
-            print(f"  Native ingest failed for {day_label}: {native_exc}. Trying fallback...", flush=True)
+            print(
+                f"  Native ingest failed for {day_label}: {native_exc}. Trying fallback...",
+                flush=True,
+            )
             result = _backfill_single_day_fallback(
                 csv_path=csv_path,
                 field_names=field_names,
@@ -1418,25 +1437,31 @@ def _backfill_single_day(
                 duckdb_memory_limit_gb=duckdb_memory_limit_gb,
                 duckdb_temp_directory=duckdb_temp_directory,
             )
-        
+
         return result
-        
+
     except Exception as e:
         elapsed = time.perf_counter() - started_at
         return _BackfillDayResult(
             day_label=day_label,
             status="error",
             skip_reason="",
-            source_csv=csv_path if 'csv_path' in dir() else Path(),
-            source_csv_sha256=source_csv_sha256 if 'source_csv_sha256' in dir() else None,
+            source_csv=csv_path if "csv_path" in dir() else Path(),
+            source_csv_sha256=(
+                source_csv_sha256 if "source_csv_sha256" in dir() else None
+            ),
             rows_source=0,
             rows_duckdb=0,
-            run_id=run_id if 'run_id' in dir() else "",
-            database_path=storage_layout.database_path if 'storage_layout' in dir() else Path(),
+            run_id=run_id if "run_id" in dir() else "",
+            database_path=(
+                storage_layout.database_path if "storage_layout" in dir() else Path()
+            ),
             execution_seconds=elapsed,
             error_message=str(e),
         )
 
+
+# !!! RAN THIS TO BACKFILL - 13-06-2026 !!!
 # DO NOT DELETE THIS COMMENTED CODE - it is a test case for the backfill function
 # result = backfill_historical_all_fields_csv_folders_to_duckdb(
 #     day_folder_labels=["01_04_2026", "02_04_2026"],
@@ -1466,10 +1491,10 @@ def backfill_historical_all_fields_csv_folders_to_duckdb(
     manifest_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Backfill historical all-fields CSV snapshots into daily DuckDB format.
-    
+
     Converts past CSV exports to the same DuckDB layout as export_all_tradingview_fields_duckdb.
     Each day folder (e.g., "01_04_2026") is processed independently.
-    
+
     Args:
         day_folder_labels: List of dated folder names in dd_mm_yyyy format (e.g., ["01_04_2026"]).
         base_data_dir: Base directory containing dated folders (default: DUCKDB_OUTPUT_DIR).
@@ -1491,7 +1516,7 @@ def backfill_historical_all_fields_csv_folders_to_duckdb(
         memory_reserve_gb: Headroom reserved for OS/Python (default: 4).
         duckdb_temp_directory: Optional spill directory for DuckDB temp files.
         manifest_dir: Directory for backfill manifest CSV (default: base_data_dir).
-    
+
     Returns:
         dict with:
             - 'results': list of _BackfillDayResult (as dicts)
@@ -1500,7 +1525,7 @@ def backfill_historical_all_fields_csv_folders_to_duckdb(
             - 'skipped_count': Number of skipped days
             - 'error_count': Number of days with errors
             - 'total_execution_seconds': Total wall-clock time
-    
+
     Example:
         result = backfill_historical_all_fields_csv_folders_to_duckdb(
             day_folder_labels=["01_04_2026", "02_04_2026"],
@@ -1509,23 +1534,23 @@ def backfill_historical_all_fields_csv_folders_to_duckdb(
         )
     """
     import time
-    
+
     total_start = time.perf_counter()
-    
+
     # Validate day labels
     for label in day_folder_labels:
         if _parse_date_label(label) is None:
             raise ValueError(
                 f"Invalid day_folder_labels format: '{label}'. Expected dd_mm_yyyy (e.g., 01_04_2026)."
             )
-    
+
     # Resolve manifest path
     manifest_path = (manifest_dir or base_data_dir) / ALL_FIELDS_BACKFILL_MANIFEST_NAME
     manifest_rows = _read_manifest(manifest_path)
-    
+
     # Setup progress reporter
     progress = _AllFieldsCsvDuckDBBackfillProgress(len(day_folder_labels))
-    
+
     effective_workers, per_worker_threads, per_worker_memory_gb = (
         _resolve_backfill_worker_resources(
             max_parallel_workers=max_parallel_workers,
@@ -1542,12 +1567,12 @@ def backfill_historical_all_fields_csv_folders_to_duckdb(
             f"({per_worker_memory_gb:.1f} GB DuckDB/worker, {per_worker_threads} threads/worker)",
             flush=True,
         )
-    
+
     results: list[_BackfillDayResult] = []
     processed_count = 0
     skipped_count = 0
     error_count = 0
-    
+
     # Sequential or parallel execution
     if effective_workers <= 1 or len(day_folder_labels) == 1:
         # Sequential execution
@@ -1570,14 +1595,14 @@ def backfill_historical_all_fields_csv_folders_to_duckdb(
                 force_rerun=force_rerun,
             )
             results.append(result)
-            
+
             if result.status == "completed":
                 processed_count += 1
             elif result.status == "skipped":
                 skipped_count += 1
             else:
                 error_count += 1
-            
+
             progress.day_finished(
                 day_label=day_label,
                 status=result.status,
@@ -1587,8 +1612,10 @@ def backfill_historical_all_fields_csv_folders_to_duckdb(
     else:
         # Parallel execution using thread/process pool
         # Note: Each day writes to a different .duckdb file, so no lock contention
-        ExecutorClass = ProcessPoolExecutor if parallel_mode == "process" else ThreadPoolExecutor
-        
+        ExecutorClass = (
+            ProcessPoolExecutor if parallel_mode == "process" else ThreadPoolExecutor
+        )
+
         with ExecutorClass(max_workers=effective_workers) as executor:
             # Submit all tasks
             future_to_label = {
@@ -1611,7 +1638,7 @@ def backfill_historical_all_fields_csv_folders_to_duckdb(
                 ): day_label
                 for day_label in day_folder_labels
             }
-            
+
             # Collect results as they complete
             for future in as_completed(future_to_label):
                 day_label = future_to_label[future]
@@ -1631,23 +1658,23 @@ def backfill_historical_all_fields_csv_folders_to_duckdb(
                         execution_seconds=0.0,
                         error_message=str(e),
                     )
-                
+
                 results.append(result)
-                
+
                 if result.status == "completed":
                     processed_count += 1
                 elif result.status == "skipped":
                     skipped_count += 1
                 else:
                     error_count += 1
-                
+
                 progress.day_finished(
                     day_label=day_label,
                     status=result.status,
                     rows=result.rows_duckdb,
                     elapsed=result.execution_seconds,
                 )
-    
+
     # Update and write manifest
     manifest_map = {row.get("day_label", ""): row for row in manifest_rows}
     for result in results:
@@ -1663,18 +1690,18 @@ def backfill_historical_all_fields_csv_folders_to_duckdb(
             "database_path": str(result.database_path),
             "execution_seconds": f"{result.execution_seconds:.3f}",
         }
-    
+
     _write_manifest(manifest_path, list(manifest_map.values()))
-    
+
     total_seconds = time.perf_counter() - total_start
-    
+
     progress.summary(
         processed=processed_count,
         skipped=skipped_count,
         errors=error_count,
         total_seconds=total_seconds,
     )
-    
+
     return {
         "results": [
             {
