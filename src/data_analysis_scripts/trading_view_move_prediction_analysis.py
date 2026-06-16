@@ -7488,6 +7488,8 @@ def run_full_analysis_suite_duckdb(
     api_request_metadata: Mapping[str, Any] | None = None,
     export_parquet: bool = True,
     create_indexes: bool = False,
+    conviction_mode_config_path: str | Path | None = None,
+    defer_conviction_to_earnings: bool = False,
 ) -> dict[str, Any]:
     """DuckDB-backed variant of :func:`run_full_analysis_suite`.
 
@@ -7642,6 +7644,26 @@ def run_full_analysis_suite_duckdb(
             else:
                 duckdb_store.commit()
 
+            conviction_result: dict[str, Any] | None = None
+            if conviction_mode_config_path and not defer_conviction_to_earnings:
+                from data_analysis_scripts.trading_view_move_prediction_conviction_mode import (
+                    run_conviction_mode_duckdb,
+                )
+
+                conviction_result = run_conviction_mode_duckdb(
+                    database_path=storage_layout.database_path,
+                    run_id=run_id,
+                    run_output_dir=storage_layout.run_output_dir,
+                    config_path=conviction_mode_config_path,
+                    include_earnings_boost=False,
+                    export_parquet=export_parquet,
+                    parquet_dir=storage_layout.parquet_dir if export_parquet else None,
+                    suite_id=profile_suite.get("suite_id"),
+                    duckdb_store=duckdb_store,
+                )
+                generated_logs["_conviction_rankings"] = conviction_result["csv_path"]
+                generated_logs["_conviction_daily_focus"] = conviction_result["log_path"]
+
             if create_indexes or export_parquet:
                 duckdb_store.close()
                 duckdb_store.open()
@@ -7649,9 +7671,11 @@ def run_full_analysis_suite_duckdb(
             if create_indexes:
                 duckdb_store.create_analysis_indexes()
             if export_parquet:
-                parquet_exports = duckdb_store.export_tables_to_parquet(
-                    run_id=run_id,
-                    parquet_dir=storage_layout.parquet_dir,
+                parquet_exports.update(
+                    duckdb_store.export_tables_to_parquet(
+                        run_id=run_id,
+                        parquet_dir=storage_layout.parquet_dir,
+                    )
                 )
 
             overview_log = storage_layout.run_output_dir / "_duckdb_run_overview.log"
@@ -7699,6 +7723,11 @@ def run_full_analysis_suite_duckdb(
         storage_layout.run_output_dir / "_duckdb_run_overview.log"
     )
     result["_duckdb_parquet_exports"] = parquet_exports
+    if conviction_mode_config_path and not defer_conviction_to_earnings:
+        result["_conviction_rankings"] = generated_logs.get("_conviction_rankings")
+        result["_conviction_daily_focus_log"] = generated_logs.get(
+            "_conviction_daily_focus"
+        )
     return result
 
 
@@ -7726,6 +7755,13 @@ EARNINGS_PRIORITY_BUCKETS: list[tuple[str, int | None]] = [
     ("Next 61–90 days", 90),
     ("Beyond 90 days", None),
 ]
+
+EARNINGS_PRIORITY_POST_RUN_PARQUET_TABLES: tuple[str, ...] = (
+    "earnings_priority_consensus_rows",
+    "earnings_priority_profile_rows",
+    "conviction_rankings",
+    "generated_reports",
+)
 
 EARNINGS_PRIORITY_SORT_FLAVOURS: dict[str, str] = {
     "flavour_marketcap": "Within each exact earnings date, rows are sorted by market cap descending.",
@@ -8939,6 +8975,7 @@ def run_full_analysis_suite_with_earnings_priority_duckdb(
     export_parquet: bool = True,
     create_indexes: bool = False,
     base_result: Mapping[str, Any] | None = None,
+    conviction_mode_config_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """DuckDB-backed variant of :func:`run_full_analysis_suite_with_earnings_priority`.
 
@@ -8978,6 +9015,8 @@ def run_full_analysis_suite_with_earnings_priority_duckdb(
             api_request_metadata=api_request_metadata,
             export_parquet=export_parquet,
             create_indexes=create_indexes,
+            conviction_mode_config_path=conviction_mode_config_path,
+            defer_conviction_to_earnings=bool(conviction_mode_config_path),
         )
     else:
         required_keys = (
@@ -9021,6 +9060,7 @@ def run_full_analysis_suite_with_earnings_priority_duckdb(
     earnings_priority_dir = run_output_dir / "earnings_priority"
     earnings_priority_dir.mkdir(parents=True, exist_ok=True)
 
+    conviction_result: dict[str, Any] | None = None
     with _duckdb_weekly_writer_lock(Path(database_path_resolved)):
         with MovePredictionDuckDBStore(
             database_path=database_path_resolved,
@@ -9045,11 +9085,37 @@ def run_full_analysis_suite_with_earnings_priority_duckdb(
             else:
                 duckdb_store.commit()
 
+            if conviction_mode_config_path:
+                from data_analysis_scripts.trading_view_move_prediction_conviction_mode import (
+                    run_conviction_mode_duckdb,
+                )
+
+                conviction_result = run_conviction_mode_duckdb(
+                    database_path=database_path_resolved,
+                    run_id=run_id,
+                    run_output_dir=run_output_dir,
+                    config_path=conviction_mode_config_path,
+                    include_earnings_boost=True,
+                    export_parquet=export_parquet,
+                    parquet_dir=parquet_dir_resolved if export_parquet else None,
+                    suite_id=base_result.get("_duckdb_profile_suite_id"),
+                    duckdb_store=duckdb_store,
+                )
+
             parquet_exports = dict(base_result.get("_duckdb_parquet_exports") or {})
             if export_parquet:
-                parquet_exports = duckdb_store.export_tables_to_parquet(
-                    run_id=run_id,
-                    parquet_dir=parquet_dir_resolved,
+                post_run_tables = [
+                    table_name
+                    for table_name in EARNINGS_PRIORITY_POST_RUN_PARQUET_TABLES
+                    if table_name != "conviction_rankings"
+                    or conviction_mode_config_path is not None
+                ]
+                parquet_exports.update(
+                    duckdb_store.export_tables_to_parquet(
+                        run_id=run_id,
+                        parquet_dir=parquet_dir_resolved,
+                        table_names=post_run_tables,
+                    )
                 )
 
     overview_generated_logs = {
@@ -9065,6 +9131,10 @@ def run_full_analysis_suite_with_earnings_priority_duckdb(
         result[result_key] = path
         overview_generated_logs[result_key] = path
 
+    if conviction_result:
+        overview_generated_logs["_conviction_rankings"] = conviction_result["csv_path"]
+        overview_generated_logs["_conviction_daily_focus"] = conviction_result["log_path"]
+
     _log_duckdb_run_overview(
         overview_log=result["_duckdb_overview_log"],
         run_id=run_id,
@@ -9076,6 +9146,9 @@ def run_full_analysis_suite_with_earnings_priority_duckdb(
         parquet_exports=parquet_exports,
     )
     result["_duckdb_parquet_exports"] = parquet_exports
+    if conviction_result:
+        result["_conviction_rankings"] = conviction_result["csv_path"]
+        result["_conviction_daily_focus_log"] = conviction_result["log_path"]
     return result
 
 

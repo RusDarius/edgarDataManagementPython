@@ -100,6 +100,32 @@ class TestProfileConfigLoader(unittest.TestCase):
             suite["consensus_profile_weights"]["swing_reversal_v1"], 0.06, places=6
         )
 
+    def test_active_manager_v3_loads_consolidated_profiles(self):
+        suite = load_profile_suite(
+            CONFIG_ROOT / "suites" / "active_manager_v3.json"
+        )
+        self.assertEqual(suite["suite_id"], "active_manager_v3")
+        self.assertEqual(len(suite["profile_names"]), 11)
+        quality_continuation = suite["registry"].get_profile("quality_continuation_v1")
+        self.assertIsNotNone(quality_continuation)
+        quality_weights = quality_continuation.component_signal_weights.get(
+            "quality", {}
+        )
+        self.assertGreater(quality_weights.get("return_on_invested_capital", 0.0), 1.4)
+        forward_edge = suite["registry"].get_profile("forward_edge_active_v2")
+        self.assertIsNotNone(forward_edge)
+        event_weights = forward_edge.component_signal_weights.get("event", {})
+        self.assertGreaterEqual(
+            event_weights.get("eps_surprise_percent_fq", 0.0), 1.85
+        )
+
+    def test_baseline_v2_weights_sum_to_one(self):
+        suite = load_profile_suite(CONFIG_ROOT / "suites" / "baseline_v2.json")
+        self.assertEqual(suite["suite_id"], "baseline_v2")
+        self.assertAlmostEqual(
+            sum(suite["consensus_profile_weights"].values()), 1.0, places=6
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

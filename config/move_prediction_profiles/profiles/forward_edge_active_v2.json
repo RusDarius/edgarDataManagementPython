@@ -1,0 +1,230 @@
+{
+  "schema_version": "move_prediction_profile_file_v1",
+  "profile_id": "forward_edge_active_v2",
+  "base_profile_id": "forward_edge_active",
+  "version": "2.0.0",
+  "effective_from": "2026-06-16",
+  "changelog": "Absorbs pre_earnings_drift catalyst signals; pair with earnings-priority suite during catalyst weeks.",
+  "profile": {
+    "name": "forward_edge_active_v2",
+    "description": "Forward-looking active management profile that identifies quality improvement BEFORE the market prices it in. v2 adds coiled-tape pre-earnings drift signals (reduced vs standalone pre_earnings profile) for catalyst-week positioning. Core differentiators: eps_forward_growth, QoQ sequential improvement, EPS surprise history, and anti-crowd attention inversion. Pair with run_full_analysis_suite_with_earnings_priority_duckdb during earnings season.",
+    "horizon_weights": {
+      "days": {
+        "attention": 0.06,
+        "event": 0.1,
+        "momentum": 0.13,
+        "trend": 0.24,
+        "quality": 0.22,
+        "valuation": 0.1,
+        "safety": 0.15
+      },
+      "weeks": {
+        "attention": 0.05,
+        "event": 0.08,
+        "momentum": 0.11,
+        "trend": 0.21,
+        "quality": 0.26,
+        "valuation": 0.14,
+        "safety": 0.15
+      },
+      "months": {
+        "attention": 0.03,
+        "event": 0.03,
+        "momentum": 0.08,
+        "trend": 0.16,
+        "quality": 0.3,
+        "valuation": 0.18,
+        "safety": 0.22
+      },
+      "years": {
+        "attention": 0.02,
+        "event": 0.01,
+        "momentum": 0.03,
+        "trend": 0.1,
+        "quality": 0.32,
+        "valuation": 0.22,
+        "safety": 0.3
+      }
+    },
+    "component_signal_weights": {
+      "attention": {
+        "relative_volume_10d_calc": 0.7,
+        "float_turnover": 0.65,
+        "dollar_turnover_intensity": 0.6,
+        "Value.Traded": 0.5,
+        "AvgValue.Traded_10d": 0.45,
+        "bb_squeeze": 1.45,
+        "range_compression": 1.4,
+        "volatility_contraction": 1.35,
+        "volume_trend": 1.45,
+        "intraday_momentum": 0.8
+      },
+      "event": {
+        "premarket_change": 0.85,
+        "postmarket_change": 0.85,
+        "gap": 0.75,
+        "gap_severity": 0.8,
+        "event_intensity": 0.85,
+        "eps_surprise_percent_fq": 1.85
+      },
+      "momentum": {
+        "change": 0.6,
+        "Perf.5D": 1.05,
+        "Perf.W": 0.9,
+        "Perf.1M": 0.75,
+        "Perf.3M": 0.5,
+        "Perf.6M": 0.25,
+        "Perf.YTD": 0.12,
+        "Perf.Y": 0.05,
+        "ROC": 1.2,
+        "Mom": 1.15,
+        "macd_spread": 1.3,
+        "Recommend.All": 0.6,
+        "Recommend.MA": 0.75,
+        "Recommend.Other": 0.55,
+        "rsi_centered": 0.45,
+        "rsi7_centered": 0.7,
+        "aroon_spread": 1.4,
+        "adx_directional_spread": 1.3,
+        "stoch_rsi_centered": 1.15,
+        "CCI20": 1.0,
+        "stoch_rsi_crossover": 1.3,
+        "recommend_tf_spread": 1.2
+      },
+      "trend": {
+        "close_vs_sma10": 1.5,
+        "close_vs_sma20": 1.4,
+        "close_vs_sma30": 1.3,
+        "close_vs_ema10": 1.5,
+        "close_vs_ema20": 1.4,
+        "close_vs_ema30": 1.3,
+        "short_trend_emergence": 1.65,
+        "close_vs_sma50": 0.85,
+        "close_vs_sma200": 0.5,
+        "close_vs_ema50": 0.85,
+        "close_vs_ema200": 0.5,
+        "close_vs_vwap": 1.05,
+        "close_vs_vwma": 1.0,
+        "trend_alignment": 0.7,
+        "bb_position": 1.25,
+        "pivot_distance": 1.0,
+        "close_vs_hullma9": 1.35
+      },
+      "quality": {
+        "total_revenue_yoy_growth_ttm": 0.95,
+        "total_revenue_qoq_growth_fq": 1.35,
+        "ebitda_yoy_growth_ttm": 0.95,
+        "ebitda_qoq_growth_fq": 1.4,
+        "net_income_yoy_growth_ttm": 0.9,
+        "net_income_qoq_growth_fq": 1.35,
+        "free_cash_flow_yoy_growth_ttm": 1.0,
+        "free_cash_flow_qoq_growth_fq": 1.45,
+        "gross_margin": 0.85,
+        "operating_margin": 1.1,
+        "after_tax_margin": 0.85,
+        "return_on_assets": 0.8,
+        "return_on_equity": 0.9,
+        "return_on_invested_capital": 1.2,
+        "free_cash_flow_margin_ttm": 1.35,
+        "buyback_yield": 0.65,
+        "dividends_yield_current": 0.3,
+        "eps_forward_growth": 1.75,
+        "revenue_per_employee": 0.8,
+        "earnings_per_share_diluted_yoy_growth_ttm": 1.15,
+        "gross_profit_margin_fy": 0.85
+      },
+      "valuation": {
+        "price_earnings_ttm": 0.8,
+        "price_earnings_growth_ttm": 1.3,
+        "price_sales_current": 0.75,
+        "price_book_fq": 0.7,
+        "price_free_cash_flow_ttm": 1.15,
+        "price_to_cash_f_operating_activities_ttm": 0.85,
+        "enterprise_value_to_revenue_ttm": 0.75,
+        "enterprise_value_to_ebit_ttm": 0.8,
+        "enterprise_value_ebitda_ttm": 0.9,
+        "earnings_yield": 1.25,
+        "distance_from_52w_high": 1.2,
+        "range_position_52w": 1.15
+      },
+      "safety": {
+        "current_ratio": 1.0,
+        "quick_ratio": 1.0,
+        "cash_ratio": 0.9,
+        "short_term_cash_coverage": 1.1,
+        "altman_z_score_ttm": 1.25,
+        "debt_to_equity": 1.2,
+        "debt_to_revenue_ttm": 1.15,
+        "net_debt": 1.15,
+        "beta_1_year": 0.65
+      }
+    },
+    "component_directional_bias": {
+      "attention": {
+        "positive_multiplier": 0.5,
+        "negative_multiplier": 1.5
+      },
+      "event": {
+        "positive_multiplier": 1.25,
+        "negative_multiplier": 0.8
+      },
+      "momentum": {
+        "positive_multiplier": 1.15,
+        "negative_multiplier": 0.72
+      },
+      "trend": {
+        "positive_multiplier": 1.3,
+        "negative_multiplier": 0.82
+      },
+      "quality": {
+        "positive_multiplier": 1.22,
+        "negative_multiplier": 1.35
+      },
+      "valuation": {
+        "positive_multiplier": 1.12,
+        "negative_multiplier": 0.78
+      },
+      "safety": {
+        "positive_multiplier": 1.1,
+        "negative_multiplier": 1.4
+      }
+    },
+    "missing_component_scores_by_horizon": {
+      "days": {
+        "quality": -0.65,
+        "safety": -0.65,
+        "trend": -0.5
+      },
+      "weeks": {
+        "quality": -0.75,
+        "safety": -0.75,
+        "trend": -0.45
+      },
+      "months": {
+        "quality": -0.9,
+        "safety": -0.9,
+        "valuation": -0.6
+      },
+      "years": {
+        "quality": -1.0,
+        "safety": -1.0,
+        "valuation": -0.8
+      }
+    },
+    "performance_tracking_periods": {
+      "days": ["Perf.W"],
+      "weeks": ["Perf.1M"],
+      "months": ["Perf.YTD", "Perf.1M"],
+      "years": ["Perf.Y"]
+    },
+    "intro_metric_notes": [
+      "Forward edge v2 — quality improvement before price follows, plus pre-earnings coiled-tape catalyst layer.",
+      "eps_forward_growth=1.75 and eps_surprise_percent_fq=1.85 (boosted for earnings-window weeks).",
+      "Coiled tape from absorbed pre_earnings_drift: bb_squeeze=1.45, range_compression=1.40, volatility_contraction=1.35.",
+      "Use run_full_analysis_suite_with_earnings_priority_duckdb during catalyst weeks.",
+      "Attention inversion: positive=0.50x, negative=1.50x — anti-crowd by design."
+    ],
+    "confidence_multiplier": 1.03,
+    "confidence_offset": 0.0
+  }
+}

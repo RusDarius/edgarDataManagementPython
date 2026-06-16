@@ -1,0 +1,91 @@
+{
+  "schema_version": "move_prediction_conviction_v1",
+  "config_id": "active_manager_conviction_v1",
+  "compatible_suite_ids": [
+    "active_manager_v3",
+    "active_manager_v2",
+    "active_manager_v1",
+    "baseline_v2"
+  ],
+  "max_display_total": 30,
+  "sleeve_allocation": {
+    "short": 10,
+    "mid": 15,
+    "long": 5
+  },
+  "sleeves": {
+    "short": {
+      "horizons": [
+        "days",
+        "weeks"
+      ],
+      "preferred_manager_actions": [
+        "add_long_breakout",
+        "add_long_breakout_high_conviction",
+        "mean_reversion_watch"
+      ],
+      "min_consensus_score": 0.35,
+      "min_risk_adjusted_score": 0.25
+    },
+    "mid": {
+      "horizons": [
+        "months"
+      ],
+      "preferred_manager_actions": [
+        "accumulate_value_catalyst",
+        "watch_value_reversal"
+      ],
+      "min_consensus_score": 0.30
+    },
+    "long": {
+      "horizons": [
+        "years"
+      ],
+      "preferred_manager_actions": [
+        "hold_quality_long"
+      ],
+      "min_consensus_score": 0.25
+    }
+  },
+  "scoring": {
+    "consensus_ras_weight": 0.35,
+    "consensus_score_weight": 0.20,
+    "agreement_ratio_weight": 0.15,
+    "multi_lens_weight": 0.15,
+    "breakout_story_weight": 0.10,
+    "manager_action_bonus": 0.05,
+    "earnings_catalyst_weight": 0.10
+  },
+  "multi_lens": {
+    "min_bullish_profiles": 3,
+    "score_floor": 0.35
+  },
+  "exclusions": {
+    "manager_actions": [
+      "avoid_value_trap"
+    ],
+    "breakout_risk_flags": [
+      "false_breakout_risk",
+      "fragility_conflict"
+    ],
+    "min_consensus_opinions": 3,
+    "min_agreement_ratio": 0.45
+  },
+  "breakout_boost": {
+    "profile_name": "breakout_long_v1",
+    "conviction_tiers": {
+      "high_conviction": 1.0,
+      "actionable": 0.7,
+      "watch": 0.3
+    },
+    "entry_readiness": {
+      "ready_now": 1.0,
+      "ready": 0.85,
+      "await_tape": 0.4
+    }
+  },
+  "earnings_catalyst": {
+    "max_days_until": 30,
+    "min_days_score": 0.35
+  }
+}

@@ -37,6 +37,11 @@ ANALYSIS_INDEX_SPECS = [
         "consensus_profile_horizon_scores",
         ["run_id", "profile_name", "horizon_name", "symbol"],
     ),
+    (
+        "idx_conviction_rankings_lookup",
+        "conviction_rankings",
+        ["run_id", "sleeve", "symbol"],
+    ),
 ]
 
 
@@ -210,6 +215,40 @@ CONSENSUS_PROFILE_HORIZON_SCORES_SCHEMA = [
     ("setup", "VARCHAR"),
     ("risk_adjusted_score", "DOUBLE"),
     ("risk_tier", "VARCHAR"),
+]
+
+CONVICTION_RANKINGS_SCHEMA = [
+    ("run_id", "VARCHAR"),
+    ("row_number", "BIGINT"),
+    ("symbol", "VARCHAR"),
+    ("company", "VARCHAR"),
+    ("sector", "VARCHAR"),
+    ("industry", "VARCHAR"),
+    ("sleeve", "VARCHAR"),
+    ("conviction_score", "DOUBLE"),
+    ("rank_overall", "BIGINT"),
+    ("rank_in_sleeve", "BIGINT"),
+    ("display_flag", "BOOLEAN"),
+    ("manager_action_signal", "VARCHAR"),
+    ("days_score", "DOUBLE"),
+    ("days_ras", "DOUBLE"),
+    ("weeks_score", "DOUBLE"),
+    ("weeks_ras", "DOUBLE"),
+    ("months_score", "DOUBLE"),
+    ("months_ras", "DOUBLE"),
+    ("years_score", "DOUBLE"),
+    ("years_ras", "DOUBLE"),
+    ("agreement_ratio", "DOUBLE"),
+    ("opinions", "BIGINT"),
+    ("bullish_profile_count", "BIGINT"),
+    ("breakout_conviction_tier", "VARCHAR"),
+    ("entry_readiness", "VARCHAR"),
+    ("size_tier", "VARCHAR"),
+    ("tape_pass", "BOOLEAN"),
+    ("earnings_days_until", "DOUBLE"),
+    ("exclusion_reason", "VARCHAR"),
+    ("score_breakdown_json", "VARCHAR"),
+    ("config_id", "VARCHAR"),
 ]
 
 
@@ -430,6 +469,9 @@ def _infer_sql_type(column_name: str, values: Sequence[Any]) -> str:
     non_blank_values = [value for value in values if not _is_blank(value)]
     if not non_blank_values:
         return "VARCHAR"
+
+    if all(isinstance(value, bool) for value in non_blank_values):
+        return "BOOLEAN"
 
     if all(_parse_float(value) is not None for value in non_blank_values):
         return "DOUBLE"
@@ -966,6 +1008,9 @@ class MovePredictionDuckDBStore:
             records,
             CONSENSUS_PROFILE_HORIZON_SCORES_SCHEMA,
         )
+
+    def append_conviction_rankings(self, records: Iterable[dict[str, Any]]) -> None:
+        self.append_records("conviction_rankings", records, CONVICTION_RANKINGS_SCHEMA)
 
     def drop_analysis_indexes(self) -> None:
         for index_name, _, _ in ANALYSIS_INDEX_SPECS:

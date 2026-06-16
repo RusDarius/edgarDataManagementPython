@@ -20,9 +20,33 @@ The root causes were:
 
 This reference documents the revised scoring model and the updated profile behavior.
 
+## June 2026 Profile Consolidation — `active_manager_v3` (11 lenses)
+
+Consolidated suite replacing the 17-profile `active_manager_v2` sprawl. Goal: distinct investing-style buckets with less redundant overlap.
+
+| Style lane | Profile | Notes |
+| --- | --- | --- |
+| Continuation | `breakout_long_v1` | Pure tape |
+| Swing | `early_momentum_inflection_v1` | Coiled pre-breakout |
+| Forward edge | `forward_edge_active_v2` | Absorbs `pre_earnings_drift_v1` catalyst signals |
+| Quality continuation | `quality_continuation_v1` | **New** — tape + ROIC/Piotroski floor |
+| Core quality | `quality_value_compounder` | Python preset |
+| Quality at value | `durable_value_compounder_v1` | |
+| Undervalue | `asymmetric_value` | Static cheapness |
+| Structural recovery | `value_recovery_v2` | Absorbs `deep_value_momentum` catalysts |
+| Fortress + action | `defensive_fortress_v2` | Absorbs `income_compounder_v1` dividend layer |
+| Hedge overlay | `fragility_short` | Inverted |
+| Trim overlay | `mean_reversion_exhaustion_v1` | Inverted |
+
+**Consensus weights (v3, sum = 1.00):** breakout 0.17, inflection 0.11, forward_edge_v2 0.11, quality_continuation 0.09, QVC 0.10, DVC 0.09, asymmetric 0.09, value_recovery_v2 0.08, fortress_v2 0.07, fragility 0.06, exhaustion 0.03.
+
+**Suites:** `active_manager_v3.json` (production), `baseline_v2.json` (same profiles for default-suite migration). Frozen `baseline.json` (10 profiles) unchanged for historical DuckDB comparison.
+
+**Overlap tooling:** `scripts/run_move_prediction_profile_overlap_report.py` — critical pairs gated at Jaccard ≤ 0.35 on weeks/months for breakout vs quality_continuation, asymmetric vs value_recovery_v2, forward_edge_v2 vs QVC.
+
 ## June 2026 Active-Manager Update — Tier-1 Signals & Six New Profiles
 
-This pass activates under-used TradingView catalog fields and expands the profile suite from 10 to **16** lenses.
+This pass activates under-used TradingView catalog fields and expands the profile suite from 10 to **16** lenses (`active_manager_v1` / `active_manager_v2`; superseded by v3 consolidation above).
 
 ### Tier-1 derived signals (new)
 

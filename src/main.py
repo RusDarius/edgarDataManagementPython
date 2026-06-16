@@ -78,6 +78,19 @@ MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2 = (
     / "suites"
     / "active_manager_v2.json"
 )
+MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3 = (
+    PROJECT_ROOT
+    / "config"
+    / "move_prediction_profiles"
+    / "suites"
+    / "active_manager_v3.json"
+)
+MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2 = (
+    PROJECT_ROOT / "config" / "move_prediction_profiles" / "suites" / "baseline_v2.json"
+)
+CONVICTION_MODE_CONFIG = (
+    PROJECT_ROOT / "config" / "move_prediction_conviction" / "active_manager_v1.json"
+)
 PREDICTION_MODULE2_SUITE_ACTIVE_MANAGER_V1 = (
     PROJECT_ROOT
     / "config"
@@ -414,20 +427,25 @@ def main():
     #     )
     # )
     # # Default (omit profile_suite_path): built-in 10-profile baseline — see DEFAULT_MOVE_PREDICTION_PROFILE_SUITE.
-    # # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
+    # # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3
+    # # Legacy 17-profile suite: MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
+    # # Realigned baseline (11 lenses): MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
     # # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
     # base_duckdb_result = run_full_analysis_suite_duckdb(
     #     scan_data=move_prediction_scan_response,
     #     min_market_cap_usd=1_000_000_000,
     #     include_blind_spot_sections=True,
-    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2,
+    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+    #     conviction_mode_config_path=CONVICTION_MODE_CONFIG,
+    #     defer_conviction_to_earnings=True,
     # )
     # run_full_analysis_suite_with_earnings_priority_duckdb(
     #     scan_data=move_prediction_scan_response,
     #     min_market_cap_usd=1_000_000_000,
     #     include_blind_spot_sections=True,
     #     base_result=base_duckdb_result,
-    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2,
+    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+    #     conviction_mode_config_path=CONVICTION_MODE_CONFIG,
     # )
 
     # Module2 orthogonal outlook scoring (separate from v1 move-prediction profiles).
@@ -479,22 +497,22 @@ def main():
     # - narrow date window
     # - explicit predictor_fields subset (20-50 fields)
     # - stricter gates (min_fill_rate=0.20, min_pair_n=50)
-    run_scan_period_close_forward_predictor_tracking(
-        start_day_label="29_03_2026",
-        end_day_label="15_06_2026",
-        min_runs_for_stability=3,
-        max_parallel_runs=4,
-        duckdb_threads=6,
-        field_batch_size=120,
-        max_parallel_chunks=1,
-        duckdb_memory_limit="10GB",
-        max_system_memory_gb=30.0,
-        memory_reserve_gb=4.0,
-        universe_filter={
-            **market_cap_basic_universe_filter(500_000_000),
-            **preferred_markets_universe_filter(PREFERRED_MARKETS),
-        },
-    )
+    # run_scan_period_close_forward_predictor_tracking(
+    #     start_day_label="29_03_2026",
+    #     end_day_label="15_06_2026",
+    #     min_runs_for_stability=3,
+    #     max_parallel_runs=4,
+    #     duckdb_threads=6,
+    #     field_batch_size=120,
+    #     max_parallel_chunks=1,
+    #     duckdb_memory_limit="10GB",
+    #     max_system_memory_gb=30.0,
+    #     memory_reserve_gb=4.0,
+    #     universe_filter={
+    #         **market_cap_basic_universe_filter(500_000_000),
+    #         **preferred_markets_universe_filter(PREFERRED_MARKETS),
+    #     },
+    # )
 
     # # --- Single day (smoke / one snapshot) ---
     # analyze_all_fields_run_performance_patterns(

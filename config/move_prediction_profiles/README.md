@@ -11,8 +11,11 @@ config/move_prediction_profiles/
     breakout_long_v1.json
     ...
   suites/            # suite manifests (profile list + consensus weights)
-    baseline.json
+    baseline.json          # frozen 10-profile built-in mirror
+    baseline_v2.json       # realigned 11-profile consolidated suite
     active_manager_v1.json
+    active_manager_v2.json # legacy 17-profile suite
+    active_manager_v3.json # production consolidated 11-profile suite
 ```
 
 ## Profile file (`profiles/*.json`)
@@ -48,15 +51,16 @@ Built-in presets (no `_v1` suffix) resolve from Python. Versioned IDs resolve fr
 From `src/main.py` (or any caller of the DuckDB suite):
 
 ```python
-from main import MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1
+from main import MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3
 
 base_result = run_full_analysis_suite_duckdb(
     scan_data=scan_response,
-    profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V1,
+    profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
 )
 run_full_analysis_suite_with_earnings_priority_duckdb(
     scan_data=scan_response,
     base_result=base_result,
+    profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
 )
 ```
 
@@ -67,6 +71,48 @@ Explicit baseline JSON (same lenses as built-in default):
 ```python
 profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_BASELINE
 ```
+
+Realigned consolidated baseline (11 lenses, same as `active_manager_v3`):
+
+```python
+profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
+```
+
+Legacy extended suites remain available for historical comparison:
+
+- `active_manager_v2.json` — 17 profiles (includes `swing_reversal_v1`)
+- `active_manager_v1.json` — 16 profiles
+
+## Style taxonomy (`active_manager_v3` / `baseline_v2`)
+
+| Investing style | Profile |
+| --- | --- |
+| Continuation (pure tape) | `breakout_long_v1` |
+| Swing (coiled setup) | `early_momentum_inflection_v1` |
+| Forward edge + earnings catalyst | `forward_edge_active_v2` |
+| Quality-backed continuation | `quality_continuation_v1` |
+| Core quality compounder | `quality_value_compounder` |
+| Quality at value | `durable_value_compounder_v1` |
+| Fundamental undervalue | `asymmetric_value` |
+| Structural recovery | `value_recovery_v2` |
+| Fortress with action | `defensive_fortress_v2` |
+| Bearish overlay (inverted) | `fragility_short` |
+| Extension trim overlay (inverted) | `mean_reversion_exhaustion_v1` |
+
+Retired from consolidated suite (JSON files kept for history): `pre_earnings_drift_v1`, `sector_rotation_momentum_v1`, `quality_growth_at_reasonable_price_v1`, `income_compounder_v1`, `swing_reversal_v1`, `deep_value_momentum`, `sector_relative_outperformer_v1`.
+
+## Overlap audit
+
+Run top-10 Jaccard overlap report after suite changes:
+
+```bash
+PYTHONPATH=src python scripts/run_move_prediction_profile_overlap_report.py \
+  --suite config/move_prediction_profiles/suites/active_manager_v3.json \
+  --scan-json path/to/scan_rows.json \
+  --output logs/tradingview_analysis/prediction_analysis/active_manager_v3__overlap_report.json
+```
+
+Use `--live-scan` instead of `--scan-json` when API credentials are available.
 
 ## Tracking and comparison
 

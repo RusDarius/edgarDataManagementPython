@@ -70,6 +70,7 @@ PARQUET_SOURCE_TABLES: dict[str, str] = {
     "profile_components": "profile_components.parquet",
     "profile_performance_tracking": "profile_performance_tracking.parquet",
     "consensus_horizon_scores": "consensus_horizon_scores.parquet",
+    "conviction_rankings": "conviction_rankings.parquet",
     "profile_config_snapshots": "profile_config_snapshots.parquet",
 }
 
