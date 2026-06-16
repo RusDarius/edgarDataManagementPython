@@ -1647,32 +1647,23 @@ SELECT qs.*,
 FROM quintile_stats qs
 ORDER BY qs.wr_quintile;
 -- =============================================================================
--- [CF DD898100] Close-forward stock rankings — scan_period_close_forward_tracking_25may_12jun2026
+-- [PERIOD DD898100] Whole-period stock rankings — scan_period_close_forward_tracking_25may_12jun2026
 -- =============================================================================
 -- Source advice: pattern_analysis/advised_conclusions/close_forward_25may_12jun2026_dd898100_advised_conclusions.md
 -- CSV exports: .../runs/scan_period_close_forward_tracking_25may_12jun2026_dd898100/predictor_stock_rankings/
---   indicator_perf/00_*.csv — TOP predictors + quintile correlation/perf (pivot in Excel for charts)
 -- Re-generate CSVs: python scripts/run_close_forward_predictor_stock_rankings.py --top-n 100
+-- Performance target: period_return_pct (period-start close to period-end close)
 --
--- WHICH DUCKDB TO TARGET
--- ----------------------
--- | Use case | Database | Notes |
--- | Predictor stability / which fields matter | .../aggregates/all_fields_pattern_aggregate.duckdb | cross_run_field_stability |
--- | Historical 7d forward returns (26 May–11 Jun) | .../close_forward/close_returns/cross_run_close_returns.duckdb | 13 scored source days |
--- | Enriched rows for joins (predictors + labels) | .../close_forward/close_forward_analysis_input.duckdb | all_fields_rows; no name/market cols |
--- | Latest positioning (12 Jun, no forward label) | .../12_06_2026/tradingview_all_fields_12_06_2026.duckdb | run_id below |
--- | Do NOT use close_forward_analysis_input alone for live screens | ends at scored rows through 11 Jun |
---
--- Multi-DB blocks: run the ATTACH block once per session, then run ranking blocks.
 -- @block
--- [CF DD898100 SETUP] Attach run databases (run once per session).
+-- [PERIOD DD898100 SETUP] Attach run databases (run once per session).
 ATTACH 'D:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/pattern_analysis/runs/scan_period_close_forward_tracking_25may_12jun2026_dd898100/aggregates/all_fields_pattern_aggregate.duckdb' AS agg (READ_ONLY);
-ATTACH 'D:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/pattern_analysis/runs/scan_period_close_forward_tracking_25may_12jun2026_dd898100/close_forward/close_forward_analysis_input.duckdb' AS enr (READ_ONLY);
-ATTACH 'D:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/pattern_analysis/runs/scan_period_close_forward_tracking_25may_12jun2026_dd898100/close_forward/close_returns/cross_run_close_returns.duckdb' AS cr (READ_ONLY);
+ATTACH 'D:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/pattern_analysis/runs/scan_period_close_forward_tracking_25may_12jun2026_dd898100/period_total/period_analysis_input.duckdb' AS enr (READ_ONLY);
+ATTACH 'D:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/pattern_analysis/runs/scan_period_close_forward_tracking_25may_12jun2026_dd898100/period_total/period_returns/period_boundary_returns.duckdb' AS pr (READ_ONLY);
+ATTACH 'D:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/pattern_analysis/runs/scan_period_close_forward_tracking_25may_12jun2026_dd898100/progression/period_progression.duckdb' AS prog (READ_ONLY);
 ATTACH 'D:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/12_06_2026/tradingview_all_fields_12_06_2026.duckdb' AS day12 (READ_ONLY);
 -- daily run_id: tradingview_all_fields_20260612_2008_utc_028e0f86
 -- @block
--- [CF DD898100 R1] Composite bullish fit score — 12 Jun (no LIMIT).
+-- [PERIOD DD898100 R1] Composite bullish fit score — 12 Jun (no LIMIT).
 WITH preferred_market_codes AS (
     SELECT market_code FROM (
         VALUES ('america'),('canada'),('mexico'),('austria'),('belgium'),('cyprus'),('czech'),
@@ -1692,7 +1683,7 @@ run_rows_preferred AS (
 pattern_weights AS (
     SELECT predictor_field, rank_stability_score AS rss, ABS(rank_stability_score) AS weight
     FROM agg.cross_run_field_stability
-    WHERE performance_field = 'close_forward_return_pct'
+    WHERE performance_field = 'period_return_pct'
       AND predictor_field IN (
           'ATRP|1W','ATRP','ADRP|15','ADRP|1W','ADX-DI|1M','ADX-DI_50|1M','relative_volume',
           'RSI21[1]|1M','Stoch.K_14_1_3|1M','W.R|1M','Recommend.MA|1M','oper_income_ttm','ebitda_ttm'
@@ -1734,234 +1725,12 @@ SELECT m.symbol, m.name, m.market, m.sector,
     ROUND(TRY_CAST(m.market_cap_basic AS DOUBLE) / 1e9, 2) AS mcap_b_usd,
     ROUND(TRY_CAST(m."ATRP|1W" AS DOUBLE), 2) AS atrp_1w,
     ROUND(TRY_CAST(m.relative_volume AS DOUBLE), 2) AS relative_volume,
-    ROUND(100.0 * s.raw_score, 2) AS close_fwd_fit_score,
+    ROUND(100.0 * s.raw_score, 2) AS period_fit_score,
     RANK() OVER (ORDER BY s.raw_score DESC) AS rank
 FROM stock_scores s INNER JOIN run_rows_preferred m USING (symbol)
 ORDER BY s.raw_score DESC;
 -- @block
--- [CF DD898100 R2] Playbook A — volatility continuation on 12 Jun (no LIMIT).
-WITH preferred_market_codes AS (
-    SELECT market_code FROM (
-        VALUES ('america'),('canada'),('mexico'),('austria'),('belgium'),('cyprus'),('czech'),
-        ('denmark'),('estonia'),('finland'),('france'),('germany'),('greece'),('hungary'),
-        ('iceland'),('ireland'),('italy'),('latvia'),('lithuania'),('luxembourg'),('netherlands'),
-        ('norway'),('poland'),('portugal'),('romania'),('slovakia'),('spain'),('sweden'),
-        ('switzerland'),('uk')
-    ) AS preferred_markets(market_code)
-),
-base AS (
-    SELECT r.symbol, r.name, r.market, r.sector,
-        TRY_CAST(r.close AS DOUBLE) AS close,
-        TRY_CAST(r.market_cap_basic AS DOUBLE) AS market_cap_basic,
-        TRY_CAST(r."ATRP|1W" AS DOUBLE) AS atrp_1w,
-        TRY_CAST(r.relative_volume AS DOUBLE) AS relvol,
-        TRY_CAST(r."ADX-DI|5" AS DOUBLE) AS adx_di5,
-        TRY_CAST(r."Stoch.K_14_1_3|1M" AS DOUBLE) AS stoch_k_1m
-    FROM day12.all_fields_rows r
-    INNER JOIN preferred_market_codes pm ON LOWER(TRIM(COALESCE(r.market, ''))) = pm.market_code
-    WHERE r.run_id = 'tradingview_all_fields_20260612_2008_utc_028e0f86'
-      AND TRY_CAST(r.market_cap_basic AS DOUBLE) >= 500000000
-      AND TRY_CAST(r.close AS DOUBLE) >= 10
-),
-med AS (SELECT MEDIAN(atrp_1w) AS atrp_median FROM base),
-stoch_med AS (SELECT MEDIAN(stoch_k_1m) AS stoch_median FROM base)
-SELECT b.symbol, b.name, b.market, b.sector,
-    ROUND(b.close, 2) AS close,
-    ROUND(b.market_cap_basic / 1e9, 2) AS mcap_b_usd,
-    ROUND(b.atrp_1w, 2) AS atrp_1w,
-    ROUND(b.relvol, 2) AS relative_volume,
-    ROUND(b.adx_di5, 1) AS adx_di5,
-    ROUND(b.stoch_k_1m, 1) AS stoch_k_1m,
-    RANK() OVER (ORDER BY b.atrp_1w DESC, b.relvol DESC, b.adx_di5 DESC NULLS LAST) AS rank
-FROM base b CROSS JOIN med CROSS JOIN stoch_med sm
-WHERE b.atrp_1w > med.atrp_median AND b.relvol > 1.5
-  AND (b.stoch_k_1m IS NULL OR b.stoch_k_1m > sm.stoch_median)
-ORDER BY b.atrp_1w DESC, b.relvol DESC, b.adx_di5 DESC NULLS LAST;
--- @block
--- [CF DD898100 R3] Playbook B — quality drift (no LIMIT).
-WITH joined AS (
-    SELECT cr.symbol, cr.close_forward_return_pct AS fwd
-    FROM cr.cross_run_close_returns cr
-    INNER JOIN enr.all_fields_rows a USING (run_id, symbol)
-    WHERE TRY_CAST(a.market_cap_basic AS DOUBLE) >= 500000000
-      AND cr.close_forward_return_pct BETWEEN -25 AND 25
-      AND cr.close_price >= 10
-)
-SELECT symbol, COUNT(*) AS n_days,
-    ROUND(AVG(fwd), 2) AS avg_fwd_pct,
-    ROUND(STDDEV(fwd), 2) AS stdev_pct,
-    ROUND(AVG(CASE WHEN fwd > 0 THEN 1.0 ELSE 0 END), 2) AS win_rate,
-    RANK() OVER (ORDER BY AVG(fwd) DESC) AS rank
-FROM joined
-GROUP BY symbol
-HAVING COUNT(*) >= 10 AND AVG(fwd) > 1.5
-   AND AVG(CASE WHEN fwd > 0 THEN 1.0 ELSE 0 END) >= 0.60
-ORDER BY avg_fwd_pct DESC;
--- @block
--- [CF DD898100 R4] Trim list — negative drift (no LIMIT).
-WITH joined AS (
-    SELECT cr.symbol, cr.close_forward_return_pct AS fwd
-    FROM cr.cross_run_close_returns cr
-    INNER JOIN enr.all_fields_rows a USING (run_id, symbol)
-    WHERE TRY_CAST(a.market_cap_basic AS DOUBLE) >= 500000000
-      AND cr.close_forward_return_pct BETWEEN -25 AND 25
-      AND cr.close_price >= 10
-)
-SELECT symbol, COUNT(*) AS n_days,
-    ROUND(AVG(fwd), 2) AS avg_fwd_pct,
-    ROUND(STDDEV(fwd), 2) AS stdev_pct,
-    ROUND(AVG(CASE WHEN fwd > 0 THEN 1.0 ELSE 0 END), 2) AS win_rate,
-    RANK() OVER (ORDER BY AVG(fwd) ASC) AS rank
-FROM joined
-GROUP BY symbol
-HAVING COUNT(*) >= 8 AND AVG(fwd) < -2
-ORDER BY avg_fwd_pct ASC;
--- @block
--- [CF DD898100 R5] Warning overlay — 2+ avoid flags on 12 Jun (no LIMIT).
-WITH preferred_market_codes AS (
-    SELECT market_code FROM (
-        VALUES ('america'),('canada'),('mexico'),('austria'),('belgium'),('cyprus'),('czech'),
-        ('denmark'),('estonia'),('finland'),('france'),('germany'),('greece'),('hungary'),
-        ('iceland'),('ireland'),('italy'),('latvia'),('lithuania'),('luxembourg'),('netherlands'),
-        ('norway'),('poland'),('portugal'),('romania'),('slovakia'),('spain'),('sweden'),
-        ('switzerland'),('uk')
-    ) AS preferred_markets(market_code)
-),
-base AS (
-    SELECT r.symbol, r.name, r.market,
-        TRY_CAST(r.close AS DOUBLE) AS close,
-        TRY_CAST(r."Stoch.K_14_1_3|1M" AS DOUBLE) AS stoch_k_1m,
-        TRY_CAST(r."W.R|1M" AS DOUBLE) AS wr_1m,
-        TRY_CAST(r."Recommend.MA|1M" AS DOUBLE) AS rec_ma_1m,
-        TRY_CAST(r.oper_income_ttm AS DOUBLE) AS oper_income_ttm,
-        TRY_CAST(r.ebitda_ttm AS DOUBLE) AS ebitda_ttm
-    FROM day12.all_fields_rows r
-    INNER JOIN preferred_market_codes pm ON LOWER(TRIM(COALESCE(r.market, ''))) = pm.market_code
-    WHERE r.run_id = 'tradingview_all_fields_20260612_2008_utc_028e0f86'
-      AND TRY_CAST(r.market_cap_basic AS DOUBLE) >= 500000000
-      AND TRY_CAST(r.close AS DOUBLE) >= 10
-),
-hist AS (
-    SELECT symbol, ROUND(AVG(fwd), 2) AS avg_fwd_pct
-    FROM (
-        SELECT cr.symbol, cr.close_forward_return_pct AS fwd
-        FROM cr.cross_run_close_returns cr
-        INNER JOIN enr.all_fields_rows a USING (run_id, symbol)
-        WHERE TRY_CAST(a.market_cap_basic AS DOUBLE) >= 500000000
-          AND cr.close_forward_return_pct BETWEEN -25 AND 25
-          AND cr.close_price >= 10
-    ) x
-    GROUP BY symbol HAVING COUNT(*) >= 5
-),
-quintiles AS (
-    SELECT symbol, name, market, close, stoch_k_1m, wr_1m, rec_ma_1m,
-        NTILE(5) OVER (ORDER BY stoch_k_1m) AS stoch_q,
-        NTILE(5) OVER (ORDER BY wr_1m) AS wr_q,
-        NTILE(5) OVER (ORDER BY rec_ma_1m) AS rec_ma_q,
-        NTILE(5) OVER (ORDER BY oper_income_ttm) AS oper_q,
-        NTILE(5) OVER (ORDER BY ebitda_ttm) AS ebitda_q,
-        oper_income_ttm,
-        ebitda_ttm
-    FROM base
-),
-scored AS (
-    SELECT q.symbol, q.name, q.market, q.close, h.avg_fwd_pct,
-        (CASE WHEN q.stoch_q = 1 THEN 1 ELSE 0 END
-         + CASE WHEN q.wr_q = 1 THEN 1 ELSE 0 END
-         + CASE WHEN q.rec_ma_q = 5 AND COALESCE(h.avg_fwd_pct, 0) < 0 THEN 1 ELSE 0 END
-         + CASE WHEN q.oper_q = 5 THEN 1 ELSE 0 END
-         + CASE WHEN q.ebitda_q = 5 THEN 1 ELSE 0 END) AS warning_flag_count
-    FROM quintiles q LEFT JOIN hist h USING (symbol)
-)
-SELECT symbol, name, market, ROUND(close, 2) AS close, avg_fwd_pct, warning_flag_count,
-    RANK() OVER (ORDER BY warning_flag_count DESC, COALESCE(avg_fwd_pct, 999) ASC) AS rank
-FROM scored
-WHERE warning_flag_count >= 2
-ORDER BY warning_flag_count DESC, COALESCE(avg_fwd_pct, 999) ASC;
--- @block
--- [CF DD898100 R6] Playbook A realized on 11 Jun (no LIMIT).
-WITH base AS (
-    SELECT cr.symbol, cr.close_price, cr.close_forward_return_pct AS fwd,
-        TRY_CAST(a."ATRP|1W" AS DOUBLE) AS atrp_1w,
-        TRY_CAST(a.relative_volume AS DOUBLE) AS relvol,
-        TRY_CAST(a."ADX-DI|5" AS DOUBLE) AS adx_di5
-    FROM cr.cross_run_close_returns cr
-    INNER JOIN enr.all_fields_rows a USING (run_id, symbol)
-    WHERE cr.source_day_label = '11_06_2026'
-      AND TRY_CAST(a.market_cap_basic AS DOUBLE) >= 500000000
-      AND cr.close_price >= 10
-),
-med AS (SELECT MEDIAN(atrp_1w) AS m FROM base)
-SELECT b.symbol,
-    ROUND(b.close_price, 2) AS close_px,
-    ROUND(b.fwd, 2) AS realized_fwd_pct,
-    ROUND(b.atrp_1w, 2) AS atrp_1w,
-    ROUND(b.relvol, 2) AS relative_volume,
-    ROUND(b.adx_di5, 1) AS adx_di5,
-    RANK() OVER (ORDER BY b.fwd DESC) AS rank
-FROM base b, med
-WHERE b.atrp_1w > med.m AND b.relvol > 1.5
-ORDER BY b.fwd DESC;
--- @block
--- [CF DD898100 R7] Single bullish predictor — ATRP|1W (no LIMIT). Swap field for other by_predictor CSVs.
-WITH preferred_market_codes AS (
-    SELECT market_code FROM (
-        VALUES ('america'),('canada'),('mexico'),('austria'),('belgium'),('cyprus'),('czech'),
-        ('denmark'),('estonia'),('finland'),('france'),('germany'),('greece'),('hungary'),
-        ('iceland'),('ireland'),('italy'),('latvia'),('lithuania'),('luxembourg'),('netherlands'),
-        ('norway'),('poland'),('portugal'),('romania'),('slovakia'),('spain'),('sweden'),
-        ('switzerland'),('uk')
-    ) AS preferred_markets(market_code)
-),
-base AS (
-    SELECT r.symbol, r.name, r.market, r.sector,
-        TRY_CAST(r.close AS DOUBLE) AS close,
-        TRY_CAST(r.market_cap_basic AS DOUBLE) AS market_cap_basic,
-        TRY_CAST(r."ATRP|1W" AS DOUBLE) AS predictor_value
-    FROM day12.all_fields_rows r
-    INNER JOIN preferred_market_codes pm ON LOWER(TRIM(COALESCE(r.market, ''))) = pm.market_code
-    WHERE r.run_id = 'tradingview_all_fields_20260612_2008_utc_028e0f86'
-      AND TRY_CAST(r.market_cap_basic AS DOUBLE) >= 500000000
-      AND TRY_CAST(r.close AS DOUBLE) >= 10
-      AND TRY_CAST(r."ATRP|1W" AS DOUBLE) IS NOT NULL
-)
-SELECT symbol, name, market, sector,
-    ROUND(close, 2) AS close,
-    ROUND(market_cap_basic / 1e9, 2) AS mcap_b_usd,
-    ROUND(predictor_value, 4) AS atrp_1w,
-    RANK() OVER (ORDER BY predictor_value DESC) AS rank
-FROM base
-ORDER BY predictor_value DESC;
--- @block
--- [CF DD898100 R8] Single warning predictor — W.R|1M oversold (no LIMIT). Use ASC for avoid list.
-WITH preferred_market_codes AS (
-    SELECT market_code FROM (
-        VALUES ('america'),('canada'),('mexico'),('austria'),('belgium'),('cyprus'),('czech'),
-        ('denmark'),('estonia'),('finland'),('france'),('germany'),('greece'),('hungary'),
-        ('iceland'),('ireland'),('italy'),('latvia'),('lithuania'),('luxembourg'),('netherlands'),
-        ('norway'),('poland'),('portugal'),('romania'),('slovakia'),('spain'),('sweden'),
-        ('switzerland'),('uk')
-    ) AS preferred_markets(market_code)
-),
-base AS (
-    SELECT r.symbol, r.name, r.market,
-        TRY_CAST(r.close AS DOUBLE) AS close,
-        TRY_CAST(r."W.R|1M" AS DOUBLE) AS predictor_value
-    FROM day12.all_fields_rows r
-    INNER JOIN preferred_market_codes pm ON LOWER(TRIM(COALESCE(r.market, ''))) = pm.market_code
-    WHERE r.run_id = 'tradingview_all_fields_20260612_2008_utc_028e0f86'
-      AND TRY_CAST(r.market_cap_basic AS DOUBLE) >= 500000000
-      AND TRY_CAST(r.close AS DOUBLE) >= 10
-      AND TRY_CAST(r."W.R|1M" AS DOUBLE) IS NOT NULL
-)
-SELECT symbol, name, market,
-    ROUND(close, 2) AS close,
-    ROUND(predictor_value, 1) AS wr_1m,
-    RANK() OVER (ORDER BY predictor_value ASC) AS rank
-FROM base
-ORDER BY predictor_value ASC;
--- @block
--- [CF DD898100 R9] TOP stable close_forward predictors — actionable only (export to CSV for charts).
+-- [PERIOD DD898100 R2] TOP stable period predictors — actionable only.
 SELECT predictor_field,
     runs_seen,
     ROUND(sign_consistency_ratio, 3) AS sign_consistency,
@@ -1981,9 +1750,9 @@ SELECT predictor_field,
         ELSE 'weak_sparse'
     END AS advice_bucket
 FROM agg.cross_run_field_stability
-WHERE performance_field = 'close_forward_return_pct'
-    AND runs_seen >= 10
-    AND sign_consistency_ratio >= 0.65
+WHERE performance_field = 'period_return_pct'
+    AND runs_seen >= 3
+    AND sign_consistency_ratio >= 0.60
     AND predictor_field NOT ILIKE '%gap%'
     AND predictor_field NOT ILIKE '%change%'
     AND predictor_field NOT ILIKE '%Mom%'
@@ -1991,7 +1760,7 @@ WHERE performance_field = 'close_forward_return_pct'
     AND ABS(median_quintile_spread) >= 0.3
 ORDER BY ABS(rank_stability_score) DESC NULLS LAST;
 -- @block
--- [CF DD898100 R10] Advised active-manager predictors — stability + playbook tags.
+-- [PERIOD DD898100 R3] Advised active-manager predictors — stability + playbook tags.
 WITH advised_meta AS (
     SELECT predictor_field, advice_category, active_mgmt_note
     FROM (
@@ -2018,7 +1787,7 @@ stability AS (
         ROUND(median_quintile_spread, 2) AS median_q_spread_pp,
         ROUND(rank_stability_score, 3) AS rank_stability_score
     FROM agg.cross_run_field_stability
-    WHERE performance_field = 'close_forward_return_pct'
+    WHERE performance_field = 'period_return_pct'
 )
 SELECT m.predictor_field,
     m.advice_category,
@@ -2037,12 +1806,10 @@ FROM advised_meta m
 ORDER BY ABS(COALESCE(s.rank_stability_score, 0)) DESC NULLS LAST,
     m.predictor_field;
 -- @block
--- [CF DD898100 R11] Pooled quintile forward-return perf — advised predictors (pivot pred_quintile in Excel).
--- Long format: one row per (predictor_field, quintile). Q5 = highest predictor value each scan day.
+-- [PERIOD DD898100 R4] Pooled quintile period-return performance — advised predictors.
 WITH filtered AS (
-    SELECT a.run_id,
-        a.symbol,
-        TRY_CAST(a.close_forward_return_pct AS DOUBLE) AS fwd_ret,
+    SELECT a.symbol,
+        TRY_CAST(a.period_return_pct AS DOUBLE) AS period_ret,
         TRY_CAST(a."ATRP|1W" AS DOUBLE) AS "ATRP|1W",
         TRY_CAST(a.ATRP AS DOUBLE) AS ATRP,
         TRY_CAST(a."ADRP|15" AS DOUBLE) AS "ADRP|15",
@@ -2057,134 +1824,72 @@ WITH filtered AS (
         TRY_CAST(a.oper_income_ttm AS DOUBLE) AS oper_income_ttm,
         TRY_CAST(a.ebitda_ttm AS DOUBLE) AS ebitda_ttm
     FROM enr.all_fields_rows a
-        INNER JOIN cr.cross_run_close_returns cr USING (run_id, symbol)
-    WHERE TRY_CAST(a.close_forward_return_pct AS DOUBLE) BETWEEN -25 AND 25
-        AND cr.close_price >= 10
+    INNER JOIN pr.period_boundary_returns p USING (symbol)
+    WHERE TRY_CAST(a.period_return_pct AS DOUBLE) BETWEEN -100 AND 100
+      AND p.start_close_price >= 10
 ),
 long_vals AS (
-    SELECT run_id, symbol, 'ATRP|1W' AS predictor_field, "ATRP|1W" AS pred_value, fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'ATRP', ATRP, fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'ADRP|15', "ADRP|15", fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'ADRP|1W', "ADRP|1W", fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'ADX-DI|1M', "ADX-DI|1M", fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'ADX-DI_50|1M', "ADX-DI_50|1M", fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'relative_volume', relative_volume, fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'RSI21[1]|1M', "RSI21[1]|1M", fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'Stoch.K_14_1_3|1M', "Stoch.K_14_1_3|1M", fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'W.R|1M', "W.R|1M", fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'Recommend.MA|1M', "Recommend.MA|1M", fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'oper_income_ttm', oper_income_ttm, fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'ebitda_ttm', ebitda_ttm, fwd_ret FROM filtered
+    SELECT symbol, 'ATRP|1W' AS predictor_field, "ATRP|1W" AS pred_value, period_ret FROM filtered
+    UNION ALL SELECT symbol, 'ATRP', ATRP, period_ret FROM filtered
+    UNION ALL SELECT symbol, 'ADRP|15', "ADRP|15", period_ret FROM filtered
+    UNION ALL SELECT symbol, 'ADRP|1W', "ADRP|1W", period_ret FROM filtered
+    UNION ALL SELECT symbol, 'ADX-DI|1M', "ADX-DI|1M", period_ret FROM filtered
+    UNION ALL SELECT symbol, 'ADX-DI_50|1M', "ADX-DI_50|1M", period_ret FROM filtered
+    UNION ALL SELECT symbol, 'relative_volume', relative_volume, period_ret FROM filtered
+    UNION ALL SELECT symbol, 'RSI21[1]|1M', "RSI21[1]|1M", period_ret FROM filtered
+    UNION ALL SELECT symbol, 'Stoch.K_14_1_3|1M', "Stoch.K_14_1_3|1M", period_ret FROM filtered
+    UNION ALL SELECT symbol, 'W.R|1M', "W.R|1M", period_ret FROM filtered
+    UNION ALL SELECT symbol, 'Recommend.MA|1M', "Recommend.MA|1M", period_ret FROM filtered
+    UNION ALL SELECT symbol, 'oper_income_ttm', oper_income_ttm, period_ret FROM filtered
+    UNION ALL SELECT symbol, 'ebitda_ttm', ebitda_ttm, period_ret FROM filtered
 ),
 quintiled AS (
-    SELECT run_id,
-        symbol,
+    SELECT symbol,
         predictor_field,
         pred_value,
-        fwd_ret,
+        period_ret,
         NTILE(5) OVER (
-            PARTITION BY run_id, predictor_field
+            PARTITION BY predictor_field
             ORDER BY pred_value
         ) AS pred_quintile
     FROM long_vals
     WHERE pred_value IS NOT NULL
         AND isfinite(pred_value)
-        AND fwd_ret IS NOT NULL
+        AND period_ret IS NOT NULL
 )
 SELECT predictor_field,
     pred_quintile,
-    COUNT(*) AS n_symbol_days,
-    COUNT(DISTINCT run_id) AS n_runs,
-    ROUND(AVG(fwd_ret), 3) AS avg_fwd_pct,
-    ROUND(MEDIAN(fwd_ret), 3) AS median_fwd_pct,
-    ROUND(STDDEV(fwd_ret), 3) AS stdev_fwd_pct,
-    ROUND(AVG(CASE WHEN fwd_ret > 0 THEN 1.0 ELSE 0 END), 3) AS win_rate
+    COUNT(*) AS n_symbols,
+    ROUND(AVG(period_ret), 3) AS avg_period_ret_pct,
+    ROUND(MEDIAN(period_ret), 3) AS median_period_ret_pct,
+    ROUND(STDDEV(period_ret), 3) AS stdev_period_ret_pct,
+    ROUND(AVG(CASE WHEN period_ret > 0 THEN 1.0 ELSE 0 END), 3) AS win_rate
 FROM quintiled
 GROUP BY predictor_field, pred_quintile
 ORDER BY predictor_field, pred_quintile;
 -- @block
--- [CF DD898100 R12] Quintile spread summary — advised predictors vs aggregate stability (self-check CSV).
-WITH filtered AS (
-    SELECT a.run_id,
-        a.symbol,
-        TRY_CAST(a.close_forward_return_pct AS DOUBLE) AS fwd_ret,
-        TRY_CAST(a."ATRP|1W" AS DOUBLE) AS "ATRP|1W",
-        TRY_CAST(a.ATRP AS DOUBLE) AS ATRP,
-        TRY_CAST(a."ADRP|15" AS DOUBLE) AS "ADRP|15",
-        TRY_CAST(a."ADRP|1W" AS DOUBLE) AS "ADRP|1W",
-        TRY_CAST(a."ADX-DI|1M" AS DOUBLE) AS "ADX-DI|1M",
-        TRY_CAST(a."ADX-DI_50|1M" AS DOUBLE) AS "ADX-DI_50|1M",
-        TRY_CAST(a.relative_volume AS DOUBLE) AS relative_volume,
-        TRY_CAST(a."RSI21[1]|1M" AS DOUBLE) AS "RSI21[1]|1M",
-        TRY_CAST(a."Stoch.K_14_1_3|1M" AS DOUBLE) AS "Stoch.K_14_1_3|1M",
-        TRY_CAST(a."W.R|1M" AS DOUBLE) AS "W.R|1M",
-        TRY_CAST(a."Recommend.MA|1M" AS DOUBLE) AS "Recommend.MA|1M",
-        TRY_CAST(a.oper_income_ttm AS DOUBLE) AS oper_income_ttm,
-        TRY_CAST(a.ebitda_ttm AS DOUBLE) AS ebitda_ttm
-    FROM enr.all_fields_rows a
-        INNER JOIN cr.cross_run_close_returns cr USING (run_id, symbol)
-    WHERE TRY_CAST(a.close_forward_return_pct AS DOUBLE) BETWEEN -25 AND 25
-        AND cr.close_price >= 10
-),
-long_vals AS (
-    SELECT run_id, symbol, 'ATRP|1W' AS predictor_field, "ATRP|1W" AS pred_value, fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'ATRP', ATRP, fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'ADRP|15', "ADRP|15", fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'ADRP|1W', "ADRP|1W", fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'ADX-DI|1M', "ADX-DI|1M", fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'ADX-DI_50|1M', "ADX-DI_50|1M", fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'relative_volume', relative_volume, fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'RSI21[1]|1M', "RSI21[1]|1M", fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'Stoch.K_14_1_3|1M', "Stoch.K_14_1_3|1M", fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'W.R|1M', "W.R|1M", fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'Recommend.MA|1M', "Recommend.MA|1M", fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'oper_income_ttm', oper_income_ttm, fwd_ret FROM filtered
-    UNION ALL SELECT run_id, symbol, 'ebitda_ttm', ebitda_ttm, fwd_ret FROM filtered
-),
-quintiled AS (
-    SELECT run_id,
-        predictor_field,
-        fwd_ret,
-        NTILE(5) OVER (
-            PARTITION BY run_id, predictor_field
-            ORDER BY pred_value
-        ) AS pred_quintile
-    FROM long_vals
-    WHERE pred_value IS NOT NULL
-        AND isfinite(pred_value)
-        AND fwd_ret IS NOT NULL
-),
-pooled AS (
-    SELECT predictor_field,
-        pred_quintile,
-        AVG(fwd_ret) AS avg_fwd_pct
-    FROM quintiled
-    GROUP BY predictor_field, pred_quintile
-),
-spreads AS (
-    SELECT predictor_field,
-        MAX(CASE WHEN pred_quintile = 5 THEN avg_fwd_pct END) AS q5_avg_fwd_pct,
-        MAX(CASE WHEN pred_quintile = 1 THEN avg_fwd_pct END) AS q1_avg_fwd_pct,
-        MAX(CASE WHEN pred_quintile = 5 THEN avg_fwd_pct END)
-            - MAX(CASE WHEN pred_quintile = 1 THEN avg_fwd_pct END) AS q5_minus_q1_spread_pp
-    FROM pooled
-    GROUP BY predictor_field
+-- [PERIOD PROGRESSION 1] Universe progression by scan day from CSV.
+SELECT *
+FROM read_csv_auto(
+    'D:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/pattern_analysis/runs/scan_period_close_forward_tracking_25may_12jun2026_dd898100/progression/period_universe_progression.csv',
+    HEADER=TRUE
 )
-SELECT s.predictor_field,
-    ROUND(s.q1_avg_fwd_pct, 3) AS q1_avg_fwd_pct,
-    ROUND(s.q5_avg_fwd_pct, 3) AS q5_avg_fwd_pct,
-    ROUND(s.q5_minus_q1_spread_pp, 3) AS q5_minus_q1_spread_pp,
-    st.runs_seen,
-    ROUND(st.sign_consistency_ratio, 3) AS sign_consistency,
-    ROUND(st.median_quintile_spread, 2) AS aggregate_median_q_spread_pp,
-    ROUND(st.median_pearson, 4) AS aggregate_median_pearson,
-    CASE
-        WHEN st.rank_stability_score >= 0 THEN 'rank_high_in_universe'
-        ELSE 'rank_low_in_universe'
-    END AS scout_direction
-FROM spreads s
-    LEFT JOIN agg.cross_run_field_stability st
-        ON st.predictor_field = s.predictor_field
-        AND st.performance_field = 'close_forward_return_pct'
-ORDER BY ABS(COALESCE(st.rank_stability_score, s.q5_minus_q1_spread_pp)) DESC NULLS LAST,
-    s.predictor_field;
+ORDER BY run_created_at_utc;
+-- @block
+-- [PERIOD PROGRESSION 2] Symbol-level close progression from DuckDB.
+SELECT source_day_label,
+    run_id,
+    symbol,
+    close_price,
+    cumulative_return_from_start_pct
+FROM prog.period_symbol_progression
+ORDER BY run_created_at_utc, symbol
+LIMIT 500;
+-- @block
+-- [PERIOD PROGRESSION 3] Field quintile progression spread from CSV.
+SELECT *
+FROM read_csv_auto(
+    'D:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/pattern_analysis/runs/scan_period_close_forward_tracking_25may_12jun2026_dd898100/progression/period_field_quintile_progression.csv',
+    HEADER=TRUE
+)
+ORDER BY run_created_at_utc, predictor_field;

@@ -20,7 +20,7 @@ import time
 import uuid
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -65,8 +65,10 @@ DEFAULT_PERFORMANCE_FIELDS: tuple[str, ...] = (
 CORE_PERFORMANCE_FIELDS: tuple[str, ...] = DEFAULT_PERFORMANCE_FIELDS
 FORWARD_PERFORMANCE_FIELDS: tuple[str, ...] = (
     "close_forward_return_pct",
+    "period_return_pct",
     "history_forward_return",
 )
+PERIOD_PERFORMANCE_FIELD = "period_return_pct"
 PERFORMANCE_PREFIXES: tuple[str, ...] = ("Perf.", "change", "change_abs")
 PREDICTOR_EXCLUDE_PREFIXES: tuple[str, ...] = PERFORMANCE_PREFIXES + (
     "close",
@@ -464,6 +466,10 @@ def _format_duration(seconds: float) -> str:
     return f"{hours}h {minutes}m {remainder}s"
 
 
+def _resolve_show_progress(show_progress: bool | None) -> bool:
+    return sys.stdout.isatty() if show_progress is None else bool(show_progress)
+
+
 class _AllFieldsPatternRunProgress:
     """Git Bash-friendly progress reporter for single-run pattern analysis."""
 
@@ -715,6 +721,94 @@ class _AllFieldsCloseForwardProgress(_AllFieldsPatternBatchProgress):
             f"  window={start_day_label}..{end_day_label} "
             f"predictors={predictor_count} runs={run_count}"
         )
+
+
+class _AllFieldsPeriodProgress(_AllFieldsPatternBatchProgress):
+    """Pipeline progress for whole-period predictor analysis (Git Bash friendly)."""
+
+    def __init__(self, *, enabled: bool) -> None:
+        super().__init__(enabled=enabled)
+        self._step_started_at: float | None = None
+
+    def pipeline_started(
+        self,
+        *,
+        start_day_label: str,
+        end_day_label: str,
+        predictor_count: int | None = None,
+        scan_count: int | None = None,
+        performance_target: str = PERIOD_PERFORMANCE_FIELD,
+    ) -> None:
+        self.banner("Whole-period predictor analysis")
+        parts = [
+            f"window={start_day_label}..{end_day_label}",
+            f"target={performance_target}",
+        ]
+        if predictor_count is not None:
+            parts.append(f"predictors={predictor_count:,}")
+        if scan_count is not None:
+            parts.append(f"scans={scan_count}")
+        self._print("  " + " ".join(parts))
+
+    def step_started(self, step: str, *, detail: str = "") -> None:
+        self._step_started_at = time.perf_counter()
+        suffix = f" — {detail}" if detail else ""
+        self._print(f"[step] {step}{suffix}")
+
+    def step_finished(self, step: str, **stats: Any) -> None:
+        started_at = self._step_started_at or self.started_at
+        elapsed = time.perf_counter() - started_at
+        stat_parts = " ".join(
+            f"{key}={value:,}" if isinstance(value, int) else f"{key}={value}"
+            for key, value in stats.items()
+            if value is not None
+        )
+        suffix = f" {stat_parts}" if stat_parts else ""
+        self._print(
+            f"[step] {step} done in {_format_duration(elapsed)}{suffix}"
+        )
+
+    def scan_attached(
+        self,
+        *,
+        completed: int,
+        total: int,
+        day_label: str,
+        elapsed_seconds: float,
+    ) -> None:
+        self._print(
+            f"[{_progress_bar(completed, total)}] attach day={day_label} "
+            f"elapsed={_format_duration(elapsed_seconds)}"
+        )
+
+    def rolling_window_finished(
+        self,
+        *,
+        completed: int,
+        total: int,
+        window_label: str,
+        rows_emitted: int,
+        elapsed_seconds: float,
+        failed: bool = False,
+    ) -> None:
+        status = "FAIL" if failed else "OK"
+        self._print(
+            f"[{_progress_bar(completed, total)}] {status} window={window_label} "
+            f"rows={rows_emitted:,} elapsed={_format_duration(elapsed_seconds)}"
+        )
+
+    def pipeline_finished(self, *, label: str = "Complete", **stats: Any) -> None:
+        elapsed = time.perf_counter() - self.started_at
+        stat_parts = " ".join(
+            f"{key}={value:,}" if isinstance(value, int) else f"{key}={value}"
+            for key, value in stats.items()
+            if value is not None
+        )
+        suffix = f" {stat_parts}" if stat_parts else ""
+        self._print(
+            f"[pipeline] {label} in {_format_duration(elapsed)}{suffix}"
+        )
+        self._print("=" * 80)
 
 
 def _chunked(values: Sequence[str], chunk_size: int) -> Iterable[list[str]]:
@@ -3678,7 +3772,7 @@ def resolve_scan_period_all_field_predictors(
         "database_paths": [path.as_posix() for path in resolved_databases],
         "database_count": len(resolved_databases),
         "shared_column_count": len(shared_columns),
-        "performance_target": "close_forward_return_pct",
+        "performance_target": PERIOD_PERFORMANCE_FIELD,
         "predictor_fields": resolved_predictors,
         "predictor_fields_skipped": skipped_predictors,
         "intersect_columns_across_databases": intersect_columns_across_databases,
@@ -3714,41 +3808,27 @@ def run_scan_period_close_forward_predictor_tracking(
     field_catalog_csv: str | Path = DEFAULT_FIELD_CATALOG_CSV,
     output_dir: str | Path | None = None,
     run_lifecycle_id: str | None = None,
+    show_progress: bool | None = None,
 ) -> dict[str, Any]:
-    """Scan-period lens using only close-forward return as the performance target.
+    """Scan-period lens using full-period close return as the performance target.
 
-    For each source day in ``[start_day_label, end_day_label]``:
+    Pipeline:
     1) pool all eligible predictor columns shared across the period
-    2) attach ``close_forward_return_pct`` from the next scan close price
-    3) quantify every predictor vs that forward close return
-    4) aggregate cross-run predictor stability over the window
+    2) compute ``period_return_pct`` from first-scan close to last-scan close
+    3) anchor predictors at period start and quantify one pooled cross-sectional fit
+    4) run rolling-window period analyses for stability aggregation
+    5) export close-price progression from period start for visualization
 
-    One ``run_lifecycle_id`` is resolved once at the top level. Every downstream
-    writer receives that id and writes beneath a single ``output_dir`` tree::
-
-        pattern_analysis/runs/scan_period_close_forward_tracking_{scope}_{id}/
-          _scan_period_close_forward_tracking.json
-          close_forward/
-          aggregates/
-
-    Example (one-week pilot, 30 GB RAM):
-
-        from data_analysis_scripts.trading_view_all_fields_metric_pattern_analyzer import (
-            run_scan_period_close_forward_predictor_tracking,
-        )
-
-        run_scan_period_close_forward_predictor_tracking(
-            start_day_label="08_06_2026",
-            end_day_label="12_06_2026",
-            close_forward_days=7,
-            min_runs_for_stability=3,
-            duckdb_threads=20,
-            field_batch_size=100,
-            max_parallel_chunks=1,
-            max_parallel_runs=3,
-            duckdb_memory_limit="9GB",
-        )
+    ``close_forward_days`` is kept for backward signature compatibility but ignored.
     """
+    if close_forward_days != 7:
+        print(
+            "[tracking] close_forward_days is deprecated in period mode and is ignored.",
+            flush=True,
+        )
+    progress = _AllFieldsPeriodProgress(enabled=_resolve_show_progress(show_progress))
+    progress.step_started("1/5 resolve predictor field universe")
+    universe_started = time.perf_counter()
     field_universe = resolve_scan_period_all_field_predictors(
         start_day_label=start_day_label,
         end_day_label=end_day_label,
@@ -3759,6 +3839,12 @@ def run_scan_period_close_forward_predictor_tracking(
         field_catalog_csv=field_catalog_csv,
     )
     resolved_predictor_fields = list(field_universe["predictor_fields"])
+    progress.step_finished(
+        "1/5 resolve predictor field universe",
+        predictors=len(resolved_predictor_fields),
+        scans=field_universe["database_count"],
+        elapsed_s=round(time.perf_counter() - universe_started, 1),
+    )
     tracking_scope = _format_day_range_scope_label(start_day_label, end_day_label)
     tracking_id, resolved_run_lifecycle_id, tracking_output_root = (
         _resolve_orchestrated_run_output_root(
@@ -3769,31 +3855,108 @@ def run_scan_period_close_forward_predictor_tracking(
         )
     )
 
-    close_forward_result = analyze_cross_run_close_performance_patterns(
+    progress.pipeline_started(
+        start_day_label=start_day_label,
+        end_day_label=end_day_label,
+        predictor_count=len(resolved_predictor_fields),
+        scan_count=field_universe["database_count"],
+    )
+    progress.step_started("2/5 period pooled correlation profile")
+    period_total_result = analyze_period_pooled_performance_patterns(
+        input_paths=[Path(path) for path in field_universe["database_paths"]],
         all_fields_root=all_fields_root,
         start_day_label=start_day_label,
         end_day_label=end_day_label,
-        output_dir=tracking_output_root / "close_forward",
-        close_forward_days=close_forward_days,
-        quintile_count=quintile_count,
+        output_dir=tracking_output_root / "period_total",
         field_catalog_csv=field_catalog_csv,
         include_predictor_fields=resolved_predictor_fields,
         min_fill_rate=min_fill_rate,
         min_pair_n=min_pair_n,
         min_numeric_parse_rate=min_numeric_parse_rate,
+        quintile_count=quintile_count,
         exclude_perf_from_predictors=exclude_perf_from_predictors,
         universe_filter=universe_filter,
         write_exports=write_exports,
         duckdb_threads=duckdb_threads,
         field_batch_size=field_batch_size,
         max_parallel_chunks=max_parallel_chunks,
-        max_parallel_runs=max_parallel_runs,
         duckdb_memory_limit=duckdb_memory_limit,
-        max_system_memory_gb=max_system_memory_gb,
-        memory_reserve_gb=memory_reserve_gb,
-        estimated_run_memory_gb=estimated_run_memory_gb,
         duckdb_temp_directory=duckdb_temp_directory,
         run_lifecycle_id=resolved_run_lifecycle_id,
+        show_progress=False,
+    )
+    progress.step_finished(
+        "2/5 period pooled correlation profile",
+        rows=period_total_result.get("rows_emitted"),
+        symbols=period_total_result["period_input_result"].get("row_count"),
+    )
+    progress.step_started("3/5 close-price progression exports")
+    progression_result = compute_period_close_progression(
+        input_paths=[Path(path) for path in field_universe["database_paths"]],
+        all_fields_root=all_fields_root,
+        start_day_label=start_day_label,
+        end_day_label=end_day_label,
+        period_returns_database_path=Path(
+            period_total_result["period_returns_result"]["database_path"]
+        ),
+        period_returns_table_name=period_total_result["period_returns_result"][
+            "table_name"
+        ],
+        output_dir=tracking_output_root / "progression",
+        run_lifecycle_id=resolved_run_lifecycle_id,
+        universe_filter=universe_filter,
+        show_progress=False,
+    )
+    progress.step_finished(
+        "3/5 close-price progression exports",
+        rows=progression_result.get("row_count"),
+        days=progression_result.get("day_count"),
+        symbols=progression_result.get("symbol_count"),
+    )
+    progress.step_started("4/5 field quintile progression")
+    field_quintile_progression_csv = _compute_period_field_quintile_progression(
+        period_analysis_input_database_path=Path(
+            period_total_result["period_input_result"]["database_path"]
+        ),
+        period_progression_database_path=Path(progression_result["database_path"]),
+        output_csv_path=Path(tracking_output_root)
+        / "progression"
+        / "period_field_quintile_progression.csv",
+        top_n_predictors=min(200, max(50, len(resolved_predictor_fields))),
+        show_progress=False,
+    )
+    progression_result["field_quintile_progression_csv"] = (
+        field_quintile_progression_csv
+    )
+    progress.step_finished("4/5 field quintile progression")
+    progress.step_started("5/5 rolling-window stability")
+    rolling_result = analyze_period_rolling_stability(
+        all_fields_root=all_fields_root,
+        start_day_label=start_day_label,
+        end_day_label=end_day_label,
+        output_dir=tracking_output_root,
+        field_catalog_csv=field_catalog_csv,
+        include_predictor_fields=resolved_predictor_fields,
+        min_fill_rate=min_fill_rate,
+        min_pair_n=min_pair_n,
+        min_numeric_parse_rate=min_numeric_parse_rate,
+        quintile_count=quintile_count,
+        exclude_perf_from_predictors=exclude_perf_from_predictors,
+        universe_filter=universe_filter,
+        write_exports=write_exports,
+        duckdb_threads=duckdb_threads,
+        field_batch_size=field_batch_size,
+        max_parallel_chunks=max_parallel_chunks,
+        duckdb_memory_limit=duckdb_memory_limit,
+        duckdb_temp_directory=duckdb_temp_directory,
+        min_runs_for_stability=min_runs_for_stability,
+        require_sign_consistency=require_sign_consistency,
+        run_lifecycle_id=resolved_run_lifecycle_id,
+        show_progress=False,
+    )
+    progress.step_finished(
+        "5/5 rolling-window stability",
+        windows=rolling_result.get("window_count"),
     )
 
     tracking_overview_path = (
@@ -3805,8 +3968,9 @@ def run_scan_period_close_forward_predictor_tracking(
         "output_dir": tracking_output_root.as_posix(),
         "start_day_label": start_day_label,
         "end_day_label": end_day_label,
-        "close_forward_days": close_forward_days,
-        "performance_target": "close_forward_return_pct",
+        "performance_lens": "period_total_return",
+        "predictor_anchor": "period_start",
+        "performance_target": PERIOD_PERFORMANCE_FIELD,
         "universe_filter": serialize_all_fields_universe_filter(
             normalize_all_fields_universe_filter(universe_filter)
         ),
@@ -3821,30 +3985,44 @@ def run_scan_period_close_forward_predictor_tracking(
         "field_universe": field_universe,
         "min_runs_for_stability": min_runs_for_stability,
         "require_sign_consistency": require_sign_consistency,
-        "close_forward_result": {
-            "analysis_id": close_forward_result.get("analysis_id"),
-            "output_dir": close_forward_result.get("output_dir"),
-            "summary_parquet": close_forward_result.get("summary_parquet"),
-            "rows_emitted": close_forward_result.get("rows_emitted"),
+        "period_total_result": {
+            "analysis_id": period_total_result.get("analysis_id"),
+            "output_dir": period_total_result.get("output_dir"),
+            "summary_parquet": period_total_result.get("summary_parquet"),
+            "rows_emitted": period_total_result.get("rows_emitted"),
+            "period_returns_result": period_total_result.get("period_returns_result"),
+            "period_input_result": period_total_result.get("period_input_result"),
+        },
+        "progression_result": progression_result,
+        "holding_period": {
+            "start_day_label": start_day_label,
+            "end_day_label": end_day_label,
+            "start_run_id": period_total_result["period_returns_result"].get(
+                "resolved_boundary_start_run"
+            ),
+            "end_run_id": period_total_result["period_returns_result"].get(
+                "resolved_boundary_end_run"
+            ),
+        },
+        "rolling_window_result": {
+            "window_count": rolling_result.get("window_count"),
+            "summary_paths": rolling_result.get("summary_paths"),
         },
     }
     _write_json(tracking_overview_path, tracking_payload)
 
     aggregate_exports: dict[str, str] | None = None
-    summary_parquet = close_forward_result.get("summary_parquet")
-    if summary_parquet:
-        stability_aggregate = aggregate_all_fields_pattern_summaries(
-            per_run_summary_paths=[Path(summary_parquet)],
-            output_dir=tracking_output_root / "aggregates",
-            min_runs_for_stability=min_runs_for_stability,
-            require_sign_consistency=require_sign_consistency,
-            field_catalog_csv=field_catalog_csv,
-            run_lifecycle_id=resolved_run_lifecycle_id,
-            nest_output_dir=False,
-        )
-        aggregate_exports = stability_aggregate.exports
+    if rolling_result.get("aggregate_result"):
+        aggregate_exports = rolling_result["aggregate_result"]
         tracking_payload["stability_aggregate"] = aggregate_exports
-        _write_json(tracking_overview_path, tracking_payload)
+    _write_json(tracking_overview_path, tracking_payload)
+
+    progress.pipeline_finished(
+        label="Scan-period tracking complete",
+        tracking_id=tracking_id,
+        rows=period_total_result.get("rows_emitted"),
+        windows=rolling_result.get("window_count"),
+    )
 
     return {
         "tracking_id": tracking_id,
@@ -3852,12 +4030,13 @@ def run_scan_period_close_forward_predictor_tracking(
         "output_dir": tracking_output_root.as_posix(),
         "start_day_label": start_day_label,
         "end_day_label": end_day_label,
-        "close_forward_days": close_forward_days,
-        "performance_target": "close_forward_return_pct",
+        "performance_target": PERIOD_PERFORMANCE_FIELD,
         "tracking_overview_json": tracking_overview_path.as_posix(),
         "field_universe": field_universe,
         "predictor_fields": resolved_predictor_fields,
-        "close_forward_result": close_forward_result,
+        "period_total_result": period_total_result,
+        "progression_result": progression_result,
+        "rolling_window_result": rolling_result,
         "aggregate_result": aggregate_exports,
     }
 
@@ -4193,6 +4372,1316 @@ def _run_close_forward_run_analysis_task(task: dict[str, Any]) -> dict[str, Any]
             "summary_parquet": run_result.exports.get("parquet"),
         },
         "rows": [row.to_dict() for row in run_result.rows],
+    }
+
+
+def compute_period_boundary_returns(
+    *,
+    input_paths: Sequence[str | Path] | str | Path | None = None,
+    all_fields_root: str | Path = DEFAULT_ALL_FIELDS_ROOT,
+    start_day_label: str | None = None,
+    end_day_label: str | None = None,
+    output_dir: str | Path | None = None,
+    run_lifecycle_id: str | None = None,
+    output_table_name: str = "period_boundary_returns",
+    min_valid_close: float = 0.000001,
+    universe_filter: AllFieldsUniverseFilterInput = None,
+    show_progress: bool | None = None,
+) -> dict[str, Any]:
+    resolved_interval = _parse_all_fields_pool_input_paths(
+        input_paths=input_paths,
+        all_fields_root=all_fields_root,
+        start_day_label=start_day_label,
+        end_day_label=end_day_label,
+    )
+    if not resolved_interval:
+        raise ValueError(
+            "No input all-fields databases resolved for period boundary returns."
+        )
+
+    interval_paths = [Path(path) for path in resolved_interval]
+    resolved_start_day = start_day_label or _extract_day_label_from_database_path(
+        interval_paths[0]
+    )
+    resolved_end_day = end_day_label or _extract_day_label_from_database_path(
+        interval_paths[-1]
+    )
+    period_scope = _format_day_range_scope_label(resolved_start_day, resolved_end_day)
+    resolved_run_lifecycle_id = _resolve_run_lifecycle_id(run_lifecycle_id)
+    period_id = _build_run_analysis_id(
+        "all_fields_period_boundary",
+        scope_label=period_scope,
+        run_lifecycle_id=resolved_run_lifecycle_id,
+    )
+    output_root = (
+        Path(output_dir)
+        if output_dir is not None
+        else DEFAULT_PATTERN_ANALYSIS_ROOT / "aggregates" / period_id
+    )
+    output_root.mkdir(parents=True, exist_ok=True)
+    period_db_path = output_root / "period_boundary_returns.duckdb"
+    period_parquet_path = output_root / "period_boundary_returns.parquet"
+    progress = _AllFieldsPeriodProgress(enabled=_resolve_show_progress(show_progress))
+    progress.step_started(
+        "period boundary returns",
+        detail=f"{resolved_start_day}..{resolved_end_day} scans={len(interval_paths)}",
+    )
+
+    with open_move_prediction_duckdb_connection(
+        period_db_path, read_only=False, threads=8
+    ) as conn:
+        conn.execute("DROP TABLE IF EXISTS close_symbol_points")
+        conn.execute(
+            """
+            CREATE TABLE close_symbol_points (
+                source_database_path VARCHAR,
+                source_day_label VARCHAR,
+                run_id VARCHAR,
+                run_created_at_utc TIMESTAMP,
+                symbol VARCHAR,
+                close_price DOUBLE
+            )
+            """
+        )
+        for index, database_path in enumerate(interval_paths):
+            attach_started = time.perf_counter()
+            alias = f"src_period_{index}"
+            source_day = _extract_day_label_from_database_path(database_path)
+            normalized_day = _normalized_close_return_period_label(
+                source_day_label=source_day,
+                run_created_at_utc=None,
+            )
+            conn.execute(
+                f"ATTACH { _quote_path_literal(database_path) } AS {_quote_identifier(alias)} (READ_ONLY)"
+            )
+            source_columns = _attached_all_fields_columns(conn, alias)
+            filter_resolution = resolve_all_fields_universe_filter_sql(
+                universe_filter,
+                available_columns=source_columns,
+                table_alias="rows",
+            )
+            universe_filter_sql = filter_resolution.sql_fragment
+            conn.execute(
+                f"""
+                INSERT INTO close_symbol_points
+                SELECT {_quote_sql_literal(database_path.as_posix())} AS source_database_path,
+                    {_quote_sql_literal(normalized_day)} AS source_day_label,
+                    rows.run_id,
+                    COALESCE(
+                        TRY_CAST(
+                            STRPTIME({_quote_sql_literal(normalized_day)}, '%d_%m_%Y')
+                            AS TIMESTAMP
+                        ),
+                        meta.created_at_utc
+                    ) AS run_created_at_utc,
+                    rows.symbol,
+                    {_numeric_sql_expression(f'{_quote_identifier("rows")}.{_quote_identifier("close")}')} AS close_price
+                FROM {_quote_identifier(alias)}.all_fields_rows rows
+                JOIN {_quote_identifier(alias)}.run_metadata meta
+                    ON meta.run_id = rows.run_id
+                WHERE meta.suite_name = {_quote_sql_literal(ALL_FIELDS_SUITE_NAME)}
+                {universe_filter_sql}
+                """
+            )
+            conn.execute(f"DETACH {_quote_identifier(alias)}")
+            progress.scan_attached(
+                completed=index + 1,
+                total=len(interval_paths),
+                day_label=normalized_day,
+                elapsed_seconds=time.perf_counter() - attach_started,
+            )
+
+        conn.execute(f"DROP TABLE IF EXISTS {_quote_identifier(output_table_name)}")
+        conn.execute(
+            f"""
+            CREATE TABLE {_quote_identifier(output_table_name)} AS
+            WITH run_level AS (
+                SELECT source_database_path,
+                    source_day_label,
+                    run_id,
+                    MAX(run_created_at_utc) AS run_created_at_utc,
+                    symbol,
+                    AVG(close_price) AS close_price
+                FROM close_symbol_points
+                WHERE close_price IS NOT NULL
+                  AND close_price >= {float(min_valid_close)}
+                GROUP BY source_database_path, source_day_label, run_id, symbol
+            ),
+            sequenced AS (
+                SELECT source_database_path,
+                    source_day_label,
+                    run_id,
+                    run_created_at_utc,
+                    symbol,
+                    close_price,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY symbol
+                        ORDER BY run_created_at_utc, run_id
+                    ) AS seq_asc,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY symbol
+                        ORDER BY run_created_at_utc DESC, run_id DESC
+                    ) AS seq_desc
+                FROM run_level
+            ),
+            start_rows AS (
+                SELECT symbol,
+                    source_database_path AS start_source_database_path,
+                    source_day_label AS start_day_label,
+                    run_id AS start_run_id,
+                    run_created_at_utc AS start_run_created_at_utc,
+                    close_price AS start_close_price
+                FROM sequenced
+                WHERE seq_asc = 1
+            ),
+            end_rows AS (
+                SELECT symbol,
+                    source_database_path AS end_source_database_path,
+                    source_day_label AS end_day_label,
+                    run_id AS end_run_id,
+                    run_created_at_utc AS end_run_created_at_utc,
+                    close_price AS end_close_price
+                FROM sequenced
+                WHERE seq_desc = 1
+            )
+            SELECT s.symbol,
+                s.start_source_database_path,
+                s.start_day_label,
+                s.start_run_id,
+                s.start_run_created_at_utc,
+                s.start_close_price,
+                e.end_source_database_path,
+                e.end_day_label,
+                e.end_run_id,
+                e.end_run_created_at_utc,
+                e.end_close_price,
+                DATE_DIFF(
+                    'day',
+                    CAST(s.start_run_created_at_utc AS DATE),
+                    CAST(e.end_run_created_at_utc AS DATE)
+                ) AS holding_calendar_days,
+                CASE
+                    WHEN s.start_close_price IS NULL OR s.start_close_price = 0 THEN NULL
+                    WHEN e.end_close_price IS NULL THEN NULL
+                    ELSE ((e.end_close_price / s.start_close_price) - 1.0) * 100.0
+                END AS period_return_pct
+            FROM start_rows s
+            JOIN end_rows e
+                ON e.symbol = s.symbol
+            WHERE s.start_close_price >= {float(min_valid_close)}
+              AND e.end_close_price >= {float(min_valid_close)}
+            """
+        )
+        conn.execute(
+            "COPY (SELECT * FROM "
+            + _quote_identifier(output_table_name)
+            + ") TO "
+            + _quote_path_literal(period_parquet_path)
+            + " (FORMAT PARQUET, COMPRESSION ZSTD)"
+        )
+        row_count = int(
+            conn.execute(
+                f"SELECT COUNT(*) FROM {_quote_identifier(output_table_name)}"
+            ).fetchone()[0]
+        )
+        non_null_count = int(
+            conn.execute(
+                f"""
+                SELECT COUNT(*)
+                FROM {_quote_identifier(output_table_name)}
+                WHERE period_return_pct IS NOT NULL
+                """
+            ).fetchone()[0]
+        )
+        boundary_rows = conn.execute(
+            f"""
+            SELECT MIN(start_day_label),
+                MAX(end_day_label),
+                MIN(start_run_id),
+                MAX(end_run_id)
+            FROM {_quote_identifier(output_table_name)}
+            """
+        ).fetchone()
+
+    progress.step_finished(
+        "period boundary returns",
+        symbols=row_count,
+        returns=non_null_count,
+    )
+    overview_payload = {
+        "period_boundary_id": period_id,
+        "run_lifecycle_id": resolved_run_lifecycle_id,
+        "output_dir": output_root.as_posix(),
+        "database_path": period_db_path.as_posix(),
+        "table_name": output_table_name,
+        "parquet_path": period_parquet_path.as_posix(),
+        "row_count": row_count,
+        "non_null_period_return_count": non_null_count,
+        "start_day_label": resolved_start_day,
+        "end_day_label": resolved_end_day,
+        "universe_filter": serialize_all_fields_universe_filter(
+            normalize_all_fields_universe_filter(universe_filter)
+        ),
+        "resolved_boundary_start_day": str(boundary_rows[0] or resolved_start_day),
+        "resolved_boundary_end_day": str(boundary_rows[1] or resolved_end_day),
+        "resolved_boundary_start_run": str(boundary_rows[2] or ""),
+        "resolved_boundary_end_run": str(boundary_rows[3] or ""),
+    }
+    overview_path = output_root / "_period_boundary_overview.json"
+    _write_json(overview_path, overview_payload)
+    overview_log_lines = [
+        "TradingView period boundary returns",
+        f"period_boundary_id={period_id}",
+        f"run_lifecycle_id={resolved_run_lifecycle_id}",
+        f"window={resolved_start_day}..{resolved_end_day}",
+        f"row_count={row_count}",
+        f"non_null_period_return_count={non_null_count}",
+        f"start_run={overview_payload['resolved_boundary_start_run']}",
+        f"end_run={overview_payload['resolved_boundary_end_run']}",
+    ]
+    _write_overview_log(output_root / "_period_boundary_overview.log", overview_log_lines)
+    return {
+        "period_boundary_id": period_id,
+        "run_lifecycle_id": resolved_run_lifecycle_id,
+        "output_dir": output_root.as_posix(),
+        "database_path": period_db_path.as_posix(),
+        "table_name": output_table_name,
+        "parquet_path": period_parquet_path.as_posix(),
+        "overview_json": overview_path.as_posix(),
+        "overview_log": (output_root / "_period_boundary_overview.log").as_posix(),
+        "row_count": row_count,
+        "non_null_period_return_count": non_null_count,
+        "start_day_label": resolved_start_day,
+        "end_day_label": resolved_end_day,
+        "resolved_boundary_start_day": overview_payload["resolved_boundary_start_day"],
+        "resolved_boundary_end_day": overview_payload["resolved_boundary_end_day"],
+        "resolved_boundary_start_run": overview_payload["resolved_boundary_start_run"],
+        "resolved_boundary_end_run": overview_payload["resolved_boundary_end_run"],
+    }
+
+
+def build_period_anchored_analysis_input(
+    *,
+    pool_database_path: str | Path,
+    pool_rows_table_name: str = "pool_all_fields_rows",
+    pool_metadata_table_name: str = "pool_run_metadata",
+    predictor_fields: Sequence[str],
+    period_returns_database_path: str | Path,
+    period_returns_table_name: str = "period_boundary_returns",
+    output_dir: str | Path,
+    run_lifecycle_id: str,
+    start_day_label: str,
+    end_day_label: str,
+    universe_filter: AllFieldsUniverseFilterInput = None,
+    synthetic_run_id: str | None = None,
+    duckdb_threads: int = 8,
+    show_progress: bool | None = None,
+) -> dict[str, Any]:
+    output_root = Path(output_dir)
+    output_root.mkdir(parents=True, exist_ok=True)
+    analysis_db_path = output_root / "period_analysis_input.duckdb"
+    resolved_synthetic_run_id = (
+        str(synthetic_run_id).strip()
+        if synthetic_run_id is not None and str(synthetic_run_id).strip()
+        else f"period_pooled_{run_lifecycle_id}"
+    )
+    source_day_label = f"{start_day_label}..{end_day_label}"
+    progress = _AllFieldsPeriodProgress(enabled=_resolve_show_progress(show_progress))
+    progress.step_started(
+        "period anchored input",
+        detail=(
+            f"{source_day_label} predictors={len(predictor_fields):,} "
+            f"run_id={resolved_synthetic_run_id}"
+        ),
+    )
+
+    with open_move_prediction_duckdb_connection(
+        analysis_db_path, read_only=False, threads=max(1, int(duckdb_threads))
+    ) as conn:
+        conn.execute(
+            f"ATTACH { _quote_path_literal(pool_database_path) } AS pool (READ_ONLY)"
+        )
+        conn.execute(
+            f"ATTACH { _quote_path_literal(period_returns_database_path) } AS period_ret (READ_ONLY)"
+        )
+        conn.execute("DROP TABLE IF EXISTS period_boundaries")
+        conn.execute(
+            f"""
+            CREATE TABLE period_boundaries AS
+            SELECT symbol,
+                start_run_id,
+                start_day_label,
+                start_run_created_at_utc,
+                end_run_id,
+                end_day_label,
+                end_run_created_at_utc,
+                period_return_pct,
+                holding_calendar_days
+            FROM period_ret.{_quote_identifier(period_returns_table_name)}
+            WHERE period_return_pct IS NOT NULL
+            """
+        )
+        conn.execute("DROP TABLE IF EXISTS run_metadata")
+        conn.execute(
+            f"""
+            CREATE TABLE run_metadata AS
+            SELECT {_quote_sql_literal(resolved_synthetic_run_id)} AS run_id,
+                CAST(MIN(start_run_created_at_utc) AS VARCHAR) AS created_at_utc,
+                {_quote_sql_literal(f'period_total_return_{source_day_label}')} AS run_label,
+                {_quote_sql_literal(ALL_FIELDS_SUITE_NAME)} AS suite_name,
+                COUNT(*) AS scan_data_count
+            FROM period_boundaries
+            """
+        )
+        conn.execute("DROP TABLE IF EXISTS all_fields_rows")
+        conn.execute(
+            """
+            CREATE TABLE all_fields_rows (
+                run_id VARCHAR,
+                row_number BIGINT,
+                symbol VARCHAR
+            )
+            """
+        )
+        for predictor_field in predictor_fields:
+            conn.execute(
+                "ALTER TABLE all_fields_rows ADD COLUMN "
+                + _quote_identifier(predictor_field)
+                + " VARCHAR"
+            )
+        conn.execute(
+            f"ALTER TABLE all_fields_rows ADD COLUMN {_quote_identifier(PERIOD_PERFORMANCE_FIELD)} VARCHAR"
+        )
+        conn.execute("ALTER TABLE all_fields_rows ADD COLUMN source_day_label VARCHAR")
+
+        conn.execute("DROP TABLE IF EXISTS period_start_features_raw")
+        conn.execute(
+            """
+            CREATE TABLE period_start_features_raw (
+                symbol VARCHAR,
+                run_id VARCHAR,
+                source_day_label VARCHAR,
+                period_return_pct VARCHAR
+            )
+            """
+        )
+        for predictor_field in predictor_fields:
+            conn.execute(
+                "ALTER TABLE period_start_features_raw ADD COLUMN "
+                + _quote_identifier(predictor_field)
+                + " VARCHAR"
+            )
+
+        predictor_projection_sql = ", ".join(
+            _quote_identifier(field_name) for field_name in predictor_fields
+        )
+        predictor_insert_sql = (
+            predictor_projection_sql + ","
+            if predictor_projection_sql
+            else ""
+        )
+        pool_columns = [
+            str(row[0])
+            for row in conn.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_catalog = 'pool'
+                  AND table_schema = 'main'
+                  AND table_name = ?
+                ORDER BY ordinal_position
+                """,
+                [pool_rows_table_name],
+            ).fetchall()
+        ]
+        filter_resolution = resolve_all_fields_universe_filter_sql(
+            universe_filter,
+            available_columns=pool_columns,
+            table_alias="rows",
+        )
+        universe_filter_sql = filter_resolution.sql_fragment
+        conn.execute(
+            f"""
+            INSERT INTO period_start_features_raw (
+                symbol,
+                run_id,
+                source_day_label,
+                {predictor_insert_sql}
+                {_quote_identifier(PERIOD_PERFORMANCE_FIELD)}
+            )
+            SELECT rows.symbol,
+                rows.run_id,
+                rows.source_day_label,
+                {predictor_insert_sql}
+                CAST(NULL AS VARCHAR) AS {_quote_identifier(PERIOD_PERFORMANCE_FIELD)}
+            FROM pool.{_quote_identifier(pool_rows_table_name)} rows
+            JOIN period_boundaries p
+                ON p.symbol = rows.symbol
+                AND p.start_run_id = rows.run_id
+            WHERE TRUE
+            {universe_filter_sql}
+            """
+        )
+
+        conn.execute("DROP TABLE IF EXISTS period_start_features")
+        conn.execute(
+            """
+            CREATE TABLE period_start_features AS
+            SELECT *
+            FROM (
+                SELECT r.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY r.symbol
+                        ORDER BY r.source_day_label, r.run_id
+                    ) AS row_rank
+                FROM period_start_features_raw r
+            ) x
+            WHERE row_rank = 1
+            """
+        )
+
+        conn.execute(
+            f"""
+            INSERT INTO all_fields_rows (
+                run_id,
+                row_number,
+                symbol,
+                {predictor_insert_sql}
+                {_quote_identifier(PERIOD_PERFORMANCE_FIELD)},
+                source_day_label
+            )
+            SELECT {_quote_sql_literal(resolved_synthetic_run_id)} AS run_id,
+                ROW_NUMBER() OVER (ORDER BY p.symbol) AS row_number,
+                p.symbol,
+                {predictor_insert_sql}
+                CAST(p.period_return_pct AS VARCHAR) AS {_quote_identifier(PERIOD_PERFORMANCE_FIELD)},
+                {_quote_sql_literal(source_day_label)} AS source_day_label
+            FROM period_boundaries p
+            JOIN period_start_features f
+                ON f.symbol = p.symbol
+            """
+        )
+        row_count = int(
+            conn.execute("SELECT COUNT(*) FROM all_fields_rows").fetchone()[0]
+        )
+        conn.execute("DETACH pool")
+        conn.execute("DETACH period_ret")
+
+    progress.step_finished(
+        "period anchored input",
+        symbols=row_count,
+        predictors=len(predictor_fields),
+    )
+    return {
+        "database_path": analysis_db_path.as_posix(),
+        "table_name": "all_fields_rows",
+        "run_id": resolved_synthetic_run_id,
+        "row_count": row_count,
+        "source_day_label": source_day_label,
+        "performance_target": PERIOD_PERFORMANCE_FIELD,
+    }
+
+
+def analyze_period_pooled_performance_patterns(
+    *,
+    input_paths: Sequence[str | Path] | str | Path | None = None,
+    all_fields_root: str | Path = DEFAULT_ALL_FIELDS_ROOT,
+    start_day_label: str | None = None,
+    end_day_label: str | None = None,
+    output_dir: str | Path | None = None,
+    field_catalog_csv: str | Path = DEFAULT_FIELD_CATALOG_CSV,
+    include_predictor_fields: Sequence[str] | None = None,
+    intersect_columns_across_databases: bool = True,
+    min_fill_rate: float = 0.10,
+    min_pair_n: int = 20,
+    min_numeric_parse_rate: float = 0.80,
+    quintile_count: int = 5,
+    exclude_perf_from_predictors: bool = True,
+    universe_filter: AllFieldsUniverseFilterInput = None,
+    write_exports: bool = True,
+    duckdb_threads: int = 8,
+    field_batch_size: int = 80,
+    max_parallel_chunks: int = 1,
+    duckdb_memory_limit: str | int | float | None = "8GB",
+    duckdb_temp_directory: str | Path | None = None,
+    run_lifecycle_id: str | None = None,
+    show_progress: bool | None = None,
+    synthetic_run_id: str | None = None,
+) -> dict[str, Any]:
+    del intersect_columns_across_databases
+    resolved_interval = _parse_all_fields_pool_input_paths(
+        input_paths=input_paths,
+        all_fields_root=all_fields_root,
+        start_day_label=start_day_label,
+        end_day_label=end_day_label,
+    )
+    if not resolved_interval:
+        raise ValueError(
+            "No input all-fields databases resolved for period pooled analysis."
+        )
+    interval_paths = [Path(path) for path in resolved_interval]
+    resolved_start_day = start_day_label or _extract_day_label_from_database_path(
+        interval_paths[0]
+    )
+    resolved_end_day = end_day_label or _extract_day_label_from_database_path(
+        interval_paths[-1]
+    )
+    period_scope = _format_day_range_scope_label(resolved_start_day, resolved_end_day)
+    resolved_run_lifecycle_id = _resolve_run_lifecycle_id(run_lifecycle_id)
+    analysis_id = _build_run_analysis_id(
+        "period_total_pattern",
+        scope_label=period_scope,
+        run_lifecycle_id=resolved_run_lifecycle_id,
+    )
+    analysis_output_root = (
+        Path(output_dir)
+        if output_dir is not None
+        else DEFAULT_PATTERN_ANALYSIS_ROOT / "aggregates" / analysis_id
+    )
+    analysis_output_root.mkdir(parents=True, exist_ok=True)
+
+    if include_predictor_fields is not None:
+        resolved_predictors = [
+            str(value)
+            for value in include_predictor_fields
+            if str(value) and str(value) not in set(ALL_FIELDS_METADATA_COLUMNS)
+        ]
+    else:
+        field_universe = resolve_scan_period_all_field_predictors(
+            start_day_label=resolved_start_day,
+            end_day_label=resolved_end_day,
+            all_fields_root=all_fields_root,
+            input_paths=interval_paths,
+            predictor_fields=None,
+            intersect_columns_across_databases=True,
+            exclude_perf_from_predictors=exclude_perf_from_predictors,
+            field_catalog_csv=field_catalog_csv,
+        )
+        resolved_predictors = list(field_universe["predictor_fields"])
+    if not resolved_predictors:
+        raise ValueError("No predictor fields available for period pooled analysis.")
+
+    progress = _AllFieldsPeriodProgress(enabled=_resolve_show_progress(show_progress))
+    resolved_nested_show_progress = _resolve_show_progress(show_progress)
+    progress.pipeline_started(
+        start_day_label=resolved_start_day,
+        end_day_label=resolved_end_day,
+        predictor_count=len(resolved_predictors),
+        scan_count=len(interval_paths),
+    )
+
+    progress.step_started("1/4 pool scan rows")
+    pool_result = aggregate_all_fields_run_pool(
+        input_paths=interval_paths,
+        include_predictor_fields=resolved_predictors,
+        performance_fields=[],
+        output_dir=analysis_output_root / "pool",
+        group_by_sector=False,
+        universe_filter=universe_filter,
+        run_lifecycle_id=resolved_run_lifecycle_id,
+    )
+    progress.step_finished(
+        "1/4 pool scan rows",
+        scans=len(interval_paths),
+    )
+
+    progress.step_started("2/4 period boundary returns")
+    period_returns_result = compute_period_boundary_returns(
+        input_paths=interval_paths,
+        all_fields_root=all_fields_root,
+        start_day_label=resolved_start_day,
+        end_day_label=resolved_end_day,
+        output_dir=analysis_output_root / "period_returns",
+        universe_filter=universe_filter,
+        run_lifecycle_id=resolved_run_lifecycle_id,
+        show_progress=False,
+    )
+    progress.step_finished(
+        "2/4 period boundary returns",
+        symbols=period_returns_result.get("row_count"),
+        returns=period_returns_result.get("non_null_period_return_count"),
+    )
+
+    progress.step_started("3/4 period-start anchored input")
+    period_input = build_period_anchored_analysis_input(
+        pool_database_path=Path(pool_result["database_path"]),
+        pool_rows_table_name="pool_all_fields_rows",
+        pool_metadata_table_name="pool_run_metadata",
+        predictor_fields=resolved_predictors,
+        period_returns_database_path=Path(period_returns_result["database_path"]),
+        period_returns_table_name=period_returns_result["table_name"],
+        output_dir=analysis_output_root,
+        run_lifecycle_id=resolved_run_lifecycle_id,
+        start_day_label=resolved_start_day,
+        end_day_label=resolved_end_day,
+        universe_filter=universe_filter,
+        synthetic_run_id=synthetic_run_id,
+        duckdb_threads=duckdb_threads,
+        show_progress=False,
+    )
+    progress.step_finished(
+        "3/4 period-start anchored input",
+        symbols=period_input.get("row_count"),
+    )
+
+    progress.step_started("4/4 pooled correlation profile")
+    run_result = analyze_all_fields_run_performance_patterns(
+        database_path=Path(period_input["database_path"]),
+        run_id=period_input["run_id"],
+        performance_fields=[PERIOD_PERFORMANCE_FIELD],
+        predictor_fields=resolved_predictors,
+        min_fill_rate=min_fill_rate,
+        min_pair_n=min_pair_n,
+        min_numeric_parse_rate=min_numeric_parse_rate,
+        quintile_count=quintile_count,
+        exclude_perf_from_predictors=exclude_perf_from_predictors,
+        output_dir=analysis_output_root / "period_runs",
+        run_lifecycle_id=resolved_run_lifecycle_id,
+        write_exports=write_exports,
+        duckdb_threads=duckdb_threads,
+        field_batch_size=field_batch_size,
+        max_parallel_chunks=max_parallel_chunks,
+        duckdb_memory_limit=duckdb_memory_limit,
+        duckdb_temp_directory=duckdb_temp_directory,
+        field_catalog_csv=field_catalog_csv,
+        source_table_name="all_fields_rows",
+        show_progress=resolved_nested_show_progress,
+    )
+    rows = [row.to_dict() for row in run_result.rows]
+    progress.step_finished("4/4 pooled correlation profile", rows=len(rows))
+
+    export_started = time.perf_counter()
+    progress.step_started("export period pattern summary")
+    summary_csv_path = analysis_output_root / "period_field_performance_patterns.csv"
+    summary_parquet_path = (
+        analysis_output_root / "period_field_performance_patterns.parquet"
+    )
+    _write_csv_rows(summary_csv_path, rows, fieldnames=FIELD_PATTERN_EXPORT_COLUMNS)
+    _write_parquet_from_csv(
+        summary_csv_path,
+        summary_parquet_path,
+        temp_directory=analysis_output_root / "duckdb_temp",
+    )
+    progress.step_finished(
+        "export period pattern summary",
+        rows=len(rows),
+        export_s=round(time.perf_counter() - export_started, 1),
+    )
+    progress.pipeline_finished(
+        label="Period pooled analysis complete",
+        rows=len(rows),
+        symbols=period_input["row_count"],
+    )
+    overview = {
+        "analysis_id": analysis_id,
+        "run_lifecycle_id": resolved_run_lifecycle_id,
+        "output_dir": analysis_output_root.as_posix(),
+        "summary_csv": summary_csv_path.as_posix(),
+        "summary_parquet": summary_parquet_path.as_posix(),
+        "rows_emitted": len(rows),
+        "predictor_field_count": len(resolved_predictors),
+        "performance_target": PERIOD_PERFORMANCE_FIELD,
+        "predictor_anchor": "period_start",
+        "start_day_label": resolved_start_day,
+        "end_day_label": resolved_end_day,
+        "pool_result": pool_result,
+        "period_returns_result": period_returns_result,
+        "period_input_result": period_input,
+        "run_exports": run_result.exports,
+    }
+    overview_path = analysis_output_root / "_period_pattern_overview.json"
+    _write_json(overview_path, overview)
+    overview_log_lines = [
+        "TradingView period-total pattern analysis",
+        f"analysis_id={analysis_id}",
+        f"run_lifecycle_id={resolved_run_lifecycle_id}",
+        f"window={resolved_start_day}..{resolved_end_day}",
+        f"performance_target={PERIOD_PERFORMANCE_FIELD}",
+        f"predictor_anchor=period_start",
+        f"predictor_field_count={len(resolved_predictors)}",
+        f"rows_emitted={len(rows)}",
+        f"period_symbol_count={period_input['row_count']}",
+        "",
+        f"Top patterns (up to {OVERVIEW_LOG_TOP_PATTERNS}):",
+    ]
+    overview_log_lines.extend(
+        _format_field_pattern_highlight_lines(rows, limit=OVERVIEW_LOG_TOP_PATTERNS)
+    )
+    overview_log_path = analysis_output_root / "_period_pattern_overview.log"
+    _write_overview_log(overview_log_path, overview_log_lines)
+    return {
+        "analysis_id": analysis_id,
+        "run_lifecycle_id": resolved_run_lifecycle_id,
+        "output_dir": analysis_output_root.as_posix(),
+        "summary_csv": summary_csv_path.as_posix(),
+        "summary_parquet": summary_parquet_path.as_posix(),
+        "overview_json": overview_path.as_posix(),
+        "overview_log": overview_log_path.as_posix(),
+        "rows_emitted": len(rows),
+        "predictor_fields": resolved_predictors,
+        "period_returns_result": period_returns_result,
+        "period_input_result": period_input,
+    }
+
+
+def compute_period_close_progression(
+    *,
+    input_paths: Sequence[str | Path] | str | Path | None = None,
+    all_fields_root: str | Path = DEFAULT_ALL_FIELDS_ROOT,
+    start_day_label: str | None = None,
+    end_day_label: str | None = None,
+    period_returns_database_path: str | Path,
+    period_returns_table_name: str = "period_boundary_returns",
+    output_dir: str | Path,
+    run_lifecycle_id: str | None = None,
+    min_valid_close: float = 0.000001,
+    universe_filter: AllFieldsUniverseFilterInput = None,
+    show_progress: bool | None = None,
+) -> dict[str, Any]:
+    resolved_interval = _parse_all_fields_pool_input_paths(
+        input_paths=input_paths,
+        all_fields_root=all_fields_root,
+        start_day_label=start_day_label,
+        end_day_label=end_day_label,
+    )
+    if not resolved_interval:
+        raise ValueError(
+            "No input all-fields databases resolved for period progression."
+        )
+    interval_paths = [Path(path) for path in resolved_interval]
+    resolved_start_day = start_day_label or _extract_day_label_from_database_path(
+        interval_paths[0]
+    )
+    resolved_end_day = end_day_label or _extract_day_label_from_database_path(
+        interval_paths[-1]
+    )
+    output_root = Path(output_dir)
+    output_root.mkdir(parents=True, exist_ok=True)
+    progression_db_path = output_root / "period_progression.duckdb"
+    progression_parquet_path = output_root / "period_symbol_progression.parquet"
+    universe_csv_path = output_root / "period_universe_progression.csv"
+    resolved_run_lifecycle_id = _resolve_run_lifecycle_id(run_lifecycle_id)
+    progress = _AllFieldsPeriodProgress(enabled=_resolve_show_progress(show_progress))
+    progress.step_started(
+        "period close progression",
+        detail=f"{resolved_start_day}..{resolved_end_day} scans={len(interval_paths)}",
+    )
+
+    with open_move_prediction_duckdb_connection(
+        progression_db_path, read_only=False, threads=8
+    ) as conn:
+        conn.execute(
+            f"ATTACH { _quote_path_literal(period_returns_database_path) } AS period_ret (READ_ONLY)"
+        )
+        conn.execute("DROP TABLE IF EXISTS close_symbol_points")
+        conn.execute(
+            """
+            CREATE TABLE close_symbol_points (
+                source_database_path VARCHAR,
+                source_day_label VARCHAR,
+                run_id VARCHAR,
+                run_created_at_utc TIMESTAMP,
+                symbol VARCHAR,
+                close_price DOUBLE
+            )
+            """
+        )
+        for index, database_path in enumerate(interval_paths):
+            attach_started = time.perf_counter()
+            alias = f"src_progression_{index}"
+            source_day = _extract_day_label_from_database_path(database_path)
+            normalized_day = _normalized_close_return_period_label(
+                source_day_label=source_day,
+                run_created_at_utc=None,
+            )
+            conn.execute(
+                f"ATTACH { _quote_path_literal(database_path) } AS {_quote_identifier(alias)} (READ_ONLY)"
+            )
+            source_columns = _attached_all_fields_columns(conn, alias)
+            filter_resolution = resolve_all_fields_universe_filter_sql(
+                universe_filter,
+                available_columns=source_columns,
+                table_alias="rows",
+            )
+            universe_filter_sql = filter_resolution.sql_fragment
+            conn.execute(
+                f"""
+                INSERT INTO close_symbol_points
+                SELECT {_quote_sql_literal(database_path.as_posix())} AS source_database_path,
+                    {_quote_sql_literal(normalized_day)} AS source_day_label,
+                    rows.run_id,
+                    COALESCE(
+                        TRY_CAST(
+                            STRPTIME({_quote_sql_literal(normalized_day)}, '%d_%m_%Y')
+                            AS TIMESTAMP
+                        ),
+                        meta.created_at_utc
+                    ) AS run_created_at_utc,
+                    rows.symbol,
+                    {_numeric_sql_expression(f'{_quote_identifier("rows")}.{_quote_identifier("close")}')} AS close_price
+                FROM {_quote_identifier(alias)}.all_fields_rows rows
+                JOIN {_quote_identifier(alias)}.run_metadata meta
+                    ON meta.run_id = rows.run_id
+                WHERE meta.suite_name = {_quote_sql_literal(ALL_FIELDS_SUITE_NAME)}
+                {universe_filter_sql}
+                """
+            )
+            conn.execute(f"DETACH {_quote_identifier(alias)}")
+            progress.scan_attached(
+                completed=index + 1,
+                total=len(interval_paths),
+                day_label=normalized_day,
+                elapsed_seconds=time.perf_counter() - attach_started,
+            )
+
+        conn.execute("DROP TABLE IF EXISTS period_symbol_progression")
+        conn.execute(
+            f"""
+            CREATE TABLE period_symbol_progression AS
+            WITH boundaries AS (
+                SELECT symbol,
+                    start_close_price,
+                    end_close_price,
+                    start_day_label,
+                    end_day_label,
+                    period_return_pct
+                FROM period_ret.{_quote_identifier(period_returns_table_name)}
+                WHERE period_return_pct IS NOT NULL
+            ),
+            run_level AS (
+                SELECT source_database_path,
+                    source_day_label,
+                    run_id,
+                    MAX(run_created_at_utc) AS run_created_at_utc,
+                    symbol,
+                    AVG(close_price) AS close_price
+                FROM close_symbol_points
+                WHERE close_price IS NOT NULL
+                  AND close_price >= {float(min_valid_close)}
+                GROUP BY source_database_path, source_day_label, run_id, symbol
+            )
+            SELECT r.source_database_path,
+                r.source_day_label,
+                r.run_id,
+                r.run_created_at_utc,
+                r.symbol,
+                r.close_price,
+                b.start_close_price,
+                b.end_close_price,
+                b.start_day_label,
+                b.end_day_label,
+                CASE
+                    WHEN b.start_close_price IS NULL OR b.start_close_price = 0 THEN NULL
+                    ELSE ((r.close_price / b.start_close_price) - 1.0) * 100.0
+                END AS cumulative_return_from_start_pct,
+                b.period_return_pct
+            FROM run_level r
+            JOIN boundaries b
+                ON b.symbol = r.symbol
+            """
+        )
+        conn.execute(
+            "COPY (SELECT * FROM period_symbol_progression ORDER BY run_created_at_utc, symbol) TO "
+            + _quote_path_literal(progression_parquet_path)
+            + " (FORMAT PARQUET, COMPRESSION ZSTD)"
+        )
+        conn.execute(
+            "COPY ("
+            "SELECT source_day_label, run_id, run_created_at_utc, "
+            "COUNT(*) AS symbol_count, "
+            "AVG(cumulative_return_from_start_pct) AS mean_cumulative_return_pct, "
+            "MEDIAN(cumulative_return_from_start_pct) AS median_cumulative_return_pct, "
+            "AVG(period_return_pct) AS mean_full_period_return_pct, "
+            "MEDIAN(period_return_pct) AS median_full_period_return_pct "
+            "FROM period_symbol_progression "
+            "GROUP BY source_day_label, run_id, run_created_at_utc "
+            "ORDER BY run_created_at_utc, run_id"
+            ") TO "
+            + _quote_path_literal(universe_csv_path)
+            + " (HEADER, DELIMITER ',')"
+        )
+        row_count = int(
+            conn.execute("SELECT COUNT(*) FROM period_symbol_progression").fetchone()[0]
+        )
+        day_count = int(
+            conn.execute(
+                "SELECT COUNT(DISTINCT source_day_label) FROM period_symbol_progression"
+            ).fetchone()[0]
+        )
+        symbol_count = int(
+            conn.execute(
+                "SELECT COUNT(DISTINCT symbol) FROM period_symbol_progression"
+            ).fetchone()[0]
+        )
+        conn.execute("DETACH period_ret")
+
+    progress.step_finished(
+        "period close progression",
+        rows=row_count,
+        days=day_count,
+        symbols=symbol_count,
+    )
+    overview_payload = {
+        "run_lifecycle_id": resolved_run_lifecycle_id,
+        "output_dir": output_root.as_posix(),
+        "database_path": progression_db_path.as_posix(),
+        "parquet_path": progression_parquet_path.as_posix(),
+        "universe_csv_path": universe_csv_path.as_posix(),
+        "row_count": row_count,
+        "day_count": day_count,
+        "symbol_count": symbol_count,
+        "start_day_label": resolved_start_day,
+        "end_day_label": resolved_end_day,
+    }
+    overview_path = output_root / "_period_progression_overview.json"
+    _write_json(overview_path, overview_payload)
+    _write_overview_log(
+        output_root / "_period_progression_overview.log",
+        [
+            "TradingView period close progression",
+            f"run_lifecycle_id={resolved_run_lifecycle_id}",
+            f"window={resolved_start_day}..{resolved_end_day}",
+            f"row_count={row_count}",
+            f"day_count={day_count}",
+            f"symbol_count={symbol_count}",
+        ],
+    )
+    return {
+        "run_lifecycle_id": resolved_run_lifecycle_id,
+        "output_dir": output_root.as_posix(),
+        "database_path": progression_db_path.as_posix(),
+        "symbol_progression_parquet": progression_parquet_path.as_posix(),
+        "universe_progression_csv": universe_csv_path.as_posix(),
+        "overview_json": overview_path.as_posix(),
+        "overview_log": (output_root / "_period_progression_overview.log").as_posix(),
+        "row_count": row_count,
+        "day_count": day_count,
+        "symbol_count": symbol_count,
+    }
+
+
+def _compute_period_field_quintile_progression(
+    *,
+    period_analysis_input_database_path: str | Path,
+    period_progression_database_path: str | Path,
+    output_csv_path: str | Path,
+    top_n_predictors: int = 100,
+    show_progress: bool | None = None,
+) -> str:
+    output_path = Path(output_csv_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    progress = _AllFieldsPeriodProgress(enabled=_resolve_show_progress(show_progress))
+    progress.step_started(
+        "field quintile progression",
+        detail=f"top_n={top_n_predictors}",
+    )
+    step_started = time.perf_counter()
+    with open_move_prediction_duckdb_connection(
+        Path(period_progression_database_path), read_only=False, threads=8
+    ) as conn:
+        conn.execute(
+            f"ATTACH { _quote_path_literal(period_analysis_input_database_path) } AS period_in (READ_ONLY)"
+        )
+        pattern_parquet_path = (
+            Path(period_analysis_input_database_path).parent
+            / "period_field_performance_patterns.parquet"
+        )
+        predictor_rows = conn.execute(
+            f"""
+            WITH ranked AS (
+                SELECT predictor_field,
+                    ABS(COALESCE(pattern_score, 0.0)) AS abs_pattern_score,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY predictor_field
+                        ORDER BY ABS(COALESCE(pattern_score, 0.0)) DESC
+                    ) AS row_rank
+                FROM read_parquet({_quote_path_literal(pattern_parquet_path)})
+            )
+            SELECT predictor_field
+            FROM ranked
+            WHERE row_rank = 1
+            ORDER BY abs_pattern_score DESC
+            LIMIT {max(1, int(top_n_predictors))}
+            """
+        ).fetchall()
+        predictors = [str(row[0]) for row in predictor_rows if str(row[0] or "").strip()]
+        if not predictors:
+            _write_csv_rows(
+                output_path,
+                rows=[],
+                fieldnames=[
+                    "source_day_label",
+                    "run_id",
+                    "run_created_at_utc",
+                    "predictor_field",
+                    "q1_avg_cum_return_pct",
+                    "q5_avg_cum_return_pct",
+                    "quintile_spread_pp",
+                ],
+            )
+            conn.execute("DETACH period_in")
+            progress.step_finished(
+                "field quintile progression",
+                predictors=0,
+                elapsed_s=round(time.perf_counter() - step_started, 1),
+            )
+            return output_path.as_posix()
+
+        predictor_count = len(predictors)
+        union_parts: list[str] = []
+        for predictor in predictors:
+            predictor_escaped = predictor.replace("'", "''")
+            predictor_col = _quote_identifier(predictor)
+            union_parts.append(
+                f"""
+                SELECT psp.source_day_label,
+                    psp.run_id,
+                    psp.run_created_at_utc,
+                    psp.symbol,
+                    '{predictor_escaped}' AS predictor_field,
+                    TRY_CAST(inp.{predictor_col} AS DOUBLE) AS predictor_value,
+                    psp.cumulative_return_from_start_pct
+                FROM period_symbol_progression psp
+                JOIN period_in.all_fields_rows inp
+                    ON inp.symbol = psp.symbol
+                WHERE TRY_CAST(inp.{predictor_col} AS DOUBLE) IS NOT NULL
+                """.strip()
+            )
+        union_sql = "\nUNION ALL\n".join(union_parts)
+        conn.execute("DROP TABLE IF EXISTS period_field_quintile_progression")
+        conn.execute(
+            f"""
+            CREATE TABLE period_field_quintile_progression AS
+            WITH long_vals AS (
+                {union_sql}
+            ),
+            quintiled AS (
+                SELECT source_day_label,
+                    run_id,
+                    run_created_at_utc,
+                    symbol,
+                    predictor_field,
+                    predictor_value,
+                    cumulative_return_from_start_pct,
+                    NTILE(5) OVER (
+                        PARTITION BY source_day_label, predictor_field
+                        ORDER BY predictor_value
+                    ) AS predictor_quintile
+                FROM long_vals
+                WHERE cumulative_return_from_start_pct IS NOT NULL
+            ),
+            spread AS (
+                SELECT source_day_label,
+                    run_id,
+                    run_created_at_utc,
+                    predictor_field,
+                    AVG(
+                        CASE WHEN predictor_quintile = 5 THEN cumulative_return_from_start_pct END
+                    ) AS q5_avg_cum_return_pct,
+                    AVG(
+                        CASE WHEN predictor_quintile = 1 THEN cumulative_return_from_start_pct END
+                    ) AS q1_avg_cum_return_pct,
+                    AVG(
+                        CASE WHEN predictor_quintile = 5 THEN cumulative_return_from_start_pct END
+                    ) - AVG(
+                        CASE WHEN predictor_quintile = 1 THEN cumulative_return_from_start_pct END
+                    ) AS quintile_spread_pp
+                FROM quintiled
+                GROUP BY source_day_label, run_id, run_created_at_utc, predictor_field
+            )
+            SELECT source_day_label,
+                run_id,
+                run_created_at_utc,
+                predictor_field,
+                q1_avg_cum_return_pct,
+                q5_avg_cum_return_pct,
+                quintile_spread_pp
+            FROM spread
+            ORDER BY run_created_at_utc, predictor_field
+            """
+        )
+        conn.execute(
+            "COPY (SELECT * FROM period_field_quintile_progression) TO "
+            + _quote_path_literal(output_path)
+            + " (HEADER, DELIMITER ',')"
+        )
+        conn.execute("DETACH period_in")
+    progress.step_finished(
+        "field quintile progression",
+        predictors=predictor_count,
+        elapsed_s=round(time.perf_counter() - step_started, 1),
+    )
+    return output_path.as_posix()
+
+
+def analyze_period_rolling_stability(
+    *,
+    all_fields_root: str | Path = DEFAULT_ALL_FIELDS_ROOT,
+    start_day_label: str,
+    end_day_label: str,
+    output_dir: str | Path,
+    field_catalog_csv: str | Path = DEFAULT_FIELD_CATALOG_CSV,
+    include_predictor_fields: Sequence[str] | None = None,
+    min_fill_rate: float = 0.10,
+    min_pair_n: int = 20,
+    min_numeric_parse_rate: float = 0.80,
+    quintile_count: int = 5,
+    exclude_perf_from_predictors: bool = True,
+    universe_filter: AllFieldsUniverseFilterInput = None,
+    write_exports: bool = False,
+    duckdb_threads: int = 8,
+    field_batch_size: int = 80,
+    max_parallel_chunks: int = 1,
+    duckdb_memory_limit: str | int | float | None = "8GB",
+    duckdb_temp_directory: str | Path | None = None,
+    min_runs_for_stability: int = 3,
+    require_sign_consistency: float = 0.6,
+    rolling_window_days: int = 7,
+    rolling_window_step_days: int = 3,
+    run_lifecycle_id: str | None = None,
+    show_progress: bool | None = None,
+) -> dict[str, Any]:
+    resolved_paths = discover_all_fields_daily_databases(
+        all_fields_root=all_fields_root,
+        start_day_label=start_day_label,
+        end_day_label=end_day_label,
+    )
+    if len(resolved_paths) < 2:
+        return {
+            "window_count": 0,
+            "window_results": [],
+            "aggregate_result": None,
+            "summary_paths": [],
+        }
+
+    parsed_paths: list[tuple[date, Path]] = []
+    for path in resolved_paths:
+        parsed_day = _try_parse_day_label(_extract_day_label_from_database_path(path))
+        if parsed_day is None:
+            continue
+        parsed_paths.append((parsed_day, path))
+    parsed_paths.sort(key=lambda item: item[0])
+    if len(parsed_paths) < 2:
+        return {
+            "window_count": 0,
+            "window_results": [],
+            "aggregate_result": None,
+            "summary_paths": [],
+        }
+
+    window_results: list[dict[str, Any]] = []
+    summary_paths: list[Path] = []
+    window_span = max(2, int(rolling_window_days))
+    step_span = max(1, int(rolling_window_step_days))
+    rolling_windows: list[tuple[str, str, list[Path]]] = []
+    cursor = 0
+    while cursor < len(parsed_paths):
+        start_index = cursor
+        end_index = min(len(parsed_paths) - 1, start_index + window_span - 1)
+        if end_index <= start_index:
+            break
+        window_subset = [path for _, path in parsed_paths[start_index : end_index + 1]]
+        window_start_label = _extract_day_label_from_database_path(window_subset[0])
+        window_end_label = _extract_day_label_from_database_path(window_subset[-1])
+        rolling_windows.append((window_start_label, window_end_label, window_subset))
+        if end_index >= len(parsed_paths) - 1:
+            break
+        next_day = parsed_paths[start_index][0] + timedelta(days=step_span)
+        next_index = start_index + 1
+        while next_index < len(parsed_paths) and parsed_paths[next_index][0] < next_day:
+            next_index += 1
+        cursor = min(next_index, len(parsed_paths) - 1)
+
+    progress = _AllFieldsPeriodProgress(enabled=_resolve_show_progress(show_progress))
+    progress.step_started(
+        "rolling period stability",
+        detail=(
+            f"{start_day_label}..{end_day_label} "
+            f"windows={len(rolling_windows)} span={window_span}d step={step_span}d"
+        ),
+    )
+
+    for window_index, (window_start_label, window_end_label, window_subset) in enumerate(
+        rolling_windows, start=1
+    ):
+        window_started = time.perf_counter()
+        window_failed = False
+        rows_emitted = 0
+        try:
+            window_result = analyze_period_pooled_performance_patterns(
+                input_paths=window_subset,
+                all_fields_root=all_fields_root,
+                start_day_label=window_start_label,
+                end_day_label=window_end_label,
+                output_dir=Path(output_dir)
+                / "rolling_windows"
+                / f"{window_start_label}_to_{window_end_label}",
+                field_catalog_csv=field_catalog_csv,
+                include_predictor_fields=include_predictor_fields,
+                min_fill_rate=min_fill_rate,
+                min_pair_n=min_pair_n,
+                min_numeric_parse_rate=min_numeric_parse_rate,
+                quintile_count=quintile_count,
+                exclude_perf_from_predictors=exclude_perf_from_predictors,
+                universe_filter=universe_filter,
+                write_exports=write_exports,
+                duckdb_threads=duckdb_threads,
+                field_batch_size=field_batch_size,
+                max_parallel_chunks=max_parallel_chunks,
+                duckdb_memory_limit=duckdb_memory_limit,
+                duckdb_temp_directory=duckdb_temp_directory,
+                run_lifecycle_id=run_lifecycle_id,
+                show_progress=False,
+                synthetic_run_id=(
+                    "period_pooled_"
+                    + _slugify(f"{window_start_label}_{window_end_label}")
+                    + "_"
+                    + _resolve_run_lifecycle_id(run_lifecycle_id)
+                ),
+            )
+            window_results.append(window_result)
+            summary_paths.append(Path(window_result["summary_parquet"]))
+            rows_emitted = int(window_result.get("rows_emitted") or 0)
+        except Exception:
+            window_failed = True
+            raise
+        finally:
+            progress.rolling_window_finished(
+                completed=window_index,
+                total=len(rolling_windows),
+                window_label=f"{window_start_label}..{window_end_label}",
+                rows_emitted=rows_emitted,
+                elapsed_seconds=time.perf_counter() - window_started,
+                failed=window_failed,
+            )
+
+    aggregate_result = None
+    if summary_paths:
+        progress.step_started("aggregate rolling stability")
+        aggregate_started = time.perf_counter()
+        aggregate_result = aggregate_all_fields_pattern_summaries(
+            per_run_summary_paths=summary_paths,
+            output_dir=Path(output_dir) / "aggregates",
+            min_runs_for_stability=min_runs_for_stability,
+            require_sign_consistency=require_sign_consistency,
+            field_catalog_csv=field_catalog_csv,
+            run_lifecycle_id=run_lifecycle_id,
+            nest_output_dir=False,
+        )
+        progress.step_finished(
+            "aggregate rolling stability",
+            windows=len(summary_paths),
+            elapsed_s=round(time.perf_counter() - aggregate_started, 1),
+        )
+    progress.step_finished(
+        "rolling period stability",
+        windows=len(window_results),
+    )
+    return {
+        "window_count": len(window_results),
+        "window_results": window_results,
+        "summary_paths": [path.as_posix() for path in summary_paths],
+        "aggregate_result": aggregate_result.exports if aggregate_result else None,
     }
 
 
@@ -5411,10 +6900,15 @@ __all__ = [
     "aggregate_all_fields_pattern_summaries",
     "aggregate_all_fields_run_pool",
     "analyze_cross_run_close_performance_patterns",
+    "analyze_period_pooled_performance_patterns",
+    "analyze_period_rolling_stability",
     "analyze_all_fields_run_performance_patterns",
     "analyze_all_fields_run_with_forward_returns",
     "attach_history_performance_targets",
+    "build_period_anchored_analysis_input",
     "compute_cross_run_close_returns",
+    "compute_period_boundary_returns",
+    "compute_period_close_progression",
     "classify_columns",
     "benchmark_all_fields_pattern_analysis",
     "discover_all_fields_daily_databases",

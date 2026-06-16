@@ -28,6 +28,7 @@ from data_analysis_scripts.trading_view_all_fields_metric_pattern_analyzer impor
 )
 from data_analysis_scripts.trading_view_move_prediction_analysis import (
     _robust_signal,
+    _get_company_name,
 )
 
 QUANTIFIABLE_CATALOG_TYPES = frozenset({"number", "percent", "fundamental_price"})
@@ -394,10 +395,12 @@ def score_universe_for_profile(
         scored = score_profile_row(
             row, derived_row, profile, metric_profiles, catalog=catalog
         )
+        company_name = _get_company_name(dict(row))
         results.append(
             {
                 "symbol": row.get("symbol"),
-                "name": row.get("name"),
+                "name": company_name,
+                "company_name": company_name,
                 **scored,
             }
         )
@@ -513,7 +516,8 @@ def build_family_orthogonal_consensus(
                 symbol,
                 {
                     "symbol": symbol,
-                    "name": row.get("name"),
+                    "name": row.get("company_name") or row.get("name"),
+                    "company_name": row.get("company_name") or row.get("name"),
                     "family_scores": {},
                     "profile_scores": {},
                     "coverage": 0.0,
@@ -558,7 +562,8 @@ def build_family_orthogonal_consensus(
         consensus_rows.append(
             {
                 "symbol": symbol,
-                "name": record.get("name"),
+                "name": record.get("company_name") or record.get("name"),
+                "company_name": record.get("company_name") or record.get("name"),
                 "horizon_name": horizon_name,
                 "consensus_score": _clamp(consensus_score, -3.0, 3.0),
                 "coverage": used_weight,

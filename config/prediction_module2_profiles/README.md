@@ -29,6 +29,8 @@ result = run_module2_suite_duckdb(
 
 Outputs land under `logs/tradingview_analysis/prediction_module2/` with per-profile CSV/log files and `module2__overlap_report.json`.
 
+**Output reference:** [documentation/prediction_module2_run_output_guide.md](../../documentation/prediction_module2_run_output_guide.md) — column meanings, scoring pipeline, profile pillars.
+
 ## Anti-overlap design
 
 - **Regime gates** filter names before scoring (e.g. upside swing rejects extended tape).

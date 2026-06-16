@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate per-profile conclusions for a move-prediction DuckDB run.
 
-Cross-references profile leaders with close-forward 3-week indicator conclusions
+Cross-references profile leaders with whole-period indicator conclusions
 (predictor_stock_rankings from scan_period_close_forward_tracking_25may_12jun2026).
 """
 
@@ -178,7 +178,7 @@ PROFILE_STYLE: dict[str, tuple[str, str, str]] = {
 }
 
 INDICATOR_CONTEXT = """
-### Close-forward indicator regime (26 May – 11 Jun 2026, 13 scored days)
+### Whole-period indicator regime (26 May – 12 Jun 2026, period-total lens)
 
 | Theme | Fields | Spread | Consistency | Long-only use |
 |-------|--------|--------|-------------|---------------|
@@ -198,6 +198,13 @@ def _load_csv_map(path: Path, key: str = "symbol") -> dict[str, dict[str, str]]:
         return {}
     with path.open(encoding="utf-8") as handle:
         return {row[key]: row for row in csv.DictReader(handle)}
+
+
+def _first_existing(path_candidates: list[Path]) -> Path:
+    for candidate in path_candidates:
+        if candidate.exists():
+            return candidate
+    return path_candidates[0]
 
 
 def _fmt_num(value: float | None, digits: int = 2) -> str:
@@ -220,8 +227,8 @@ def _classify_symbol(
     playbooks: list[str] = []
     if sym in trim:
         flags.append(
-            f"TRIM LIST: avg 7d fwd {trim[sym].get('avg_fwd_pct', '?')}% "
-            f"over {trim[sym].get('n_days', '?')} scan days"
+            f"TRIM LIST: avg period return {trim[sym].get('avg_period_ret_pct', '?')}% "
+            f"over {trim[sym].get('n_days', '?')} symbols"
         )
     if sym in warn:
         flags.append(f"WARNING OVERLAY hit (avoid rank {warn[sym].get('rank', '?')})")
@@ -229,7 +236,7 @@ def _classify_symbol(
         playbooks.append("Playbook A — vol continuation fit")
     if sym in pb_b:
         playbooks.append(
-            f"Playbook B — quality drift (hist avg fwd {pb_b[sym].get('avg_fwd_pct', '?')}%)"
+            f"Playbook B — quality drift (hist avg period return {pb_b[sym].get('avg_period_ret_pct', '?')}%)"
         )
     if sym in active:
         playbooks.append(f"Active mgmt tier: {active[sym].get('active_mgmt_tier', '?')}")
@@ -305,8 +312,8 @@ def _profile_conclusion(
         )
     elif profile == "swing_reversal_v1":
         lines.append(
-            "**Critical tension with 3w indicators:** Monthly oversold oscillators were **reliably negative** "
-            "for forward returns (−0.7 pp). This profile's top picks (SNDK, SEZL, AMAT) are **momentum leaders**, "
+            "**Critical tension with whole-period indicators:** Monthly oversold oscillators were **reliably negative** "
+            "for period-total returns (−0.7 pp). This profile's top picks (SNDK, SEZL, AMAT) are **momentum leaders**, "
             "not classical oversold reversals — treat as **repair-after-depression** only when ATRP + volume confirm, "
             "not as blind oversold buys."
         )
@@ -371,6 +378,14 @@ def generate(
     out_dir = run_dir / "profile_conclusions"
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    indicator_perf_dir = rank_dir / "indicator_perf"
+    top_stable_indicator_file = _first_existing(
+        [
+            indicator_perf_dir / "00_top_stable_period_return_pct_predictors.csv",
+            indicator_perf_dir / "00_top_stable_close_forward_predictors.csv",
+        ]
+    )
+
     composite = _load_csv_map(rank_dir / "01_composite_bullish_fit_top100.csv")
     active = _load_csv_map(rank_dir / "07_active_management_candidates_top100.csv")
     trim = _load_csv_map(rank_dir / "04_trim_negative_drift_top100.csv")
@@ -413,11 +428,11 @@ def generate(
         f"**Run ID:** `{run_id}`  ",
         f"**Generated:** {generated_at}  ",
         f"**Universe:** all industries, market cap ≥ $1B  ",
-        f"**Cross-reference:** `close_forward_25may_12jun2026_dd898100` (13-day 7d-forward study)  ",
+        f"**Cross-reference:** `close_forward_25may_12jun2026_dd898100` (whole-period close return study)  ",
         f"**Rankings source:** `{rank_dir.relative_to(PROJECT_ROOT).as_posix()}`  ",
         "",
         "This pack provides **separate outlooks per investment profile** — no composite weighting. "
-        "Each file maps profile leaders to the 3-week close-forward indicator playbooks (A/B/C).",
+        "Each file maps profile leaders to the whole-period indicator playbooks (A/B/C).",
         "",
         INDICATOR_CONTEXT,
         "",
@@ -710,7 +725,7 @@ def generate(
             [
                 "# Predictor stock rankings — cross-reference for this run",
                 "",
-                f"Rankings generated from **3-week close-forward study** "
+                f"Rankings generated from **whole-period close return study** "
                 f"`scan_period_close_forward_tracking_25may_12jun2026_dd898100`.",
                 "",
                 f"**Source directory:** `{rank_dir}`",
@@ -724,9 +739,9 @@ def generate(
                 "| `03_playbook_b_quality_drift_top100.csv` | Multi-day positive drift names |",
                 "| `04_trim_negative_drift_top100.csv` | Persistent losers — universal trim |",
                 "| `05_warning_overlay_avoid_top100.csv` | Playbook C — oversold/crowded/mega-cap flags |",
-                "| `06_playbook_a_realized_11_06_2026_top100.csv` | Realized 7d winners on last scored day |",
+                "| `06_playbook_a_realized_11_06_2026_top100.csv` | Realized period winners on last scored day anchor |",
                 "| `07_active_management_candidates_top100.csv` | Active sleeve overlay |",
-                "| `indicator_perf/00_top_stable_close_forward_predictors.csv` | Which indicators mattered over 13 days |",
+                f"| `indicator_perf/{top_stable_indicator_file.name}` | Which indicators mattered in period-total analysis |",
                 "",
                 "## Re-generate rankings",
                 "",

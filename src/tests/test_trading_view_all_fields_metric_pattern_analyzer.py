@@ -16,6 +16,8 @@ from data_analysis_scripts.trading_view_all_fields_metric_pattern_analyzer impor
     aggregate_all_fields_pattern_summaries,
     aggregate_all_fields_run_pool,
     analyze_cross_run_close_performance_patterns,
+    analyze_period_pooled_performance_patterns,
+    analyze_period_rolling_stability,
     analyze_all_fields_run_performance_patterns,
     analyze_all_fields_run_with_forward_returns,
     attach_history_performance_targets,
@@ -23,6 +25,8 @@ from data_analysis_scripts.trading_view_all_fields_metric_pattern_analyzer impor
     build_close_forward_pattern_summary,
     classify_columns,
     compute_cross_run_close_returns,
+    compute_period_boundary_returns,
+    compute_period_close_progression,
     discover_all_fields_daily_databases,
     inventory_all_fields_runs,
     load_field_catalog,
@@ -269,6 +273,21 @@ def _copy_database_with_day_label(
     target_file = target_dir / (file_name or f"tradingview_all_fields_{day_label}.duckdb")
     shutil.copy2(source_path, target_file)
     return target_file
+
+
+def _update_all_fields_column(database_path: Path, column_name: str, expression_sql: str) -> None:
+    import duckdb
+
+    conn = duckdb.connect(str(database_path))
+    try:
+        conn.execute(
+            f"""
+            UPDATE all_fields_rows
+            SET "{column_name}" = CAST({expression_sql} AS VARCHAR)
+            """
+        )
+    finally:
+        conn.close()
 
 
 class TestAllFieldsPatternAnalyzerHelpers(unittest.TestCase):
@@ -1112,7 +1131,7 @@ class TestAllFieldsPatternAnalyzerCore(unittest.TestCase):
                 field_catalog_csv=catalog_path,
             )
             self.assertEqual(2, resolved["database_count"])
-            self.assertEqual("close_forward_return_pct", resolved["performance_target"])
+            self.assertEqual("period_return_pct", resolved["performance_target"])
             self.assertIn("enterprise_value_ebitda_ttm", resolved["predictor_fields"])
             self.assertIn("price_revenue_ttm", resolved["predictor_fields"])
             self.assertIn("total_revenue_yoy_growth_ttm", resolved["predictor_fields"])
@@ -1165,14 +1184,20 @@ class TestAllFieldsPatternAnalyzerCore(unittest.TestCase):
                 (tracking_root / "_scan_period_close_forward_tracking.json").as_posix(),
                 result["tracking_overview_json"],
             )
-            self.assertEqual("close_forward_return_pct", result["performance_target"])
-            close_forward_dir = Path(result["close_forward_result"]["output_dir"])
-            self.assertEqual((tracking_root / "close_forward").resolve(), close_forward_dir.resolve())
-            self.assertTrue((close_forward_dir / "pool").exists())
-            self.assertTrue((close_forward_dir / "close_returns").exists())
-            self.assertGreaterEqual(
-                int(result["close_forward_result"]["rows_emitted"]), 0
+            self.assertEqual("period_return_pct", result["performance_target"])
+            period_total_dir = Path(result["period_total_result"]["output_dir"])
+            self.assertEqual(
+                (tracking_root / "period_total").resolve(), period_total_dir.resolve()
             )
+            self.assertTrue((period_total_dir / "pool").exists())
+            self.assertTrue((period_total_dir / "period_returns").exists())
+            self.assertGreaterEqual(
+                int(result["period_total_result"]["rows_emitted"]), 0
+            )
+            progression = result["progression_result"]
+            self.assertTrue(Path(progression["symbol_progression_parquet"]).exists())
+            self.assertTrue(Path(progression["universe_progression_csv"]).exists())
+            self.assertTrue(Path(progression["field_quintile_progression_csv"]).exists())
             overview = json.loads(
                 Path(result["tracking_overview_json"]).read_text(encoding="utf-8")
             )
@@ -1186,6 +1211,154 @@ class TestAllFieldsPatternAnalyzerCore(unittest.TestCase):
                         (tracking_root / "aggregates").as_posix()
                     )
                 )
+
+    def test_period_boundary_returns_and_progression_outputs(self):
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            base_db = temp_path / "source.duckdb"
+            _create_all_fields_test_database(
+                base_db,
+                run_id="run_alpha",
+                created_at_utc=datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc),
+                row_count=10,
+            )
+            _update_all_fields_column(base_db, "close", "100 + row_number * 2")
+            day1_db = _copy_database_with_day_label(base_db, temp_path, "01_06_2026")
+            day2_db = _copy_database_with_day_label(base_db, temp_path, "02_06_2026")
+            day3_db = _copy_database_with_day_label(base_db, temp_path, "03_06_2026")
+            _update_all_fields_column(day1_db, "close", "100 + row_number * 1")
+            _update_all_fields_column(day2_db, "close", "100 + row_number * 1.5")
+            _update_all_fields_column(day3_db, "close", "100 + row_number * 2")
+
+            boundary = compute_period_boundary_returns(
+                input_paths=[day1_db, day2_db, day3_db],
+                output_dir=temp_path / "period_returns",
+                run_lifecycle_id="period01",
+            )
+            self.assertTrue(Path(boundary["database_path"]).exists())
+            self.assertGreater(boundary["row_count"], 0)
+            self.assertEqual("01_06_2026", boundary["resolved_boundary_start_day"])
+            self.assertEqual("03_06_2026", boundary["resolved_boundary_end_day"])
+
+            progression = compute_period_close_progression(
+                input_paths=[day1_db, day2_db, day3_db],
+                period_returns_database_path=boundary["database_path"],
+                output_dir=temp_path / "progression",
+                run_lifecycle_id="period01",
+            )
+            self.assertTrue(Path(progression["symbol_progression_parquet"]).exists())
+            self.assertTrue(Path(progression["universe_progression_csv"]).exists())
+            self.assertGreaterEqual(progression["day_count"], 3)
+            self.assertGreaterEqual(progression["symbol_count"], 5)
+
+            from db.trading_view_move_prediction_duckdb import query_move_prediction_duckdb
+
+            progression_rows = query_move_prediction_duckdb(
+                progression["database_path"],
+                """
+                SELECT source_day_label, symbol, ROUND(cumulative_return_from_start_pct, 2) AS ret
+                FROM period_symbol_progression
+                WHERE symbol = 'NASDAQ:SYM001'
+                ORDER BY run_created_at_utc
+                """,
+            )
+            self.assertEqual(3, len(progression_rows))
+            self.assertAlmostEqual(0.0, float(progression_rows[0]["ret"]), places=2)
+            self.assertGreater(float(progression_rows[1]["ret"]), 0.0)
+            self.assertGreater(float(progression_rows[2]["ret"]), float(progression_rows[1]["ret"]))
+
+    def test_period_pooled_analysis_uses_period_return_target(self):
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            base_db = temp_path / "source.duckdb"
+            _create_all_fields_test_database(
+                base_db,
+                run_id="run_alpha",
+                created_at_utc=datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc),
+                row_count=12,
+            )
+            day1_db = _copy_database_with_day_label(base_db, temp_path, "01_06_2026")
+            day2_db = _copy_database_with_day_label(base_db, temp_path, "02_06_2026")
+            day3_db = _copy_database_with_day_label(base_db, temp_path, "03_06_2026")
+            _update_all_fields_column(day1_db, "close", "100 + row_number * 1")
+            _update_all_fields_column(day2_db, "close", "100 + row_number * 1.5")
+            _update_all_fields_column(day3_db, "close", "100 + row_number * 2")
+            catalog_path = temp_path / "catalog.csv"
+            _write_catalog_csv(catalog_path)
+
+            period_result = analyze_period_pooled_performance_patterns(
+                input_paths=[day1_db, day2_db, day3_db],
+                output_dir=temp_path / "period_total",
+                field_catalog_csv=catalog_path,
+                include_predictor_fields=[
+                    "enterprise_value_ebitda_ttm",
+                    "price_revenue_ttm",
+                    "total_revenue_yoy_growth_ttm",
+                ],
+                min_fill_rate=0.0,
+                min_pair_n=5,
+                min_numeric_parse_rate=0.0,
+                write_exports=False,
+                run_lifecycle_id="period02",
+            )
+            self.assertTrue(Path(period_result["summary_csv"]).exists())
+            self.assertGreaterEqual(period_result["rows_emitted"], 1)
+            rows = list(csv.DictReader(Path(period_result["summary_csv"]).open(encoding="utf-8")))
+            self.assertTrue(rows)
+            performance_fields = {row["performance_field"] for row in rows}
+            self.assertEqual({"period_return_pct"}, performance_fields)
+            run_ids = {row["run_id"] for row in rows}
+            self.assertEqual({"period_pooled_period02"}, run_ids)
+            predictor_rows = [
+                row for row in rows if row["predictor_field"] == "total_revenue_yoy_growth_ttm"
+            ]
+            self.assertTrue(predictor_rows)
+            self.assertGreater(float(predictor_rows[0]["spearman_corr_adjusted"] or 0.0), 0.0)
+
+    def test_period_rolling_stability_outputs_aggregate(self):
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            base_db = temp_path / "source.duckdb"
+            _create_all_fields_test_database(
+                base_db,
+                run_id="run_alpha",
+                created_at_utc=datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc),
+                row_count=10,
+            )
+            day1_db = _copy_database_with_day_label(base_db, temp_path, "01_06_2026")
+            day2_db = _copy_database_with_day_label(base_db, temp_path, "02_06_2026")
+            day3_db = _copy_database_with_day_label(base_db, temp_path, "03_06_2026")
+            day4_db = _copy_database_with_day_label(base_db, temp_path, "04_06_2026")
+            _update_all_fields_column(day1_db, "close", "100 + row_number * 1")
+            _update_all_fields_column(day2_db, "close", "100 + row_number * 1.5")
+            _update_all_fields_column(day3_db, "close", "100 + row_number * 2")
+            _update_all_fields_column(day4_db, "close", "100 + row_number * 2.5")
+            catalog_path = temp_path / "catalog.csv"
+            _write_catalog_csv(catalog_path)
+
+            rolling = analyze_period_rolling_stability(
+                all_fields_root=temp_path,
+                start_day_label="01_06_2026",
+                end_day_label="04_06_2026",
+                output_dir=temp_path / "tracking",
+                field_catalog_csv=catalog_path,
+                include_predictor_fields=[
+                    "enterprise_value_ebitda_ttm",
+                    "price_revenue_ttm",
+                ],
+                min_fill_rate=0.0,
+                min_pair_n=5,
+                min_numeric_parse_rate=0.0,
+                rolling_window_days=2,
+                rolling_window_step_days=1,
+                min_runs_for_stability=2,
+                require_sign_consistency=0.0,
+                write_exports=False,
+                run_lifecycle_id="period03",
+            )
+            self.assertGreaterEqual(rolling["window_count"], 2)
+            self.assertTrue(rolling["summary_paths"])
+            self.assertIsNotNone(rolling["aggregate_result"])
 
     def test_batch_analysis_applies_memory_budgeting(self):
         with TemporaryDirectory() as temp_dir:
@@ -1267,6 +1440,40 @@ class TestAllFieldsPatternAnalyzerCore(unittest.TestCase):
             self.assertEqual(1, int(overview["effective_parallel_runs"]))
             self.assertIn("per_worker_threads", overview)
             self.assertIn("per_worker_memory_gb", overview)
+
+    def test_scan_period_tracking_deprecates_close_forward_days(self):
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            day1_dir = temp_path / "01_06_2026"
+            day1_dir.mkdir(parents=True, exist_ok=True)
+            day1_db = day1_dir / "tradingview_all_fields_01_06_2026.duckdb"
+            _create_all_fields_test_database(day1_db, run_id="run_a", row_count=12)
+
+            day2_dir = temp_path / "02_06_2026"
+            day2_dir.mkdir(parents=True, exist_ok=True)
+            day2_db = day2_dir / "tradingview_all_fields_02_06_2026.duckdb"
+            _create_all_fields_test_database(day2_db, run_id="run_b", row_count=12)
+
+            catalog_path = temp_path / "catalog.csv"
+            _write_catalog_csv(catalog_path)
+
+            result = run_scan_period_close_forward_predictor_tracking(
+                start_day_label="01_06_2026",
+                end_day_label="02_06_2026",
+                all_fields_root=temp_path,
+                output_dir=temp_path / "tracking_root_deprecated",
+                run_lifecycle_id="dep77777",
+                close_forward_days=21,
+                predictor_fields=["enterprise_value_ebitda_ttm"],
+                min_runs_for_stability=1,
+                require_sign_consistency=0.0,
+                duckdb_threads=2,
+                field_batch_size=1,
+                max_parallel_runs=1,
+                field_catalog_csv=catalog_path,
+                write_exports=False,
+            )
+            self.assertEqual("period_return_pct", result["performance_target"])
 
     def test_benchmark_writer_outputs_metrics_json(self):
         with TemporaryDirectory() as temp_dir:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export top-N stock rankings from a close-forward tracking run.
+"""Export top-N stock rankings from a whole-period tracking run.
 
 Rankings follow advised conclusions in:
   pattern_analysis/advised_conclusions/close_forward_*_advised_conclusions.md
@@ -36,6 +36,7 @@ DEFAULT_LATEST_SCORED_DAY = "11_06_2026"
 MIN_MCAP = 500_000_000.0
 MIN_CLOSE = 10.0
 DEFAULT_TOP_N = 100
+DEFAULT_PERFORMANCE_TARGET = "period_return_pct"
 
 BULLISH_PREDICTORS = (
     "ATRP|1W",
@@ -126,9 +127,19 @@ def _attach(con: duckdb.DuckDBPyConnection, alias: str, path: Path) -> None:
     )
 
 
+def _require_path(path: Path, *, label: str) -> None:
+    if path.exists():
+        return
+    raise FileNotFoundError(
+        f"{label} not found at {path.as_posix()}. "
+        "Run scan-period tracking again to generate period_total outputs."
+    )
+
+
 def _fetch_predictor_weights(
     con: duckdb.DuckDBPyConnection,
     predictor_fields: tuple[str, ...],
+    performance_target: str,
 ) -> list[tuple[str, float, float]]:
     placeholders = ", ".join("?" for _ in predictor_fields)
     rows = con.execute(
@@ -137,16 +148,20 @@ def _fetch_predictor_weights(
                rank_stability_score,
                ABS(rank_stability_score) AS weight
         FROM agg.cross_run_field_stability
-        WHERE performance_field = 'close_forward_return_pct'
+        WHERE performance_field = ?
           AND predictor_field IN ({placeholders})
         ORDER BY ABS(rank_stability_score) DESC
         """,
-        list(predictor_fields),
+        [performance_target, *list(predictor_fields)],
     ).fetchall()
     return [(str(field), float(rss), float(weight)) for field, rss, weight in rows]
 
 
-def _build_enr_unpivot_sql(predictor_fields: list[str]) -> str:
+def _build_enr_unpivot_sql(
+    predictor_fields: list[str],
+    *,
+    performance_field: str,
+) -> str:
     parts: list[str] = []
     for field in predictor_fields:
         col = _quote_identifier(field)
@@ -157,7 +172,7 @@ def _build_enr_unpivot_sql(predictor_fields: list[str]) -> str:
            symbol,
            '{escaped}' AS predictor_field,
            TRY_CAST({col} AS DOUBLE) AS pred_value,
-           TRY_CAST(close_forward_return_pct AS DOUBLE) AS fwd_ret
+           TRY_CAST({_quote_identifier(performance_field)} AS DOUBLE) AS period_ret
     FROM filtered
     WHERE TRY_CAST({col} AS DOUBLE) IS NOT NULL
       AND isfinite(TRY_CAST({col} AS DOUBLE))
@@ -166,7 +181,7 @@ def _build_enr_unpivot_sql(predictor_fields: list[str]) -> str:
     return "\n    UNION ALL\n".join(parts)
 
 
-def _top_stable_predictors_sql(*, top_n: int) -> str:
+def _top_stable_predictors_sql(*, top_n: int, performance_target: str) -> str:
     return f"""
 SELECT predictor_field,
        runs_seen,
@@ -189,7 +204,7 @@ SELECT predictor_field,
            ELSE 'weak_sparse'
        END AS advice_bucket
 FROM agg.cross_run_field_stability
-WHERE performance_field = 'close_forward_return_pct'
+WHERE performance_field = '{performance_target}'
   AND runs_seen >= 10
   AND sign_consistency_ratio >= 0.65
   AND predictor_field NOT ILIKE '%gap%'
@@ -204,6 +219,8 @@ LIMIT {top_n}
 
 def _advised_predictor_profile_sql(
     weights: list[tuple[str, float, float]],
+    *,
+    performance_target: str,
 ) -> str:
     rows = ",\n                ".join(
         f"('{field.replace(chr(39), chr(39)+chr(39))}', '{ADVISED_PREDICTOR_ADVICE.get(field, ('unknown', ''))[0]}', "
@@ -230,7 +247,7 @@ stability AS (
                ELSE 'rank_low_in_universe'
            END AS scout_direction
     FROM agg.cross_run_field_stability
-    WHERE performance_field = 'close_forward_return_pct'
+    WHERE performance_field = '{performance_target}'
 )
 SELECT m.predictor_field,
        m.advice_category,
@@ -249,142 +266,121 @@ ORDER BY ABS(COALESCE(s.rank_stability_score, 0)) DESC NULLS LAST,
 """
 
 
-def _quintile_fwd_perf_pooled_sql(predictor_fields: list[str]) -> str:
+def _quintile_fwd_perf_pooled_sql(
+    predictor_fields: list[str],
+    *,
+    performance_field: str,
+) -> str:
     return f"""
 WITH filtered AS (
     SELECT a.run_id,
            a.symbol,
-           a.close_forward_return_pct,
+           a.{_quote_identifier(performance_field)},
            a.*
     FROM enr.all_fields_rows a
-        INNER JOIN cr.cross_run_close_returns cr USING (run_id, symbol)
-    WHERE TRY_CAST(a.close_forward_return_pct AS DOUBLE) BETWEEN -25 AND 25
-      AND cr.close_price >= {MIN_CLOSE}
+        INNER JOIN pr.period_boundary_returns pr USING (symbol)
+    WHERE TRY_CAST(a.{_quote_identifier(performance_field)} AS DOUBLE) BETWEEN -100 AND 100
+      AND pr.start_close_price >= {MIN_CLOSE}
 ),
 long_vals AS (
-{_build_enr_unpivot_sql(predictor_fields)}
+{_build_enr_unpivot_sql(predictor_fields, performance_field=performance_field)}
 ),
 quintiled AS (
     SELECT run_id,
            symbol,
            predictor_field,
            pred_value,
-           fwd_ret,
+           period_ret,
            NTILE(5) OVER (
-               PARTITION BY run_id, predictor_field
+               PARTITION BY predictor_field
                ORDER BY pred_value
            ) AS pred_quintile
     FROM long_vals
-    WHERE fwd_ret IS NOT NULL
+    WHERE period_ret IS NOT NULL
 ),
 pooled AS (
     SELECT predictor_field,
            pred_quintile,
-           COUNT(*) AS n_symbol_days,
+           COUNT(*) AS n_symbols,
            COUNT(DISTINCT run_id) AS n_runs,
-           ROUND(AVG(fwd_ret), 3) AS avg_fwd_pct,
-           ROUND(MEDIAN(fwd_ret), 3) AS median_fwd_pct,
-           ROUND(STDDEV(fwd_ret), 3) AS stdev_fwd_pct,
-           ROUND(AVG(CASE WHEN fwd_ret > 0 THEN 1.0 ELSE 0.0 END), 3) AS win_rate
+           ROUND(AVG(period_ret), 3) AS avg_period_ret_pct,
+           ROUND(MEDIAN(period_ret), 3) AS median_period_ret_pct,
+           ROUND(STDDEV(period_ret), 3) AS stdev_period_ret_pct,
+           ROUND(AVG(CASE WHEN period_ret > 0 THEN 1.0 ELSE 0.0 END), 3) AS win_rate
     FROM quintiled
     GROUP BY predictor_field, pred_quintile
 )
 SELECT predictor_field,
        pred_quintile,
-       n_symbol_days,
+       n_symbols,
        n_runs,
-       avg_fwd_pct,
-       median_fwd_pct,
-       stdev_fwd_pct,
+       avg_period_ret_pct,
+       median_period_ret_pct,
+       stdev_period_ret_pct,
        win_rate
 FROM pooled
 ORDER BY predictor_field, pred_quintile
 """
 
 
-def _quintile_spread_summary_sql(predictor_fields: list[str]) -> str:
+def _quintile_spread_summary_sql(
+    predictor_fields: list[str],
+    *,
+    performance_field: str,
+) -> str:
     return f"""
 WITH filtered AS (
     SELECT a.run_id,
            a.symbol,
-           a.close_forward_return_pct,
+           a.{_quote_identifier(performance_field)},
            a.*
     FROM enr.all_fields_rows a
-        INNER JOIN cr.cross_run_close_returns cr USING (run_id, symbol)
-    WHERE TRY_CAST(a.close_forward_return_pct AS DOUBLE) BETWEEN -25 AND 25
-      AND cr.close_price >= {MIN_CLOSE}
+        INNER JOIN pr.period_boundary_returns pr USING (symbol)
+    WHERE TRY_CAST(a.{_quote_identifier(performance_field)} AS DOUBLE) BETWEEN -100 AND 100
+      AND pr.start_close_price >= {MIN_CLOSE}
 ),
 long_vals AS (
-{_build_enr_unpivot_sql(predictor_fields)}
+{_build_enr_unpivot_sql(predictor_fields, performance_field=performance_field)}
 ),
 quintiled AS (
     SELECT run_id,
            symbol,
            predictor_field,
            pred_value,
-           fwd_ret,
+           period_ret,
            NTILE(5) OVER (
-               PARTITION BY run_id, predictor_field
+               PARTITION BY predictor_field
                ORDER BY pred_value
            ) AS pred_quintile
     FROM long_vals
-    WHERE fwd_ret IS NOT NULL
+    WHERE period_ret IS NOT NULL
 ),
 pooled AS (
     SELECT predictor_field,
            pred_quintile,
-           ROUND(AVG(fwd_ret), 3) AS avg_fwd_pct
+           ROUND(AVG(period_ret), 3) AS avg_period_ret_pct
     FROM quintiled
     GROUP BY predictor_field, pred_quintile
 ),
 pooled_wide AS (
     SELECT predictor_field,
-           MAX(CASE WHEN pred_quintile = 1 THEN avg_fwd_pct END) AS q1_avg_fwd_pct,
-           MAX(CASE WHEN pred_quintile = 2 THEN avg_fwd_pct END) AS q2_avg_fwd_pct,
-           MAX(CASE WHEN pred_quintile = 3 THEN avg_fwd_pct END) AS q3_avg_fwd_pct,
-           MAX(CASE WHEN pred_quintile = 4 THEN avg_fwd_pct END) AS q4_avg_fwd_pct,
-           MAX(CASE WHEN pred_quintile = 5 THEN avg_fwd_pct END) AS q5_avg_fwd_pct,
-           MAX(CASE WHEN pred_quintile = 5 THEN avg_fwd_pct END)
-               - MAX(CASE WHEN pred_quintile = 1 THEN avg_fwd_pct END) AS pooled_q5_minus_q1_pp
+           MAX(CASE WHEN pred_quintile = 1 THEN avg_period_ret_pct END) AS q1_avg_period_ret_pct,
+           MAX(CASE WHEN pred_quintile = 2 THEN avg_period_ret_pct END) AS q2_avg_period_ret_pct,
+           MAX(CASE WHEN pred_quintile = 3 THEN avg_period_ret_pct END) AS q3_avg_period_ret_pct,
+           MAX(CASE WHEN pred_quintile = 4 THEN avg_period_ret_pct END) AS q4_avg_period_ret_pct,
+           MAX(CASE WHEN pred_quintile = 5 THEN avg_period_ret_pct END) AS q5_avg_period_ret_pct,
+           MAX(CASE WHEN pred_quintile = 5 THEN avg_period_ret_pct END)
+               - MAX(CASE WHEN pred_quintile = 1 THEN avg_period_ret_pct END) AS pooled_q5_minus_q1_pp
     FROM pooled
     GROUP BY predictor_field
 ),
-per_run_quintile AS (
-    SELECT run_id,
-           predictor_field,
-           pred_quintile,
-           AVG(fwd_ret) AS avg_fwd_pct
-    FROM quintiled
-    GROUP BY run_id, predictor_field, pred_quintile
-),
-per_run_spread AS (
-    SELECT run_id,
-           predictor_field,
-           MAX(CASE WHEN pred_quintile = 5 THEN avg_fwd_pct END)
-               - MAX(CASE WHEN pred_quintile = 1 THEN avg_fwd_pct END) AS quintile_spread_pp
-    FROM per_run_quintile
-    GROUP BY run_id, predictor_field
-),
-per_run_summary AS (
-    SELECT predictor_field,
-           COUNT(*) AS n_runs,
-           ROUND(MEDIAN(quintile_spread_pp), 3) AS median_per_run_spread_pp,
-           ROUND(AVG(quintile_spread_pp), 3) AS mean_per_run_spread_pp,
-           ROUND(AVG(CASE WHEN quintile_spread_pp > 0 THEN 1.0 ELSE 0.0 END), 3) AS pct_runs_spread_positive
-    FROM per_run_spread
-    GROUP BY predictor_field
-)
 SELECT pw.predictor_field,
-       pw.q1_avg_fwd_pct,
-       pw.q2_avg_fwd_pct,
-       pw.q3_avg_fwd_pct,
-       pw.q4_avg_fwd_pct,
-       pw.q5_avg_fwd_pct,
+       pw.q1_avg_period_ret_pct,
+       pw.q2_avg_period_ret_pct,
+       pw.q3_avg_period_ret_pct,
+       pw.q4_avg_period_ret_pct,
+       pw.q5_avg_period_ret_pct,
        pw.pooled_q5_minus_q1_pp,
-       pr.n_runs,
-       pr.median_per_run_spread_pp,
-       pr.mean_per_run_spread_pp,
-       pr.pct_runs_spread_positive,
        st.runs_seen AS aggregate_runs_seen,
        ROUND(st.sign_consistency_ratio, 3) AS aggregate_sign_consistency,
        ROUND(st.median_quintile_spread, 2) AS aggregate_median_q_spread_pp,
@@ -394,72 +390,27 @@ SELECT pw.predictor_field,
            ELSE 'rank_low_in_universe'
        END AS scout_direction
 FROM pooled_wide pw
-    LEFT JOIN per_run_summary pr USING (predictor_field)
     LEFT JOIN agg.cross_run_field_stability st
         ON st.predictor_field = pw.predictor_field
-        AND st.performance_field = 'close_forward_return_pct'
-ORDER BY ABS(COALESCE(st.rank_stability_score, pr.median_per_run_spread_pp)) DESC NULLS LAST,
+        AND st.performance_field = '{performance_field}'
+ORDER BY ABS(COALESCE(st.rank_stability_score, pw.pooled_q5_minus_q1_pp)) DESC NULLS LAST,
     pw.predictor_field
 """
 
 
-def _per_run_quintile_spread_sql(predictor_fields: list[str]) -> str:
+def _per_run_quintile_spread_sql() -> str:
     return f"""
-WITH filtered AS (
-    SELECT a.run_id,
-           a.symbol,
-           a.close_forward_return_pct,
-           a.*
-    FROM enr.all_fields_rows a
-        INNER JOIN cr.cross_run_close_returns cr USING (run_id, symbol)
-    WHERE TRY_CAST(a.close_forward_return_pct AS DOUBLE) BETWEEN -25 AND 25
-      AND cr.close_price >= {MIN_CLOSE}
-),
-long_vals AS (
-{_build_enr_unpivot_sql(predictor_fields)}
-),
-quintiled AS (
-    SELECT run_id,
-           symbol,
-           predictor_field,
-           pred_value,
-           fwd_ret,
-           NTILE(5) OVER (
-               PARTITION BY run_id, predictor_field
-               ORDER BY pred_value
-           ) AS pred_quintile
-    FROM long_vals
-    WHERE fwd_ret IS NOT NULL
-),
-per_run_quintile AS (
-    SELECT run_id,
-           predictor_field,
-           pred_quintile,
-           AVG(fwd_ret) AS avg_fwd_pct,
-           COUNT(*) AS n_symbols
-    FROM quintiled
-    GROUP BY run_id, predictor_field, pred_quintile
-),
-per_run_spread AS (
-    SELECT run_id,
-           predictor_field,
-           MAX(CASE WHEN pred_quintile = 5 THEN avg_fwd_pct END)
-               - MAX(CASE WHEN pred_quintile = 1 THEN avg_fwd_pct END) AS quintile_spread_pp,
-           MAX(CASE WHEN pred_quintile = 5 THEN n_symbols END) AS q5_n,
-           MAX(CASE WHEN pred_quintile = 1 THEN n_symbols END) AS q1_n
-    FROM per_run_quintile
-    GROUP BY run_id, predictor_field
-)
-SELECT pr.run_id,
-       rm.run_label,
-       pr.predictor_field,
-       ROUND(pr.quintile_spread_pp, 3) AS quintile_spread_pp,
-       pr.q1_n,
-       pr.q5_n,
-       CASE WHEN pr.quintile_spread_pp > 0 THEN 1 ELSE 0 END AS spread_positive
-FROM per_run_spread pr
-    LEFT JOIN enr.run_metadata rm USING (run_id)
-ORDER BY pr.predictor_field, rm.run_label, pr.run_id
+SELECT predictor_field,
+       runs_seen,
+       ROUND(sign_consistency_ratio, 3) AS sign_consistency_ratio,
+       ROUND(median_quintile_spread, 3) AS median_quintile_spread,
+       ROUND(mean_quintile_spread, 3) AS mean_quintile_spread,
+       ROUND(median_pearson, 4) AS median_pearson,
+       ROUND(rank_stability_score, 4) AS rank_stability_score
+FROM agg.cross_run_field_stability
+WHERE performance_field = '{DEFAULT_PERFORMANCE_TARGET}'
+ORDER BY ABS(rank_stability_score) DESC NULLS LAST,
+    predictor_field
 """
 
 
@@ -468,6 +419,7 @@ def _active_management_candidates_sql(
     weights: list[tuple[str, float, float]],
     min_signals: int,
     daily_run_id: str,
+    performance_field: str,
 ) -> str:
     escaped_run_id = daily_run_id.replace("'", "''")
     composite_sql = _bind_run_id(
@@ -483,16 +435,16 @@ WITH composite AS (
 hist AS (
     SELECT symbol,
            COUNT(*) AS n_days,
-           ROUND(AVG(fwd), 2) AS avg_fwd_pct,
-           ROUND(AVG(CASE WHEN fwd > 0 THEN 1.0 ELSE 0.0 END), 2) AS win_rate
+           ROUND(AVG(ret), 2) AS avg_ret_pct,
+           ROUND(AVG(CASE WHEN ret > 0 THEN 1.0 ELSE 0.0 END), 2) AS win_rate
     FROM (
-            SELECT cr.symbol,
-                   cr.close_forward_return_pct AS fwd
-            FROM cr.cross_run_close_returns cr
-                INNER JOIN enr.all_fields_rows a USING (run_id, symbol)
+            SELECT pr.symbol,
+                   a.{_quote_identifier(performance_field)} AS ret
+            FROM pr.period_boundary_returns pr
+                INNER JOIN enr.all_fields_rows a USING (symbol)
             WHERE TRY_CAST(a.market_cap_basic AS DOUBLE) >= {MIN_MCAP}
-              AND cr.close_forward_return_pct BETWEEN -25 AND 25
-              AND cr.close_price >= {MIN_CLOSE}
+              AND TRY_CAST(a.{_quote_identifier(performance_field)} AS DOUBLE) BETWEEN -100 AND 100
+              AND pr.start_close_price >= {MIN_CLOSE}
         ) x
     GROUP BY symbol
 ),
@@ -500,7 +452,7 @@ trim AS (
     SELECT symbol
     FROM hist
     WHERE n_days >= 8
-      AND avg_fwd_pct < -2
+      AND avg_ret_pct < -2
 ),
 playbook_a AS (
     SELECT symbol
@@ -526,7 +478,7 @@ SELECT c.symbol,
        c.close_fwd_fit_score,
        c.rank AS composite_rank,
        h.n_days,
-       h.avg_fwd_pct,
+       h.avg_ret_pct,
        h.win_rate,
        CASE WHEN pa.symbol IS NOT NULL THEN 1 ELSE 0 END AS playbook_a_fit,
        COALESCE(w.warning_flag_count, 0) AS warning_flag_count,
@@ -534,10 +486,10 @@ SELECT c.symbol,
            WHEN trim.symbol IS NOT NULL THEN 'trim_avoid'
            WHEN COALESCE(w.warning_flag_count, 0) >= 2 THEN 'warning_overlay'
            WHEN pa.symbol IS NOT NULL
-                AND COALESCE(h.avg_fwd_pct, 0) >= 1.5
+                AND COALESCE(h.avg_ret_pct, 0) >= 1.5
                 AND COALESCE(h.win_rate, 0) >= 0.60 THEN 'playbook_b_quality_drift'
            WHEN pa.symbol IS NOT NULL THEN 'playbook_a_vol_continuation'
-           WHEN COALESCE(h.avg_fwd_pct, 0) >= 1.5
+           WHEN COALESCE(h.avg_ret_pct, 0) >= 1.5
                 AND COALESCE(h.win_rate, 0) >= 0.60 THEN 'playbook_b_watch'
            ELSE 'composite_only'
        END AS active_mgmt_tier
@@ -550,10 +502,10 @@ WHERE trim.symbol IS NULL
   AND COALESCE(w.warning_flag_count, 0) < 2
   AND (
       pa.symbol IS NOT NULL
-      OR COALESCE(h.avg_fwd_pct, 0) >= 1.5
+      OR COALESCE(h.avg_ret_pct, 0) >= 1.5
   )
 ORDER BY c.close_fwd_fit_score DESC,
-    COALESCE(h.avg_fwd_pct, -999) DESC
+    COALESCE(h.avg_ret_pct, -999) DESC
 """
 
 
@@ -757,51 +709,51 @@ ORDER BY b.atrp_1w DESC,
 def _playbook_b_sql() -> str:
     return f"""
 WITH joined AS (
-    SELECT cr.symbol,
-           cr.close_forward_return_pct AS fwd
-    FROM cr.cross_run_close_returns cr
-        INNER JOIN enr.all_fields_rows a USING (run_id, symbol)
+    SELECT pr.symbol,
+           TRY_CAST(a.{_quote_identifier(DEFAULT_PERFORMANCE_TARGET)} AS DOUBLE) AS ret
+    FROM pr.period_boundary_returns pr
+        INNER JOIN enr.all_fields_rows a USING (symbol)
     WHERE TRY_CAST(a.market_cap_basic AS DOUBLE) >= {MIN_MCAP}
-      AND cr.close_forward_return_pct BETWEEN -25 AND 25
-      AND cr.close_price >= {MIN_CLOSE}
+      AND TRY_CAST(a.{_quote_identifier(DEFAULT_PERFORMANCE_TARGET)} AS DOUBLE) BETWEEN -100 AND 100
+      AND pr.start_close_price >= {MIN_CLOSE}
 )
 SELECT symbol,
        COUNT(*) AS n_days,
-       ROUND(AVG(fwd), 2) AS avg_fwd_pct,
-       ROUND(STDDEV(fwd), 2) AS stdev_pct,
-       ROUND(AVG(CASE WHEN fwd > 0 THEN 1.0 ELSE 0 END), 2) AS win_rate,
-       RANK() OVER (ORDER BY AVG(fwd) DESC) AS rank
+       ROUND(AVG(ret), 2) AS avg_period_ret_pct,
+       ROUND(STDDEV(ret), 2) AS stdev_pct,
+       ROUND(AVG(CASE WHEN ret > 0 THEN 1.0 ELSE 0 END), 2) AS win_rate,
+       RANK() OVER (ORDER BY AVG(ret) DESC) AS rank
 FROM joined
 GROUP BY symbol
 HAVING COUNT(*) >= 10
-   AND AVG(fwd) > 1.5
-   AND AVG(CASE WHEN fwd > 0 THEN 1.0 ELSE 0 END) >= 0.60
-ORDER BY avg_fwd_pct DESC
+   AND AVG(ret) > 1.5
+   AND AVG(CASE WHEN ret > 0 THEN 1.0 ELSE 0 END) >= 0.60
+ORDER BY avg_period_ret_pct DESC
 """
 
 
 def _trim_list_sql() -> str:
     return f"""
 WITH joined AS (
-    SELECT cr.symbol,
-           cr.close_forward_return_pct AS fwd
-    FROM cr.cross_run_close_returns cr
-        INNER JOIN enr.all_fields_rows a USING (run_id, symbol)
+    SELECT pr.symbol,
+           TRY_CAST(a.{_quote_identifier(DEFAULT_PERFORMANCE_TARGET)} AS DOUBLE) AS ret
+    FROM pr.period_boundary_returns pr
+        INNER JOIN enr.all_fields_rows a USING (symbol)
     WHERE TRY_CAST(a.market_cap_basic AS DOUBLE) >= {MIN_MCAP}
-      AND cr.close_forward_return_pct BETWEEN -25 AND 25
-      AND cr.close_price >= {MIN_CLOSE}
+      AND TRY_CAST(a.{_quote_identifier(DEFAULT_PERFORMANCE_TARGET)} AS DOUBLE) BETWEEN -100 AND 100
+      AND pr.start_close_price >= {MIN_CLOSE}
 )
 SELECT symbol,
        COUNT(*) AS n_days,
-       ROUND(AVG(fwd), 2) AS avg_fwd_pct,
-       ROUND(STDDEV(fwd), 2) AS stdev_pct,
-       ROUND(AVG(CASE WHEN fwd > 0 THEN 1.0 ELSE 0 END), 2) AS win_rate,
-       RANK() OVER (ORDER BY AVG(fwd) ASC) AS rank
+       ROUND(AVG(ret), 2) AS avg_period_ret_pct,
+       ROUND(STDDEV(ret), 2) AS stdev_pct,
+       ROUND(AVG(CASE WHEN ret > 0 THEN 1.0 ELSE 0 END), 2) AS win_rate,
+       RANK() OVER (ORDER BY AVG(ret) ASC) AS rank
 FROM joined
 GROUP BY symbol
 HAVING COUNT(*) >= 8
-   AND AVG(fwd) < -2
-ORDER BY avg_fwd_pct ASC
+   AND AVG(ret) < -2
+ORDER BY avg_period_ret_pct ASC
 """
 
 
@@ -832,15 +784,15 @@ base AS (
 ),
 hist AS (
     SELECT symbol,
-           ROUND(AVG(fwd), 2) AS avg_fwd_pct
+           ROUND(AVG(ret), 2) AS avg_ret_pct
     FROM (
-            SELECT cr.symbol,
-                   cr.close_forward_return_pct AS fwd
-            FROM cr.cross_run_close_returns cr
-                INNER JOIN enr.all_fields_rows a USING (run_id, symbol)
+            SELECT pr.symbol,
+                   TRY_CAST(a.{_quote_identifier(DEFAULT_PERFORMANCE_TARGET)} AS DOUBLE) AS ret
+            FROM pr.period_boundary_returns pr
+                INNER JOIN enr.all_fields_rows a USING (symbol)
             WHERE TRY_CAST(a.market_cap_basic AS DOUBLE) >= {MIN_MCAP}
-              AND cr.close_forward_return_pct BETWEEN -25 AND 25
-              AND cr.close_price >= {MIN_CLOSE}
+              AND TRY_CAST(a.{_quote_identifier(DEFAULT_PERFORMANCE_TARGET)} AS DOUBLE) BETWEEN -100 AND 100
+              AND pr.start_close_price >= {MIN_CLOSE}
         ) x
     GROUP BY symbol
     HAVING COUNT(*) >= 5
@@ -866,14 +818,14 @@ SELECT q.symbol,
        q.name,
        q.market,
        ROUND(q.close, 2) AS close,
-       h.avg_fwd_pct,
+       h.avg_ret_pct,
        q.stoch_k_1m,
        q.wr_1m,
        q.rec_ma_1m,
        (
            CASE WHEN q.stoch_q = 1 THEN 1 ELSE 0 END
            + CASE WHEN q.wr_q = 1 THEN 1 ELSE 0 END
-           + CASE WHEN q.rec_ma_q = 5 AND COALESCE(h.avg_fwd_pct, 0) < 0 THEN 1 ELSE 0 END
+           + CASE WHEN q.rec_ma_q = 5 AND COALESCE(h.avg_ret_pct, 0) < 0 THEN 1 ELSE 0 END
            + CASE WHEN q.oper_q = 5 THEN 1 ELSE 0 END
            + CASE WHEN q.ebitda_q = 5 THEN 1 ELSE 0 END
        ) AS warning_flag_count,
@@ -881,23 +833,23 @@ SELECT q.symbol,
            ORDER BY (
                CASE WHEN q.stoch_q = 1 THEN 1 ELSE 0 END
                + CASE WHEN q.wr_q = 1 THEN 1 ELSE 0 END
-               + CASE WHEN q.rec_ma_q = 5 AND COALESCE(h.avg_fwd_pct, 0) < 0 THEN 1 ELSE 0 END
+               + CASE WHEN q.rec_ma_q = 5 AND COALESCE(h.avg_ret_pct, 0) < 0 THEN 1 ELSE 0 END
                + CASE WHEN q.oper_q = 5 THEN 1 ELSE 0 END
                + CASE WHEN q.ebitda_q = 5 THEN 1 ELSE 0 END
            ) DESC,
-           COALESCE(h.avg_fwd_pct, 999) ASC
+           COALESCE(h.avg_ret_pct, 999) ASC
        ) AS rank
 FROM quintiles q
     LEFT JOIN hist h USING (symbol)
 WHERE (
     CASE WHEN q.stoch_q = 1 THEN 1 ELSE 0 END
     + CASE WHEN q.wr_q = 1 THEN 1 ELSE 0 END
-    + CASE WHEN q.rec_ma_q = 5 AND COALESCE(h.avg_fwd_pct, 0) < 0 THEN 1 ELSE 0 END
+    + CASE WHEN q.rec_ma_q = 5 AND COALESCE(h.avg_ret_pct, 0) < 0 THEN 1 ELSE 0 END
     + CASE WHEN q.oper_q = 5 THEN 1 ELSE 0 END
     + CASE WHEN q.ebitda_q = 5 THEN 1 ELSE 0 END
 ) >= 2
 ORDER BY warning_flag_count DESC,
-    COALESCE(h.avg_fwd_pct, 999) ASC
+    COALESCE(h.avg_ret_pct, 999) ASC
 """
 
 
@@ -950,31 +902,31 @@ ORDER BY predictor_value {order}
 def _playbook_a_realized_sql(source_day_label: str) -> str:
     return f"""
 WITH base AS (
-    SELECT cr.symbol,
-           cr.close_price,
-           cr.close_forward_return_pct AS fwd,
+    SELECT pr.symbol,
+           pr.start_close_price AS close_price,
+           TRY_CAST(a.{_quote_identifier(DEFAULT_PERFORMANCE_TARGET)} AS DOUBLE) AS ret,
            TRY_CAST(a."ATRP|1W" AS DOUBLE) AS atrp_1w,
            TRY_CAST(a.relative_volume AS DOUBLE) AS relvol,
            TRY_CAST(a."ADX-DI|5" AS DOUBLE) AS adx_di5
-    FROM cr.cross_run_close_returns cr
-        INNER JOIN enr.all_fields_rows a USING (run_id, symbol)
-    WHERE cr.source_day_label = '{source_day_label}'
+    FROM pr.period_boundary_returns pr
+        INNER JOIN enr.all_fields_rows a USING (symbol)
+    WHERE pr.start_day_label = '{source_day_label}'
       AND TRY_CAST(a.market_cap_basic AS DOUBLE) >= {MIN_MCAP}
-      AND cr.close_price >= {MIN_CLOSE}
+      AND pr.start_close_price >= {MIN_CLOSE}
 ),
 med AS (SELECT MEDIAN(atrp_1w) AS m FROM base)
 SELECT b.symbol,
        ROUND(b.close_price, 2) AS close_px,
-       ROUND(b.fwd, 2) AS realized_fwd_pct,
+       ROUND(b.ret, 2) AS realized_period_ret_pct,
        ROUND(b.atrp_1w, 2) AS atrp_1w,
        ROUND(b.relvol, 2) AS relative_volume,
        ROUND(b.adx_di5, 1) AS adx_di5,
-       RANK() OVER (ORDER BY b.fwd DESC) AS rank
+       RANK() OVER (ORDER BY b.ret DESC) AS rank
 FROM base b,
     med
 WHERE b.atrp_1w > med.m
   AND b.relvol > 1.5
-ORDER BY b.fwd DESC
+ORDER BY b.ret DESC
 """
 
 
@@ -1001,6 +953,10 @@ def _write_csv(path: Path, rows: list[tuple], columns: list[str]) -> None:
         writer.writerows(rows)
 
 
+def _safe_csv_name(value: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9_]+", "_", value).strip("_").lower() or "unknown"
+
+
 def _query_limited(
     con: duckdb.DuckDBPyConnection,
     sql: str,
@@ -1021,8 +977,16 @@ def _write_readme(
     run_root: Path,
     daily_db: Path,
     daily_run_id: str,
+    performance_target: str,
     outputs: list[str],
 ) -> None:
+    target_slug = _safe_csv_name(performance_target)
+    top_stable_csv = f"00_top_stable_{target_slug}_predictors.csv"
+    quintile_perf_csv = f"00_quintile_perf_by_advised_predictor_{target_slug}.csv"
+    quintile_spread_csv = f"00_quintile_spread_by_advised_predictor_{target_slug}.csv"
+    rolling_spread_csv = (
+        f"00_rolling_stability_by_advised_predictor_{target_slug}.csv"
+    )
     text = f"""# Predictor stock rankings — dd898100
 
 Generated by `scripts/run_close_forward_predictor_stock_rankings.py`.
@@ -1032,27 +996,29 @@ Generated by `scripts/run_close_forward_predictor_stock_rankings.py`.
 | Question | Target database | Alias / table |
 |----------|-----------------|---------------|
 | Cross-run predictor stability (which fields matter) | `{run_root.as_posix()}/aggregates/all_fields_pattern_aggregate.duckdb` | `cross_run_field_stability`, `per_run_patterns` |
-| Historical 7-day forward returns (26 May – 11 Jun) | `{run_root.as_posix()}/close_forward/close_returns/cross_run_close_returns.duckdb` | `cross_run_close_returns` |
-| Enriched scan rows joined to forward labels | `{run_root.as_posix()}/close_forward/close_forward_analysis_input.duckdb` | `all_fields_rows` (join on `run_id`, `symbol`) |
+| Whole-period boundary returns (start/end close) | `{run_root.as_posix()}/period_total/period_returns/period_boundary_returns.duckdb` | `period_boundary_returns` |
+| Enriched period rows joined to performance labels | `{run_root.as_posix()}/period_total/period_analysis_input.duckdb` | `all_fields_rows` (join on `symbol`) |
 | **Latest positioning (12 Jun — no forward label yet)** | `{daily_db.as_posix()}` | `all_fields_rows` where `run_id = '{daily_run_id}'` |
-| Realized Playbook A on a scored day | Attach **both** `cross_run_close_returns` + `close_forward_analysis_input` | filter `source_day_label = '11_06_2026'` |
+| Realized Playbook A on a scored day | Attach `period_boundary_returns` + `period_analysis_input` | filter `start_day_label = '11_06_2026'` |
 
-**Do not** use `close_forward_analysis_input.duckdb` alone for live scouting — it ends at 11 Jun scored rows.
-For current screens use the **12 Jun daily DuckDB**. For drift / trim lists use **cross_run_close_returns**.
+**Do not** use `period_analysis_input.duckdb` alone for live scouting — it is a pooled period snapshot.
+For current screens use the **12 Jun daily DuckDB**. For drift / trim lists use **period_boundary_returns**.
 
 Unlimited SQL replays live in:
 `sql_connections_space/tradingview_all_fields_pattern_analysis.session.sql`
-section `[CF DD898100]` (remove `LIMIT` clauses as needed).
+section `[PERIOD DD898100]` (remove `LIMIT` clauses as needed).
 
 ## Indicator / correlation CSVs (`indicator_perf/`)
 
-Use these to chart TOP predictors and verify quintile forward-return behavior yourself:
+Use these to chart top predictors and verify quintile period-return behavior:
 
-- `00_top_stable_close_forward_predictors.csv` — ranked stable fields (no gap/change noise)
+- `{top_stable_csv}` — ranked stable fields (no gap/change noise)
 - `00_advised_active_manager_predictor_profile.csv` — composite weights + Playbook A/B/C advice tags
-- `00_quintile_fwd_perf_by_advised_predictor.csv` — pooled avg 7d fwd return by quintile (long format; pivot in Excel)
-- `00_quintile_spread_by_advised_predictor.csv` — Q5−Q1 spread vs aggregate stability metrics
-- `00_per_run_quintile_spread_by_advised_predictor.csv` — per-scan-day spread (sign-consistency lens)
+- `{quintile_perf_csv}` — pooled average period return by quintile (long format; pivot in Excel)
+- `{quintile_spread_csv}` — Q5−Q1 spread vs aggregate stability metrics
+- `{rolling_spread_csv}` — rolling-window stability spread summary
+
+Performance target used by this run: `{performance_target}`.
 
 Active-management stock overlay: `07_active_management_candidates_top*.csv`
 (composite fit + Playbook A/B filters, excluding trim list and warning overlay).
@@ -1084,18 +1050,40 @@ def run_rankings(
     out_dir.mkdir(parents=True, exist_ok=True)
     by_predictor_dir.mkdir(parents=True, exist_ok=True)
 
+    tracking_json_path = run_root / "_scan_period_close_forward_tracking.json"
+    tracking_payload = {}
+    if tracking_json_path.exists():
+        tracking_payload = json.loads(tracking_json_path.read_text(encoding="utf-8"))
+    performance_target = str(
+        tracking_payload.get("performance_target") or DEFAULT_PERFORMANCE_TARGET
+    )
+    period_total_root = run_root / "period_total"
     agg_path = run_root / "aggregates/all_fields_pattern_aggregate.duckdb"
-    enr_path = run_root / "close_forward/close_forward_analysis_input.duckdb"
-    cr_path = run_root / "close_forward/close_returns/cross_run_close_returns.duckdb"
+    period_total_result = tracking_payload.get("period_total_result") or {}
+    period_input_result = period_total_result.get("period_input_result") or {}
+    period_returns_result = period_total_result.get("period_returns_result") or {}
+    enr_path = Path(
+        period_input_result.get("database_path")
+        or period_total_root / "period_analysis_input.duckdb"
+    )
+    pr_path = Path(
+        period_returns_result.get("database_path")
+        or period_total_root / "period_returns" / "period_boundary_returns.duckdb"
+    )
+
+    _require_path(agg_path, label="Aggregate stability database")
+    _require_path(enr_path, label="Period analysis input database")
+    _require_path(pr_path, label="Period boundary returns database")
+    _require_path(daily_db, label="Daily all-fields database")
 
     con = duckdb.connect()
     _attach(con, "agg", agg_path)
     _attach(con, "enr", enr_path)
-    _attach(con, "cr", cr_path)
+    _attach(con, "pr", pr_path)
     _attach(con, "day", daily_db)
 
     all_predictors = BULLISH_PREDICTORS + BEARISH_WARNING_PREDICTORS
-    weights = _fetch_predictor_weights(con, all_predictors)
+    weights = _fetch_predictor_weights(con, all_predictors, performance_target)
     if not weights:
         raise RuntimeError("No predictor weights found in aggregate DB.")
 
@@ -1105,14 +1093,22 @@ def run_rankings(
     indicator_dir.mkdir(parents=True, exist_ok=True)
 
     columns, rows = _query_all(
-        con, _top_stable_predictors_sql(top_n=max(top_n, 60)), None
+        con,
+        _top_stable_predictors_sql(
+            top_n=max(top_n, 60), performance_target=performance_target
+        ),
+        None,
     )
-    path = indicator_dir / "00_top_stable_close_forward_predictors.csv"
+    path = indicator_dir / f"00_top_stable_{_safe_csv_name(performance_target)}_predictors.csv"
     _write_csv(path, rows, columns)
     outputs["top_stable_predictors"] = path
 
     columns, rows = _query_all(
-        con, _advised_predictor_profile_sql(weights), None
+        con,
+        _advised_predictor_profile_sql(
+            weights, performance_target=performance_target
+        ),
+        None,
     )
     path = indicator_dir / "00_advised_active_manager_predictor_profile.csv"
     _write_csv(path, rows, columns)
@@ -1120,23 +1116,31 @@ def run_rankings(
 
     advised_fields = [field for field, _, _ in weights]
     columns, rows = _query_all(
-        con, _quintile_fwd_perf_pooled_sql(advised_fields), None
+        con,
+        _quintile_fwd_perf_pooled_sql(
+            advised_fields,
+            performance_field=performance_target,
+        ),
+        None,
     )
-    path = indicator_dir / "00_quintile_fwd_perf_by_advised_predictor.csv"
+    path = indicator_dir / f"00_quintile_perf_by_advised_predictor_{_safe_csv_name(performance_target)}.csv"
     _write_csv(path, rows, columns)
     outputs["quintile_fwd_perf"] = path
 
     columns, rows = _query_all(
-        con, _quintile_spread_summary_sql(advised_fields), None
+        con,
+        _quintile_spread_summary_sql(
+            advised_fields,
+            performance_field=performance_target,
+        ),
+        None,
     )
-    path = indicator_dir / "00_quintile_spread_by_advised_predictor.csv"
+    path = indicator_dir / f"00_quintile_spread_by_advised_predictor_{_safe_csv_name(performance_target)}.csv"
     _write_csv(path, rows, columns)
     outputs["quintile_spread_summary"] = path
 
-    columns, rows = _query_all(
-        con, _per_run_quintile_spread_sql(advised_fields), None
-    )
-    path = indicator_dir / "00_per_run_quintile_spread_by_advised_predictor.csv"
+    columns, rows = _query_all(con, _per_run_quintile_spread_sql(), None)
+    path = indicator_dir / f"00_rolling_stability_by_advised_predictor_{_safe_csv_name(performance_target)}.csv"
     _write_csv(path, rows, columns)
     outputs["per_run_quintile_spread"] = path
 
@@ -1184,6 +1188,7 @@ def run_rankings(
             weights=weights,
             min_signals=min_signals,
             daily_run_id=daily_run_id,
+            performance_field=performance_target,
         ),
         None,
         top_n,
@@ -1232,6 +1237,7 @@ def run_rankings(
         run_root=run_root,
         daily_db=daily_db,
         daily_run_id=daily_run_id,
+        performance_target=performance_target,
         outputs=[p.name for p in outputs.values()] + ["_manifest.json"],
     )
 
@@ -1241,7 +1247,7 @@ def run_rankings(
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Export close-forward predictor stock rankings for a tracking run."
+        description="Export period-total predictor stock rankings for a tracking run."
     )
     parser.add_argument(
         "--run-root",
@@ -1263,7 +1269,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--latest-scored-day",
         default=DEFAULT_LATEST_SCORED_DAY,
-        help="Last source_day_label with realized forward returns",
+        help="Last source_day_label with realized period labels",
     )
     parser.add_argument(
         "--top-n",

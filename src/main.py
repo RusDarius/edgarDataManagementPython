@@ -430,7 +430,9 @@ def main():
     #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2,
     # )
 
-    # # Module2 orthogonal outlook scoring (separate from v1 move-prediction profiles)
+    # Module2 orthogonal outlook scoring (separate from v1 move-prediction profiles).
+    # Output guide: documentation/prediction_module2_run_output_guide.md
+    # Run output: logs/tradingview_analysis/prediction_module2/duckdb_runs/iso_year=.../week=.../runs/<run_id>/
     # move_prediction_scan_response = (
     #     TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
     #         min_market_cap_usd=1_000_000_000,
@@ -466,29 +468,33 @@ def main():
     #     performance_fields=["Perf.1M", "Perf.3M"],
     # )
 
-    # --- Scan-period close-forward predictor tracking (close price perf ONLY) ---
-    # Pools all eligible fields across the period; performance target is close_forward_return_pct.
+    # --- Scan-period predictor tracking (whole-period close performance) ---
+    # Pools all eligible fields across the period; performance target is period_return_pct.
+    # Predictors are anchored at period start and correlated against start->end close return.
+    # Progression exports:
+    #   progression/period_symbol_progression.parquet
+    #   progression/period_universe_progression.csv
+    #   progression/period_field_quintile_progression.csv
     # Fast pilot option for faster runtime:
     # - narrow date window
     # - explicit predictor_fields subset (20-50 fields)
     # - stricter gates (min_fill_rate=0.20, min_pair_n=50)
-    # run_scan_period_close_forward_predictor_tracking(
-    #     start_day_label="29_03_2026",
-    #     end_day_label="12_06_2026",
-    #     close_forward_days=7,
-    #     min_runs_for_stability=3,
-    #     max_parallel_runs=4,
-    #     duckdb_threads=6,
-    #     field_batch_size=100,
-    #     max_parallel_chunks=1,
-    #     duckdb_memory_limit="9GB",
-    #     max_system_memory_gb=30.0,
-    #     memory_reserve_gb=4.0,
-    #     universe_filter={
-    #         **market_cap_basic_universe_filter(500_000_000),
-    #         **preferred_markets_universe_filter(PREFERRED_MARKETS),
-    #     },
-    # )
+    run_scan_period_close_forward_predictor_tracking(
+        start_day_label="29_03_2026",
+        end_day_label="15_06_2026",
+        min_runs_for_stability=3,
+        max_parallel_runs=4,
+        duckdb_threads=6,
+        field_batch_size=120,
+        max_parallel_chunks=1,
+        duckdb_memory_limit="10GB",
+        max_system_memory_gb=30.0,
+        memory_reserve_gb=4.0,
+        universe_filter={
+            **market_cap_basic_universe_filter(500_000_000),
+            **preferred_markets_universe_filter(PREFERRED_MARKETS),
+        },
+    )
 
     # # --- Single day (smoke / one snapshot) ---
     # analyze_all_fields_run_performance_patterns(

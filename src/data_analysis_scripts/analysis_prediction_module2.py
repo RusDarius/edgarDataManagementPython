@@ -22,6 +22,7 @@ from data_analysis_scripts.prediction_module2_scoring import (
 )
 from data_analysis_scripts.trading_view_move_prediction_analysis import (
     _enrich_with_peer_metrics,
+    _get_company_name,
 )
 from generic_utils.log_to_files_util import log_to_file, log_rows_to_csv
 
@@ -145,7 +146,7 @@ def _build_profile_csv_rows(
 ) -> tuple[list[str], list[list[str]]]:
     headers = [
         "symbol",
-        "name",
+        "company_name",
         "score",
         "hard_gate_passed",
         "soft_gate_multiplier",
@@ -156,7 +157,7 @@ def _build_profile_csv_rows(
     for row in ranked_rows:
         csv_row = [
             str(row.get("symbol") or ""),
-            str(row.get("name") or ""),
+            _get_company_name(dict(row) if isinstance(row, Mapping) else row),
             "" if row.get("score") is None else f"{float(row['score']):.4f}",
             str(bool(row.get("hard_gate_passed"))),
             "" if row.get("soft_gate_multiplier") is None else f"{float(row['soft_gate_multiplier']):.4f}",
@@ -190,7 +191,7 @@ def _write_profile_log(
     log_to_file(log_path, "")
     log_to_file(
         log_path,
-        f"{'Rank':<5} {'Symbol':<18} {'Score':>8} {'Gate':>6} {'Soft':>6} {'Pillars'}",
+        f"{'Rank':<5} {'Symbol':<18} {'Company':<32} {'Score':>8} {'Gate':>6} {'Soft':>6} {'Pillars'}",
     )
     for index, row in enumerate(ranked_rows[:TOP_SECTION_ROWS], start=1):
         pillar_scores = row.get("pillar_scores") or {}
@@ -199,10 +200,12 @@ def _write_profile_log(
             for name in profile.pillars.keys()
             if pillar_scores.get(name) is not None
         )
+        company_name = str(row.get("company_name") or row.get("name") or "")
         log_to_file(
             log_path,
             (
                 f"{index:<5} {str(row.get('symbol') or ''):<18} "
+                f"{company_name[:32]:<32} "
                 f"{float(row.get('score') or 0.0):>8.3f} "
                 f"{str(bool(row.get('hard_gate_passed'))):>6} "
                 f"{float(row.get('soft_gate_multiplier') or 0.0):>6.2f} "
@@ -305,11 +308,11 @@ def run_module2_profile_suite(
     consensus_csv = run_output_dir / "module2__consensus.csv"
     log_rows_to_csv(
         consensus_csv,
-        ["symbol", "name", "horizon_name", "consensus_score", "coverage", "family_scores_json"],
+        ["symbol", "company_name", "horizon_name", "consensus_score", "coverage", "family_scores_json"],
         [
             [
                 str(row.get("symbol") or ""),
-                str(row.get("name") or ""),
+                str(row.get("company_name") or row.get("name") or ""),
                 str(row.get("horizon_name") or ""),
                 f"{float(row['consensus_score']):.4f}",
                 f"{float(row['coverage']):.4f}",
@@ -358,6 +361,58 @@ def run_module2_profile_suite(
     }
 
 
+def _ensure_module2_duckdb_schema(connection: Any) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS module2_run_metadata (
+            run_id VARCHAR PRIMARY KEY,
+            created_at_utc TIMESTAMP,
+            suite_id VARCHAR,
+            suite_version VARCHAR,
+            suite_path VARCHAR,
+            scan_data_count BIGINT,
+            consensus_mode VARCHAR,
+            run_output_dir VARCHAR,
+            overlap_report_path VARCHAR
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS module2_profile_scores (
+            run_id VARCHAR,
+            profile_id VARCHAR,
+            outlook_family VARCHAR,
+            symbol VARCHAR,
+            company_name VARCHAR,
+            score DOUBLE,
+            hard_gate_passed BOOLEAN,
+            soft_gate_multiplier DOUBLE,
+            pillar_scores_json VARCHAR
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS module2_consensus_scores (
+            run_id VARCHAR,
+            symbol VARCHAR,
+            company_name VARCHAR,
+            horizon_name VARCHAR,
+            consensus_score DOUBLE,
+            coverage DOUBLE,
+            family_scores_json VARCHAR
+        )
+        """
+    )
+    connection.execute(
+        "ALTER TABLE module2_profile_scores ADD COLUMN IF NOT EXISTS company_name VARCHAR"
+    )
+    connection.execute(
+        "ALTER TABLE module2_consensus_scores ADD COLUMN IF NOT EXISTS company_name VARCHAR"
+    )
+
+
 def run_module2_suite_duckdb(
     scan_data: list[dict[str, Any]] | Mapping[str, Any],
     *,
@@ -402,54 +457,24 @@ def run_module2_suite_duckdb(
     run_id = result["run_id"]
     suite = resolve_module2_profile_suite(profile_suite_path)
     with open_move_prediction_duckdb_connection(resolved_database_path) as connection:
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS module2_run_metadata (
-                run_id VARCHAR PRIMARY KEY,
-                created_at_utc TIMESTAMP,
-                suite_id VARCHAR,
-                suite_version VARCHAR,
-                suite_path VARCHAR,
-                scan_data_count BIGINT,
-                consensus_mode VARCHAR,
-                run_output_dir VARCHAR,
-                overlap_report_path VARCHAR
-            )
-            """
-        )
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS module2_profile_scores (
-                run_id VARCHAR,
-                profile_id VARCHAR,
-                outlook_family VARCHAR,
-                symbol VARCHAR,
-                score DOUBLE,
-                hard_gate_passed BOOLEAN,
-                soft_gate_multiplier DOUBLE,
-                pillar_scores_json VARCHAR
-            )
-            """
-        )
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS module2_consensus_scores (
-                run_id VARCHAR,
-                symbol VARCHAR,
-                horizon_name VARCHAR,
-                consensus_score DOUBLE,
-                coverage DOUBLE,
-                family_scores_json VARCHAR
-            )
-            """
-        )
+        _ensure_module2_duckdb_schema(connection)
         connection.execute("DELETE FROM module2_run_metadata WHERE run_id = ?", [run_id])
         connection.execute("DELETE FROM module2_profile_scores WHERE run_id = ?", [run_id])
         connection.execute("DELETE FROM module2_consensus_scores WHERE run_id = ?", [run_id])
 
         connection.execute(
             """
-            INSERT INTO module2_run_metadata VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO module2_run_metadata (
+                run_id,
+                created_at_utc,
+                suite_id,
+                suite_version,
+                suite_path,
+                scan_data_count,
+                consensus_mode,
+                run_output_dir,
+                overlap_report_path
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 run_id,
@@ -480,13 +505,24 @@ def run_module2_suite_duckdb(
             for row in scored_rows:
                 connection.execute(
                     """
-                    INSERT INTO module2_profile_scores VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO module2_profile_scores (
+                        run_id,
+                        profile_id,
+                        outlook_family,
+                        symbol,
+                        company_name,
+                        score,
+                        hard_gate_passed,
+                        soft_gate_multiplier,
+                        pillar_scores_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     [
                         run_id,
                         profile_name,
                         profile.outlook_family,
                         row.get("symbol"),
+                        row.get("company_name") or row.get("name"),
                         row.get("score"),
                         bool(row.get("hard_gate_passed")),
                         row.get("soft_gate_multiplier"),
@@ -497,11 +533,20 @@ def run_module2_suite_duckdb(
         for row in result.get("consensus_top") or []:
             connection.execute(
                 """
-                INSERT INTO module2_consensus_scores VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO module2_consensus_scores (
+                    run_id,
+                    symbol,
+                    company_name,
+                    horizon_name,
+                    consensus_score,
+                    coverage,
+                    family_scores_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     run_id,
                     row.get("symbol"),
+                    row.get("company_name") or row.get("name"),
                     row.get("horizon_name"),
                     row.get("consensus_score"),
                     row.get("coverage"),
