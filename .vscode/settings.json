@@ -73,6 +73,13 @@
             "database": "${workspaceFolder:edgarDataManagementPython}/logs/tradingview_analysis/trading_view_all_fields_data/pattern_analysis/aggregates/close_forward_pattern_08jun_12jun2026_20260614_20h56mUTC_a139a62a/close_forward_analysis_input.duckdb",
             "name": "all_fields_pattern_aggregate.duckdbv1",
             "group": "2026_all_fields_analysis"
+        },
+        {
+            "previewLimit": 50,
+            "driver": "DuckDB",
+            "name": "pedict_analysis_week25",
+            "group": "2026",
+            "database": "${workspaceFolder:edgarDataManagementPython}/logs/tradingview_analysis/prediction_analysis/duckdb_runs/iso_year=2026/week=25/move_prediction_2026_W25.duckdb"
         }
     ],
     "python.analysis.extraPaths": [

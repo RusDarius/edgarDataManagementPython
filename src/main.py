@@ -1,5 +1,6 @@
 from pathlib import Path
 from datetime import datetime, timezone
+import json
 import uuid
 
 from constants.trading_view_constants import (
@@ -30,6 +31,13 @@ from data_analysis_scripts.trading_view_move_prediction_batch_pattern_analysis i
 from data_analysis_scripts.trading_view_move_prediction_multi_run_pool_aggregator import (
     run_move_prediction_run_pool_aggregation,
 )
+from data_analysis_scripts.trading_view_backwards_prediction_analysis import (
+    AnchorSpec,
+    run_backwards_prediction_analysis,
+)
+from data_analysis_scripts.trading_view_backwards_prediction_scout_report import (
+    run_backwards_prediction_scout_report,
+)
 from data_analysis_scripts.trading_view_move_prediction_pool_analyzer import (
     analyze_pool_database,
     export_analysis_reports,
@@ -49,6 +57,12 @@ from data_analysis_scripts.trading_view_all_fields_metric_pattern_analyzer impor
 )
 from data_analysis_scripts.trading_view_priceperf_analysis import (
     analyze_global_price_performance,
+)
+from data_analysis_scripts.trading_view_price_driven_score_analysis import (
+    run_price_driven_score_analysis_duckdb,
+)
+from data_analysis_scripts.trading_view_holdings_scoring_analysis import (
+    run_holdings_scoring_analysis,
 )
 from data_analysis_scripts.trading_view_move_prediction_analysis import (
     run_full_analysis_suite,
@@ -389,77 +403,60 @@ def main():
     #     },
     # )
 
-    # run_safety_core_scan(
-    #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_safety_core(
-    #         min_market_cap_usd=1_000_000_000,
-    #     ).get("data", []),
-    #     min_market_cap_usd=1_000_000_000,
+    # # Holdings scoring: merge configured current holdings with latest move-prediction run.
+    # # Output: logs/tradingview_analysis/holdings_scoring_analysis/runs/<run_id>/
+    # #   holdings_scoring__shortlist.log  — human-readable portfolio shortlist
+    # run_holdings_scoring_analysis(
+    #     holdings_config_path=PROJECT_ROOT
+    #     / "config"
+    #     / "holdings_scoring"
+    #     / "current_holdings.json",
     # )
 
-    # analyze_ev_ebitda_deviation(
-    #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_by_industry(
-    #         min_market_cap_usd=1_000_000_000,
-    #         industries=[TRADING_VIEW_INDUSTRIES.HOTELS_RESORTS_CRUISE_LINES],
-    #     ).get("data", []),
-    #     industries=[TRADING_VIEW_INDUSTRIES.HOTELS_RESORTS_CRUISE_LINES],
-    # )
+    # # # # # Model Analysis scan with duckdb storage solution
+    move_prediction_scan_response = (
+        TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+            min_market_cap_usd=500_000_000,
+            markets=PREFERRED_MARKETS,
+        )
+    )
+    # Default (omit profile_suite_path): built-in 10-profile baseline — see DEFAULT_MOVE_PREDICTION_PROFILE_SUITE.
+    # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3
+    # Legacy 17-profile suite: MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
+    # Realigned baseline (11 lenses): MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
+    # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
+    base_duckdb_result = run_full_analysis_suite_duckdb(
+        scan_data=move_prediction_scan_response,
+        min_market_cap_usd=500_000_000,
+        include_blind_spot_sections=True,
+        profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+        conviction_mode_config_path=CONVICTION_MODE_CONFIG,
+        defer_conviction_to_earnings=True,
+    )
+    run_full_analysis_suite_with_earnings_priority_duckdb(
+        scan_data=move_prediction_scan_response,
+        min_market_cap_usd=500_000_000,
+        include_blind_spot_sections=True,
+        base_result=base_duckdb_result,
+        profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+        conviction_mode_config_path=CONVICTION_MODE_CONFIG,
+    )
 
-    # Replay the current model against prior all-fields CSV exports (legacy CSV
-    # output path). The runner expects each dated folder to contain
-    # tradingview_global_all_tdfields_*.csv and writes profile/horizon/date
-    # snapshots under prediction_analysis/raw_csv_backscan.
-    #
-    # run_full_analysis_suite_from_raw_csv_folders(
-    #     raw_data_folders=[
-    #         Path(
-    #             r"D:\FinanceProjects\edgarDataManagementPython\logs\tradingview_analysis\trading_view_all_fields_data\01_04_2026"
-    #         ),
-    #     ],
-    #     min_market_cap_usd=1_000_000_000,
-    #     include_blind_spot_sections=False,
-    # )
-
-    # # # # Model Analysis scan with duckdb storage solution
-    # move_prediction_scan_response = (
-    #     TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-    #         min_market_cap_usd=1_000_000_000,
-    #         markets=PREFERRED_MARKETS,
-    #     )
-    # )
-    # # Default (omit profile_suite_path): built-in 10-profile baseline — see DEFAULT_MOVE_PREDICTION_PROFILE_SUITE.
-    # # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3
-    # # Legacy 17-profile suite: MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
-    # # Realigned baseline (11 lenses): MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
-    # # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
-    # base_duckdb_result = run_full_analysis_suite_duckdb(
+    # # Price-driven decile analysis: bucket by change / Perf.5D / Perf.1M, score profiles,
+    # # surface upward-move opportunities in worst performers. Output:
+    # # logs/tradingview_analysis/prediction_analysis/price_driven_score_analysis/duckdb_runs/...
+    # run_price_driven_score_analysis_duckdb(
     #     scan_data=move_prediction_scan_response,
-    #     min_market_cap_usd=1_000_000_000,
-    #     include_blind_spot_sections=True,
+    #     min_market_cap_usd=500_000_000,
     #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
-    #     conviction_mode_config_path=CONVICTION_MODE_CONFIG,
-    #     defer_conviction_to_earnings=True,
-    # )
-    # run_full_analysis_suite_with_earnings_priority_duckdb(
-    #     scan_data=move_prediction_scan_response,
-    #     min_market_cap_usd=1_000_000_000,
-    #     include_blind_spot_sections=True,
-    #     base_result=base_duckdb_result,
-    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
-    #     conviction_mode_config_path=CONVICTION_MODE_CONFIG,
     # )
 
-    # Module2 orthogonal outlook scoring (separate from v1 move-prediction profiles).
-    # Output guide: documentation/prediction_module2_run_output_guide.md
-    # Run output: logs/tradingview_analysis/prediction_module2/duckdb_runs/iso_year=.../week=.../runs/<run_id>/
-    # move_prediction_scan_response = (
-    #     TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-    #         min_market_cap_usd=1_000_000_000,
-    #         markets=PREFERRED_MARKETS,
-    #     )
-    # )
+    # # Module2 orthogonal outlook scoring (separate from v1 move-prediction profiles).
+    # # Output guide: documentation/prediction_module2_run_output_guide.md
+    # # Run output: logs/tradingview_analysis/prediction_module2/duckdb_runs/iso_year=.../week=.../runs/<run_id>/
     # run_module2_suite_duckdb(
     #     scan_data=move_prediction_scan_response,
-    #     min_market_cap_usd=1_000_000_000,
+    #     min_market_cap_usd=500_000_000,
     #     profile_suite_path=PREDICTION_MODULE2_SUITE_ACTIVE_MANAGER_V1,
     # )
 
@@ -560,42 +557,6 @@ def main():
     #     close_forward_days=40,
     # )
 
-    # run_full_analysis_suite(
-    #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-    #         industries=[TRADING_VIEW_INDUSTRIES.INFORMATION_TECHNOLOGY_SERVICES],
-    #         min_market_cap_usd=1_000_000_000,
-    #         markets=PREFERRED_MARKETS,
-    #     ).get("data", []),
-    #     min_market_cap_usd=1_000_000_000,
-    #     include_blind_spot_sections=True,
-    #     industries=[TRADING_VIEW_INDUSTRIES.INFORMATION_TECHNOLOGY_SERVICES],
-    # )
-
-    # # RUN SUITE DAILY BELOW - old CSV format - will try to move to the DuckDB version
-    # run_full_analysis_suite(
-    #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-    #         min_market_cap_usd=1_000_000_000,
-    #         markets=PREFERRED_MARKETS,
-    #     ).get("data", []),
-    #     min_market_cap_usd=1_000_000_000,
-    #     include_blind_spot_sections=True,
-    # )
-
-    # # Earnings-priority variant: same per-profile + consensus analysis as the
-    # # standard full analysis suite, plus an extra report ordering names
-    # # chronologically by upcoming earnings (catalyst-time view). Uses the
-    # # earnings-enriched scan so the next-earnings columns are populated.
-    # run_full_analysis_suite_with_earnings_priority(
-    #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction_with_earnings(
-    #         min_market_cap_usd=1_000_000_000,
-    #         markets=PREFERRED_MARKETS,
-    #     ).get(
-    #         "data", []
-    #     ),
-    #     min_market_cap_usd=1_000_000_000,
-    #     include_blind_spot_sections=True,
-    # )
-
     # run_targets_scan(
     #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
     #         min_market_cap_usd=1_000_000_000,
@@ -650,7 +611,7 @@ def main():
     # )
     # print(load_result)
 
-    # Step 2: Open dated positions sized by money input.
+    # # Step 2: Open dated positions sized by money input.
     # tracker = PortfolioTracker("Demo1", currency="USD")
     # tracker.add_holding_by_amount(
     #     internal_id=1,
@@ -695,6 +656,38 @@ def main():
     #     prefer_parquet_inputs=True,
     # )
     # print(result["database_path"])
+
+    # Compare current move-prediction scores vs historical anchor runs
+    # with MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3.open(encoding="utf-8") as handle:
+    #     backwards_profiles = json.load(handle)["profile_names"]
+
+    # backwards_result = run_backwards_prediction_analysis(
+    #     anchors=[
+    #         AnchorSpec.preset("yesterday"),
+    #         AnchorSpec.preset("last_week"),
+    #         AnchorSpec.preset("last_month"),
+    #         AnchorSpec.preset("oldest"),
+    #     ],
+    #     include_profiles=backwards_profiles,
+    #     include_consensus=True,
+    #     include_components=True,
+    #     min_scan_data_count=3000,
+    # )
+    # print(backwards_result["database_path"])
+    # print(Path(backwards_result["overview_log"]).read_text(encoding="utf-8"))
+
+    # scout_result = run_backwards_prediction_scout_report(
+    #     database_path=backwards_result["database_path"],
+    #     profile_name=["breakout_long_v1", "value_recovery_v2"],
+    #     horizon_name=["days", "weeks"],
+    #     primary_anchor_name="last_week",
+    #     top_n=50,
+    # )
+    # if scout_result["combination_count"] == 1:
+    #     print(scout_result["highlights_log"])
+    # else:
+    #     for combo in scout_result["results"]:
+    #         print(combo["highlights_log"])
 
     # # Analyze the pooled database for top profiles and stock rankings
     # # Option 1: By pool ID pattern

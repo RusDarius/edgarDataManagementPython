@@ -854,3 +854,137 @@ ORDER BY CASE
     ras_change_corr DESC NULLS LAST,
     top_minus_bottom_decile_spread DESC NULLS LAST,
     profile_name;
+-- @block
+-- Latest run (or given run): industry rollup by industry + sector + profile + horizon.
+-- Comment out entire MEAN or AVG sections below to keep only one aggregate style.
+-- Variant A: latest run — ACTIVE. Variant B: swap latest_run for commented target_run.
+-- Optional filters in industry_detail WHERE: sector and/or profile_name.
+WITH latest_run AS (
+    SELECT run_id,
+        created_at_utc,
+        run_date_utc,
+        iso_year,
+        iso_week
+    FROM run_metadata
+    ORDER BY created_at_utc DESC
+    LIMIT 1
+), -- target_run AS (
+--     SELECT run_id,
+--         created_at_utc,
+--         run_date_utc,
+--         iso_year,
+--         iso_week
+--     FROM run_metadata
+--     WHERE run_id = 'move_prediction_20260616_1515_utc_8b6d74b8'
+-- ),
+symbol_tape AS (
+    SELECT lr.run_id,
+        lr.created_at_utc AS run_created_at_utc,
+        lr.run_date_utc,
+        lr.iso_year,
+        lr.iso_week,
+        r.symbol,
+        MAX(r.sector) AS sector,
+        MAX(r.industry) AS industry,
+        MAX(TRY_CAST(r.change AS DOUBLE)) AS change_pct_today,
+        MAX(TRY_CAST(r."Perf.W" AS DOUBLE)) AS perf_w_pct,
+        MAX(TRY_CAST(r."Perf.1M" AS DOUBLE)) AS perf_1m_pct,
+        MAX(TRY_CAST(r."Perf.3M" AS DOUBLE)) AS perf_3m_pct,
+        MAX(TRY_CAST(r."Perf.YTD" AS DOUBLE)) AS perf_ytd_pct,
+        MAX(TRY_CAST(r."Perf.Y" AS DOUBLE)) AS perf_y_pct,
+        MAX(TRY_CAST(r."Perf.5Y" AS DOUBLE)) AS perf_5y_pct
+    FROM latest_run lr
+        INNER JOIN raw_scan_rows r ON r.run_id = lr.run_id
+    GROUP BY lr.run_id,
+        lr.created_at_utc,
+        lr.run_date_utc,
+        lr.iso_year,
+        lr.iso_week,
+        r.symbol
+),
+industry_detail AS (
+    SELECT t.run_created_at_utc,
+        t.run_date_utc,
+        t.iso_year,
+        t.iso_week,
+        h.run_id,
+        t.industry,
+        t.sector,
+        h.symbol,
+        h.profile_name,
+        h.horizon_name,
+        h.score,
+        h.risk_adjusted_score,
+        h.confidence,
+        h.coverage,
+        t.change_pct_today,
+        t.perf_w_pct,
+        t.perf_1m_pct,
+        t.perf_3m_pct,
+        t.perf_ytd_pct,
+        t.perf_y_pct,
+        t.perf_5y_pct
+    FROM profile_horizon_scores h
+        INNER JOIN latest_run lr ON h.run_id = lr.run_id
+        INNER JOIN symbol_tape t ON t.run_id = h.run_id
+        AND (
+            t.symbol = h.symbol
+            OR t.symbol LIKE '%:' || h.symbol
+            OR h.symbol LIKE '%:' || t.symbol
+        )
+    WHERE COALESCE(TRIM(t.industry), '') <> '' -- AND t.sector = 'Technology'
+        -- AND h.profile_name = 'breakout_long'
+)
+SELECT run_created_at_utc,
+    run_date_utc,
+    run_id,
+    industry,
+    sector,
+    profile_name,
+    horizon_name,
+    COUNT(DISTINCT symbol) AS symbols_in_industry,
+    -- --- MEDIAN: model scores ---
+    MEDIAN(score) AS median_score,
+    MEDIAN(risk_adjusted_score) AS median_risk_adjusted_score,
+    MEDIAN(confidence) AS median_confidence,
+    MEDIAN(coverage) AS median_coverage,
+    -- --- MEDIAN: tape returns ---
+    MEDIAN(change_pct_today) AS median_return_today,
+    MEDIAN(perf_w_pct) AS median_return_w,
+    MEDIAN(perf_1m_pct) AS median_return_1m,
+    MEDIAN(perf_3m_pct) AS median_return_3m,
+    MEDIAN(perf_ytd_pct) AS median_return_ytd,
+    MEDIAN(perf_y_pct) AS median_return_y,
+    MEDIAN(perf_5y_pct) AS median_return_5y -- ,
+    -- -- --- AVG: model scores ---
+    -- AVG(score) AS avg_score,
+    -- AVG(risk_adjusted_score) AS avg_risk_adjusted_score,
+    -- AVG(confidence) AS avg_confidence,
+    -- AVG(coverage) AS avg_coverage,
+    -- -- --- AVG: tape returns ---
+    -- AVG(change_pct_today) AS avg_return_today,
+    -- AVG(perf_w_pct) AS avg_return_w,
+    -- AVG(perf_1m_pct) AS avg_return_1m,
+    -- AVG(perf_3m_pct) AS avg_return_3m,
+    -- AVG(perf_ytd_pct) AS avg_return_ytd,
+    -- AVG(perf_y_pct) AS avg_return_y,
+    -- AVG(perf_5y_pct) AS avg_return_5y
+FROM industry_detail
+GROUP BY run_created_at_utc,
+    run_date_utc,
+    run_id,
+    industry,
+    sector,
+    profile_name,
+    horizon_name
+ORDER BY median_return_today DESC NULLS LAST,
+    industry,
+    profile_name,
+    CASE
+        horizon_name
+        WHEN 'days' THEN 1
+        WHEN 'weeks' THEN 2
+        WHEN 'months' THEN 3
+        WHEN 'years' THEN 4
+        ELSE 99
+    END;

@@ -373,7 +373,7 @@ pooled_wide AS (
                - MAX(CASE WHEN pred_quintile = 1 THEN avg_period_ret_pct END) AS pooled_q5_minus_q1_pp
     FROM pooled
     GROUP BY predictor_field
-),
+)
 SELECT pw.predictor_field,
        pw.q1_avg_period_ret_pct,
        pw.q2_avg_period_ret_pct,
@@ -439,7 +439,7 @@ hist AS (
            ROUND(AVG(CASE WHEN ret > 0 THEN 1.0 ELSE 0.0 END), 2) AS win_rate
     FROM (
             SELECT pr.symbol,
-                   a.{_quote_identifier(performance_field)} AS ret
+                   TRY_CAST(a.{_quote_identifier(performance_field)} AS DOUBLE) AS ret
             FROM pr.period_boundary_returns pr
                 INNER JOIN enr.all_fields_rows a USING (symbol)
             WHERE TRY_CAST(a.market_cap_basic AS DOUBLE) >= {MIN_MCAP}

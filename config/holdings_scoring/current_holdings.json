@@ -1,0 +1,195 @@
+{
+  "schema_version": "holdings_scoring_v1",
+  "holdings_id": "default",
+  "portfolio_currency": "USD",
+  "description": "Current book — set invested_sum/average_price in their currencies; portfolio aggregates in USD",
+  "holdings": [
+    {
+      "ticker": "VSH",
+      "sleeve": "core",
+      "invested_sum": 2004.69,
+      "invested_currency": "USD",
+      "average_price": 24.69,
+      "price_currency": "USD"
+    },
+    {
+      "ticker": "UNH",
+      "sleeve": "core",
+      "invested_sum": 9491.13,
+      "invested_currency": "USD",
+      "average_price": 277.30,
+      "price_currency": "USD"
+    },
+    {
+      "ticker": "STMPA",
+      "sleeve": "core",
+      "invested_sum": 2758.02,
+      "invested_currency": "EUR",
+      "average_price": 33.98,
+      "price_currency": "EUR",
+      "quote_currency": "EUR"
+    },
+    {
+      "ticker": "GOOG",
+      "sleeve": "core",
+      "invested_sum": 1999.72,
+      "invested_currency": "USD",
+      "average_price": 154.85,
+      "price_currency": "USD"
+    },
+    {
+      "ticker": "SYNA",
+      "sleeve": "core",
+      "invested_sum": 1507.94,
+      "invested_currency": "USD",
+      "average_price": 97.44,
+      "price_currency": "USD",
+      "notes": "Synaptics"
+    },
+    {
+      "ticker": "SNX",
+      "sleeve": "core",
+      "invested_sum": 998.49,
+      "invested_currency": "USD",
+      "average_price": 183.82,
+      "price_currency": "USD",
+      "notes": "TD Synnex"
+    },
+    {
+      "ticker": "DUOL",
+      "sleeve": "core",
+      "invested_sum": 1996.42,
+      "invested_currency": "USD",
+      "average_price": 111.73,
+      "price_currency": "USD",
+      "notes": "Duolingo"
+    },
+    {
+      "ticker": "NTAP",
+      "sleeve": "core",
+      "invested_sum": 2000.13,
+      "invested_currency": "USD",
+      "average_price": 141.92,
+      "price_currency": "USD",
+      "notes": "NetApp"
+    },
+    {
+      "ticker": "TEAM",
+      "sleeve": "core",
+      "invested_sum": 2682.02,
+      "invested_currency": "USD",
+      "average_price": 89.72,
+      "price_currency": "USD",
+      "notes": "Atlassian"
+    },
+    {
+      "ticker": "PATH",
+      "sleeve": "core",
+      "invested_sum": 1999.1,
+      "invested_currency": "USD",
+      "average_price": 11.39,
+      "price_currency": "USD",
+      "notes": "UiPath"
+    },
+    {
+      "ticker": "META",
+      "sleeve": "core",
+      "invested_sum": 999.35,
+      "invested_currency": "USD",
+      "average_price": 667.66,
+      "price_currency": "USD",
+      "notes": "Meta"
+    },
+    {
+      "ticker": "FNV",
+      "sleeve": "core",
+      "invested_sum": 1998.23,
+      "invested_currency": "USD",
+      "average_price": 262.23,
+      "price_currency": "USD",
+      "notes": "Franco-Nevada"
+    },
+    {
+      "ticker": "VEEV",
+      "sleeve": "core",
+      "invested_sum": 2496.77,
+      "invested_currency": "USD",
+      "average_price": 181.77,
+      "price_currency": "USD",
+      "notes": "Veeva Systems"
+    },
+    {
+      "ticker": "GTLB",
+      "sleeve": "core",
+      "invested_sum": 2398.92,
+      "invested_currency": "USD",
+      "average_price": 32.76,
+      "price_currency": "USD",
+      "notes": "GitLab"
+    },
+    {
+      "ticker": "CF",
+      "sleeve": "core",
+      "invested_sum": 2626.63,
+      "invested_currency": "USD",
+      "average_price": 131.46,
+      "price_currency": "USD",
+      "notes": "CF Industries"
+    },
+    {
+      "ticker": "JD",
+      "sleeve": "core",
+      "invested_sum": 2806.22,
+      "invested_currency": "USD",
+      "average_price": 36.13,
+      "price_currency": "USD",
+      "notes": "JD.com"
+    },
+    {
+      "ticker": "ZS",
+      "sleeve": "core",
+      "invested_sum": 4483,
+      "invested_currency": "USD",
+      "average_price": 152.30,
+      "price_currency": "USD",
+      "notes": "Zscaler"
+    },
+    {
+      "ticker": "NOVO_B",
+      "sleeve": "core",
+      "invested_sum": 79329,
+      "invested_currency": "DKK",
+      "average_price": 353.28,
+      "price_currency": "DKK",
+      "quote_currency": "DKK",
+      "notes": "Novo Nordisk — Copenhagen B-share"
+    },
+    {
+      "ticker": "ADBE",
+      "sleeve": "core",
+      "invested_sum": 5001,
+      "invested_currency": "USD",
+      "average_price": 316.26,
+      "price_currency": "USD",
+      "notes": "Adobe"
+    },
+    {
+      "ticker": "DELL",
+      "sleeve": "core",
+      "invested_sum": 1300,
+      "invested_currency": "USD",
+      "average_price": 127.81,
+      "price_currency": "USD",
+      "notes": "Dell Technologies"
+    },
+    {
+      "ticker": "BIDU",
+      "sleeve": "core",
+      "invested_sum": 3120,
+      "invested_currency": "USD",
+      "average_price": 103.9,
+      "price_currency": "USD",
+      "notes": "Baidu"
+    }
+  ]
+}
