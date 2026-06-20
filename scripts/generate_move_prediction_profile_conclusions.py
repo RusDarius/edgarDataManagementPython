@@ -175,6 +175,11 @@ PROFILE_STYLE: dict[str, tuple[str, str, str]] = {
         "Repair confirmation required — raw monthly oversold is a 3w headwind",
         "days–3 weeks",
     ),
+    "upside_reversal_v1": (
+        "Upside reversal (pullback bounce)",
+        "Depressed range + repair confirmation; reject exhaustion conflict",
+        "days–3 weeks",
+    ),
 }
 
 INDICATOR_CONTEXT = """
@@ -316,6 +321,12 @@ def _profile_conclusion(
             "for period-total returns (−0.7 pp). This profile's top picks (SNDK, SEZL, AMAT) are **momentum leaders**, "
             "not classical oversold reversals — treat as **repair-after-depression** only when ATRP + volume confirm, "
             "not as blind oversold buys."
+        )
+    elif profile == "upside_reversal_v1":
+        lines.append(
+            "**Upside reversal lens:** Requires depressed `range_position_52w` plus `repair_confirmation_score` — "
+            "not monthly oversold alone. Cross-check `mean_reversion_exhaustion_v1`; if both rank high, treat as "
+            "**exhaustion conflict** and avoid new longs."
         )
     elif profile == "mean_reversion_exhaustion_v1":
         lines.append(

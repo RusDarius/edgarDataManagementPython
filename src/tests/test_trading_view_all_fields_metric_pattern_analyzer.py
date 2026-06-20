@@ -1,5 +1,6 @@
 import csv
 import json
+import shutil
 import sys
 import unittest
 from datetime import datetime, timezone
@@ -28,6 +29,7 @@ from data_analysis_scripts.trading_view_all_fields_metric_pattern_analyzer impor
     compute_period_boundary_returns,
     compute_period_close_progression,
     discover_all_fields_daily_databases,
+    export_scan_period_data_set_conclusions,
     inventory_all_fields_runs,
     load_field_catalog,
     market_cap_basic_universe_filter,
@@ -1502,6 +1504,95 @@ class TestAllFieldsPatternAnalyzerCore(unittest.TestCase):
                 Path(benchmark["benchmark_path"]).read_text(encoding="utf-8")
             )
             self.assertIn("elapsed_seconds", payload)
+
+    def test_export_scan_period_data_set_conclusions(self):
+        with TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            base_db = temp_path / "source.duckdb"
+            _create_all_fields_test_database(
+                base_db,
+                run_id="run_alpha",
+                created_at_utc=datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc),
+                row_count=12,
+            )
+            day1_db = _copy_database_with_day_label(base_db, temp_path, "01_06_2026")
+            day2_db = _copy_database_with_day_label(base_db, temp_path, "02_06_2026")
+            day3_db = _copy_database_with_day_label(base_db, temp_path, "03_06_2026")
+            _update_all_fields_column(day1_db, "close", "100 + row_number * 1")
+            _update_all_fields_column(day2_db, "close", "100 + row_number * 1.5")
+            _update_all_fields_column(day3_db, "close", "100 + row_number * 2")
+            catalog_path = temp_path / "catalog.csv"
+            _write_catalog_csv(catalog_path)
+
+            tracking_root = temp_path / "tracking_root"
+            period_result = analyze_period_pooled_performance_patterns(
+                input_paths=[day1_db, day2_db, day3_db],
+                output_dir=tracking_root / "period_total",
+                field_catalog_csv=catalog_path,
+                include_predictor_fields=[
+                    "enterprise_value_ebitda_ttm",
+                    "price_revenue_ttm",
+                    "total_revenue_yoy_growth_ttm",
+                ],
+                min_fill_rate=0.0,
+                min_pair_n=5,
+                min_numeric_parse_rate=0.0,
+                write_exports=True,
+                run_lifecycle_id="abc12345",
+            )
+            rolling_dir = tracking_root / "rolling_windows" / "01_06_2026_to_03_06_2026"
+            rolling_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(
+                period_result["summary_parquet"],
+                rolling_dir / "period_field_performance_patterns.parquet",
+            )
+            progression = compute_period_close_progression(
+                input_paths=[day1_db, day2_db, day3_db],
+                period_returns_database_path=period_result["period_returns_result"][
+                    "database_path"
+                ],
+                output_dir=tracking_root / "progression",
+                run_lifecycle_id="abc12345",
+            )
+            tracking_payload = {
+                "tracking_id": "scan_period_close_forward_tracking_01jun_03jun2026_abc12345",
+                "run_lifecycle_id": "abc12345",
+                "start_day_label": "01_06_2026",
+                "end_day_label": "03_06_2026",
+                "performance_target": "period_return_pct",
+                "min_runs_for_stability": 1,
+                "require_sign_consistency": 0.5,
+            }
+            (tracking_root / "_scan_period_close_forward_tracking.json").write_text(
+                json.dumps(tracking_payload),
+                encoding="utf-8",
+            )
+            self.assertTrue(Path(progression["universe_progression_csv"]).exists())
+
+            default_result = export_scan_period_data_set_conclusions(
+                run_root=tracking_root,
+                top_n=5,
+            )
+            default_markdown_path = Path(default_result["markdown_path"])
+            self.assertTrue(default_markdown_path.exists())
+            self.assertEqual(
+                default_markdown_path.parent,
+                tracking_root / "data_set_conclusions",
+            )
+
+            result = export_scan_period_data_set_conclusions(
+                run_root=tracking_root,
+                output_dir=temp_path / "conclusions",
+                top_n=5,
+            )
+            markdown_path = Path(result["markdown_path"])
+            self.assertTrue(markdown_path.exists())
+            markdown_text = markdown_path.read_text(encoding="utf-8")
+            self.assertIn("Scan-Period Data Set Conclusions", markdown_text)
+            self.assertIn("enterprise_value_ebitda_ttm", markdown_text)
+            self.assertTrue(Path(result["leaderboard_csv_path"]).exists())
+            self.assertTrue(Path(result["progression_csv_path"]).exists())
+            self.assertGreaterEqual(result["top_predictor_count"], 1)
 
 
 if __name__ == "__main__":

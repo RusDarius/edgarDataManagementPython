@@ -2,6 +2,7 @@
   "schema_version": "move_prediction_conviction_v1",
   "config_id": "active_manager_conviction_v1",
   "compatible_suite_ids": [
+    "active_manager_v4",
     "active_manager_v3",
     "active_manager_v2",
     "active_manager_v1",
@@ -22,6 +23,8 @@
       "preferred_manager_actions": [
         "add_long_breakout",
         "add_long_breakout_high_conviction",
+        "accumulate_reversal_long",
+        "watch_reversal_entry",
         "mean_reversion_watch"
       ],
       "min_consensus_score": 0.35,
@@ -33,7 +36,9 @@
       ],
       "preferred_manager_actions": [
         "accumulate_value_catalyst",
-        "watch_value_reversal"
+        "accumulate_reversal_long",
+        "watch_value_reversal",
+        "watch_reversal_entry"
       ],
       "min_consensus_score": 0.30
     },
@@ -54,7 +59,8 @@
     "multi_lens_weight": 0.15,
     "breakout_story_weight": 0.10,
     "manager_action_bonus": 0.05,
-    "earnings_catalyst_weight": 0.10
+    "earnings_catalyst_weight": 0.10,
+    "regime_fit_weight": 0.08
   },
   "multi_lens": {
     "min_bullish_profiles": 3,
@@ -62,7 +68,8 @@
   },
   "exclusions": {
     "manager_actions": [
-      "avoid_value_trap"
+      "avoid_value_trap",
+      "avoid_reversal_trap"
     ],
     "breakout_risk_flags": [
       "false_breakout_risk",

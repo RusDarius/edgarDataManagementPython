@@ -1,6 +1,6 @@
 # Active Management — Discussion, Critique, and Improvement Directions
 
-> **Status:** Living discussion document (June 2026)  
+> **Status:** Living discussion document (June 2026, revised after holdings scoring + regime/backscan review)  
 > **Context:** ~$110k portfolio · ~$7k realized (2025) · ~$21k unrealized (2026 YTD) · value-tilted philosophy adapted for active management  
 > **Related tooling:** [move-prediction profiles](../tradingview_move_prediction_profile_weighting_reference.md) · [Module2](../prediction_module2_run_output_guide.md) · [pre-earnings](../pre_earnings_profile_analysis.md) · [screening fundamentals](active_screening_analysis_fundamentals.md)
 
@@ -272,10 +272,192 @@ When MU / NVDA / etc. rip without you: log **which gate blocked** (valuation? sa
 3. **Minimum edge to act** — what consensus score / action signal threshold justified your best 2025–2026 trades in hindsight?
 4. **SpaceX / private exposure** — will you hold pre-IPO elsewhere? If not, define “late listed entry” rules now.
 5. **Module2 vs v1** — should Module2 **replace** tactical v1 profiles for you, or only break ties?
+6. **Off-book exposure after VUAA** — beyond the listed-equity sleeve plus `VUAA`, is there any other meaningful capital allocation (cash, funds, private holdings) that should be reflected in portfolio-mode review?
 
 ---
 
-## 8. Related docs (tooling map)
+## 8. Current posture scan (June 17-18, 2026)
+
+The latest holdings-scoring snapshot is useful because it measures the **listed-equity sleeve you actually hold**, not just the opportunity set. It does **not** natively include your `VUAA` ETF position yet because the holdings scorer does not support ETFs, and you are also using that sleeve as a **safety anchor** rather than as an actively scored idea.
+
+For consistency, the portfolio roll-up below uses the same FX basis as the holdings scorer (`EURUSD = 1.1591`, 2026-06-17 ECB/frankfurter.app rate already used elsewhere in the run):
+
+- **Tracked listed-equity sleeve:** `$67.4k` invested -> `$77.8k` current value -> `+$10.4k` / `+15.4%`
+- **Excluded ETF safety anchor:** `VUAA`, avg price `EUR 91.7592`, invested `EUR 19,250` -> current value `EUR 26,157`
+- **VUAA in USD (same FX basis):** invested `~$22.3k`, current value `~$30.3k`, unrealized `~+$8.0k`
+- **Combined invested portfolio now reflected here:** `~$89.7k` invested -> `~$108.1k` current value -> `~+$18.4k` / `+20.5%`
+
+That total sits much closer to the real portfolio context you described. It also changes the interpretation in an important way: the actively scored book is **only part of the total capital base**, while `VUAA` acts as a stabilizing ballast. So your **active sleeve is more concentrated than the whole portfolio**, and the whole portfolio is safer than the raw holdings-scoring output first suggested.
+
+| Observation | Practical read |
+|-----|----------|
+| 21 tracked positions, ~$67.4k invested, ~$77.8k current value, **+15.4%** MTM | The tracked book is working overall; the main issue is selectivity and capital placement, not broad portfolio failure. |
+| Plus excluded `VUAA` ETF anchor: `EUR 19,250` invested, `EUR 26,157` current (`~$22.3k` -> `~$30.3k`) | The real invested portfolio is closer to **$89.7k / $108.1k current**, and part of your concentration concern is softened by a passive safety sleeve. |
+| Only **7 of 21** holdings have non-zero conviction | Most capital is sitting in names the current engine does not actively want to size up. |
+| Explicit positive action signals are limited: `DUOL` = `add_long_breakout`; `FNV` and `VEEV` = `hold_quality_long` | Only a small slice of the book is clearly model-confirmed right now. |
+| Mild but non-actionable positive reads: `ADBE`, `CF`, `GOOG`, `NTAP` | These look more like "possible holds / watch for repair" than "concentrate now." |
+| Largest current weights include `UNH` and `NOVO_B`, both with `0.00` conviction and `neutral_watch` | The book's biggest weights are not the book's strongest current signals. |
+| Several strongest winners (`VSH`, `DELL`, `STMPA`, `SNX`) also show `0.00` conviction | Legacy winners and present-tape opportunity are not the same thing; trim logic matters. |
+
+At the same time, the Mar-Jun regime card is still saying **risk-on / volatility-rewarded tape**:
+
+- Stable positive predictors: `ADRP|15`, `ADRP|1W`, `ATRP|1W`
+- Stable negative / warning fields: `ebitda_ttm`, `oper_income_ttm`, `Recommend.MA|1M`
+- Daily conviction focus is still surfacing tape-driven candidates more than fundamental compounders
+
+That creates a very important nuance: the recent all-fields work is currently strongest as a **tactical confirmation layer**, not as a replacement for your core investing philosophy.
+
+The current book therefore looks like a mix of three inventories:
+
+1. **Model-confirmed core / hold candidates** - names the engine still supports (`FNV`, `VEEV`, and milder cases like `GOOG`, `NTAP`, `ADBE`).
+2. **Tactical or regime-aligned positions inside a core book** - names the current tape likes more than the long-horizon model structure (`DUOL`, and some legacy winners with high recent tape strength).
+3. **Legacy or unresolved capital** - names where the current system is mostly saying "not broken enough to short, not good enough to add."
+
+This is probably the clearest articulation of where you are now: **concentration already exists in active-book capital terms, but not yet in evidence terms**. At the whole-portfolio level, `VUAA` reduces some of that concentration pressure because it functions as a passive safety anchor outside the scored opportunity sleeve.
+
+One tooling caveat is worth calling out explicitly: the holdings scorer currently shows at least one **symbol-identity ambiguity** (`CF` surfaced as `Canaccord Genuity Group Inc.` in a summary row even though your note is `CF Industries`). That means any portfolio-mode process should move from naked tickers to **fully qualified symbols** (`NYSE:CF`, `NASDAQ:GOOG`, `CPH:NOVO_B`, etc.) before you rely on the overlay for trim / add decisions.
+
+---
+
+## 9. A thesis you may actually be able to believe in
+
+You may not need a radically new investment ideology. You may need a **single concentration protocol** that works across different edge types.
+
+Working thesis:
+
+> Concentrate only when **structural case**, **current tape/regime fit**, and **multi-anchor persistence** agree.  
+> If only one or two are present, own smaller or wait.  
+> If none are present, do not confuse familiarity with conviction.
+
+This keeps value from being your universal entry gate while still preserving a real sense of margin of safety.
+
+| Edge type | What counts as "margin of safety" | What must be true before concentration | What invalidates it |
+|-----|----------|----------|----------|
+| **Core compounder** | Quality durability, balance-sheet resilience, not obviously overpriced vs peers / own history | Positive read from `quality_value_compounder`, `durable_value_compounder`, or `quality_continuation`; non-negative weeks/months RAS; no fragility overlay; backscan drift not deteriorating | Quality breaks, repeated negative anchor drift, or thesis becomes purely valuation-based |
+| **Tactical / theme** | Liquidity, participation, ability to exit, strong regime alignment, no exhaustion | `conviction_daily_focus` or Playbook A alignment; relvol / ATRP support; positive score deltas vs `yesterday` and `last_week`; no `mean_reversion_exhaustion` warning | Score stalls, price diverges from score improvement, or exhaustion starts leading the read |
+| **Recovery / catalyst** | Downside survivability plus evidence that the tape stopped getting worse | `forward_edge_active_v2` / `value_recovery_v2` positive; months score at least neutral-to-up; catalyst identifiable; backscan improving from weak base | It stays cheap but score progression never improves, or catalyst window passes with no confirmation |
+
+This is the key reframing:
+
+- For **cheap names**, low valuation alone is **not** margin of safety unless deterioration has stopped.
+- For **expensive names**, low P/E is impossible, so margin of safety must come from **persistence, liquidity, multi-lens agreement, and a clear exit path**.
+
+In other words, the thesis is not "buy value" or "buy hot stocks." It is:
+
+> Buy the names where your current tools can prove that the market is rewarding the right kind of evidence **and** where you know exactly what would make you leave.
+
+That is a model you can plausibly feel good using because it does not require pretending that high-multiple winners are value ideas, and it does not require pretending that every cheap stock is safe.
+
+---
+
+## 10. How to augment your scans with data already in hand
+
+These are the most useful next augmentations from the tooling you already built.
+
+### 10.1 — Add a holdings triage layer, not just a holdings report
+
+Your current holdings scoring run is already halfway there. The next step is to classify every holding into one of five buckets:
+
+- `confirmed_add`
+- `confirmed_hold`
+- `legacy_winner_trim_watch`
+- `repair_or_revalidate`
+- `dead_capital_watch`
+
+Inputs can come from fields you already export:
+
+- `conviction_score`
+- `manager_action_signal`
+- weeks / months `RAS`
+- weight drift
+- unrealized P&L vs cost
+- backscan persistence (see next item)
+
+This would stop the book from being one flat list of positions and turn it into a **decision board**.
+
+### 10.2 — Promote backscan to a concentration gate
+
+The new backwards-analysis workflow is probably the most promising augmentation you have right now because it can express **conviction as persistence**, not just as one-day rank.
+
+Use it like this:
+
+1. Run anchors: `yesterday`, `last_week`, `last_month`.
+2. For candidate adds, require positive `score_delta` on at least **2 of 3** anchors.
+3. Prefer names in `price_aligned` rather than `price_divergent`.
+4. Treat "current score high but anchor drift flat/negative" as **watchlist, not concentration**.
+
+This is especially useful for expensive growth / momentum names where valuation will not help you feel safe.
+
+### 10.3 — Separate tactical field research from core field research
+
+Your Mar-Jun scan-period batch validated a **risk-on tactical playbook**. That does **not** mean it validated a new core investing model.
+
+Split the research lane:
+
+- **Tactical lab:** `ADRP`, `ATRP`, relvol, momentum, event, theme participation
+- **Core lab:** quality, revisions, operating improvement, EDGAR discipline, industry-relative valuation
+
+If you keep asking one field-correlation run to answer both questions, it will keep pushing you toward either overfitting or philosophical confusion.
+
+### 10.4 — Use industry packs when hunting "the next Micron"
+
+Global cross-sectional ranks are too blunt for many theme trades. Use your existing scan stack to run **theme-local universes**:
+
+- semiconductors
+- power / grid / electrical equipment
+- defense / aerospace
+- selected software clusters
+
+Why this matters:
+
+- peer-relative normalization is better
+- you stop comparing cyclical leaders to random defensive names
+- a "hot stock" thesis becomes "best-in-theme with confirmation," which is easier to believe in than raw FOMO
+
+### 10.5 — Harden identity and book completeness before relying on portfolio-mode outputs
+
+Two process fixes are now high priority:
+
+1. **Fully qualified symbols** in holdings config to eliminate ticker collisions.
+2. **Explicit ETF / cash / off-book tracking** so the scorer can reflect real concentration and dry powder even before full ETF support exists.
+
+Right now the holdings file is informative, but the portfolio review should explicitly carry `VUAA` as a separate safety bucket until the tooling can score or at least track ETFs directly.
+
+### 10.6 — Add thesis metadata beside each position
+
+The holdings config or an adjacent file should eventually include:
+
+- `thesis_style` (`core_compounder`, `tactical_theme`, `recovery_catalyst`)
+- `thesis_profile`
+- `expected_horizon`
+- `hard_stop_pct` or invalidation rule
+- `review_cadence`
+- `add_only_if`
+
+That would let the overlay answer a more useful question:
+
+> Is the position doing what it was bought to do?
+
+instead of just:
+
+> Does today's model like it?
+
+### 10.7 — Stop blending every good signal into one mega-score
+
+A likely source of discomfort is that a new "investment model" sounds like one more composite score. You probably do **not** want that.
+
+Better approach:
+
+- Let **lane fit** pick the edge type.
+- Let **regime fit** confirm whether now is the right time.
+- Let **backscan persistence** decide whether the move is strengthening.
+- Let **overlays** (`fragility_short`, `mean_reversion_exhaustion`) decide risk control.
+
+That is not a new ideology. It is a cleaner permission system for concentration.
+
+---
+
+## 11. Related docs (tooling map)
 
 | Doc | Use when |
 |-----|----------|
@@ -285,7 +467,8 @@ When MU / NVDA / etc. rip without you: log **which gate blocked** (valuation? sa
 | [active_screening_analysis_fundamentals.md](active_screening_analysis_fundamentals.md) | Core fundamental composite |
 | [active_manager_implementation_usage.md](../active_manager_implementation_usage.md) | Weekly run cadence |
 | [active_manager_profile_and_pattern_discovery_plan.md](../improvements_plans/active_manager_profile_and_pattern_discovery_plan.md) | Sleeve budgets, pattern discovery |
+| [backwards_prediction_analysis_guide.md](../backwards_prediction_analysis_guide.md) | Current-vs-anchor score progression and persistence checks |
 
 ---
 
-*This is a starting point. Edit §3 priorities as you learn from the 30-day experiment and post-mortems.*
+*This is a starting point. The next useful refinement is to turn the current holdings overlay + backwards anchors into a live concentration protocol rather than another research output.*

@@ -128,8 +128,27 @@ RAW_SYMBOL_JOIN = """
 
 
 @dataclass(frozen=True)
+class CashPositionConfig:
+    value: float
+    currency: str
+    value_in_portfolio_currency: float | None = None
+    fx_rate_to_portfolio: float | None = None
+    fx_rate_date: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "value": self.value,
+            "currency": self.currency,
+            "value_in_portfolio_currency": self.value_in_portfolio_currency,
+            "fx_rate_to_portfolio": self.fx_rate_to_portfolio,
+            "fx_rate_date": self.fx_rate_date,
+        }
+
+
+@dataclass(frozen=True)
 class HoldingConfig:
     ticker: str
+    symbol: str | None = None
     sleeve: str | None = None
     invested_sum: float | None = None
     average_price: float | None = None
@@ -161,9 +180,22 @@ class HoldingConfig:
 
 
 @dataclass(frozen=True)
+class RawScanSymbolEntry:
+    symbol: str
+    company: str
+    bare_ticker: str
+
+
+@dataclass(frozen=True)
 class MatchedHolding:
     holding: HoldingConfig
     db_symbol: str
+    scan_symbol: str | None = None
+    company: str | None = None
+
+    @property
+    def lookup_key(self) -> str:
+        return self.scan_symbol or self.db_symbol
 
 
 @dataclass(frozen=True)
@@ -214,6 +246,16 @@ def normalize_holding_ticker(ticker: str) -> str:
     return str(ticker or "").strip().upper()
 
 
+def _split_exchange_symbol(value: str) -> tuple[str | None, str]:
+    normalized = normalize_holding_ticker(value)
+    if not normalized:
+        return None, ""
+    if ":" in normalized:
+        exchange, ticker = normalized.split(":", 1)
+        return exchange or None, ticker
+    return None, normalized
+
+
 def holding_ticker_keys(ticker: str) -> set[str]:
     normalized = normalize_holding_ticker(ticker)
     if not normalized:
@@ -226,6 +268,111 @@ def holding_ticker_keys(ticker: str) -> set[str]:
 
 def holding_matches_db_symbol(config_ticker: str, db_symbol: str) -> bool:
     return bool(holding_ticker_keys(config_ticker) & holding_ticker_keys(db_symbol))
+
+
+def holding_matches_db_symbol_strict(config_symbol: str, db_symbol: str) -> bool:
+    """Match when ticker suffix agrees and exchange prefixes are compatible."""
+    config_norm = normalize_holding_ticker(config_symbol)
+    db_norm = normalize_holding_ticker(db_symbol)
+    if config_norm == db_norm:
+        return True
+    config_exchange, config_ticker = _split_exchange_symbol(config_norm)
+    db_exchange, db_ticker = _split_exchange_symbol(db_norm)
+    if not config_ticker or config_ticker != db_ticker:
+        return False
+    if config_exchange and db_exchange:
+        return config_exchange == db_exchange
+    return False
+
+
+def holding_config_match_keys(holding: HoldingConfig) -> tuple[str, bool]:
+    """Return the match key and whether exchange-aware strict matching applies."""
+    if holding.symbol:
+        symbol = normalize_holding_ticker(holding.symbol)
+        exchange, _ = _split_exchange_symbol(symbol)
+        return symbol, bool(exchange)
+    return normalize_holding_ticker(holding.ticker), False
+
+
+def holding_matches_db_symbol_for_holding(
+    holding: HoldingConfig,
+    db_symbol: str,
+) -> bool:
+    match_key, strict = holding_config_match_keys(holding)
+    if strict:
+        return holding_matches_db_symbol_strict(match_key, db_symbol)
+    return holding_matches_db_symbol(match_key, db_symbol)
+
+
+def holding_config_label(holding: HoldingConfig) -> str:
+    symbol = str(holding.symbol or "").strip()
+    ticker = str(holding.ticker or "").strip()
+    if symbol and symbol.upper() != ticker.upper():
+        return f"{ticker} [{symbol}]" if ticker else symbol
+    return ticker or symbol
+
+
+def _pick_catalog_entry(
+    holding: HoldingConfig,
+    candidates: Sequence[RawScanSymbolEntry],
+) -> RawScanSymbolEntry | None:
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+    notes = (holding.notes or "").strip().lower()
+    if notes:
+        for entry in candidates:
+            company_lower = entry.company.lower()
+            if notes in company_lower or company_lower in notes:
+                return entry
+    return None
+
+
+def _catalog_entry_for_holding(
+    holding: HoldingConfig,
+    catalog: Sequence[RawScanSymbolEntry],
+) -> RawScanSymbolEntry | None:
+    if not catalog:
+        return None
+    match_key, strict = holding_config_match_keys(holding)
+    if strict:
+        return next(
+            (
+                entry
+                for entry in catalog
+                if holding_matches_db_symbol_strict(match_key, entry.symbol)
+            ),
+            None,
+        )
+    candidates = [
+        entry
+        for entry in catalog
+        if holding_matches_db_symbol(match_key, entry.symbol)
+        or holding_matches_db_symbol(match_key, entry.bare_ticker)
+    ]
+    return _pick_catalog_entry(holding, candidates)
+
+
+def _row_company(row: Mapping[str, Any]) -> str:
+    return str(row.get("company") or row.get("Company") or "").strip()
+
+
+def _resolve_row_to_match(
+    row: Mapping[str, Any],
+    matched: Sequence[MatchedHolding],
+) -> MatchedHolding | None:
+    symbol = str(row.get("symbol") or "")
+    company = _row_company(row)
+    for match in matched:
+        if match.db_symbol != symbol:
+            continue
+        if match.company and company and match.company != company:
+            continue
+        if match.company and not company:
+            continue
+        return match
+    return next((match for match in matched if match.db_symbol == symbol), None)
 
 
 def _resolve_holding_currency_fields(
@@ -252,7 +399,37 @@ def _resolve_holding_currency_fields(
     return invested_currency, price_currency, quote_currency
 
 
-def load_holdings_config(config_path: str | Path) -> tuple[dict[str, Any], list[HoldingConfig]]:
+def _parse_cash_position(
+    raw: Any,
+    *,
+    portfolio_currency: str,
+    config_path: Path,
+) -> CashPositionConfig | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError(f"cash_position must be an object in {config_path}")
+    value = raw.get("value")
+    if value is None:
+        return None
+    try:
+        parsed_value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"cash_position.value must be numeric in {config_path}"
+        ) from exc
+    if parsed_value < 0:
+        raise ValueError(f"cash_position.value must be >= 0 in {config_path}")
+    currency = normalize_currency_code(
+        raw.get("currency"),
+        default=portfolio_currency,
+    )
+    return CashPositionConfig(value=parsed_value, currency=currency)
+
+
+def load_holdings_config(
+    config_path: str | Path,
+) -> tuple[dict[str, Any], list[HoldingConfig], CashPositionConfig | None]:
     resolved_path = Path(config_path)
     payload = json.loads(resolved_path.read_text(encoding="utf-8"))
     schema_version = payload.get("schema_version")
@@ -276,6 +453,10 @@ def load_holdings_config(config_path: str | Path) -> tuple[dict[str, Any], list[
         ticker = str(item.get("ticker") or "").strip()
         if not ticker:
             raise ValueError(f"holdings[{index}].ticker is required in {resolved_path}")
+        symbol_raw = item.get("symbol")
+        symbol = str(symbol_raw).strip() if symbol_raw else None
+        if symbol == "":
+            symbol = None
         invested_sum = item.get("invested_sum")
         average_price = item.get("average_price")
         invested_currency, price_currency, quote_currency = _resolve_holding_currency_fields(
@@ -285,6 +466,7 @@ def load_holdings_config(config_path: str | Path) -> tuple[dict[str, Any], list[
         holdings.append(
             HoldingConfig(
                 ticker=ticker,
+                symbol=symbol,
                 sleeve=str(item["sleeve"]).strip() if item.get("sleeve") else None,
                 invested_sum=float(invested_sum) if invested_sum is not None else None,
                 average_price=float(average_price) if average_price is not None else None,
@@ -295,8 +477,16 @@ def load_holdings_config(config_path: str | Path) -> tuple[dict[str, Any], list[
                 notes=str(item["notes"]).strip() if item.get("notes") else None,
             )
         )
+    cash_position = _parse_cash_position(
+        payload.get("cash_position"),
+        portfolio_currency=portfolio_currency,
+        config_path=resolved_path,
+    )
     payload["_resolved_portfolio_currency"] = portfolio_currency
-    return payload, holdings
+    payload["_resolved_cash_position"] = (
+        cash_position.to_dict() if cash_position is not None else None
+    )
+    return payload, holdings, cash_position
 
 
 def _parse_rate_date(value: Any) -> str:
@@ -432,6 +622,7 @@ def enrich_holdings_positions(
         enriched.append(
             HoldingConfig(
                 ticker=holding.ticker,
+                symbol=holding.symbol,
                 sleeve=holding.sleeve,
                 invested_sum=holding.invested_sum,
                 average_price=holding.average_price,
@@ -462,6 +653,7 @@ def enrich_holdings_positions(
         weighted_holdings.append(
             HoldingConfig(
                 ticker=holding.ticker,
+                symbol=holding.symbol,
                 sleeve=holding.sleeve,
                 invested_sum=holding.invested_sum,
                 average_price=holding.average_price,
@@ -481,6 +673,50 @@ def enrich_holdings_positions(
         )
 
     return weighted_holdings, fx_warnings
+
+
+def enrich_cash_position(
+    cash_position: CashPositionConfig | None,
+    *,
+    portfolio_currency: str = "USD",
+    as_of_date: date | None = None,
+    rate_cache: dict[tuple[str, str, str | None], FxRateQuote] | None = None,
+    allow_external_fx: bool = True,
+    fx_warnings: list[str] | None = None,
+) -> CashPositionConfig | None:
+    """Convert cash to portfolio currency when FX resolution is enabled."""
+    if cash_position is None:
+        return None
+    resolved_portfolio_currency = normalize_currency_code(portfolio_currency)
+    warnings = fx_warnings if fx_warnings is not None else []
+    cache = rate_cache if rate_cache is not None else {}
+    if cash_position.currency == resolved_portfolio_currency:
+        return CashPositionConfig(
+            value=cash_position.value,
+            currency=cash_position.currency,
+            value_in_portfolio_currency=cash_position.value,
+            fx_rate_to_portfolio=1.0,
+        )
+    if not allow_external_fx:
+        return cash_position
+    converted_value, fx_rate, fx_rate_date = _convert_holding_amount(
+        cash_position.value,
+        cash_position.currency,
+        resolved_portfolio_currency,
+        ticker="CASH",
+        as_of_date=as_of_date,
+        rate_cache=cache,
+        allow_external_fx=allow_external_fx,
+        fx_warnings=warnings,
+        label="cash_position",
+    )
+    return CashPositionConfig(
+        value=cash_position.value,
+        currency=cash_position.currency,
+        value_in_portfolio_currency=converted_value,
+        fx_rate_to_portfolio=fx_rate,
+        fx_rate_date=fx_rate_date,
+    )
 
 
 def _parse_profile_names(profile_names_json: str | None) -> list[str]:
@@ -613,28 +849,82 @@ def _fetch_distinct_symbols(
     return [str(row["symbol"]) for row in rows if row.get("symbol")]
 
 
+def _fetch_raw_scan_symbol_catalog(
+    database_path: Path,
+    run_id: str,
+) -> list[RawScanSymbolEntry]:
+    if not _table_exists(database_path, "raw_scan_rows"):
+        return []
+    rows = query_move_prediction_duckdb(
+        database_path,
+        """
+        SELECT DISTINCT symbol, company
+        FROM raw_scan_rows
+        WHERE run_id = ?
+          AND symbol IS NOT NULL
+          AND symbol != ''
+        ORDER BY symbol
+        """,
+        parameters=[run_id],
+    )
+    catalog: list[RawScanSymbolEntry] = []
+    for row in rows:
+        symbol = str(row.get("symbol") or "").strip()
+        if not symbol:
+            continue
+        _, bare_ticker = _split_exchange_symbol(symbol)
+        catalog.append(
+            RawScanSymbolEntry(
+                symbol=symbol,
+                company=_row_company(row),
+                bare_ticker=bare_ticker,
+            )
+        )
+    return catalog
+
+
 def match_holdings_to_db_symbols(
     holdings: Sequence[HoldingConfig],
     db_symbols: Sequence[str],
+    *,
+    raw_catalog: Sequence[RawScanSymbolEntry] | None = None,
 ) -> tuple[list[MatchedHolding], list[str]]:
     matched: list[MatchedHolding] = []
     unmatched: list[str] = []
-    used_db_symbols: set[str] = set()
+    used_lookup_keys: set[str] = set()
+    catalog = list(raw_catalog or [])
 
     for holding in holdings:
+        catalog_entry = _catalog_entry_for_holding(holding, catalog)
+        if catalog_entry is not None:
+            lookup_key = catalog_entry.symbol
+            if lookup_key in used_lookup_keys:
+                unmatched.append(holding_config_label(holding))
+                continue
+            used_lookup_keys.add(lookup_key)
+            matched.append(
+                MatchedHolding(
+                    holding=holding,
+                    db_symbol=catalog_entry.bare_ticker,
+                    scan_symbol=catalog_entry.symbol,
+                    company=catalog_entry.company or None,
+                )
+            )
+            continue
+
         match_symbol = next(
             (
                 db_symbol
                 for db_symbol in db_symbols
-                if db_symbol not in used_db_symbols
-                and holding_matches_db_symbol(holding.ticker, db_symbol)
+                if db_symbol not in used_lookup_keys
+                and holding_matches_db_symbol_for_holding(holding, db_symbol)
             ),
             None,
         )
         if match_symbol is None:
-            unmatched.append(holding.ticker)
+            unmatched.append(holding_config_label(holding))
             continue
-        used_db_symbols.add(match_symbol)
+        used_lookup_keys.add(match_symbol)
         matched.append(MatchedHolding(holding=holding, db_symbol=match_symbol))
 
     return matched, unmatched
@@ -668,6 +958,19 @@ def _build_symbol_values_clause(matched: Sequence[MatchedHolding]) -> tuple[str,
     return placeholders, parameters
 
 
+def _build_symbol_match_clause(matched: Sequence[MatchedHolding]) -> tuple[str, list[Any]]:
+    clauses: list[str] = []
+    parameters: list[Any] = []
+    for match in matched:
+        if match.company:
+            clauses.append("(symbol = ? AND company = ?)")
+            parameters.extend([match.db_symbol, match.company])
+        else:
+            clauses.append("symbol = ?")
+            parameters.append(match.db_symbol)
+    return " OR ".join(clauses), parameters
+
+
 def _holding_position_fields(holding: HoldingConfig) -> dict[str, Any]:
     return {
         "sleeve": holding.sleeve or "",
@@ -685,13 +988,17 @@ def _holding_position_fields(holding: HoldingConfig) -> dict[str, Any]:
         "implied_shares": holding.implied_shares,
         "portfolio_weight_pct": holding.portfolio_weight_pct,
         "notes": holding.notes or "",
+        "config_symbol": holding.symbol or "",
     }
 
 
 def _holding_metadata_row(match: MatchedHolding) -> dict[str, Any]:
     return {
         "config_ticker": match.holding.ticker,
-        "matched_symbol": match.db_symbol,
+        "config_symbol": match.holding.symbol or "",
+        "matched_symbol": match.scan_symbol or match.db_symbol,
+        "db_symbol": match.db_symbol,
+        "matched_company": match.company or "",
         **_holding_position_fields(match.holding),
     }
 
@@ -920,19 +1227,19 @@ def _fetch_symbol_close_quotes(
     close_by_symbol: dict[str, CloseQuote] = {}
     missing: list[MatchedHolding] = []
 
-    holding_by_symbol = {match.db_symbol: match.holding for match in matched}
+    holding_by_lookup = {match.lookup_key: match.holding for match in matched}
 
     for match in matched:
-        raw_row = raw_perf_by_symbol.get(match.db_symbol, {})
+        raw_row = raw_perf_by_symbol.get(match.lookup_key, {})
         close_price = _coerce_positive_float(raw_row.get("close"))
         if close_price is not None:
-            close_by_symbol[match.db_symbol] = CloseQuote(
+            close_by_symbol[match.lookup_key] = CloseQuote(
                 price=close_price,
                 quote_currency=_resolve_close_quote_currency(
                     currency=raw_row.get("currency"),
                     exchange=raw_row.get("exchange"),
                     country=raw_row.get("country"),
-                    quote_currency_override=holding_by_symbol[match.db_symbol].quote_currency,
+                    quote_currency_override=holding_by_lookup[match.lookup_key].quote_currency,
                 ),
                 source="raw_scan_rows.close",
             )
@@ -940,38 +1247,41 @@ def _fetch_symbol_close_quotes(
             missing.append(match)
 
     if missing and _table_exists(source.database_path, "profile_horizon_scores"):
-        placeholders, parameters = _build_symbol_values_clause(missing)
+        match_clause, match_params = _build_symbol_match_clause(missing)
         rows = query_move_prediction_duckdb(
             source.database_path,
             f"""
-            SELECT symbol, MAX(close) AS close
+            SELECT symbol, company, MAX(close) AS close
             FROM profile_horizon_scores
             WHERE run_id = ?
-              AND symbol IN ({placeholders})
+              AND ({match_clause})
               AND close IS NOT NULL
-            GROUP BY symbol
+            GROUP BY symbol, company
             """,
-            parameters=[source.run_id, *parameters],
+            parameters=[source.run_id, *match_params],
         )
         for row in rows:
-            symbol = str(row["symbol"])
+            owning_match = _resolve_row_to_match(row, missing)
+            if owning_match is None:
+                continue
             close_price = _coerce_positive_float(row.get("close"))
-            if close_price is not None and symbol not in close_by_symbol:
-                holding = holding_by_symbol.get(symbol)
-                raw_row = raw_perf_by_symbol.get(symbol, {})
-                close_by_symbol[symbol] = CloseQuote(
-                    price=close_price,
-                    quote_currency=_resolve_close_quote_currency(
-                        currency=raw_row.get("currency"),
-                        exchange=raw_row.get("exchange"),
-                        country=raw_row.get("country"),
-                        quote_currency_override=holding.quote_currency if holding else None,
-                    ),
-                    source="profile_horizon_scores.close",
-                )
+            if close_price is None or owning_match.lookup_key in close_by_symbol:
+                continue
+            holding = holding_by_lookup.get(owning_match.lookup_key)
+            raw_row = raw_perf_by_symbol.get(owning_match.lookup_key, {})
+            close_by_symbol[owning_match.lookup_key] = CloseQuote(
+                price=close_price,
+                quote_currency=_resolve_close_quote_currency(
+                    currency=raw_row.get("currency"),
+                    exchange=raw_row.get("exchange"),
+                    country=raw_row.get("country"),
+                    quote_currency_override=holding.quote_currency if holding else None,
+                ),
+                source="profile_horizon_scores.close",
+            )
 
     for match in matched:
-        close_by_symbol.setdefault(match.db_symbol, CloseQuote(price=None, source=""))
+        close_by_symbol.setdefault(match.lookup_key, CloseQuote(price=None, source=""))
     return close_by_symbol
 
 
@@ -982,6 +1292,7 @@ def _order_summary_row(
     """Keep summary CSV columns grouped: identity, position, mark-to-market, then scores."""
     leading_keys = [
         "config_ticker",
+        "config_symbol",
         "matched_symbol",
         "company",
         "sector",
@@ -1039,24 +1350,26 @@ def _fetch_consensus_rows(
 ) -> dict[str, dict[str, dict[str, Any]]]:
     if not matched:
         return {}
-    placeholders, parameters = _build_symbol_values_clause(matched)
+    match_clause, match_params = _build_symbol_match_clause(matched)
     rows = query_move_prediction_duckdb(
         source.database_path,
         f"""
-        SELECT symbol, horizon_name, score, direction, confidence,
+        SELECT symbol, company, horizon_name, score, direction, confidence,
             agreement_ratio, opinions, risk_adjusted_score, risk_tier,
             manager_action_signal
         FROM consensus_horizon_scores
         WHERE run_id = ?
-          AND symbol IN ({placeholders})
+          AND ({match_clause})
         """,
-        parameters=[source.run_id, *parameters],
+        parameters=[source.run_id, *match_params],
     )
     by_symbol: dict[str, dict[str, dict[str, Any]]] = {}
     for row in rows:
-        symbol = str(row["symbol"])
+        owning_match = _resolve_row_to_match(row, matched)
+        if owning_match is None:
+            continue
         horizon = str(row["horizon_name"])
-        by_symbol.setdefault(symbol, {})[horizon] = row
+        by_symbol.setdefault(owning_match.lookup_key, {})[horizon] = row
     return by_symbol
 
 
@@ -1066,7 +1379,7 @@ def _fetch_conviction_rows(
 ) -> dict[str, dict[str, Any]]:
     if not matched or not _table_exists(source.database_path, "conviction_rankings"):
         return {}
-    placeholders, parameters = _build_symbol_values_clause(matched)
+    match_clause, match_params = _build_symbol_match_clause(matched)
     rows = query_move_prediction_duckdb(
         source.database_path,
         f"""
@@ -1078,11 +1391,17 @@ def _fetch_conviction_rows(
             earnings_days_until, exclusion_reason
         FROM conviction_rankings
         WHERE run_id = ?
-          AND symbol IN ({placeholders})
+          AND ({match_clause})
         """,
-        parameters=[source.run_id, *parameters],
+        parameters=[source.run_id, *match_params],
     )
-    return {str(row["symbol"]): row for row in rows}
+    by_symbol: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        owning_match = _resolve_row_to_match(row, matched)
+        if owning_match is None:
+            continue
+        by_symbol[owning_match.lookup_key] = row
+    return by_symbol
 
 
 def _available_raw_scan_columns(database_path: Path) -> set[str]:
@@ -1121,13 +1440,17 @@ def _fetch_raw_perf_rows(
     )
     meta_select = f"{quoted_meta_fields}," if quoted_meta_fields else ""
     symbol_rows = [
-        {"symbol": match.db_symbol, "config_ticker": match.holding.ticker}
+        {
+            "symbol": match.scan_symbol or match.db_symbol,
+            "config_ticker": match.holding.ticker,
+            "lookup_key": match.lookup_key,
+        }
         for match in matched
     ]
-    values_sql = ", ".join("(?, ?)" for _ in symbol_rows)
+    values_sql = ", ".join("(?, ?, ?)" for _ in symbol_rows)
     flat_params: list[Any] = []
     for row in symbol_rows:
-        flat_params.extend([row["symbol"], row["config_ticker"]])
+        flat_params.extend([row["symbol"], row["config_ticker"], row["lookup_key"]])
 
     quoted_perf_fields = ", ".join(
         f'r."{field_name}"' for field_name in perf_fields
@@ -1138,13 +1461,14 @@ def _fetch_raw_perf_rows(
     rows = query_move_prediction_duckdb(
         source.database_path,
         f"""
-        WITH target(symbol, config_ticker) AS (
+        WITH target(symbol, config_ticker, lookup_key) AS (
             VALUES {values_sql}
         )
-        SELECT target.config_ticker,
+        SELECT target.lookup_key,
+            target.config_ticker,
             target.symbol AS matched_symbol,
             r.symbol AS raw_symbol,
-            r.company,
+            COALESCE(r.company, r."Company") AS company,
             r.sector,
             r.industry,
             r.market_cap_basic,
@@ -1154,11 +1478,11 @@ def _fetch_raw_perf_rows(
         FROM target
         LEFT JOIN raw_scan_rows r
             ON r.run_id = ?
-            AND {RAW_SYMBOL_JOIN.strip()}
+            AND r.symbol = target.symbol
         """,
         parameters=[*flat_params, source.run_id],
     )
-    return {str(row["matched_symbol"]): row for row in rows if row.get("matched_symbol")}
+    return {str(row["lookup_key"]): row for row in rows if row.get("lookup_key")}
 
 
 def _build_summary_rows(
@@ -1178,7 +1502,7 @@ def _build_summary_rows(
         row["source_run_id"] = source.run_id
         row["suite_name"] = source.suite_name or ""
 
-        consensus = consensus_by_symbol.get(match.db_symbol, {})
+        consensus = consensus_by_symbol.get(match.lookup_key, {})
         for horizon_name in HORIZON_NAMES:
             horizon = consensus.get(horizon_name, {})
             row[f"consensus_{horizon_name}_score"] = horizon.get("score")
@@ -1189,19 +1513,24 @@ def _build_summary_rows(
                 "manager_action_signal"
             )
 
-        conviction = conviction_by_symbol.get(match.db_symbol, {})
+        conviction = conviction_by_symbol.get(match.lookup_key, {})
         row["conviction_score"] = conviction.get("conviction_score")
         row["conviction_rank_overall"] = conviction.get("rank_overall")
         row["conviction_sleeve"] = conviction.get("sleeve")
         row["conviction_entry_readiness"] = conviction.get("entry_readiness")
         row["conviction_breakout_tier"] = conviction.get("breakout_conviction_tier")
 
-        raw_perf = raw_perf_by_symbol.get(match.db_symbol, {})
-        row["company"] = raw_perf.get("company") or conviction.get("company")
+        raw_perf = raw_perf_by_symbol.get(match.lookup_key, {})
+        row["company"] = (
+            raw_perf.get("company")
+            or conviction.get("company")
+            or conviction.get("Company")
+            or match.company
+        )
         row["sector"] = raw_perf.get("sector") or conviction.get("sector")
         row["industry"] = raw_perf.get("industry") or conviction.get("industry")
         row["market_cap_basic"] = raw_perf.get("market_cap_basic")
-        close_quote = close_by_symbol.get(match.db_symbol, CloseQuote(price=None))
+        close_quote = close_by_symbol.get(match.lookup_key, CloseQuote(price=None))
         row.update(
             _build_mark_to_market_fields(
                 match.holding,
@@ -1225,8 +1554,7 @@ def _fetch_profile_horizon_rows(
 ) -> list[dict[str, Any]]:
     if not matched:
         return []
-    placeholders, parameters = _build_symbol_values_clause(matched)
-    holding_by_symbol = {match.db_symbol: match for match in matched}
+    match_clause, match_params = _build_symbol_match_clause(matched)
     rows = query_move_prediction_duckdb(
         source.database_path,
         f"""
@@ -1235,22 +1563,21 @@ def _fetch_profile_horizon_rows(
             manager_action_signal
         FROM profile_horizon_scores
         WHERE run_id = ?
-          AND symbol IN ({placeholders})
+          AND ({match_clause})
         ORDER BY symbol, profile_name, horizon_name
         """,
-        parameters=[source.run_id, *parameters],
+        parameters=[source.run_id, *match_params],
     )
     export_rows: list[dict[str, Any]] = []
     for row in rows:
-        symbol = str(row["symbol"])
-        holding = holding_by_symbol.get(symbol)
+        owning_match = _resolve_row_to_match(row, matched)
         export_row = {
-            "config_ticker": holding.holding.ticker if holding else "",
-            "matched_symbol": symbol,
+            "config_ticker": owning_match.holding.ticker if owning_match else "",
+            "matched_symbol": row.get("symbol"),
             **{key: row.get(key) for key in row if key != "symbol"},
         }
-        if holding:
-            export_row.update(_holding_position_fields(holding.holding))
+        if owning_match:
+            export_row.update(_holding_position_fields(owning_match.holding))
         export_rows.append(export_row)
     return export_rows
 
@@ -1261,8 +1588,7 @@ def _fetch_performance_tracking_rows(
 ) -> list[dict[str, Any]]:
     if not matched or not _table_exists(source.database_path, "profile_performance_tracking"):
         return []
-    placeholders, parameters = _build_symbol_values_clause(matched)
-    holding_by_symbol = {match.db_symbol: match for match in matched}
+    match_clause, match_params = _build_symbol_match_clause(matched)
     rows = query_move_prediction_duckdb(
         source.database_path,
         f"""
@@ -1271,19 +1597,18 @@ def _fetch_performance_tracking_rows(
             manager_action_signal
         FROM profile_performance_tracking
         WHERE run_id = ?
-          AND symbol IN ({placeholders})
+          AND ({match_clause})
         ORDER BY symbol, profile_name, horizon_name, performance_field
         """,
-        parameters=[source.run_id, *parameters],
+        parameters=[source.run_id, *match_params],
     )
     export_rows: list[dict[str, Any]] = []
     for row in rows:
-        symbol = str(row["symbol"])
-        holding = holding_by_symbol.get(symbol)
+        owning_match = _resolve_row_to_match(row, matched)
         export_rows.append(
             {
-                "config_ticker": holding.holding.ticker if holding else "",
-                "matched_symbol": symbol,
+                "config_ticker": owning_match.holding.ticker if owning_match else "",
+                "matched_symbol": row.get("symbol"),
                 **{key: row.get(key) for key in row if key != "symbol"},
             }
         )
@@ -1297,7 +1622,7 @@ def _fetch_conviction_export_rows(
     conviction_by_symbol = _fetch_conviction_rows(source, matched)
     export_rows: list[dict[str, Any]] = []
     for match in matched:
-        conviction = conviction_by_symbol.get(match.db_symbol, {})
+        conviction = conviction_by_symbol.get(match.lookup_key, {})
         if not conviction:
             continue
         export_rows.append(
@@ -1318,8 +1643,8 @@ def _fetch_raw_perf_export_rows(
     raw_perf_by_symbol = _fetch_raw_perf_rows(source, matched)
     export_rows: list[dict[str, Any]] = []
     for match in matched:
-        raw_perf = raw_perf_by_symbol.get(match.db_symbol, {})
-        close_quote = close_by_symbol.get(match.db_symbol, CloseQuote(price=None))
+        raw_perf = raw_perf_by_symbol.get(match.lookup_key, {})
+        close_quote = close_by_symbol.get(match.lookup_key, CloseQuote(price=None))
         export_row = {
             **_holding_metadata_row(match),
             **raw_perf,
@@ -1344,10 +1669,10 @@ def _empty_mark_to_market_fields() -> dict[str, Any]:
 
 
 def _build_unmatched_rows(unmatched_tickers: Sequence[str], holdings: Sequence[HoldingConfig]) -> list[dict[str, Any]]:
-    holding_by_ticker = {holding.ticker: holding for holding in holdings}
+    holding_by_label = {holding_config_label(holding): holding for holding in holdings}
     rows: list[dict[str, Any]] = []
-    for ticker in unmatched_tickers:
-        holding = holding_by_ticker.get(ticker)
+    for label in unmatched_tickers:
+        holding = holding_by_label.get(label)
         position_fields = (
             _holding_position_fields(holding)
             if holding
@@ -1367,11 +1692,12 @@ def _build_unmatched_rows(unmatched_tickers: Sequence[str], holdings: Sequence[H
                 "implied_shares": None,
                 "portfolio_weight_pct": None,
                 "notes": "",
+                "config_symbol": "",
             }
         )
         rows.append(
             {
-                "config_ticker": ticker,
+                "config_ticker": holding.ticker if holding else label,
                 **position_fields,
                 **_empty_mark_to_market_fields(),
                 "reason": "no_symbol_match_in_source_run",
@@ -1390,7 +1716,7 @@ def _scan_row_matches_holding(row: dict[str, Any], holding: HoldingConfig) -> bo
         candidates.append(ticker_view.get("name"))
     for candidate in candidates:
         candidate_text = str(candidate or "").strip()
-        if candidate_text and holding_matches_db_symbol(holding.ticker, candidate_text):
+        if candidate_text and holding_matches_db_symbol_for_holding(holding, candidate_text):
             return True
     return False
 
@@ -1410,6 +1736,7 @@ def _build_api_fallback_raw_perf_rows(
             continue
         export_row = {
             "config_ticker": holding.ticker,
+            "config_symbol": holding.symbol or "",
             "matched_symbol": get_symbol_name(matched_row),
             **_holding_position_fields(holding),
             "company": matched_row.get("name") or matched_row.get("description"),
@@ -1638,6 +1965,37 @@ def _coerce_optional_float(value: Any) -> float | None:
         return None
 
 
+def _format_cash_position_summary(
+    cash_position: CashPositionConfig | Mapping[str, Any] | None,
+    *,
+    portfolio_currency: str,
+) -> str | None:
+    if cash_position is None:
+        return None
+    if isinstance(cash_position, CashPositionConfig):
+        value = cash_position.value
+        currency = cash_position.currency
+        value_in_portfolio = cash_position.value_in_portfolio_currency
+    else:
+        value = _coerce_optional_float(cash_position.get("value"))
+        if value is None:
+            return None
+        currency = str(cash_position.get("currency") or portfolio_currency)
+        value_in_portfolio = _coerce_optional_float(
+            cash_position.get("value_in_portfolio_currency")
+        )
+    line = f"{value:,.2f} {currency}"
+    if (
+        value_in_portfolio is not None
+        and normalize_currency_code(currency) != normalize_currency_code(portfolio_currency)
+    ):
+        line += (
+            f" ({value_in_portfolio:,.2f} "
+            f"{normalize_currency_code(portfolio_currency).lower()})"
+        )
+    return line
+
+
 def _format_shortlist_usd(amount: float | None) -> str:
     if amount is None:
         return "n/a"
@@ -1842,6 +2200,12 @@ def _build_shortlist_lines(
     ]
     if holdings_payload.get("description"):
         lines.append(f"Notes      : {holdings_payload['description']}")
+    cash_summary = _format_cash_position_summary(
+        holdings_payload.get("_resolved_cash_position"),
+        portfolio_currency=portfolio_currency,
+    )
+    if cash_summary:
+        lines.append(f"Cash       : {cash_summary}")
     if source is not None:
         lines.append(f"Scan       : {source.run_id}")
     lines.append("")
@@ -2155,9 +2519,19 @@ def _write_overview_log(
         f"  total_invested_usd: {total_invested_usd:,.2f}"
         if total_invested_usd > 0
         else "  total_invested_usd: N/A",
+    ]
+    cash_summary = _format_cash_position_summary(
+        holdings_payload.get("_resolved_cash_position"),
+        portfolio_currency=str(portfolio_currency),
+    )
+    if cash_summary:
+        lines.append(f"  cash_position: {cash_summary}")
+    lines.extend(
+        [
         "  fx_provider: frankfurter.app (ECB rates, free, no API key)",
         "",
-    ]
+        ]
+    )
     if fx_warnings:
         lines.append("FX warnings")
         for warning in fx_warnings:
@@ -2237,7 +2611,7 @@ def run_holdings_scoring_analysis(
 ) -> dict[str, Any]:
     """Run holdings scoring exports for the configured current holdings."""
     resolved_config_path = Path(holdings_config_path)
-    holdings_payload, holdings = load_holdings_config(resolved_config_path)
+    holdings_payload, holdings, cash_position = load_holdings_config(resolved_config_path)
     portfolio_currency = str(
         holdings_payload.get("_resolved_portfolio_currency") or "USD"
     )
@@ -2252,6 +2626,15 @@ def run_holdings_scoring_analysis(
         allow_external_fx=resolve_fx_rates,
     )
     fx_warnings.extend(enrich_warnings)
+    cash_position = enrich_cash_position(
+        cash_position,
+        portfolio_currency=portfolio_currency,
+        as_of_date=as_of_date,
+        allow_external_fx=resolve_fx_rates,
+        fx_warnings=fx_warnings,
+    )
+    if cash_position is not None:
+        holdings_payload["_resolved_cash_position"] = cash_position.to_dict()
     mtm_context = MarkToMarketContext(
         portfolio_currency=portfolio_currency,
         as_of_date=as_of_date,
@@ -2287,7 +2670,15 @@ def run_holdings_scoring_analysis(
             source.run_id,
             "consensus_horizon_scores",
         )
-        matched, unmatched = match_holdings_to_db_symbols(holdings, db_symbols)
+        raw_catalog = _fetch_raw_scan_symbol_catalog(
+            source.database_path,
+            source.run_id,
+        )
+        matched, unmatched = match_holdings_to_db_symbols(
+            holdings,
+            db_symbols,
+            raw_catalog=raw_catalog,
+        )
 
     scan_results: list[ScanExportResult] = []
     for scan_key in enabled_scans:
@@ -2336,6 +2727,9 @@ def run_holdings_scoring_analysis(
         "holdings_id": holdings_payload.get("holdings_id"),
         "holdings_count": len(holdings),
         "portfolio_currency": portfolio_currency,
+        "cash_position": (
+            cash_position.to_dict() if cash_position is not None else None
+        ),
         "fx_as_of_date": as_of_date.isoformat(),
         "fx_provider": "frankfurter.app",
         "resolve_fx_rates": resolve_fx_rates,
@@ -2396,6 +2790,9 @@ def run_holdings_scoring_analysis(
         "holdings_config_path": str(resolved_config_path),
         "holdings_id": holdings_payload.get("holdings_id"),
         "portfolio_currency": portfolio_currency,
+        "cash_position": (
+            cash_position.to_dict() if cash_position is not None else None
+        ),
         "fx_warnings": fx_warnings,
         "source": {
             "database_path": str(source.database_path),

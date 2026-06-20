@@ -2,8 +2,20 @@
   "schema_version": "holdings_scoring_v1",
   "holdings_id": "default",
   "portfolio_currency": "USD",
-  "description": "Current book — set invested_sum/average_price in their currencies; portfolio aggregates in USD",
+  "description": "Current book — set invested_sum/average_price in their currencies; portfolio aggregates in USD. Use optional symbol (EXCHANGE:TICKER) when ticker alone is ambiguous.",
+  "cash_position": {
+    "value": 10450,
+    "currency": "USD"
+  },
   "holdings": [
+    {
+      "ticker": "SEZL",
+      "sleeve": "core",
+      "invested_sum": 1999,
+      "invested_currency": "USD",
+      "average_price": 155.48,
+      "price_currency": "USD"
+    },
     {
       "ticker": "VSH",
       "sleeve": "core",
@@ -45,15 +57,6 @@
       "average_price": 97.44,
       "price_currency": "USD",
       "notes": "Synaptics"
-    },
-    {
-      "ticker": "SNX",
-      "sleeve": "core",
-      "invested_sum": 998.49,
-      "invested_currency": "USD",
-      "average_price": 183.82,
-      "price_currency": "USD",
-      "notes": "TD Synnex"
     },
     {
       "ticker": "DUOL",
@@ -129,6 +132,7 @@
     },
     {
       "ticker": "CF",
+      "symbol": "NYSE:CF",
       "sleeve": "core",
       "invested_sum": 2626.63,
       "invested_currency": "USD",

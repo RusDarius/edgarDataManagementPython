@@ -1,0 +1,50 @@
+{
+  "schema_version": "move_prediction_profile_suite_v1",
+  "suite_id": "active_manager_v4",
+  "suite_version": "1.0.0",
+  "description": "Active-manager v4: v3 consolidated suite plus upside_reversal_v1 long reversal lens.",
+  "profile_names": [
+    "breakout_long_v1",
+    "early_momentum_inflection_v1",
+    "forward_edge_active_v2",
+    "quality_continuation_v1",
+    "quality_value_compounder",
+    "durable_value_compounder_v1",
+    "asymmetric_value",
+    "value_recovery_v2",
+    "defensive_fortress_v2",
+    "upside_reversal_v1",
+    "fragility_short",
+    "mean_reversion_exhaustion_v1"
+  ],
+  "consensus_profile_weights": {
+    "breakout_long_v1": 0.16,
+    "early_momentum_inflection_v1": 0.10,
+    "forward_edge_active_v2": 0.10,
+    "quality_continuation_v1": 0.08,
+    "quality_value_compounder": 0.10,
+    "durable_value_compounder_v1": 0.09,
+    "asymmetric_value": 0.08,
+    "value_recovery_v2": 0.07,
+    "defensive_fortress_v2": 0.06,
+    "upside_reversal_v1": 0.07,
+    "fragility_short": 0.06,
+    "mean_reversion_exhaustion_v1": 0.03
+  },
+  "inverted_consensus_profiles": [
+    "fragility_short",
+    "mean_reversion_exhaustion_v1"
+  ],
+  "long_consensus_profiles": [
+    "breakout_long_v1",
+    "early_momentum_inflection_v1",
+    "forward_edge_active_v2",
+    "quality_continuation_v1",
+    "quality_value_compounder",
+    "durable_value_compounder_v1",
+    "asymmetric_value",
+    "value_recovery_v2",
+    "defensive_fortress_v2",
+    "upside_reversal_v1"
+  ]
+}

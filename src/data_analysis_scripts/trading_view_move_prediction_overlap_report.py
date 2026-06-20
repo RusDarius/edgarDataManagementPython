@@ -25,6 +25,9 @@ CRITICAL_PAIR_GATES: dict[tuple[str, str], float] = {
     ("breakout_long_v1", "quality_continuation_v1"): 0.35,
     ("asymmetric_value", "value_recovery_v2"): 0.35,
     ("forward_edge_active_v2", "quality_value_compounder"): 0.35,
+    ("upside_reversal_v1", "breakout_long_v1"): 0.35,
+    ("upside_reversal_v1", "early_momentum_inflection_v1"): 0.35,
+    ("upside_reversal_v1", "value_recovery_v2"): 0.35,
 }
 
 OVERLAY_PROFILES = frozenset({"fragility_short", "mean_reversion_exhaustion_v1"})

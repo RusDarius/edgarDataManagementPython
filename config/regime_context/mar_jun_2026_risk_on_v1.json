@@ -1,0 +1,50 @@
+{
+  "schema_version": "regime_context_v1",
+  "config_id": "mar_jun_2026_risk_on",
+  "regime_label": "Risk-on / high-beta rally — volatility and beta rewarded",
+  "scan_period_run_root": "logs/tradingview_analysis/trading_view_all_fields_data/pattern_analysis/runs/scan_period_close_forward_tracking_29mar_15jun2026_b108820e",
+  "all_fields_root": "logs/tradingview_analysis/trading_view_all_fields_data",
+  "all_fields_db_path": null,
+  "performance_target": "period_return_pct",
+  "stale_all_fields_days": 8,
+  "promoted_predictors": ["ADRP|15", "ADRP|1W", "ATRP|1W"],
+  "demoted_predictors": ["ebitda_ttm", "oper_income_ttm", "Recommend.MA|1M"],
+  "warning_predictors": [
+    "RSI21[1]|1M",
+    "Stoch.K_14_1_3|1M",
+    "W.R|1M",
+    "Recommend.MA|1M",
+    "oper_income_ttm",
+    "ebitda_ttm"
+  ],
+  "bullish_predictors": [
+    "ATRP|1W",
+    "ATRP",
+    "ADRP|15",
+    "ADRP|1W",
+    "ADX-DI|1M",
+    "ADX-DI_50|1M",
+    "relative_volume"
+  ],
+  "playbook_a_min_relative_volume": 1.5,
+  "top_n_focus": 30,
+  "field_resolution": {
+    "scan_column_aliases": {
+      "relative_volume": "relative_volume_10d_calc",
+      "Recommend.MA|1M": "Recommend.MA"
+    },
+    "scan_proxies_last_resort": {
+      "ADRP|15": "ADR",
+      "ADRP|1W": "ADR",
+      "ATRP|1W": "ATRP",
+      "ATRP": "ATRP",
+      "ADX-DI|1M": "ADX-DI",
+      "ADX-DI_50|1M": "ADX-DI",
+      "ebitda_ttm": "ebitda",
+      "oper_income_ttm": "net_income",
+      "RSI21[1]|1M": "RSI",
+      "Stoch.K_14_1_3|1M": "Stoch.RSI.K",
+      "W.R|1M": "W.R"
+    }
+  }
+}

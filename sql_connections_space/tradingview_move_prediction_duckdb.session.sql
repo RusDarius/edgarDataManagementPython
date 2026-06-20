@@ -116,12 +116,7 @@ ORDER BY m.created_at_utc DESC NULLS LAST,
 WITH tickers AS (
     SELECT unnest(
             [
-                'VSH',
-                'STMPA',
-                'SYNA',
-                'GTLB',
-                'TEAM',
-                'ZS',
+                'BE',
             ]
         ) AS ticker
 ),

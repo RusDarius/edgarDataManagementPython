@@ -21,6 +21,11 @@ from pathlib import Path
 import duckdb
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+from data_analysis_scripts.trading_view_regime_context_overlay import (
+    fetch_predictor_weights,
+)
 DEFAULT_RUN_ROOT = (
     PROJECT_ROOT
     / "logs/tradingview_analysis/trading_view_all_fields_data/pattern_analysis/runs"
@@ -134,27 +139,6 @@ def _require_path(path: Path, *, label: str) -> None:
         f"{label} not found at {path.as_posix()}. "
         "Run scan-period tracking again to generate period_total outputs."
     )
-
-
-def _fetch_predictor_weights(
-    con: duckdb.DuckDBPyConnection,
-    predictor_fields: tuple[str, ...],
-    performance_target: str,
-) -> list[tuple[str, float, float]]:
-    placeholders = ", ".join("?" for _ in predictor_fields)
-    rows = con.execute(
-        f"""
-        SELECT predictor_field,
-               rank_stability_score,
-               ABS(rank_stability_score) AS weight
-        FROM agg.cross_run_field_stability
-        WHERE performance_field = ?
-          AND predictor_field IN ({placeholders})
-        ORDER BY ABS(rank_stability_score) DESC
-        """,
-        [performance_target, *list(predictor_fields)],
-    ).fetchall()
-    return [(str(field), float(rss), float(weight)) for field, rss, weight in rows]
 
 
 def _build_enr_unpivot_sql(
@@ -1083,7 +1067,7 @@ def run_rankings(
     _attach(con, "day", daily_db)
 
     all_predictors = BULLISH_PREDICTORS + BEARISH_WARNING_PREDICTORS
-    weights = _fetch_predictor_weights(con, all_predictors, performance_target)
+    weights = fetch_predictor_weights(run_root, all_predictors, performance_target)
     if not weights:
         raise RuntimeError("No predictor weights found in aggregate DB.")
 

@@ -13,7 +13,7 @@ from pathlib import Path
 import subprocess
 from statistics import median
 import sys
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 import uuid
 
 from data_analysis_scripts._shared_analysis_utils import (
@@ -275,6 +275,8 @@ RAW_PROFILE_FIELDS = [
     "ChaikinMoneyFlow",
     "BBPower",
     "Recommend.All|1W",
+    "Recommend.MA|1M",
+    "W.R",
 ]
 
 DERIVED_PROFILE_FIELDS = [
@@ -341,6 +343,12 @@ DERIVED_PROFILE_FIELDS = [
     "ebitda_per_employee",
     "near_52w_high_score",
     "exhaustion_range_position",
+    "williams_r_centered",
+    "regime_oversold_daily",
+    "regime_extended_tape",
+    "repair_confirmation_score",
+    "upside_room_score",
+    "distress_floor",
 ]
 
 EXTENDED_SIGNALS: frozenset[str] = frozenset(
@@ -461,6 +469,12 @@ EXTENDED_SIGNALS: frozenset[str] = frozenset(
         "ebitda_per_employee",
         "near_52w_high_score",
         "exhaustion_range_position",
+        "williams_r_centered",
+        "regime_oversold_daily",
+        "regime_extended_tape",
+        "repair_confirmation_score",
+        "upside_room_score",
+        "distress_floor",
     }
 )
 
@@ -3340,6 +3354,8 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
     bb_power = _coerce_numeric(row.get("BBPower"))
     recommend_all = _coerce_numeric(row.get("Recommend.All"))
     recommend_all_1w = _coerce_numeric(row.get("Recommend.All|1W"))
+    recommend_ma_1m = _coerce_numeric(row.get("Recommend.MA|1M"))
+    williams_r = _coerce_numeric(row.get("W.R"))
     ebitda_value = _coerce_numeric(row.get("ebitda"))
 
     short_term_cash_coverage = _safe_ratio(
@@ -3591,6 +3607,93 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
     )
     exhaustion_range_position = range_position_52w
 
+    williams_r_centered: float | None = (
+        None if williams_r is None else 50.0 - williams_r
+    )
+
+    def _mean_signal_values(values: list[float]) -> float | None:
+        if not values:
+            return None
+        return sum(values) / len(values)
+
+    oversold_inputs: list[float] = []
+    if rsi_value is not None:
+        oversold_inputs.append(_clamp((50.0 - rsi_value) / 25.0, -3.0, 3.0))
+    if rsi7_value is not None:
+        oversold_inputs.append(_clamp((50.0 - rsi7_value) / 25.0, -3.0, 3.0))
+    if stoch_rsi_k is not None:
+        oversold_inputs.append(_clamp((50.0 - stoch_rsi_k) / 25.0, -3.0, 3.0))
+    if bb_position is not None:
+        oversold_inputs.append(_clamp(0.5 - bb_position, -3.0, 3.0) * 2.0)
+    if range_position_52w is not None:
+        oversold_inputs.append(_clamp(0.35 - range_position_52w, -3.0, 3.0) * 2.0)
+    if williams_r_centered is not None:
+        oversold_inputs.append(_clamp(williams_r_centered / 25.0, -3.0, 3.0))
+    regime_oversold_daily = _mean_signal_values(oversold_inputs)
+
+    perf_3m = _coerce_numeric(row.get("Perf.3M"))
+    perf_6m = _coerce_numeric(row.get("Perf.6M"))
+    extended_inputs: list[float] = []
+    if near_52w_high_score is not None:
+        extended_inputs.append(near_52w_high_score)
+    if trend_alignment is not None:
+        extended_inputs.append(trend_alignment)
+    if perf_3m is not None and perf_3m > 0:
+        extended_inputs.append(_clamp(perf_3m / 20.0, 0.0, 3.0))
+    if perf_6m is not None and perf_6m > 0:
+        extended_inputs.append(_clamp(perf_6m / 30.0, 0.0, 3.0))
+    regime_extended_tape = _mean_signal_values(extended_inputs)
+
+    perf_5d = _coerce_numeric(row.get("Perf.5D"))
+    perf_w = _coerce_numeric(row.get("Perf.W"))
+    relative_volume = _coerce_numeric(row.get("relative_volume_10d_calc"))
+    repair_inputs: list[float] = []
+    if perf_5d is not None and perf_5d > 0:
+        repair_inputs.append(_clamp(perf_5d / 10.0, 0.0, 3.0))
+    if perf_w is not None and perf_w > 0:
+        repair_inputs.append(_clamp(perf_w / 15.0, 0.0, 3.0))
+    if relative_volume is not None and relative_volume > 1.0:
+        repair_inputs.append(_clamp(relative_volume - 1.0, 0.0, 3.0))
+    if atrp is not None:
+        repair_inputs.append(_clamp(atrp / 5.0, 0.0, 3.0))
+    monthly_oversold_only = False
+    if recommend_ma_1m is not None and recommend_ma_1m < 0:
+        monthly_oversold_only = True
+    if stoch_rsi_k is not None and stoch_rsi_k < 30 and (perf_5d or 0) <= 0:
+        monthly_oversold_only = True
+    repair_confirmation_score = _mean_signal_values(repair_inputs)
+    if monthly_oversold_only and repair_confirmation_score is not None:
+        repair_confirmation_score *= 0.35
+
+    upside_inputs: list[float] = []
+    if distance_from_52w_high is not None:
+        upside_inputs.append(_clamp(-distance_from_52w_high * 2.0, -3.0, 3.0))
+    pt_upside = price_target_upside_median
+    if pt_upside is None:
+        pt_upside = price_target_upside_average
+    if pt_upside is not None and pt_upside > 0:
+        upside_inputs.append(_clamp(pt_upside * 2.0, 0.0, 3.0))
+    close_vs_r1 = _pivot_distance(camarilla_r1)
+    if close_vs_r1 is not None and close_vs_r1 < 0:
+        upside_inputs.append(_clamp(-close_vs_r1, 0.0, 3.0))
+    if donchian_position is not None and donchian_position < 0.7:
+        upside_inputs.append(_clamp(0.7 - donchian_position, 0.0, 3.0) * 2.0)
+    upside_room_score = _mean_signal_values(upside_inputs)
+
+    altman_z = _coerce_numeric(row.get("altman_z_score_ttm"))
+    debt_ebitda = _coerce_numeric(row.get("total_debt_to_ebitda_fq"))
+    interest_cover = _coerce_numeric(row.get("interst_cover_ttm"))
+    distress_inputs: list[float] = []
+    if altman_z is not None:
+        distress_inputs.append(_clamp((altman_z - 1.8) / 1.5, -3.0, 3.0))
+    if debt_ebitda is not None:
+        distress_inputs.append(_clamp((3.0 - debt_ebitda) / 2.0, -3.0, 3.0))
+    if interest_cover is not None:
+        distress_inputs.append(_clamp(interest_cover / 5.0, -3.0, 3.0))
+    if net_cash_to_market_cap is not None:
+        distress_inputs.append(_clamp(net_cash_to_market_cap * 10.0, -3.0, 3.0))
+    distress_floor = _mean_signal_values(distress_inputs)
+
     return {
         "float_turnover": _safe_ratio(volume, float_shares),
         "dollar_turnover_intensity": _safe_ratio(avg_value_traded_10d, market_cap),
@@ -3666,6 +3769,12 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
         "ebitda_per_employee": ebitda_per_employee,
         "near_52w_high_score": near_52w_high_score,
         "exhaustion_range_position": exhaustion_range_position,
+        "williams_r_centered": williams_r_centered,
+        "regime_oversold_daily": regime_oversold_daily,
+        "regime_extended_tape": regime_extended_tape,
+        "repair_confirmation_score": repair_confirmation_score,
+        "upside_room_score": upside_room_score,
+        "distress_floor": distress_floor,
     }
 
 
@@ -3984,6 +4093,18 @@ def _build_component_signal_map(
             "exhaustion_range_position": _derived_signal(
                 derived_row, profiles, "exhaustion_range_position"
             ),
+            "williams_r_centered": _derived_signal(
+                derived_row, profiles, "williams_r_centered"
+            ),
+            "regime_oversold_daily": _derived_signal(
+                derived_row, profiles, "regime_oversold_daily"
+            ),
+            "regime_extended_tape": _derived_signal(
+                derived_row, profiles, "regime_extended_tape"
+            ),
+            "repair_confirmation_score": _derived_signal(
+                derived_row, profiles, "repair_confirmation_score"
+            ),
         },
         "trend": {
             "close_vs_sma50": derived_row.get("close_vs_sma50"),
@@ -4184,6 +4305,9 @@ def _build_component_signal_map(
             "range_position_52w": _derived_signal(
                 derived_row, profiles, "range_position_52w", invert=True
             ),
+            "upside_room_score": _derived_signal(
+                derived_row, profiles, "upside_room_score"
+            ),
             "enterprise_value_to_free_cash_flow_ttm": _field_signal(
                 row,
                 profiles,
@@ -4292,6 +4416,7 @@ def _build_component_signal_map(
                 invert=True,
                 positive_only=True,
             ),
+            "distress_floor": _derived_signal(derived_row, profiles, "distress_floor"),
             "price_target_dispersion": _derived_signal(
                 derived_row,
                 profiles,
@@ -4943,6 +5068,50 @@ def _manager_action_signal(
         if weeks is not None and weeks >= 0.55 and momentum >= 0.45:
             return "trim_extended_long"
 
+    if profile_family == "upside_reversal":
+        derived = derived_row or {}
+        extended_tape = derived.get("regime_extended_tape")
+        repair_confirmation = derived.get("repair_confirmation_score")
+        distress_floor = derived.get("distress_floor")
+        range_position = derived.get("range_position_52w")
+        exhaustion_weeks = None
+        if profile_scores:
+            for exhaustion_name in (
+                "mean_reversion_exhaustion_v1",
+                "mean_reversion_exhaustion",
+            ):
+                if exhaustion_name in profile_scores:
+                    exhaustion_weeks = profile_scores[exhaustion_name].get(
+                        "weeks", {}
+                    ).get("score")
+                    if exhaustion_weeks is not None:
+                        break
+
+        if safety <= -0.55 or (distress_floor is not None and distress_floor < -0.5):
+            return "avoid_reversal_trap"
+        if extended_tape is not None and extended_tape > 0.3:
+            return "avoid_reversal_trap"
+        if (
+            exhaustion_weeks is not None
+            and exhaustion_weeks >= 0.50
+            and weeks is not None
+            and weeks >= 0.45
+        ):
+            return "avoid_reversal_trap"
+        if range_position is not None and range_position > 0.65:
+            return "avoid_reversal_trap"
+
+        if (
+            weeks is not None
+            and weeks >= 0.55
+            and repair_confirmation is not None
+            and repair_confirmation >= 0.2
+            and safety >= -0.25
+        ):
+            return "accumulate_reversal_long"
+        if weeks is not None and weeks >= 0.35:
+            return "watch_reversal_entry"
+
     if profile_family == "pre_earnings_drift":
         if (
             earnings_days_to_next is not None
@@ -5485,10 +5654,88 @@ def _log_scoring_profile_details(
     log_to_file(log_file, "")
 
 
+def _format_regime_context_log_suffix(
+    prediction: dict[str, Any],
+    regime_context_by_symbol: Mapping[str, Any] | None,
+) -> str:
+    if not regime_context_by_symbol:
+        return ""
+    from data_analysis_scripts.trading_view_regime_context_overlay import (
+        get_regime_record_for_row,
+    )
+
+    record = get_regime_record_for_row(prediction["row"], regime_context_by_symbol)
+    if record is None:
+        return f"{'':>8} {'':<12} {'':>8} {'':>8} {'':>5}"
+    tier = str(record.active_mgmt_tier or "")[:12]
+    return (
+        f"{record.regime_fit_score:>8.1f} {tier:<12} "
+        f"{(record.atrp_1w or 0.0):>8.1f} "
+        f"{(record.relative_volume or 0.0):>8.2f} "
+        f"{record.warning_flag_count:>5}"
+    )
+
+
+def _log_regime_aligned_section(
+    log_file: Path,
+    prediction_rows: list[dict[str, Any]],
+    *,
+    regime_context_by_symbol: Mapping[str, Any],
+    top_n: int = TOP_SECTION_ROWS,
+) -> None:
+    from data_analysis_scripts.trading_view_regime_context_overlay import (
+        get_regime_record_for_row,
+    )
+
+    ranked: list[tuple[float, dict[str, Any]]] = []
+    for prediction in prediction_rows:
+        weeks = prediction["horizons"].get("weeks") or {}
+        weeks_ras = weeks.get("risk_adjusted_score")
+        if weeks_ras is None:
+            continue
+        record = get_regime_record_for_row(prediction["row"], regime_context_by_symbol)
+        if record is None:
+            continue
+        if record.active_mgmt_tier in {"warning_overlay", "insufficient_signals"}:
+            continue
+        combined = float(weeks_ras) * (record.regime_fit_score / 100.0)
+        ranked.append((combined, prediction))
+
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    log_to_file(log_file, f"REGIME-ALIGNED TOP {top_n} (weeks RAS x regime fit)")
+    log_to_file(log_file, "-" * 160)
+    log_to_file(
+        log_file,
+        f"{'Ticker':<12} {'Score':>8} {'RAdj':>8} {'RegFit':>8} {'Tier':<14} "
+        f"{'ATRP':>8} {'RelVol':>8} {'Warn':>5} {'Combined':>10}",
+    )
+    log_to_file(log_file, "-" * 160)
+    for combined, prediction in ranked[:top_n]:
+        row = prediction["row"]
+        weeks = prediction["horizons"].get("weeks") or {}
+        record = get_regime_record_for_row(prediction["row"], regime_context_by_symbol)
+        if record is None:
+            continue
+        log_to_file(
+            log_file,
+            f"{_get_symbol_name(row):<12} "
+            f"{_format_score(weeks.get('score')):>8} "
+            f"{_format_score(weeks.get('risk_adjusted_score')):>8} "
+            f"{record.regime_fit_score:>8.1f} "
+            f"{str(record.active_mgmt_tier or '')[:14]:<14} "
+            f"{(record.atrp_1w or 0.0):>8.1f} "
+            f"{(record.relative_volume or 0.0):>8.2f} "
+            f"{record.warning_flag_count:>5} "
+            f"{combined:>10.3f}",
+        )
+    log_to_file(log_file, "")
+
+
 def _log_horizon_section(
     log_file: Path,
     prediction_rows: list[dict[str, Any]],
     horizon_name: str,
+    regime_context_by_symbol: Mapping[str, Any] | None = None,
 ) -> None:
     horizon_title = HORIZON_TITLES[horizon_name]
     scored_predictions = [
@@ -5496,6 +5743,11 @@ def _log_horizon_section(
         for prediction in prediction_rows
         if prediction["horizons"][horizon_name]["score"] is not None
     ]
+    regime_header = (
+        f" {'RegFit':>8} {'Tier':<12} {'ATRP':>8} {'RelVol':>8} {'Warn':>5}"
+        if regime_context_by_symbol
+        else ""
+    )
 
     log_to_file(log_file, horizon_title)
     log_to_file(log_file, "-" * 160)
@@ -5504,7 +5756,7 @@ def _log_horizon_section(
         (
             f"{'Ticker':<12} {'Company':<28} {'Industry':<26} {'MCap':>10} {'Float%':>8} {'Score':>8} {'Dir':<12} {'Conf':>6} "
             f"{'Attn':>8} {'Event':>8} {'Mom':>8} {'Trend':>8} {'Qual':>8} {'Value':>8} {'Safe':>8} {'Scale':>8} {'STSafe':>8} {'Setup':<28}"
-            f" {'RAdj':>8} {'Risk':<14} {'Action':<24}"
+            f" {'RAdj':>8} {'Risk':<14} {'Action':<24}{regime_header}"
         ),
     )
     log_to_file(log_file, "-" * 160)
@@ -5531,12 +5783,23 @@ def _log_horizon_section(
                 f"{_format_score(components['trend']):>8} {_format_score(components['quality']):>8} {_format_score(components['valuation']):>8} "
                 f"{_format_score(components['safety']):>8} {_format_score(components.get('scale')):>8} {_format_multiple(prediction['derived'].get('short_term_cash_coverage')):>8} {str(horizon['setup'])[:28]:<28} "
                 f"{_format_score(horizon.get('risk_adjusted_score')):>8} {str(horizon.get('risk_tier'))[:14]:<14} {str(prediction.get('manager_action_signal'))[:24]:<24}"
+                f"{_format_regime_context_log_suffix(prediction, regime_context_by_symbol)}"
             ),
         )
 
     log_to_file(log_file, "")
     log_to_file(log_file, f"{horizon_title} downside candidates")
     log_to_file(log_file, "-" * 160)
+    if regime_context_by_symbol:
+        log_to_file(
+            log_file,
+            (
+                f"{'Ticker':<12} {'Company':<28} {'Industry':<26} {'MCap':>10} {'Float%':>8} {'Score':>8} {'Dir':<12} {'Conf':>6} "
+                f"{'Attn':>8} {'Event':>8} {'Mom':>8} {'Trend':>8} {'Qual':>8} {'Value':>8} {'Safe':>8} {'Scale':>8} {'STSafe':>8} {'Setup':<28}"
+                f" {'RAdj':>8} {'Risk':<14} {'Action':<24}{regime_header}"
+            ),
+        )
+        log_to_file(log_file, "-" * 160)
 
     top_downside = sorted(
         scored_predictions,
@@ -5560,6 +5823,7 @@ def _log_horizon_section(
                 f"{_format_score(components['trend']):>8} {_format_score(components['quality']):>8} {_format_score(components['valuation']):>8} "
                 f"{_format_score(components['safety']):>8} {_format_score(components.get('scale')):>8} {_format_multiple(prediction['derived'].get('short_term_cash_coverage')):>8} {str(horizon['setup'])[:28]:<28} "
                 f"{_format_score(horizon.get('risk_adjusted_score')):>8} {str(horizon.get('risk_tier'))[:14]:<14} {str(prediction.get('manager_action_signal'))[:24]:<24}"
+                f"{_format_regime_context_log_suffix(prediction, regime_context_by_symbol)}"
             ),
         )
 
@@ -6561,10 +6825,13 @@ def _log_consensus_aggregator_report(
     log_to_file(log_file, "=" * 160)
     action_labels = [
         ("add_long_breakout", "Momentum longs with risk filter"),
+        ("accumulate_reversal_long", "Upside reversal entries with repair confirmation"),
+        ("watch_reversal_entry", "Reversal setups awaiting confirmation"),
         ("accumulate_value_catalyst", "Value plus catalyst longs"),
         ("watch_value_reversal", "Cheap names waiting for reversal"),
         ("hold_quality_long", "Lower-drama quality longs"),
         ("hedge_or_short", "Short / hedge candidates"),
+        ("avoid_reversal_trap", "Reversal candidates blocked by extension or distress"),
         ("avoid_value_trap", "Cheap but structurally risky"),
     ]
 
@@ -7238,7 +7505,8 @@ def _analyze_move_prediction_scan_duckdb(
     scoring_profile: str | ScoringProfile | None = None,
     include_blind_spot_sections: bool = True,
     output_dir: str | Path | None = None,
-) -> Path:
+    regime_context_by_symbol: Mapping[str, Any] | None = None,
+) -> tuple[Path, list[dict[str, Any]]]:
     industries = _normalize_industries(industries)
     resolved_profile = resolve_move_prediction_scoring_profile(scoring_profile)
     horizon_names = list(_resolve_horizon_weights(resolved_profile).keys())
@@ -7275,7 +7543,7 @@ def _analyze_move_prediction_scan_duckdb(
 
     if not scan_data:
         log_to_file(log_file, "No rows returned for this scan.")
-        return log_file
+        return log_file, []
 
     _enrich_with_peer_metrics(scan_data)
     derived_metrics = [_build_derived_metrics(row) for row in scan_data]
@@ -7336,10 +7604,22 @@ def _analyze_move_prediction_scan_duckdb(
     _log_methodology(log_file, resolved_profile)
     _log_scoring_profile_details(log_file, resolved_profile)
     for horizon_name in horizon_names:
-        _log_horizon_section(log_file, prediction_rows, horizon_name)
+        _log_horizon_section(
+            log_file,
+            prediction_rows,
+            horizon_name,
+            regime_context_by_symbol=regime_context_by_symbol,
+        )
     _log_consensus_section(log_file, prediction_rows)
     if include_blind_spot_sections:
         _log_blind_spot_sections(log_file, prediction_rows)
+    if regime_context_by_symbol:
+        _log_regime_aligned_section(
+            log_file,
+            prediction_rows,
+            regime_context_by_symbol=regime_context_by_symbol,
+            top_n=TOP_SECTION_ROWS,
+        )
 
     tracking_log_file = _build_tracking_log_file_name(
         industries,
@@ -7364,7 +7644,49 @@ def _analyze_move_prediction_scan_duckdb(
         profile_name=resolved_profile.name,
         file_path=tracking_log_file,
     )
-    return log_file
+    return log_file, prediction_rows
+
+
+def _write_regime_context_focus_log_for_run(
+    *,
+    run_output_dir: Path,
+    run_id: str,
+    regime_overlay_result: Any,
+    consensus_rows: list[dict[str, Any]],
+    resolved_profiles: list[str],
+    generated_logs: dict[str, Any],
+    profile_predictions_by_name: Mapping[str, list[dict[str, Any]]],
+    conviction_records: Sequence[Mapping[str, Any]] | None = None,
+    duckdb_store: Any | None = None,
+) -> Path:
+    from data_analysis_scripts.trading_view_regime_context_overlay import (
+        write_regime_context_focus_log,
+    )
+
+    regime_focus_log = run_output_dir / "move_prediction__regime_context_focus.log"
+    write_regime_context_focus_log(
+        regime_focus_log,
+        run_id=run_id,
+        overlay=regime_overlay_result,
+        consensus_rows=consensus_rows,
+        profile_names=resolved_profiles,
+        profile_log_paths={
+            name: path
+            for name, path in generated_logs.items()
+            if name in resolved_profiles and isinstance(path, Path)
+        },
+        profile_predictions_by_name=profile_predictions_by_name,
+        conviction_records=conviction_records,
+    )
+    generated_logs["_regime_context_focus"] = regime_focus_log
+    if duckdb_store is not None:
+        duckdb_store.register_report(
+            run_id=run_id,
+            report_key="_regime_context_focus",
+            report_type="regime_context_focus_log",
+            file_path=regime_focus_log,
+        )
+    return regime_focus_log
 
 
 def _run_consensus_aggregator_duckdb(
@@ -7381,7 +7703,7 @@ def _run_consensus_aggregator_duckdb(
     consensus_profile_weights: Mapping[str, float] | None = None,
     inverted_consensus_profiles: frozenset[str] | None = None,
     long_consensus_profiles: frozenset[str] | None = None,
-) -> Path:
+) -> tuple[Path, list[dict[str, Any]]]:
     industries = _normalize_industries(industries)
     resolved_output_dir = Path(output_dir) if output_dir is not None else None
     log_file = _build_report_file_name(
@@ -7437,7 +7759,7 @@ def _run_consensus_aggregator_duckdb(
         profile_name="consensus",
         file_path=log_file,
     )
-    return log_file
+    return log_file, consensus_rows
 
 
 def _log_duckdb_run_overview(
@@ -7490,6 +7812,10 @@ def run_full_analysis_suite_duckdb(
     create_indexes: bool = False,
     conviction_mode_config_path: str | Path | None = None,
     defer_conviction_to_earnings: bool = False,
+    regime_context_config_path: str | Path | None = None,
+    write_industry_packs: bool = False,
+    industry_pack_group_field: str = "industry",
+    industry_pack_top_n: int = TOP_SECTION_ROWS,
 ) -> dict[str, Any]:
     """DuckDB-backed variant of :func:`run_full_analysis_suite`.
 
@@ -7505,6 +7831,9 @@ def run_full_analysis_suite_duckdb(
     Pass ``profile_suite_path`` to run a versioned JSON profile suite
     (for example ``config/move_prediction_profiles/suites/active_manager_v1.json``).
     Built-in presets remain the default when omitted.
+
+    Set ``write_industry_packs=True`` to emit per-industry peer packs under
+    ``<run_output_dir>/industry_packs/`` (§10.4 theme-local hunting).
     """
     from data_analysis_scripts.trading_view_move_prediction_profile_config import (
         resolve_profile_suite,
@@ -7543,6 +7872,20 @@ def run_full_analysis_suite_duckdb(
     code_version_metadata = _collect_code_version_metadata()
     industries_normalized = _normalize_industries(industries)
 
+    regime_overlay_result: Any | None = None
+    regime_context_by_symbol: dict[str, Any] = {}
+    if regime_context_config_path:
+        from data_analysis_scripts.trading_view_regime_context_overlay import (
+            build_regime_context_duckdb_records,
+            compute_regime_context_overlay,
+        )
+
+        regime_overlay_result = compute_regime_context_overlay(
+            scan_rows,
+            config_path=regime_context_config_path,
+        )
+        regime_context_by_symbol = regime_overlay_result.by_symbol
+
     storage_layout = _build_duckdb_weekly_storage_layout(
         run_id=run_id,
         created_at_utc=created_at_utc,
@@ -7557,6 +7900,8 @@ def run_full_analysis_suite_duckdb(
 
     generated_logs: dict[str, Path] = {}
     parquet_exports: dict[str, Path] = {}
+    profile_predictions_by_name: dict[str, list[dict[str, Any]]] = {}
+    consensus_rows: list[dict[str, Any]] = []
 
     with _duckdb_weekly_writer_lock(storage_layout.database_path):
         with MovePredictionDuckDBStore(
@@ -7608,8 +7953,14 @@ def run_full_analysis_suite_duckdb(
                     context={"run_id": run_id},
                 )
 
+                if regime_overlay_result is not None:
+                    duckdb_store.append_regime_context_scores(
+                        build_regime_context_duckdb_records(run_id, regime_overlay_result)
+                    )
+
+                profile_predictions_by_name = {}
                 for profile_name in resolved_profiles:
-                    generated_logs[profile_name] = _analyze_move_prediction_scan_duckdb(
+                    profile_log, prediction_rows = _analyze_move_prediction_scan_duckdb(
                         scan_data=scan_rows,
                         duckdb_store=duckdb_store,
                         run_id=run_id,
@@ -7619,9 +7970,12 @@ def run_full_analysis_suite_duckdb(
                         scoring_profile=profile_name,
                         include_blind_spot_sections=include_blind_spot_sections,
                         output_dir=storage_layout.run_output_dir,
+                        regime_context_by_symbol=regime_context_by_symbol,
                     )
+                    generated_logs[profile_name] = profile_log
+                    profile_predictions_by_name[profile_name] = prediction_rows
 
-                consensus_log = _run_consensus_aggregator_duckdb(
+                consensus_log, consensus_rows = _run_consensus_aggregator_duckdb(
                     scan_data=scan_rows,
                     duckdb_store=duckdb_store,
                     run_id=run_id,
@@ -7638,6 +7992,18 @@ def run_full_analysis_suite_duckdb(
                     long_consensus_profiles=profile_suite["long_consensus_profiles"],
                 )
                 generated_logs["_consensus_aggregator"] = consensus_log
+
+                if regime_overlay_result is not None:
+                    _write_regime_context_focus_log_for_run(
+                        run_output_dir=storage_layout.run_output_dir,
+                        run_id=run_id,
+                        regime_overlay_result=regime_overlay_result,
+                        consensus_rows=consensus_rows,
+                        resolved_profiles=resolved_profiles,
+                        generated_logs=generated_logs,
+                        profile_predictions_by_name=profile_predictions_by_name,
+                        duckdb_store=duckdb_store,
+                    )
             except Exception:
                 duckdb_store.rollback()
                 raise
@@ -7660,9 +8026,21 @@ def run_full_analysis_suite_duckdb(
                     parquet_dir=storage_layout.parquet_dir if export_parquet else None,
                     suite_id=profile_suite.get("suite_id"),
                     duckdb_store=duckdb_store,
+                    regime_context_by_symbol=regime_context_by_symbol,
                 )
                 generated_logs["_conviction_rankings"] = conviction_result["csv_path"]
                 generated_logs["_conviction_daily_focus"] = conviction_result["log_path"]
+                if regime_overlay_result is not None:
+                    _write_regime_context_focus_log_for_run(
+                        run_output_dir=storage_layout.run_output_dir,
+                        run_id=run_id,
+                        regime_overlay_result=regime_overlay_result,
+                        consensus_rows=consensus_rows,
+                        resolved_profiles=resolved_profiles,
+                        generated_logs=generated_logs,
+                        profile_predictions_by_name=profile_predictions_by_name,
+                        conviction_records=conviction_result.get("ranked_records"),
+                    )
 
             if create_indexes or export_parquet:
                 duckdb_store.close()
@@ -7728,6 +8106,28 @@ def run_full_analysis_suite_duckdb(
         result["_conviction_daily_focus_log"] = generated_logs.get(
             "_conviction_daily_focus"
         )
+    result["_profile_predictions_by_name"] = profile_predictions_by_name
+    result["_consensus_rows"] = consensus_rows
+    if regime_overlay_result is not None:
+        result["_regime_context_focus_log"] = generated_logs.get(
+            "_regime_context_focus"
+        )
+        result["_regime_context_overlay"] = regime_overlay_result
+
+    if write_industry_packs:
+        from data_analysis_scripts.trading_view_move_prediction_industry_packs import (
+            write_industry_packs_from_duckdb_run,
+        )
+
+        industry_pack_result = write_industry_packs_from_duckdb_run(
+            result,
+            group_field=industry_pack_group_field,
+            top_n=industry_pack_top_n,
+        )
+        result["_industry_packs"] = industry_pack_result
+        generated_logs["_industry_packs_overview"] = industry_pack_result[
+            "overview_log"
+        ]
     return result
 
 
@@ -8976,6 +9376,7 @@ def run_full_analysis_suite_with_earnings_priority_duckdb(
     create_indexes: bool = False,
     base_result: Mapping[str, Any] | None = None,
     conviction_mode_config_path: str | Path | None = None,
+    regime_context_config_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """DuckDB-backed variant of :func:`run_full_analysis_suite_with_earnings_priority`.
 
@@ -9017,6 +9418,7 @@ def run_full_analysis_suite_with_earnings_priority_duckdb(
             create_indexes=create_indexes,
             conviction_mode_config_path=conviction_mode_config_path,
             defer_conviction_to_earnings=bool(conviction_mode_config_path),
+            regime_context_config_path=regime_context_config_path,
         )
     else:
         required_keys = (
@@ -9100,7 +9502,36 @@ def run_full_analysis_suite_with_earnings_priority_duckdb(
                     parquet_dir=parquet_dir_resolved if export_parquet else None,
                     suite_id=base_result.get("_duckdb_profile_suite_id"),
                     duckdb_store=duckdb_store,
+                    regime_context_by_symbol=(
+                        getattr(
+                            base_result.get("_regime_context_overlay"),
+                            "by_symbol",
+                            None,
+                        )
+                        or {}
+                    ),
                 )
+
+                if (
+                    conviction_result
+                    and base_result.get("_regime_context_overlay") is not None
+                ):
+                    _write_regime_context_focus_log_for_run(
+                        run_output_dir=run_output_dir,
+                        run_id=run_id,
+                        regime_overlay_result=base_result["_regime_context_overlay"],
+                        consensus_rows=base_result.get("_consensus_rows") or [],
+                        resolved_profiles=resolved_profiles,
+                        generated_logs={
+                            key: value
+                            for key, value in base_result.items()
+                            if isinstance(value, Path)
+                        },
+                        profile_predictions_by_name=(
+                            base_result.get("_profile_predictions_by_name") or {}
+                        ),
+                        conviction_records=conviction_result.get("ranked_records"),
+                    )
 
             parquet_exports = dict(base_result.get("_duckdb_parquet_exports") or {})
             if export_parquet:
@@ -9134,6 +9565,10 @@ def run_full_analysis_suite_with_earnings_priority_duckdb(
     if conviction_result:
         overview_generated_logs["_conviction_rankings"] = conviction_result["csv_path"]
         overview_generated_logs["_conviction_daily_focus"] = conviction_result["log_path"]
+        if base_result.get("_regime_context_overlay") is not None:
+            overview_generated_logs["_regime_context_focus"] = (
+                run_output_dir / "move_prediction__regime_context_focus.log"
+            )
 
     _log_duckdb_run_overview(
         overview_log=result["_duckdb_overview_log"],
@@ -9149,6 +9584,10 @@ def run_full_analysis_suite_with_earnings_priority_duckdb(
     if conviction_result:
         result["_conviction_rankings"] = conviction_result["csv_path"]
         result["_conviction_daily_focus_log"] = conviction_result["log_path"]
+        if base_result.get("_regime_context_overlay") is not None:
+            result["_regime_context_focus_log"] = (
+                run_output_dir / "move_prediction__regime_context_focus.log"
+            )
     return result
 
 

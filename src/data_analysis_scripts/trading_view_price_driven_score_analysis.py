@@ -71,8 +71,10 @@ PERFORMANCE_LENSES: dict[str, dict[str, Any]] = {
 
 REVERSAL_PROFILES = frozenset(
     {
+        "upside_reversal_v1",
         "swing_reversal_v1",
         "value_recovery_v1",
+        "value_recovery_v2",
         "mean_reversion_exhaustion_v1",
         "value_recovery",
         "mean_reversion_exhaustion",

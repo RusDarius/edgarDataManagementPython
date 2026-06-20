@@ -4024,7 +4024,19 @@ def run_scan_period_close_forward_predictor_tracking(
         windows=rolling_result.get("window_count"),
     )
 
-    return {
+    data_set_conclusions_result: dict[str, Any] | None = None
+    if int(rolling_result.get("window_count") or 0) > 0:
+        try:
+            data_set_conclusions_result = export_scan_period_data_set_conclusions(
+                run_root=tracking_output_root,
+            )
+        except (FileNotFoundError, ValueError) as exc:
+            print(
+                f"[tracking] Skipped data_set_conclusions export: {exc}",
+                flush=True,
+            )
+
+    result_payload: dict[str, Any] = {
         "tracking_id": tracking_id,
         "run_lifecycle_id": resolved_run_lifecycle_id,
         "output_dir": tracking_output_root.as_posix(),
@@ -4039,6 +4051,9 @@ def run_scan_period_close_forward_predictor_tracking(
         "rolling_window_result": rolling_result,
         "aggregate_result": aggregate_exports,
     }
+    if data_set_conclusions_result is not None:
+        result_payload["data_set_conclusions"] = data_set_conclusions_result
+    return result_payload
 
 
 def _parse_all_fields_pool_input_paths(
@@ -6803,6 +6818,614 @@ def analyze_all_fields_run_with_forward_returns(
     )
 
 
+DEFAULT_DATA_SET_CONCLUSIONS_DIR = DEFAULT_PATTERN_ANALYSIS_ROOT / "data_set_conclusions"
+
+_STRUCTURAL_PREDICTOR_MARKERS: tuple[str, ...] = (
+    "dividend",
+    "payment_date",
+    "ex_dividend",
+    "ex_date",
+    "earnings_release",
+)
+_NOISE_PREDICTOR_MARKERS: tuple[str, ...] = (
+    "gap",
+    "change",
+    "mom",
+    "roc",
+    "candle.",
+)
+
+
+def _classify_scan_period_predictor_profile(predictor_field: str) -> str:
+    lowered = predictor_field.lower()
+    if any(marker in lowered for marker in _STRUCTURAL_PREDICTOR_MARKERS):
+        return "structural_non_tradable"
+    if any(marker in lowered for marker in _NOISE_PREDICTOR_MARKERS):
+        return "sparse_or_noise"
+    return "tradable_price_indicator"
+
+
+def _format_scan_period_window_label(run_id: str, *, run_lifecycle_id: str | None = None) -> str:
+    body = run_id.removeprefix("period_pooled_")
+    if run_lifecycle_id and body.endswith(f"_{run_lifecycle_id}"):
+        body = body[: -(len(run_lifecycle_id) + 1)]
+    else:
+        parts = body.rsplit("_", 1)
+        if len(parts) == 2 and len(parts[1]) == 8 and parts[1].isalnum():
+            body = parts[0]
+    tokens = body.split("_")
+    if len(tokens) >= 6:
+        start = "_".join(tokens[:3])
+        end = "_".join(tokens[3:6])
+        return f"{start} → {end}"
+    return run_id
+
+
+def _resolve_scan_period_tracking_run_root(
+    *,
+    run_root: str | Path | None = None,
+    tracking_id: str | None = None,
+) -> Path:
+    if run_root is not None:
+        resolved = Path(run_root)
+        if resolved.exists():
+            return resolved
+        raise FileNotFoundError(f"Scan-period run root not found: {resolved.as_posix()}")
+    if tracking_id:
+        candidate = DEFAULT_PATTERN_ANALYSIS_ROOT / "runs" / tracking_id
+        if candidate.exists():
+            return candidate
+        raise FileNotFoundError(
+            f"Scan-period tracking run not found for tracking_id={tracking_id!r} "
+            f"at {candidate.as_posix()}"
+        )
+    raise ValueError("Provide run_root or tracking_id for scan-period data-set conclusions.")
+
+
+def export_scan_period_data_set_conclusions(
+    *,
+    run_root: str | Path | None = None,
+    tracking_id: str | None = None,
+    output_dir: str | Path | None = None,
+    top_n: int = 30,
+    top_progression_detail: int = 12,
+    min_runs_for_stability: int | None = None,
+    require_sign_consistency: float | None = None,
+    include_structural_predictors: bool = False,
+) -> dict[str, Any]:
+    """Summarize predictor profile performance across a scan-period tracking run.
+
+    Reads period-total patterns, rolling-window progression, and stability
+    aggregates produced by ``run_scan_period_close_forward_predictor_tracking``.
+    Writes a human-readable markdown report plus a CSV of per-window score
+    progression for the top-ranked tradable predictors.
+
+    Output naming: ``{tracking_id}_data_set_conclusions.md`` under
+    ``{run_root}/data_set_conclusions/`` by default.
+    """
+    resolved_run_root = _resolve_scan_period_tracking_run_root(
+        run_root=run_root,
+        tracking_id=tracking_id,
+    )
+    tracking_json_path = resolved_run_root / "_scan_period_close_forward_tracking.json"
+    if not tracking_json_path.exists():
+        raise FileNotFoundError(
+            f"Missing tracking overview JSON: {tracking_json_path.as_posix()}"
+        )
+    tracking_payload = json.loads(tracking_json_path.read_text(encoding="utf-8"))
+    resolved_tracking_id = str(
+        tracking_payload.get("tracking_id") or resolved_run_root.name
+    )
+    run_lifecycle_id = str(tracking_payload.get("run_lifecycle_id") or "")
+    start_day_label = str(tracking_payload.get("start_day_label") or "")
+    end_day_label = str(tracking_payload.get("end_day_label") or "")
+    performance_target = str(
+        tracking_payload.get("performance_target") or PERIOD_PERFORMANCE_FIELD
+    )
+    stability_min_runs = int(
+        min_runs_for_stability
+        if min_runs_for_stability is not None
+        else tracking_payload.get("min_runs_for_stability") or 3
+    )
+    stability_sign_gate = float(
+        require_sign_consistency
+        if require_sign_consistency is not None
+        else tracking_payload.get("require_sign_consistency") or 0.6
+    )
+
+    period_total_parquet = (
+        resolved_run_root / "period_total" / "period_field_performance_patterns.parquet"
+    )
+    stability_parquet = (
+        resolved_run_root / "aggregates" / "cross_run_field_stability.parquet"
+    )
+    universe_csv = resolved_run_root / "progression" / "period_universe_progression.csv"
+    rolling_parquets = sorted(
+        resolved_run_root.glob(
+            "rolling_windows/*/period_field_performance_patterns.parquet"
+        )
+    )
+    if not period_total_parquet.exists():
+        raise FileNotFoundError(
+            f"Missing period-total patterns: {period_total_parquet.as_posix()}"
+        )
+    if not rolling_parquets:
+        raise FileNotFoundError(
+            "No rolling-window pattern summaries found under rolling_windows/."
+        )
+
+    conclusions_output_dir = (
+        Path(output_dir)
+        if output_dir is not None
+        else resolved_run_root / "data_set_conclusions"
+    )
+    conclusions_output_dir.mkdir(parents=True, exist_ok=True)
+    markdown_path = (
+        conclusions_output_dir / f"{resolved_tracking_id}_data_set_conclusions.md"
+    )
+    progression_csv_path = (
+        conclusions_output_dir
+        / f"{resolved_tracking_id}_predictor_profile_progression.csv"
+    )
+    leaderboard_csv_path = (
+        conclusions_output_dir
+        / f"{resolved_tracking_id}_predictor_profile_leaderboard.csv"
+    )
+
+    rolling_paths_sql = ", ".join(
+        _quote_path_literal(path) for path in rolling_parquets
+    )
+    period_total_sql = _quote_path_literal(period_total_parquet)
+    stability_sql = (
+        _quote_path_literal(stability_parquet)
+        if stability_parquet.exists()
+        else "NULL"
+    )
+
+    duckdb = _import_duckdb()
+    conn = duckdb.connect()
+    try:
+        period_total_rows = conn.execute(
+            f"""
+            SELECT predictor_field,
+                predictor_display_name,
+                predictor_type,
+                pattern_score,
+                pearson_corr_adjusted,
+                quintile_spread_adjusted,
+                top_quintile_avg_perf,
+                bottom_quintile_avg_perf,
+                pair_n
+            FROM read_parquet({period_total_sql})
+            WHERE performance_field = {_quote_sql_literal(performance_target)}
+            ORDER BY pattern_score DESC NULLS LAST
+            """
+        ).fetchall()
+        period_total_columns = [col[0] for col in conn.description]
+
+        progression_rows = conn.execute(
+            f"""
+            WITH window_patterns AS (
+                SELECT run_id,
+                    predictor_field,
+                    pattern_score,
+                    pearson_corr_adjusted,
+                    quintile_spread_adjusted
+                FROM read_parquet([{rolling_paths_sql}])
+                WHERE performance_field = {_quote_sql_literal(performance_target)}
+            )
+            SELECT predictor_field,
+                COUNT(*) AS windows_seen,
+                SUM(CASE WHEN pattern_score > 0 THEN 1 ELSE 0 END) AS positive_score_windows,
+                SUM(CASE WHEN quintile_spread_adjusted > 0 THEN 1 ELSE 0 END) AS positive_spread_windows,
+                AVG(pattern_score) AS mean_pattern_score,
+                MEDIAN(pattern_score) AS median_pattern_score,
+                STDDEV_POP(pattern_score) AS stddev_pattern_score,
+                MIN(pattern_score) AS min_pattern_score,
+                MAX(pattern_score) AS max_pattern_score,
+                AVG(quintile_spread_adjusted) AS mean_quintile_spread_pp,
+                MEDIAN(quintile_spread_adjusted) AS median_quintile_spread_pp,
+                STDDEV_POP(quintile_spread_adjusted) AS stddev_quintile_spread_pp,
+                AVG(pearson_corr_adjusted) AS mean_pearson,
+                MEDIAN(pearson_corr_adjusted) AS median_pearson
+            FROM window_patterns
+            GROUP BY predictor_field
+            """
+        ).fetchall()
+        progression_columns = [col[0] for col in conn.description]
+
+        stability_rows: list[tuple[Any, ...]] = []
+        stability_columns: list[str] = []
+        if stability_parquet.exists():
+            stability_rows = conn.execute(
+                f"""
+                SELECT predictor_field,
+                    runs_seen,
+                    sign_consistency_ratio,
+                    rank_stability_score,
+                    median_quintile_spread,
+                    mean_quintile_spread,
+                    median_pearson,
+                    mean_pearson,
+                    best_run_id,
+                    worst_run_id
+                FROM read_parquet({stability_sql})
+                WHERE performance_field = {_quote_sql_literal(performance_target)}
+                """
+            ).fetchall()
+            stability_columns = [col[0] for col in conn.description]
+
+        window_detail_rows = conn.execute(
+            f"""
+            SELECT run_id,
+                predictor_field,
+                pattern_score,
+                quintile_spread_adjusted,
+                pearson_corr_adjusted
+            FROM read_parquet([{rolling_paths_sql}])
+            WHERE performance_field = {_quote_sql_literal(performance_target)}
+            ORDER BY predictor_field, run_id
+            """
+        ).fetchall()
+    finally:
+        conn.close()
+
+    period_total_by_field = {
+        str(row[0]): dict(zip(period_total_columns, row)) for row in period_total_rows
+    }
+    progression_by_field = {
+        str(row[0]): dict(zip(progression_columns, row)) for row in progression_rows
+    }
+    stability_by_field = {
+        str(row[0]): dict(zip(stability_columns, row)) for row in stability_rows
+    }
+
+    universe_stats: dict[str, float | int | None] = {}
+    if universe_csv.exists():
+        with universe_csv.open(encoding="utf-8", newline="") as csv_file:
+            reader = csv.DictReader(csv_file)
+            universe_rows = list(reader)
+        if universe_rows:
+            last_row = universe_rows[-1]
+            universe_stats = {
+                "scan_days": len(universe_rows),
+                "final_symbol_count": int(float(last_row.get("symbol_count") or 0)),
+                "final_median_full_period_return_pct": _normalize_float(
+                    last_row.get("median_full_period_return_pct")
+                ),
+                "final_mean_full_period_return_pct": _normalize_float(
+                    last_row.get("mean_full_period_return_pct")
+                ),
+            }
+
+    leaderboard: list[dict[str, Any]] = []
+    for predictor_field, period_payload in period_total_by_field.items():
+        profile_class = _classify_scan_period_predictor_profile(predictor_field)
+        if not include_structural_predictors and profile_class != "tradable_price_indicator":
+            continue
+        progression_payload = progression_by_field.get(predictor_field, {})
+        stability_payload = stability_by_field.get(predictor_field, {})
+        period_score = _normalize_float(period_payload.get("pattern_score"))
+        rank_stability = _normalize_float(stability_payload.get("rank_stability_score"))
+        sign_consistency = _normalize_float(
+            stability_payload.get("sign_consistency_ratio")
+        )
+        runs_seen = int(stability_payload.get("runs_seen") or 0)
+        passes_stability = (
+            runs_seen >= stability_min_runs
+            and sign_consistency is not None
+            and sign_consistency >= stability_sign_gate
+        )
+        composite_rank_score = (
+            (period_score or 0.0) * 0.45
+            + (rank_stability or 0.0) * 0.35
+            + (progression_payload.get("mean_pattern_score") or 0.0) * 0.20
+        )
+        leaderboard.append(
+            {
+                "predictor_field": predictor_field,
+                "predictor_display_name": period_payload.get("predictor_display_name"),
+                "profile_class": profile_class,
+                "period_pattern_score": period_score,
+                "period_quintile_spread_pp": _normalize_float(
+                    period_payload.get("quintile_spread_adjusted")
+                ),
+                "period_pearson": _normalize_float(
+                    period_payload.get("pearson_corr_adjusted")
+                ),
+                "period_top_quintile_avg_pct": _normalize_float(
+                    period_payload.get("top_quintile_avg_perf")
+                ),
+                "period_bottom_quintile_avg_pct": _normalize_float(
+                    period_payload.get("bottom_quintile_avg_perf")
+                ),
+                "windows_seen": int(progression_payload.get("windows_seen") or 0),
+                "positive_score_windows": int(
+                    progression_payload.get("positive_score_windows") or 0
+                ),
+                "positive_spread_windows": int(
+                    progression_payload.get("positive_spread_windows") or 0
+                ),
+                "mean_window_pattern_score": _normalize_float(
+                    progression_payload.get("mean_pattern_score")
+                ),
+                "median_window_pattern_score": _normalize_float(
+                    progression_payload.get("median_pattern_score")
+                ),
+                "stddev_window_pattern_score": _normalize_float(
+                    progression_payload.get("stddev_pattern_score")
+                ),
+                "min_window_pattern_score": _normalize_float(
+                    progression_payload.get("min_pattern_score")
+                ),
+                "max_window_pattern_score": _normalize_float(
+                    progression_payload.get("max_pattern_score")
+                ),
+                "mean_window_quintile_spread_pp": _normalize_float(
+                    progression_payload.get("mean_quintile_spread_pp")
+                ),
+                "median_window_quintile_spread_pp": _normalize_float(
+                    progression_payload.get("median_quintile_spread_pp")
+                ),
+                "runs_seen": runs_seen,
+                "sign_consistency_ratio": sign_consistency,
+                "rank_stability_score": rank_stability,
+                "median_stability_quintile_spread_pp": _normalize_float(
+                    stability_payload.get("median_quintile_spread")
+                ),
+                "passes_stability_gate": passes_stability,
+                "composite_rank_score": composite_rank_score,
+            }
+        )
+
+    leaderboard.sort(
+        key=lambda row: (
+            row.get("composite_rank_score") is None,
+            -(row.get("composite_rank_score") or 0.0),
+            -(row.get("period_pattern_score") or 0.0),
+        )
+    )
+    top_leaderboard = leaderboard[: max(1, int(top_n))]
+    stable_leaderboard = [
+        row
+        for row in leaderboard
+        if row.get("passes_stability_gate")
+        and row.get("profile_class") == "tradable_price_indicator"
+    ]
+    stable_leaderboard.sort(
+        key=lambda row: (
+            row.get("rank_stability_score") is None,
+            -(row.get("rank_stability_score") or 0.0),
+        )
+    )
+    top_stable = stable_leaderboard[: max(1, int(top_n))]
+
+    detail_fields = {
+        row["predictor_field"]
+        for row in top_leaderboard[: max(1, int(top_progression_detail))]
+    }
+    detail_fields.update(row["predictor_field"] for row in top_stable[:6])
+    progression_detail_rows: list[dict[str, Any]] = []
+    for run_id, predictor_field, pattern_score, quintile_spread, pearson in window_detail_rows:
+        if predictor_field not in detail_fields:
+            continue
+        progression_detail_rows.append(
+            {
+                "predictor_field": predictor_field,
+                "window_run_id": run_id,
+                "window_label": _format_scan_period_window_label(
+                    str(run_id),
+                    run_lifecycle_id=run_lifecycle_id or None,
+                ),
+                "pattern_score": _normalize_float(pattern_score),
+                "quintile_spread_pp": _normalize_float(quintile_spread),
+                "pearson_corr_adjusted": _normalize_float(pearson),
+            }
+        )
+
+    _write_csv_rows(
+        leaderboard_csv_path,
+        leaderboard,
+        fieldnames=list(leaderboard[0].keys()) if leaderboard else None,
+    )
+    _write_csv_rows(
+        progression_csv_path,
+        progression_detail_rows,
+        fieldnames=[
+            "predictor_field",
+            "window_run_id",
+            "window_label",
+            "pattern_score",
+            "quintile_spread_pp",
+            "pearson_corr_adjusted",
+        ],
+    )
+
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    lines: list[str] = [
+        f"# Scan-Period Data Set Conclusions — {resolved_tracking_id}",
+        "",
+        f"> Generated: {generated_at}  ",
+        f"> Run lifecycle ID: `{run_lifecycle_id}`  ",
+        f"> Window: **{start_day_label.replace('_', ' ')}** → **{end_day_label.replace('_', ' ')}**  ",
+        f"> Performance target: `{performance_target}` (predictors anchored at sub-period start)  ",
+        f"> Rolling windows analyzed: **{len(rolling_parquets)}**  ",
+        "",
+        "## 1. Universe context",
+        "",
+    ]
+    if universe_stats:
+        lines.extend(
+            [
+                "| Metric | Value |",
+                "|--------|-------|",
+                f"| Scan days in progression | {universe_stats.get('scan_days')} |",
+                f"| Final filtered symbol count | {universe_stats.get('final_symbol_count')} |",
+                f"| Median full-period return | {universe_stats.get('final_median_full_period_return_pct'):.2f}% |"
+                if universe_stats.get("final_median_full_period_return_pct") is not None
+                else "| Median full-period return | n/a |",
+                f"| Mean full-period return | {universe_stats.get('final_mean_full_period_return_pct'):.2f}% |"
+                if universe_stats.get("final_mean_full_period_return_pct") is not None
+                else "| Mean full-period return | n/a |",
+                "",
+            ]
+        )
+    else:
+        lines.extend(["Universe progression CSV not found; skipping regime stats.", ""])
+
+    lines.extend(
+        [
+            "## 2. How profiles are ranked",
+            "",
+            "Each **predictor profile** is one all-fields column evaluated as a cross-sectional",
+            "signal against sub-period close-to-close return. Rankings blend:",
+            "",
+            "- **Period-total pattern score** (full Mar–Jun pooled fit)",
+            "- **Rolling stability score** (median quintile spread × sign consistency across windows)",
+            "- **Mean rolling pattern score** (average sub-period fit)",
+            "",
+            f"Stability gate for the stable leaderboard: `runs_seen >= {stability_min_runs}` and "
+            f"`sign_consistency >= {stability_sign_gate:.0%}`. Structural calendar/dividend fields "
+            "and sparse candle/momentum markers are excluded from the primary leaderboard unless "
+            "`include_structural_predictors=True`.",
+            "",
+            "## 3. Top predictor profiles — full period + rolling progression",
+            "",
+            "| Rank | Predictor | Period score | Period Q5−Q1 (pp) | Mean window score | "
+            "Score range | Pos. windows | Stability | Sign cons. | Class |",
+            "|------|-----------|--------------|-------------------|-------------------|"
+            "-------------|--------------|------------|------------|-------|",
+        ]
+    )
+    for index, row in enumerate(top_leaderboard, start=1):
+        period_score = row.get("period_pattern_score")
+        period_spread = row.get("period_quintile_spread_pp")
+        mean_window = row.get("mean_window_pattern_score")
+        score_range = (
+            f"{row.get('min_window_pattern_score'):.3f}..{row.get('max_window_pattern_score'):.3f}"
+            if row.get("min_window_pattern_score") is not None
+            and row.get("max_window_pattern_score") is not None
+            else "n/a"
+        )
+        stability = row.get("rank_stability_score")
+        sign_consistency = row.get("sign_consistency_ratio")
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    str(index),
+                    f"`{row['predictor_field']}`",
+                    f"{period_score:.3f}" if period_score is not None else "n/a",
+                    f"{period_spread:.1f}" if period_spread is not None else "n/a",
+                    f"{mean_window:.3f}" if mean_window is not None else "n/a",
+                    score_range,
+                    f"{row.get('positive_score_windows')}/{row.get('windows_seen')}",
+                    f"{stability:.3f}" if stability is not None else "n/a",
+                    f"{sign_consistency:.0%}" if sign_consistency is not None else "n/a",
+                    str(row.get("profile_class")),
+                ]
+            )
+            + " |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## 4. Stability-passing tradable profiles",
+            "",
+            "These predictors cleared the rolling stability gate and are not classified as "
+            "structural calendar noise.",
+            "",
+            "| Rank | Predictor | Stability score | Median Q-spread (pp) | Mean window score | "
+            "Pos. spread windows | Period score |",
+            "|------|-----------|-----------------|----------------------|-------------------|"
+            "---------------------|--------------|",
+        ]
+    )
+    for index, row in enumerate(top_stable, start=1):
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    str(index),
+                    f"`{row['predictor_field']}`",
+                    f"{row.get('rank_stability_score'):.3f}"
+                    if row.get("rank_stability_score") is not None
+                    else "n/a",
+                    f"{row.get('median_stability_quintile_spread_pp'):.1f}"
+                    if row.get("median_stability_quintile_spread_pp") is not None
+                    else "n/a",
+                    f"{row.get('mean_window_pattern_score'):.3f}"
+                    if row.get("mean_window_pattern_score") is not None
+                    else "n/a",
+                    f"{row.get('positive_spread_windows')}/{row.get('windows_seen')}",
+                    f"{row.get('period_pattern_score'):.3f}"
+                    if row.get("period_pattern_score") is not None
+                    else "n/a",
+                ]
+            )
+            + " |"
+        )
+
+    lines.extend(["", "## 5. Score progression detail (top profiles)", ""])
+    for predictor_field in sorted(detail_fields):
+        field_rows = [
+            row for row in progression_detail_rows if row["predictor_field"] == predictor_field
+        ]
+        if not field_rows:
+            continue
+        summary = period_total_by_field.get(predictor_field, {})
+        lines.append(f"### `{predictor_field}`")
+        if summary.get("predictor_display_name"):
+            lines.append(f"Display name: {summary.get('predictor_display_name')}")
+        lines.append("")
+        lines.append("| Window | Pattern score | Q5−Q1 (pp) | Pearson |")
+        lines.append("|--------|---------------|------------|---------|")
+        for row in field_rows:
+            pattern_score = row.get("pattern_score")
+            spread = row.get("quintile_spread_pp")
+            pearson = row.get("pearson_corr_adjusted")
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        str(row.get("window_label")),
+                        f"{pattern_score:.3f}" if pattern_score is not None else "n/a",
+                        f"{spread:.1f}" if spread is not None else "n/a",
+                        f"{pearson:.3f}" if pearson is not None else "n/a",
+                    ]
+                )
+                + " |"
+            )
+        lines.append("")
+
+    lines.extend(
+        [
+            "## 6. Exports",
+            "",
+            f"- Markdown: `{markdown_path.as_posix()}`",
+            f"- Leaderboard CSV: `{leaderboard_csv_path.as_posix()}`",
+            f"- Window progression CSV: `{progression_csv_path.as_posix()}`",
+            f"- Source run root: `{resolved_run_root.as_posix()}`",
+            "",
+        ]
+    )
+    markdown_path.write_text("\n".join(lines), encoding="utf-8")
+
+    return {
+        "tracking_id": resolved_tracking_id,
+        "run_lifecycle_id": run_lifecycle_id,
+        "run_root": resolved_run_root.as_posix(),
+        "markdown_path": markdown_path.as_posix(),
+        "leaderboard_csv_path": leaderboard_csv_path.as_posix(),
+        "progression_csv_path": progression_csv_path.as_posix(),
+        "top_predictor_count": len(top_leaderboard),
+        "stable_predictor_count": len(top_stable),
+        "rolling_window_count": len(rolling_parquets),
+        "leaderboard": top_leaderboard,
+    }
+
+
 def benchmark_all_fields_pattern_analysis(
     *,
     database_path: str | Path,
@@ -6924,6 +7547,7 @@ __all__ = [
     "resolve_scan_period_all_field_predictors",
     "run_all_fields_multi_day_pattern_suite",
     "run_all_fields_pattern_analysis_batch",
+    "export_scan_period_data_set_conclusions",
     "run_scan_period_close_forward_predictor_tracking",
     "build_close_forward_pattern_summary",
 ]

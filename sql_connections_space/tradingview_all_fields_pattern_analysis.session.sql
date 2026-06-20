@@ -1893,3 +1893,59 @@ FROM read_csv_auto(
     HEADER=TRUE
 )
 ORDER BY run_created_at_utc, predictor_field;
+-- @block
+-- [PERIOD B108820E W1] Attach Mar–Jun 2026 scan-period run for ticker watchlist queries.
+ATTACH 'D:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/pattern_analysis/runs/scan_period_close_forward_tracking_29mar_15jun2026_b108820e/period_total/period_returns/period_boundary_returns.duckdb' AS pr_b108 (READ_ONLY);
+ATTACH 'D:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/pattern_analysis/runs/scan_period_close_forward_tracking_29mar_15jun2026_b108820e/period_total/period_analysis_input.duckdb' AS enr_b108 (READ_ONLY);
+ATTACH 'D:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/pattern_analysis/runs/scan_period_close_forward_tracking_29mar_15jun2026_b108820e/progression/period_progression.duckdb' AS prog_b108 (READ_ONLY);
+-- @block
+-- [PERIOD B108820E W2] Watchlist period return + predictor snapshot at period start (29 Mar anchor).
+SELECT e.symbol,
+    TRY_CAST(p.period_return_pct AS DOUBLE) AS period_return_pct,
+    TRY_CAST(p.start_close_price AS DOUBLE) AS start_close_price,
+    TRY_CAST(p.end_close_price AS DOUBLE) AS end_close_price,
+    TRY_CAST(e."ATRP|1W" AS DOUBLE) AS atrp_1w_at_start,
+    TRY_CAST(e."ADRP|1W" AS DOUBLE) AS adrp_1w_at_start,
+    TRY_CAST(e.relative_volume AS DOUBLE) AS relvol_at_start,
+    TRY_CAST(e.ebitda_ttm AS DOUBLE) AS ebitda_ttm_at_start,
+    TRY_CAST(e."Recommend.MA|1M" AS DOUBLE) AS recommend_ma_1m_at_start
+FROM enr_b108.all_fields_rows e
+INNER JOIN pr_b108.period_boundary_returns p USING (symbol)
+WHERE e.symbol IN (
+    'SILEX', 'QS', 'DYVOX', 'BFLY', 'LEGN', 'DAR', 'GNS', 'IDIA', 'OCDO', 'CPI',
+    'GNFT', 'AMS', 'FAST', 'SVMB', 'FRAMERY', 'MMGR_B', 'SHA0', 'ACN', 'KAR', 'CRW',
+    'LNZ', 'HACK', 'ACAST', 'CAP', 'AMTD', 'DRW8', 'FGA', 'FCH', 'PE', 'VPLAY_A'
+)
+ORDER BY period_return_pct DESC NULLS LAST, e.symbol;
+-- @block
+-- [PERIOD B108820E W3] Daily progression for one watchlist symbol through Mar–Jun.
+SELECT source_day_label,
+    symbol,
+    close_price,
+    cumulative_return_from_start_pct,
+    period_return_pct
+FROM prog_b108.period_symbol_progression
+WHERE symbol = 'SILEX'
+ORDER BY run_created_at_utc;
+-- @block
+-- [PERIOD B108820E W4] Watchlist vs universe median period return.
+WITH watchlist AS (
+    SELECT e.symbol,
+        TRY_CAST(p.period_return_pct AS DOUBLE) AS period_return_pct
+    FROM enr_b108.all_fields_rows e
+    INNER JOIN pr_b108.period_boundary_returns p USING (symbol)
+    WHERE e.symbol IN ('SILEX', 'QS', 'SVMB', 'DYVOX', 'BFLY')
+),
+universe AS (
+    SELECT MEDIAN(TRY_CAST(period_return_pct AS DOUBLE)) AS median_period_return_pct
+    FROM pr_b108.period_boundary_returns
+    WHERE period_return_pct IS NOT NULL
+)
+SELECT w.symbol,
+    w.period_return_pct,
+    u.median_period_return_pct,
+    w.period_return_pct - u.median_period_return_pct AS vs_median_pp
+FROM watchlist w
+CROSS JOIN universe u
+ORDER BY w.period_return_pct DESC NULLS LAST;
+

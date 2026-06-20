@@ -1143,6 +1143,8 @@ GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD = {
         "ChaikinMoneyFlow",
         "BBPower",
         "Recommend.All|1W",
+        "Recommend.MA|1M",
+        "W.R",
     ],
     "sort": {"sortBy": "relative_volume_10d_calc", "sortOrder": "desc"},
     "filter": [{"left": "is_primary", "operation": "equal", "right": True}],

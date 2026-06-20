@@ -16,6 +16,7 @@ config/move_prediction_profiles/
     active_manager_v1.json
     active_manager_v2.json # legacy 17-profile suite
     active_manager_v3.json # production consolidated 11-profile suite
+    active_manager_v4.json # v3 plus upside_reversal_v1 long reversal lens
 ```
 
 ## Profile file (`profiles/*.json`)
@@ -83,12 +84,51 @@ Legacy extended suites remain available for historical comparison:
 - `active_manager_v2.json` — 17 profiles (includes `swing_reversal_v1`)
 - `active_manager_v1.json` — 16 profiles
 
+Production suite with upside reversal lens:
+
+```python
+from main import MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V4
+
+base_result = run_full_analysis_suite_duckdb(
+    scan_data=scan_response,
+    profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V4,
+)
+```
+
+Standalone upside-reversal calibration:
+
+```python
+from main import MOVE_PREDICTION_PROFILE_SUITE_UPSIDE_REVERSAL_V1
+
+run_full_analysis_suite_duckdb(
+    scan_data=scan_response,
+    profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_UPSIDE_REVERSAL_V1,
+)
+```
+
 ## Style taxonomy (`active_manager_v3` / `baseline_v2`)
 
 | Investing style | Profile |
 | --- | --- |
 | Continuation (pure tape) | `breakout_long_v1` |
 | Swing (coiled setup) | `early_momentum_inflection_v1` |
+| Forward edge + earnings catalyst | `forward_edge_active_v2` |
+| Quality-backed continuation | `quality_continuation_v1` |
+| Core quality compounder | `quality_value_compounder` |
+| Quality at value | `durable_value_compounder_v1` |
+| Fundamental undervalue | `asymmetric_value` |
+| Structural recovery | `value_recovery_v2` |
+| Fortress with action | `defensive_fortress_v2` |
+| Bearish overlay (inverted) | `fragility_short` |
+| Extension trim overlay (inverted) | `mean_reversion_exhaustion_v1` |
+
+## Style taxonomy (`active_manager_v4`)
+
+| Investing style | Profile |
+| --- | --- |
+| Continuation (pure tape) | `breakout_long_v1` |
+| Swing (coiled setup) | `early_momentum_inflection_v1` |
+| Upside reversal (pullback bounce) | `upside_reversal_v1` |
 | Forward edge + earnings catalyst | `forward_edge_active_v2` |
 | Quality-backed continuation | `quality_continuation_v1` |
 | Core quality compounder | `quality_value_compounder` |

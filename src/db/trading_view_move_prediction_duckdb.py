@@ -217,6 +217,22 @@ CONSENSUS_PROFILE_HORIZON_SCORES_SCHEMA = [
     ("risk_tier", "VARCHAR"),
 ]
 
+REGIME_CONTEXT_SCORES_SCHEMA = [
+    ("run_id", "VARCHAR"),
+    ("row_number", "BIGINT"),
+    ("symbol", "VARCHAR"),
+    ("regime_fit_score", "DOUBLE"),
+    ("active_mgmt_tier", "VARCHAR"),
+    ("warning_flag_count", "BIGINT"),
+    ("atrp_1w", "DOUBLE"),
+    ("relative_volume", "DOUBLE"),
+    ("signals_matched", "BIGINT"),
+    ("promoted_field_ranks_json", "VARCHAR"),
+    ("fields_source_summary", "VARCHAR"),
+    ("all_fields_day_label", "VARCHAR"),
+    ("config_id", "VARCHAR"),
+]
+
 CONVICTION_RANKINGS_SCHEMA = [
     ("run_id", "VARCHAR"),
     ("row_number", "BIGINT"),
@@ -1011,6 +1027,11 @@ class MovePredictionDuckDBStore:
 
     def append_conviction_rankings(self, records: Iterable[dict[str, Any]]) -> None:
         self.append_records("conviction_rankings", records, CONVICTION_RANKINGS_SCHEMA)
+
+    def append_regime_context_scores(self, records: Iterable[dict[str, Any]]) -> None:
+        self.append_records(
+            "regime_context_scores", records, REGIME_CONTEXT_SCORES_SCHEMA
+        )
 
     def drop_analysis_indexes(self) -> None:
         for index_name, _, _ in ANALYSIS_INDEX_SPECS:

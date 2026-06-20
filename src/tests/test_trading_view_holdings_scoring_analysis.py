@@ -9,10 +9,14 @@ from unittest.mock import patch
 from data_analysis_scripts.trading_view_holdings_scoring_analysis import (
     HoldingConfig,
     MarkToMarketContext,
+    RawScanSymbolEntry,
     _build_mark_to_market_fields,
     _resolve_close_quote_currency,
     enrich_holdings_positions,
+    holding_config_label,
     holding_matches_db_symbol,
+    holding_matches_db_symbol_for_holding,
+    holding_matches_db_symbol_strict,
     holding_ticker_keys,
     load_holdings_config,
     match_holdings_to_db_symbols,
@@ -89,6 +93,23 @@ class TestHoldingTickerMatching(unittest.TestCase):
         self.assertTrue(holding_matches_db_symbol("MU", "NASDAQ:MU"))
         self.assertFalse(holding_matches_db_symbol("NASDAQ:MU", "AMD"))
 
+    def test_holding_matches_db_symbol_strict_rejects_cross_exchange(self):
+        self.assertTrue(holding_matches_db_symbol_strict("NYSE:CF", "NYSE:CF"))
+        self.assertFalse(holding_matches_db_symbol_strict("NYSE:CF", "NASDAQ:CF"))
+        self.assertFalse(holding_matches_db_symbol_strict("NYSE:CF", "CF"))
+
+    def test_holding_matches_db_symbol_for_holding_uses_symbol_when_set(self):
+        holding = HoldingConfig(ticker="CF", symbol="NYSE:CF")
+        self.assertTrue(holding_matches_db_symbol_for_holding(holding, "NYSE:CF"))
+        self.assertFalse(holding_matches_db_symbol_for_holding(holding, "NASDAQ:CF"))
+        self.assertFalse(holding_matches_db_symbol_for_holding(holding, "CF"))
+
+    def test_holding_config_label_includes_symbol_when_distinct(self):
+        self.assertEqual(
+            holding_config_label(HoldingConfig(ticker="CF", symbol="NYSE:CF")),
+            "CF [NYSE:CF]",
+        )
+
     def test_match_holdings_to_db_symbols_prefers_one_to_one(self):
         holdings = [
             HoldingConfig(ticker="NASDAQ:AAA"),
@@ -100,6 +121,31 @@ class TestHoldingTickerMatching(unittest.TestCase):
         )
         self.assertEqual(unmatched, [])
         self.assertEqual({match.db_symbol for match in matched}, {"AAA", "NASDAQ:BBB"})
+
+    def test_match_holdings_to_db_symbols_respects_symbol_exchange(self):
+        catalog = [
+            RawScanSymbolEntry(
+                symbol="NASDAQ:CF",
+                company="Other CF",
+                bare_ticker="CF",
+            ),
+            RawScanSymbolEntry(
+                symbol="NYSE:CF",
+                company="CF Industries Holdings, Inc.",
+                bare_ticker="CF",
+            ),
+        ]
+        holdings = [HoldingConfig(ticker="CF", symbol="NYSE:CF")]
+        matched, unmatched = match_holdings_to_db_symbols(
+            holdings,
+            ["CF"],
+            raw_catalog=catalog,
+        )
+        self.assertEqual(unmatched, [])
+        self.assertEqual(matched[0].db_symbol, "CF")
+        self.assertEqual(matched[0].scan_symbol, "NYSE:CF")
+        self.assertEqual(matched[0].company, "CF Industries Holdings, Inc.")
+        self.assertEqual(matched[0].lookup_key, "NYSE:CF")
 
     def test_build_mark_to_market_fields_uses_implied_shares_and_close(self):
         holding = HoldingConfig(
@@ -218,9 +264,10 @@ class TestHoldingsConfigLoader(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            payload, holdings = load_holdings_config(config_path)
+            payload, holdings, cash_position = load_holdings_config(config_path)
             self.assertEqual(payload["holdings_id"], "test")
             self.assertEqual(len(holdings), 1)
+            self.assertIsNone(cash_position)
             self.assertEqual(holdings[0].ticker, "NASDAQ:MU")
             self.assertEqual(holdings[0].sleeve, "tactical")
             self.assertEqual(holdings[0].invested_sum, 5000.0)
@@ -263,13 +310,98 @@ class TestHoldingsConfigLoader(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            _, holdings = load_holdings_config(config_path)
+            _, holdings, _ = load_holdings_config(config_path)
             self.assertEqual(holdings[0].invested_currency, "EUR")
             self.assertEqual(holdings[0].price_currency, "EUR")
             self.assertEqual(holdings[1].invested_currency, "DKK")
             self.assertEqual(holdings[1].price_currency, "DKK")
             self.assertEqual(holdings[2].invested_currency, "USD")
             self.assertEqual(holdings[2].price_currency, "USD")
+
+    def test_load_holdings_config_parses_cash_position(self):
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "holdings.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "holdings_scoring_v1",
+                        "portfolio_currency": "USD",
+                        "cash_position": {"value": 12500.5, "currency": "EUR"},
+                        "holdings": [
+                            {
+                                "ticker": "MU",
+                                "invested_sum": 100.0,
+                                "average_price": 10.0,
+                                "currency": "USD",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            payload, holdings, cash_position = load_holdings_config(config_path)
+            self.assertEqual(len(holdings), 1)
+            self.assertIsNotNone(cash_position)
+            assert cash_position is not None
+            self.assertEqual(cash_position.value, 12500.5)
+            self.assertEqual(cash_position.currency, "EUR")
+            self.assertEqual(
+                payload["_resolved_cash_position"],
+                {
+                    "value": 12500.5,
+                    "currency": "EUR",
+                    "value_in_portfolio_currency": None,
+                    "fx_rate_to_portfolio": None,
+                    "fx_rate_date": None,
+                },
+            )
+
+    def test_load_holdings_config_ignores_null_cash_value(self):
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "holdings.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "holdings_scoring_v1",
+                        "cash_position": {"value": None, "currency": "USD"},
+                        "holdings": [
+                            {
+                                "ticker": "MU",
+                                "invested_sum": 100.0,
+                                "average_price": 10.0,
+                                "currency": "USD",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            _, _, cash_position = load_holdings_config(config_path)
+            self.assertIsNone(cash_position)
+
+    def test_load_holdings_config_parses_optional_symbol(self):
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "holdings.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "holdings_scoring_v1",
+                        "holdings": [
+                            {
+                                "ticker": "CF",
+                                "symbol": "NYSE:CF",
+                                "invested_sum": 100.0,
+                                "average_price": 10.0,
+                                "currency": "USD",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            _, holdings, _ = load_holdings_config(config_path)
+            self.assertEqual(holdings[0].ticker, "CF")
+            self.assertEqual(holdings[0].symbol, "NYSE:CF")
 
     @patch("data_analysis_scripts.trading_view_holdings_scoring_analysis.convert_amount")
     def test_enrich_holdings_positions_computes_usd_and_weights(self, mock_convert):

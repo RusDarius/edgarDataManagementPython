@@ -1,0 +1,15 @@
+{
+  "schema_version": "move_prediction_profile_suite_v1",
+  "suite_id": "upside_reversal_v1",
+  "suite_version": "1.0.0",
+  "description": "Standalone calibration suite for upside_reversal_v1 long-oriented pullback-to-bounce lens.",
+  "profile_names": [
+    "upside_reversal_v1"
+  ],
+  "consensus_profile_weights": {
+    "upside_reversal_v1": 1.0
+  },
+  "long_consensus_profiles": [
+    "upside_reversal_v1"
+  ]
+}

@@ -126,6 +126,50 @@ class TestProfileConfigLoader(unittest.TestCase):
             sum(suite["consensus_profile_weights"].values()), 1.0, places=6
         )
 
+    def test_upside_reversal_v1_profile_loads(self):
+        meta = load_profile_config_file(
+            CONFIG_ROOT / "profiles" / "upside_reversal_v1.json"
+        )
+        profile = resolve_move_prediction_scoring_profile("upside_reversal_v1")
+        self.assertEqual(meta["profile_id"], "upside_reversal_v1")
+        self.assertEqual(meta["base_profile_id"], "upside_reversal")
+        self.assertEqual(profile.name, "upside_reversal_v1")
+        momentum_weights = profile.component_signal_weights.get("momentum", {})
+        safety_weights = profile.component_signal_weights.get("safety", {})
+        self.assertGreaterEqual(
+            momentum_weights.get("repair_confirmation_score", 0.0), 1.6
+        )
+        self.assertGreaterEqual(momentum_weights.get("regime_oversold_daily", 0.0), 1.5)
+        self.assertGreaterEqual(safety_weights.get("distress_floor", 0.0), 1.2)
+
+    def test_upside_reversal_v1_standalone_suite_weights_sum_to_one(self):
+        suite = load_profile_suite(
+            CONFIG_ROOT / "suites" / "upside_reversal_v1.json"
+        )
+        self.assertEqual(suite["suite_id"], "upside_reversal_v1")
+        self.assertEqual(suite["profile_names"], ["upside_reversal_v1"])
+        self.assertAlmostEqual(
+            sum(suite["consensus_profile_weights"].values()), 1.0, places=6
+        )
+
+    def test_active_manager_v4_includes_upside_reversal_v1(self):
+        suite = load_profile_suite(
+            CONFIG_ROOT / "suites" / "active_manager_v4.json"
+        )
+        self.assertEqual(suite["suite_id"], "active_manager_v4")
+        self.assertEqual(len(suite["profile_names"]), 12)
+        self.assertIn("upside_reversal_v1", suite["profile_names"])
+        self.assertIn("upside_reversal_v1", suite["long_consensus_profiles"])
+        self.assertNotIn(
+            "upside_reversal_v1", suite["inverted_consensus_profiles"]
+        )
+        self.assertAlmostEqual(
+            sum(suite["consensus_profile_weights"].values()), 1.0, places=6
+        )
+        self.assertAlmostEqual(
+            suite["consensus_profile_weights"]["upside_reversal_v1"], 0.07, places=6
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

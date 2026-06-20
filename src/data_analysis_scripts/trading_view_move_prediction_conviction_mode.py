@@ -9,7 +9,7 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from data_analysis_scripts.trading_view_move_prediction_conviction_config import (
     resolve_conviction_mode_config,
@@ -291,6 +291,7 @@ def _build_candidate_records(
     *,
     include_earnings_boost: bool,
     conn: Any | None = None,
+    regime_context_by_symbol: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     multi_lens_floor = float(config.get("multi_lens", {}).get("score_floor", 0.35))
     base_rows = _execute_query(
@@ -374,6 +375,9 @@ def _build_candidate_records(
         if exclusion:
             conviction_score = 0.0
             score_breakdown = {"sleeve_scores": sleeve_scores}
+            regime_fit_score = None
+            regime_tier = None
+            regime_warning_count = None
         else:
             primary_sub_score = sleeve_scores[primary_sleeve]
 
@@ -409,6 +413,31 @@ def _build_candidate_records(
                 + earnings_bonus
             )
 
+            regime_bonus = 0.0
+            regime_fit_score = None
+            regime_tier = None
+            regime_warning_count = None
+            if regime_context_by_symbol:
+                from data_analysis_scripts.trading_view_regime_context_overlay import (
+                    get_regime_record_for_row,
+                )
+
+                regime_record = get_regime_record_for_row(
+                    {"symbol": symbol},
+                    regime_context_by_symbol,
+                )
+                if regime_record is not None:
+                    regime_fit_score = regime_record.regime_fit_score
+                    regime_tier = regime_record.active_mgmt_tier
+                    regime_warning_count = regime_record.warning_flag_count
+                    regime_weight = float(
+                        scoring_weights.get("regime_fit_weight") or 0.0
+                    )
+                    regime_bonus = regime_weight * (regime_fit_score / 100.0)
+                    if regime_record.active_mgmt_tier == "warning_overlay":
+                        regime_bonus -= regime_weight * 0.5
+                    conviction_score += regime_bonus
+
             score_breakdown = {
                 "sleeve_scores": sleeve_scores,
                 "primary_sleeve": primary_sleeve,
@@ -417,6 +446,7 @@ def _build_candidate_records(
                 "agreement_bonus": agreement_bonus,
                 **breakout_breakdown,
                 **earnings_breakdown,
+                "regime_bonus": regime_bonus,
             }
 
         candidates.append(
@@ -454,6 +484,9 @@ def _build_candidate_records(
                 "exclusion_reason": exclusion,
                 "score_breakdown": score_breakdown,
                 "thesis_1": breakout_row.get("thesis_1") if breakout_row else "",
+                "regime_fit_score": regime_fit_score,
+                "regime_tier": regime_tier,
+                "regime_warning_count": regime_warning_count,
             }
         )
 
@@ -625,19 +658,34 @@ def _write_daily_focus_log(
         log_to_file(path, "-" * 120)
         log_to_file(
             path,
-            f"{'Rank':<6}{'Score':>8}  {'Ticker':<32}{'Action':<32}{'Size':<10}Notes",
+            f"{'Rank':<6}{'Score':>8}  {'Ticker':<28}{'Action':<24}{'RegFit':>7}{'Tier':<12}{'Warn':>5}  Notes",
         )
         if not sleeve_display:
             log_to_file(path, "  (none)")
         else:
             for row in sleeve_display:
+                regime_fit = row.get("regime_fit_score")
+                regime_fit_text = (
+                    f"{float(regime_fit):>7.1f}"
+                    if regime_fit is not None
+                    else f"{'—':>7}"
+                )
+                tier_text = str(row.get("regime_tier") or "—")[:11]
+                warn_text = row.get("regime_warning_count")
+                warn_display = (
+                    f"{int(warn_text):>5}"
+                    if warn_text is not None
+                    else f"{'—':>5}"
+                )
                 log_to_file(
                     path,
                     f"{row.get('rank_in_sleeve') or '-':<6}"
                     f"{row.get('conviction_score', 0.0):>8.2f}  "
-                    f"{_format_ticker_label(row):<32}"
-                    f"{str(row.get('manager_action_signal') or '')[:31]:<32}"
-                    f"{str(row.get('size_tier') or '—')[:9]:<10}"
+                    f"{_format_ticker_label(row):<28}"
+                    f"{str(row.get('manager_action_signal') or '')[:23]:<24}"
+                    f"{regime_fit_text}"
+                    f"{tier_text:<12}"
+                    f"{warn_display}  "
                     f"{_format_notes(row)}",
                 )
         log_to_file(path, "")
@@ -718,6 +766,7 @@ def run_conviction_mode_duckdb(
     parquet_dir: str | Path | None = None,
     suite_id: str | None = None,
     duckdb_store: MovePredictionDuckDBStore | None = None,
+    regime_context_by_symbol: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build conviction rankings from an existing move-prediction DuckDB run."""
     config = resolve_conviction_mode_config(config_path)
@@ -731,6 +780,7 @@ def run_conviction_mode_duckdb(
         config,
         include_earnings_boost=include_earnings_boost,
         conn=active_conn,
+        regime_context_by_symbol=regime_context_by_symbol,
     )
     ranked = _rank_candidates(candidates)
     ranked_eligible = [row for row in ranked if not row.get("exclusion_reason")]
@@ -812,4 +862,5 @@ def run_conviction_mode_duckdb(
         "config_id": config.get("config_id"),
         "config_hash": config.get("config_hash"),
         "parquet_exports": parquet_exports,
+        "ranked_records": ranked,
     }

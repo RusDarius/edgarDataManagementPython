@@ -180,11 +180,14 @@ LIMIT 50
 
 ACTION_BUCKET_HORIZONS = {
     "add_long_breakout": "weeks",
+    "accumulate_reversal_long": "weeks",
+    "watch_reversal_entry": "weeks",
     "accumulate_value_catalyst": "months",
     "watch_value_reversal": "months",
     "hold_quality_long": "years",
     "hedge_or_short": "weeks",
     "mean_reversion_watch": "weeks",
+    "avoid_reversal_trap": "weeks",
     "neutral_watch": "weeks",
 }
 

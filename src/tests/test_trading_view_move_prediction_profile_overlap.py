@@ -192,6 +192,18 @@ def _filler_rows(count: int = 12) -> list[dict]:
     return rows
 
 
+class TestActiveManagerV4Suite(unittest.TestCase):
+    def test_active_manager_v4_has_twelve_profiles(self):
+        suite = load_profile_suite(CONFIG_ROOT / "suites" / "active_manager_v4.json")
+        self.assertEqual(suite["suite_id"], "active_manager_v4")
+        self.assertEqual(len(suite["profile_names"]), 12)
+        self.assertAlmostEqual(
+            sum(suite["consensus_profile_weights"].values()), 1.0, places=6
+        )
+        self.assertIn("upside_reversal_v1", suite["profile_names"])
+        self.assertIn("upside_reversal_v1", suite["long_consensus_profiles"])
+
+
 class TestActiveManagerV3Suite(unittest.TestCase):
     def test_active_manager_v3_has_eleven_profiles(self):
         suite = load_profile_suite(CONFIG_ROOT / "suites" / "active_manager_v3.json")

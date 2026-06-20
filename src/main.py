@@ -52,6 +52,7 @@ from data_analysis_scripts.trading_view_all_fields_metric_pattern_analyzer impor
     run_all_fields_multi_day_pattern_suite,
     run_all_fields_pattern_analysis_batch,
     run_scan_period_close_forward_predictor_tracking,
+    export_scan_period_data_set_conclusions,
     market_cap_basic_universe_filter,
     preferred_markets_universe_filter,
 )
@@ -73,6 +74,12 @@ from data_analysis_scripts.trading_view_move_prediction_analysis import (
     run_move_prediction_profile_suite,
     run_move_prediction_scan,
 )
+from data_analysis_scripts.trading_view_scan_period_ticker_watchlist import (
+    run_scan_period_ticker_watchlist_analysis,
+)
+from data_analysis_scripts.trading_view_move_prediction_industry_packs import (
+    write_industry_packs_from_duckdb_run,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MOVE_PREDICTION_PROFILE_SUITE_BASELINE = (
@@ -84,6 +91,13 @@ MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1 = (
     / "move_prediction_profiles"
     / "suites"
     / "swing_reversal_v1.json"
+)
+MOVE_PREDICTION_PROFILE_SUITE_UPSIDE_REVERSAL_V1 = (
+    PROJECT_ROOT
+    / "config"
+    / "move_prediction_profiles"
+    / "suites"
+    / "upside_reversal_v1.json"
 )
 MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2 = (
     PROJECT_ROOT
@@ -99,11 +113,26 @@ MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3 = (
     / "suites"
     / "active_manager_v3.json"
 )
+MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V4 = (
+    PROJECT_ROOT
+    / "config"
+    / "move_prediction_profiles"
+    / "suites"
+    / "active_manager_v4.json"
+)
 MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2 = (
     PROJECT_ROOT / "config" / "move_prediction_profiles" / "suites" / "baseline_v2.json"
 )
 CONVICTION_MODE_CONFIG = (
     PROJECT_ROOT / "config" / "move_prediction_conviction" / "active_manager_v1.json"
+)
+REGIME_CONTEXT_CONFIG = (
+    PROJECT_ROOT / "config" / "regime_context" / "mar_jun_2026_risk_on_v1.json"
+)
+SCAN_PERIOD_TRACKING_RUN_ROOT = (
+    PROJECT_ROOT
+    / "logs/tradingview_analysis/trading_view_all_fields_data/pattern_analysis/runs"
+    / "scan_period_close_forward_tracking_29mar_15jun2026_b108820e"
 )
 PREDICTION_MODULE2_SUITE_ACTIVE_MANAGER_V1 = (
     PROJECT_ROOT
@@ -406,6 +435,7 @@ def main():
     # # Holdings scoring: merge configured current holdings with latest move-prediction run.
     # # Output: logs/tradingview_analysis/holdings_scoring_analysis/runs/<run_id>/
     # #   holdings_scoring__shortlist.log  — human-readable portfolio shortlist
+    # # Optional cash_position in config (value + currency) is passed through to manifest/logs.
     # run_holdings_scoring_analysis(
     #     holdings_config_path=PROJECT_ROOT
     #     / "config"
@@ -414,33 +444,39 @@ def main():
     # )
 
     # # # # # Model Analysis scan with duckdb storage solution
-    move_prediction_scan_response = (
-        TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-            min_market_cap_usd=500_000_000,
-            markets=PREFERRED_MARKETS,
-        )
-    )
-    # Default (omit profile_suite_path): built-in 10-profile baseline — see DEFAULT_MOVE_PREDICTION_PROFILE_SUITE.
-    # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3
-    # Legacy 17-profile suite: MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
-    # Realigned baseline (11 lenses): MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
-    # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
-    base_duckdb_result = run_full_analysis_suite_duckdb(
-        scan_data=move_prediction_scan_response,
-        min_market_cap_usd=500_000_000,
-        include_blind_spot_sections=True,
-        profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
-        conviction_mode_config_path=CONVICTION_MODE_CONFIG,
-        defer_conviction_to_earnings=True,
-    )
-    run_full_analysis_suite_with_earnings_priority_duckdb(
-        scan_data=move_prediction_scan_response,
-        min_market_cap_usd=500_000_000,
-        include_blind_spot_sections=True,
-        base_result=base_duckdb_result,
-        profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
-        conviction_mode_config_path=CONVICTION_MODE_CONFIG,
-    )
+    # move_prediction_scan_response = (
+    #     TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+    #         min_market_cap_usd=500_000_000,
+    #         markets=PREFERRED_MARKETS,
+    #     )
+    # )
+    # # Default (omit profile_suite_path): built-in 10-profile baseline — see DEFAULT_MOVE_PREDICTION_PROFILE_SUITE.
+    # # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3
+    # # Legacy 17-profile suite: MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
+    # # Realigned baseline (11 lenses): MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
+    # # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
+    # base_duckdb_result = run_full_analysis_suite_duckdb(
+    #     scan_data=move_prediction_scan_response,
+    #     min_market_cap_usd=500_000_000,
+    #     include_blind_spot_sections=True,
+    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+    #     conviction_mode_config_path=CONVICTION_MODE_CONFIG,
+    #     defer_conviction_to_earnings=True,
+    #     regime_context_config_path=REGIME_CONTEXT_CONFIG,
+    #     write_industry_packs=True,
+    # )
+
+    # FOR INDUSTRY RUN SPLIT Or post-process an existing run:
+    # write_industry_packs_from_duckdb_run(base_duckdb_result)
+    # run_full_analysis_suite_with_earnings_priority_duckdb(
+    #     scan_data=move_prediction_scan_response,
+    #     min_market_cap_usd=500_000_000,
+    #     include_blind_spot_sections=True,
+    #     base_result=base_duckdb_result,
+    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+    #     conviction_mode_config_path=CONVICTION_MODE_CONFIG,
+    #     regime_context_config_path=REGIME_CONTEXT_CONFIG,
+    # )
 
     # # Price-driven decile analysis: bucket by change / Perf.5D / Perf.1M, score profiles,
     # # surface upward-move opportunities in worst performers. Output:
@@ -511,6 +547,64 @@ def main():
     #     },
     # )
 
+    # # --- Scan-period post-processing (requires completed tracking run) ---
+    #
+    # The watchlist analyzer always needs a scan-period folder as its data source
+    # (period returns, anchored predictors, daily progression). It does NOT run
+    # without one. Provide the run in any of these ways:
+    #   run_root=SCAN_PERIOD_TRACKING_RUN_ROOT
+    #   tracking_id="scan_period_close_forward_tracking_29mar_15jun2026_b108820e"
+    #   regime_context_config_path=REGIME_CONTEXT_CONFIG  # uses scan_period_run_root
+    #
+    # (A) Field-level conclusions for the same scan period:
+    # export_scan_period_data_set_conclusions(run_root=SCAN_PERIOD_TRACKING_RUN_ROOT)
+    #
+    # (B) PLAYBOOK A tickers vs Mar–Jun realized performance:
+    # run_scan_period_ticker_watchlist_analysis(
+    #     regime_context_config_path=REGIME_CONTEXT_CONFIG,
+    #     from_regime_log=PROJECT_ROOT
+    #     / "logs/tradingview_analysis/prediction_analysis/duckdb_runs/iso_year=2026/week=25/runs"
+    #     / "move_prediction_20260618_1442_utc_31b685b4/move_prediction__regime_context_focus.log",
+    #     watchlist_id="playbook_a_mar_jun_check",
+    # )
+    # # Explicit scan-period path (equivalent):
+    # run_scan_period_ticker_watchlist_analysis(
+    #     run_root=SCAN_PERIOD_TRACKING_RUN_ROOT,
+    #     tickers=[
+    #         "SILEX",
+    #         "QS",
+    #         "DYVOX",
+    #         "BFLY",
+    #         "LEGN",
+    #         "DAR",
+    #         "GNS",
+    #         "IDIA",
+    #         "OCDO",
+    #         "CPI",
+    #         "GNFT",
+    #         "AMS",
+    #         "FAST",
+    #         "SVMB",
+    #         "FRAMERY",
+    #         "MMGR_B",
+    #         "SHA0",
+    #         "ACN",
+    #         "KAR",
+    #         "CRW",
+    #         "LNZ",
+    #         "HACK",
+    #         "ACAST",
+    #         "CAP",
+    #         "AMTD",
+    #         "DRW8",
+    #         "FGA",
+    #         "FCH",
+    #         "PE",
+    #         "VPLAY_A",
+    #     ],
+    #     watchlist_id="playbook_a_tactical_mar_jun2026",
+    # )
+
     # # --- Single day (smoke / one snapshot) ---
     # analyze_all_fields_run_performance_patterns(
     #     database_path=Path(
@@ -575,9 +669,6 @@ def main():
 
     # Aggregate stored DuckDB runs across selected weekly databases.
     # run_move_prediction_history_aggregation_duckdb_example()
-
-    # Legacy CSV-folder aggregation path kept for backward compatibility.
-    # run_move_prediction_history_aggregation_example()
 
     # daily use to get all market data for a day
     # exported_file = export_all_tradingview_fields()
@@ -657,8 +748,10 @@ def main():
     # )
     # print(result["database_path"])
 
-    # Compare current move-prediction scores vs historical anchor runs
-    # with MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3.open(encoding="utf-8") as handle:
+    # # Compare current move-prediction scores vs historical anchor runs
+    # with MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3.open(
+    #     encoding="utf-8"
+    # ) as handle:
     #     backwards_profiles = json.load(handle)["profile_names"]
 
     # backwards_result = run_backwards_prediction_analysis(
