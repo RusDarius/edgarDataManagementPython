@@ -116,7 +116,7 @@ ORDER BY m.created_at_utc DESC NULLS LAST,
 WITH tickers AS (
     SELECT unnest(
             [
-                'BE',
+                'GOOG',
             ]
         ) AS ticker
 ),

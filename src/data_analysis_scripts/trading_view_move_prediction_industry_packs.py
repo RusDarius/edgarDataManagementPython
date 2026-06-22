@@ -35,6 +35,12 @@ INDUSTRY_PACK_TOP_N = TOP_SECTION_ROWS
 DEFAULT_SCORE_HORIZON = "weeks"
 DEFAULT_PERF_RANK_FIELD = "Perf.1M"
 PERF_RANK_FIELDS = ("Perf.W", "Perf.1M", "Perf.YTD")
+PERF_OVERVIEW_FIELDS = (
+    ("Perf.W", "1W"),
+    ("Perf.1M", "1M"),
+    ("Perf.3M", "3M"),
+    ("Perf.Y", "1Y"),
+)
 SEARCH_NAME_MAX_LEN = 15
 BARE_SYMBOL_MAX_LEN = 10
 FULL_SYMBOL_MAX_LEN = 18
@@ -246,6 +252,150 @@ def _horizon_score(
 
 def _perf_value(row: Mapping[str, Any], perf_field: str) -> float | None:
     return coerce_numeric(row.get(perf_field))
+
+
+def _median(values: Sequence[float]) -> float | None:
+    if not values:
+        return None
+    sorted_vals = sorted(values)
+    mid = len(sorted_vals) // 2
+    if len(sorted_vals) % 2:
+        return sorted_vals[mid]
+    return (sorted_vals[mid - 1] + sorted_vals[mid]) / 2.0
+
+
+def _avg_and_median(
+    values: Sequence[float],
+) -> tuple[float | None, float | None, int]:
+    if not values:
+        return None, None, 0
+    return sum(values) / len(values), _median(values), len(values)
+
+
+def _collect_perf_pack_stats(
+    row_dicts: Sequence[Mapping[str, Any]],
+    perf_field: str,
+) -> dict[str, float | None | int]:
+    values = [
+        perf
+        for row in row_dicts
+        if (perf := _perf_value(row, perf_field)) is not None
+    ]
+    avg, median, count = _avg_and_median(values)
+    return {"avg": avg, "median": median, "count": count}
+
+
+def _collect_score_pack_stats(
+    group_rows: Sequence[Mapping[str, Any]],
+    score_horizon: str,
+) -> dict[str, float | None | int]:
+    scores = [
+        score
+        for row in group_rows
+        if (score := _horizon_score(row, score_horizon)) is not None
+    ]
+    avg, median, count = _avg_and_median(scores)
+    bullish_pct = (
+        sum(1 for score in scores if score > 0) / len(scores) * 100 if scores else None
+    )
+    return {
+        "avg": avg,
+        "median": median,
+        "count": count,
+        "bullish_pct": bullish_pct,
+    }
+
+
+def _build_group_overview_meta(
+    group_rows: Sequence[Mapping[str, Any]],
+    *,
+    score_horizon: str,
+    score_sorted: Sequence[Mapping[str, Any]],
+    regime_by_symbol: Mapping[str, Any],
+) -> dict[str, Any]:
+    row_dicts = [row.get("row") or {} for row in group_rows]
+    score_stats = _collect_score_pack_stats(group_rows, score_horizon)
+    perf_stats_by_field = {
+        perf_field: _collect_perf_pack_stats(row_dicts, perf_field)
+        for perf_field, _ in PERF_OVERVIEW_FIELDS
+    }
+    perf_sorted = sorted(
+        group_rows,
+        key=lambda row: _perf_value(row.get("row") or {}, DEFAULT_PERF_RANK_FIELD)
+        or float("-inf"),
+        reverse=True,
+    )
+    best_score_row = score_sorted[0] if score_sorted else None
+    best_perf_row = perf_sorted[0] if perf_sorted else None
+    best_perf_1m = (
+        _perf_value(best_perf_row.get("row") or {}, DEFAULT_PERF_RANK_FIELD)
+        if best_perf_row
+        else None
+    )
+    perf_1m_stats = perf_stats_by_field[DEFAULT_PERF_RANK_FIELD]
+    med_score = score_stats["median"]
+    med_perf_1m = perf_1m_stats["median"]
+
+    catch_up = 0
+    extended = 0
+    if med_score is not None and med_perf_1m is not None:
+        for consensus_row in group_rows:
+            row = consensus_row.get("row") or {}
+            score = _horizon_score(consensus_row, score_horizon)
+            perf = _perf_value(row, DEFAULT_PERF_RANK_FIELD)
+            if score is None or perf is None:
+                continue
+            if score >= med_score and perf < med_perf_1m:
+                catch_up += 1
+            if perf >= med_perf_1m and score < med_score:
+                extended += 1
+
+    gate_failures = 0
+    for consensus_row in group_rows:
+        row = consensus_row.get("row") or {}
+        regime_record = _lookup_regime_record(row, regime_by_symbol)
+        if _safety_gate_summary(row, consensus_row, regime_record) != "ok":
+            gate_failures += 1
+
+    rvol_values = [
+        value
+        for row in row_dicts
+        if (value := coerce_numeric(row.get("relative_volume_10d_calc"))) is not None
+    ]
+    _, rvol_median, _ = _avg_and_median(rvol_values)
+
+    best_weeks_score = (
+        _horizon_score(best_score_row, score_horizon) if best_score_row else None
+    )
+    return {
+        "row_count": len(group_rows),
+        "avg_weeks_score": score_stats["avg"],
+        "median_weeks_score": score_stats["median"],
+        "bullish_pct": score_stats["bullish_pct"],
+        "best_weeks_score": best_weeks_score,
+        "best_score_row": best_score_row,
+        "best_perf_row": best_perf_row,
+        "best_perf_1m": best_perf_1m,
+        "avg_perf_1m": perf_1m_stats["avg"],
+        "median_perf_1m": perf_1m_stats["median"],
+        "perf_stats_by_field": perf_stats_by_field,
+        "score_spread": (
+            (best_weeks_score - med_score)
+            if best_weeks_score is not None and med_score is not None
+            else None
+        ),
+        "perf_spread_1m": (
+            (best_perf_1m - med_perf_1m)
+            if best_perf_1m is not None and med_perf_1m is not None
+            else None
+        ),
+        "catch_up_count": catch_up,
+        "extended_count": extended,
+        "gate_fail_pct": (
+            gate_failures / len(group_rows) * 100 if group_rows else None
+        ),
+        "rvol_median": rvol_median,
+    }
 
 
 def _top_profile_signals(
@@ -630,42 +780,61 @@ def _write_group_summary_log(
     log_to_file(log_file, "")
 
 
-def _write_overview_log(
+def _write_overview_header(
+    log_file: Path,
+    *,
+    title: str,
+    run_id: str | None,
+    group_field: str,
+    industry_count: int,
+    companion_logs: Sequence[tuple[str, Path]] | None = None,
+) -> None:
+    reset_log_file(log_file)
+    log_to_file(log_file, build_report_title(title))
+    log_to_file(log_file, "=" * 160)
+    if run_id:
+        log_to_file(log_file, f"run_id: {run_id}")
+    log_to_file(
+        log_file,
+        f"Industries exported: {industry_count} | group_field={group_field} | "
+        f"top_n={INDUSTRY_PACK_TOP_N}",
+    )
+    if companion_logs:
+        log_to_file(
+            log_file,
+            "Companion overviews: "
+            + " | ".join(f"{label}={path.name}" for label, path in companion_logs),
+        )
+    log_to_file(log_file, "")
+
+
+def _write_score_overview_log(
     log_file: Path,
     *,
     run_id: str | None,
     group_field: str,
     industry_outputs: Mapping[str, Mapping[str, Any]],
     score_horizon: str,
+    companion_logs: Sequence[tuple[str, Path]] | None = None,
 ) -> None:
-    reset_log_file(log_file)
-    log_to_file(
+    _write_overview_header(
         log_file,
-        build_report_title("Industry packs overview — theme-local peer sets"),
-    )
-    log_to_file(log_file, "=" * 160)
-    if run_id:
-        log_to_file(log_file, f"run_id: {run_id}")
-    log_to_file(
-        log_file,
-        f"Industries exported: {len(industry_outputs)} | group_field={group_field} | "
-        f"top_n={INDUSTRY_PACK_TOP_N}",
+        title="Industry packs overview — score breadth",
+        run_id=run_id,
+        group_field=group_field,
+        industry_count=len(industry_outputs),
+        companion_logs=companion_logs,
     )
     log_to_file(
         log_file,
         "Each industry folder contains: summary, ranked_by_score, ranked_by_perf_1m. "
-        "Open the industry that matches your active theme before comparing global ranks.",
+        "PackAvg1M/PackMed1M are industry-wide tape aggregates; TopPerf1M is the "
+        "best individual name in the pack.",
     )
     log_to_file(log_file, "")
 
-    ranked_industries = []
-    for group_label, meta in industry_outputs.items():
-        avg_score = meta.get("avg_weeks_score")
-        if avg_score is None:
-            continue
-        ranked_industries.append((group_label, meta))
-
-    ranked_industries.sort(
+    ranked_industries = sorted(
+        industry_outputs.items(),
         key=lambda item: item[1].get("avg_weeks_score") or float("-inf"),
         reverse=True,
     )
@@ -674,8 +843,9 @@ def _write_overview_log(
     log_to_file(log_file, "-" * 160)
     log_to_file(
         log_file,
-        f"{'Industry':<40} {'Names':>6} {'AvgScore':>10} {'BestScore':>12} "
-        f"{'BestName':<15} {'FQSym':<18} {'TopPerf':<15} {'Perf1M':>8}",
+        f"{'Industry':<32} {'Names':>6} {'AvgScore':>9} {'MedScore':>9} "
+        f"{'BestScore':>10} {'BestName':<15} {'FQSym':<18} {'TopPerf':<15} "
+        f"{'TopP1M':>8} {'PkAvg1M':>8} {'PkMed1M':>8}",
     )
     log_to_file(log_file, "-" * 160)
     for group_label, meta in ranked_industries:
@@ -685,13 +855,125 @@ def _write_overview_log(
         perf_scan_row = perf_row.get("row") or {}
         log_to_file(
             log_file,
-            f"{group_label[:39]:<40} {meta.get('row_count', 0):>6} "
-            f"{meta.get('avg_weeks_score', 0):>+10.3f} "
-            f"{meta.get('best_weeks_score', 0):>+12.3f} "
+            f"{group_label[:31]:<32} {meta.get('row_count', 0):>6} "
+            f"{meta.get('avg_weeks_score', 0):>+9.3f} "
+            f"{meta.get('median_weeks_score', 0):>+9.3f} "
+            f"{meta.get('best_weeks_score', 0):>+10.3f} "
             f"{_search_name(best_scan_row):<15} "
             f"{_full_qualified_symbol(best_scan_row):<18} "
             f"{_search_name(perf_scan_row):<15} "
-            f"{_format_percent(meta.get('best_perf_1m')):>8}",
+            f"{_format_percent(meta.get('best_perf_1m')):>8} "
+            f"{_format_percent(meta.get('avg_perf_1m')):>8} "
+            f"{_format_percent(meta.get('median_perf_1m')):>8}",
+        )
+    log_to_file(log_file, "")
+
+
+def _write_perf_overview_log(
+    log_file: Path,
+    *,
+    run_id: str | None,
+    group_field: str,
+    industry_outputs: Mapping[str, Mapping[str, Any]],
+    companion_logs: Sequence[tuple[str, Path]] | None = None,
+) -> None:
+    _write_overview_header(
+        log_file,
+        title="Industry packs perf overview — pack tape aggregates",
+        run_id=run_id,
+        group_field=group_field,
+        industry_count=len(industry_outputs),
+        companion_logs=companion_logs,
+    )
+    log_to_file(
+        log_file,
+        "Pack-level trailing performance across scan names. Avg/Med pairs show "
+        "whether leadership is broad or concentrated. Ranked by pack average 1M.",
+    )
+    log_to_file(log_file, "")
+
+    ranked_industries = sorted(
+        industry_outputs.items(),
+        key=lambda item: (
+            (item[1].get("perf_stats_by_field") or {})
+            .get(DEFAULT_PERF_RANK_FIELD, {})
+            .get("avg")
+        )
+        or float("-inf"),
+        reverse=True,
+    )
+
+    log_to_file(log_file, "Industries ranked by pack average 1-month performance")
+    log_to_file(log_file, "-" * 160)
+    header = f"{'Industry':<32} {'Names':>6}"
+    for _, label in PERF_OVERVIEW_FIELDS:
+        header += f" {'A' + label:>8} {'M' + label:>8}"
+    log_to_file(log_file, header)
+    log_to_file(log_file, "-" * 160)
+    for group_label, meta in ranked_industries:
+        perf_stats = meta.get("perf_stats_by_field") or {}
+        line = f"{group_label[:31]:<32} {meta.get('row_count', 0):>6}"
+        for perf_field, _ in PERF_OVERVIEW_FIELDS:
+            field_stats = perf_stats.get(perf_field) or {}
+            line += (
+                f" {_format_percent(field_stats.get('avg')):>8}"
+                f" {_format_percent(field_stats.get('median')):>8}"
+            )
+        log_to_file(log_file, line)
+    log_to_file(log_file, "")
+
+
+def _write_analysis_overview_log(
+    log_file: Path,
+    *,
+    run_id: str | None,
+    group_field: str,
+    industry_outputs: Mapping[str, Mapping[str, Any]],
+    companion_logs: Sequence[tuple[str, Path]] | None = None,
+) -> None:
+    _write_overview_header(
+        log_file,
+        title="Industry packs analysis overview — theme hunting signals",
+        run_id=run_id,
+        group_field=group_field,
+        industry_count=len(industry_outputs),
+        companion_logs=companion_logs,
+    )
+    log_to_file(
+        log_file,
+        "Active-management lens at industry level. CatchUp = names with above-median "
+        "score but below-median 1M perf (relative-value within theme). Extended = "
+        "above-median 1M perf but below-median score (already moved). "
+        "GateFail% = composite safety gate failures. RVolMed = median 10d relative volume.",
+    )
+    log_to_file(log_file, "")
+
+    ranked_industries = sorted(
+        industry_outputs.items(),
+        key=lambda item: item[1].get("catch_up_count") or 0,
+        reverse=True,
+    )
+
+    log_to_file(log_file, "Industries ranked by catch-up candidate count")
+    log_to_file(log_file, "-" * 160)
+    log_to_file(
+        log_file,
+        f"{'Industry':<32} {'Names':>6} {'Bull%':>7} {'GateF%':>7} "
+        f"{'ScrSprd':>8} {'PfSprd':>8} {'CatchUp':>8} {'Extend':>8} "
+        f"{'RVolMed':>8}",
+    )
+    log_to_file(log_file, "-" * 160)
+    for group_label, meta in ranked_industries:
+        log_to_file(
+            log_file,
+            f"{group_label[:31]:<32} {meta.get('row_count', 0):>6} "
+            f"{meta.get('bullish_pct', 0):>6.1f}% "
+            f"{meta.get('gate_fail_pct', 0):>6.1f}% "
+            f"{_format_percent(meta.get('score_spread')):>8} "
+            f"{_format_percent(meta.get('perf_spread_1m')):>8} "
+            f"{meta.get('catch_up_count', 0):>8} "
+            f"{meta.get('extended_count', 0):>8} "
+            f"{_format_multiple(meta.get('rvol_median')):>8}",
         )
     log_to_file(log_file, "")
 
@@ -731,7 +1013,8 @@ def write_industry_packs_from_duckdb_run(
 
   Returns
   -------
-  dict with ``industry_packs_dir``, ``overview_log``, and per-group file paths.
+  dict with ``industry_packs_dir``, ``overview_log``, ``perf_overview_log``,
+  ``analysis_overview_log``, and per-group file paths.
     """
     run_output_dir = Path(duckdb_run_result["_duckdb_run_output_dir"])
     if output_dir is None:
@@ -814,60 +1097,67 @@ def write_industry_packs_from_duckdb_run(
             regime_by_symbol=regime_by_symbol,
         )
 
-        weeks_scores = [
-            s
-            for row in group_rows
-            if (s := _horizon_score(row, score_horizon)) is not None
-        ]
-        best_score_row = score_sorted[0] if score_sorted else None
-        perf_sorted = sorted(
+
+        overview_meta = _build_group_overview_meta(
             group_rows,
-            key=lambda row: _perf_value(row.get("row") or {}, DEFAULT_PERF_RANK_FIELD)
-            or float("-inf"),
-            reverse=True,
+            score_horizon=score_horizon,
+            score_sorted=score_sorted,
+            regime_by_symbol=regime_by_symbol,
         )
-        best_perf_row = perf_sorted[0] if perf_sorted else None
 
         industry_outputs[group_label] = {
             "folder": group_dir,
             "summary_log": summary_log,
             "ranked_by_score_log": score_log,
             "ranked_by_perf_1m_log": perf_log,
-            "row_count": len(group_rows),
             "peer_rescored": peer_rescored,
-            "avg_weeks_score": (
-                sum(weeks_scores) / len(weeks_scores) if weeks_scores else None
-            ),
-            "best_weeks_score": (
-                _horizon_score(best_score_row, score_horizon)
-                if best_score_row
-                else None
-            ),
             "best_score_ticker": (
-                best_score_row.get("ticker") if best_score_row else None
+                score_sorted[0].get("ticker") if score_sorted else None
             ),
-            "best_score_row": best_score_row,
-            "best_perf_row": best_perf_row,
-            "best_perf_ticker": best_perf_row.get("ticker") if best_perf_row else None,
-            "best_perf_1m": (
-                _perf_value(best_perf_row.get("row") or {}, DEFAULT_PERF_RANK_FIELD)
-                if best_perf_row
+            "best_perf_ticker": (
+                overview_meta["best_perf_row"].get("ticker")
+                if overview_meta.get("best_perf_row")
                 else None
             ),
+            **overview_meta,
         }
 
     overview_log = packs_root / "_industry_packs_overview.log"
-    _write_overview_log(
+    perf_overview_log = packs_root / "_industry_packs_perf_overview.log"
+    analysis_overview_log = packs_root / "_industry_packs_analysis_overview.log"
+    companion_logs = [
+        ("score", overview_log),
+        ("perf", perf_overview_log),
+        ("analysis", analysis_overview_log),
+    ]
+    _write_score_overview_log(
         overview_log,
         run_id=str(run_id) if run_id else None,
         group_field=group_field,
         industry_outputs=industry_outputs,
         score_horizon=score_horizon,
+        companion_logs=companion_logs,
+    )
+    _write_perf_overview_log(
+        perf_overview_log,
+        run_id=str(run_id) if run_id else None,
+        group_field=group_field,
+        industry_outputs=industry_outputs,
+        companion_logs=companion_logs,
+    )
+    _write_analysis_overview_log(
+        analysis_overview_log,
+        run_id=str(run_id) if run_id else None,
+        group_field=group_field,
+        industry_outputs=industry_outputs,
+        companion_logs=companion_logs,
     )
 
     return {
         "industry_packs_dir": packs_root,
         "overview_log": overview_log,
+        "perf_overview_log": perf_overview_log,
+        "analysis_overview_log": analysis_overview_log,
         "industries": industry_outputs,
         "run_output_dir": run_output_dir,
     }

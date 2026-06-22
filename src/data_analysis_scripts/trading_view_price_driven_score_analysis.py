@@ -75,6 +75,7 @@ REVERSAL_PROFILES = frozenset(
         "swing_reversal_v1",
         "value_recovery_v1",
         "value_recovery_v2",
+        "value_recovery_v3",
         "mean_reversion_exhaustion_v1",
         "value_recovery",
         "mean_reversion_exhaustion",

@@ -25,6 +25,9 @@ from data_analysis_scripts.trading_view_export_all_tdfields import (
     export_all_tradingview_fields,
     export_all_tradingview_fields_duckdb,
 )
+from data_analysis_scripts.trading_view_market_flow_screening import (
+    run_market_flow_screening_suite,
+)
 from data_analysis_scripts.trading_view_move_prediction_batch_pattern_analysis import (
     run_batch_prediction_pattern_analysis,
 )
@@ -443,40 +446,41 @@ def main():
     #     / "current_holdings.json",
     # )
 
-    # # # # # Model Analysis scan with duckdb storage solution
-    # move_prediction_scan_response = (
-    #     TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-    #         min_market_cap_usd=500_000_000,
-    #         markets=PREFERRED_MARKETS,
-    #     )
-    # )
-    # # Default (omit profile_suite_path): built-in 10-profile baseline — see DEFAULT_MOVE_PREDICTION_PROFILE_SUITE.
-    # # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3
-    # # Legacy 17-profile suite: MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
-    # # Realigned baseline (11 lenses): MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
-    # # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
-    # base_duckdb_result = run_full_analysis_suite_duckdb(
-    #     scan_data=move_prediction_scan_response,
-    #     min_market_cap_usd=500_000_000,
-    #     include_blind_spot_sections=True,
-    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
-    #     conviction_mode_config_path=CONVICTION_MODE_CONFIG,
-    #     defer_conviction_to_earnings=True,
-    #     regime_context_config_path=REGIME_CONTEXT_CONFIG,
-    #     write_industry_packs=True,
-    # )
+    # # # Model Analysis scan with duckdb storage solution
+    move_prediction_scan_response = (
+        TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+            min_market_cap_usd=500_000_000,
+            markets=PREFERRED_MARKETS,
+        )
+    )
+    # Default (omit profile_suite_path): built-in 10-profile baseline — see DEFAULT_MOVE_PREDICTION_PROFILE_SUITE.
+    # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3
+    # Legacy 17-profile suite: MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
+    # Realigned baseline (11 lenses): MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
+    # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
+    base_duckdb_result = run_full_analysis_suite_duckdb(
+        scan_data=move_prediction_scan_response,
+        min_market_cap_usd=500_000_000,
+        include_blind_spot_sections=True,
+        profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+        conviction_mode_config_path=CONVICTION_MODE_CONFIG,
+        defer_conviction_to_earnings=True,
+        regime_context_config_path=REGIME_CONTEXT_CONFIG,
+        write_industry_packs=True,
+    )
 
     # FOR INDUSTRY RUN SPLIT Or post-process an existing run:
     # write_industry_packs_from_duckdb_run(base_duckdb_result)
-    # run_full_analysis_suite_with_earnings_priority_duckdb(
-    #     scan_data=move_prediction_scan_response,
-    #     min_market_cap_usd=500_000_000,
-    #     include_blind_spot_sections=True,
-    #     base_result=base_duckdb_result,
-    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
-    #     conviction_mode_config_path=CONVICTION_MODE_CONFIG,
-    #     regime_context_config_path=REGIME_CONTEXT_CONFIG,
-    # )
+
+    run_full_analysis_suite_with_earnings_priority_duckdb(
+        scan_data=move_prediction_scan_response,
+        min_market_cap_usd=500_000_000,
+        include_blind_spot_sections=True,
+        base_result=base_duckdb_result,
+        profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+        conviction_mode_config_path=CONVICTION_MODE_CONFIG,
+        regime_context_config_path=REGIME_CONTEXT_CONFIG,
+    )
 
     # # Price-driven decile analysis: bucket by change / Perf.5D / Perf.1M, score profiles,
     # # surface upward-move opportunities in worst performers. Output:
@@ -498,6 +502,19 @@ def main():
 
     # ALL FIELDS DUCKDB EXPORT
     # export_all_tradingview_fields_duckdb()
+
+    # Market flow screening (paired daily DuckDB snapshots)
+    # Output: logs/tradingview_analysis/market_flow_screening/runs/flow_<base>_<compare>_<id>/
+    # run_market_flow_screening_suite(
+    #     base_day_label="12_06_2026",
+    #     compare_day_label="18_06_2026",
+    #     min_market_cap_usd=100_000_000,
+    #     # optional refinement overrides:
+    #     # max_abs_price_return_pct=150.0,
+    #     # max_abs_flow_residual_pct=200.0,
+    #     # buyback_yield_threshold=0.02,
+    #     # share_buyback_ratio_threshold=0.02,
+    # )
 
     # all-view trading view data analysis
     #
@@ -559,6 +576,10 @@ def main():
     # (A) Field-level conclusions for the same scan period:
     # export_scan_period_data_set_conclusions(run_root=SCAN_PERIOD_TRACKING_RUN_ROOT)
     #
+    # (A2) Field taxonomy splits (meaning / usage / relevance):
+    # from data_analysis_scripts.trading_view_field_taxonomy_builder import build_trading_view_field_taxonomy
+    # build_trading_view_field_taxonomy(scan_run_root=SCAN_PERIOD_TRACKING_RUN_ROOT)
+    #
     # (B) PLAYBOOK A tickers vs Mar–Jun realized performance:
     # run_scan_period_ticker_watchlist_analysis(
     #     regime_context_config_path=REGIME_CONTEXT_CONFIG,
@@ -601,6 +622,36 @@ def main():
     #         "FCH",
     #         "PE",
     #         "VPLAY_A",
+    #         "BION",
+    #         "SNDK",
+    #         "MLI",
+    #         "GPCR",
+    #         "CALM",
+    #         "MU",
+    #         "TROW",
+    #         "JHG",
+    #         "SYF",
+    #         "ABUS",
+    #         "AMP",
+    #         "ADMIE",
+    #         "NVR",
+    #         "AUPH",
+    #         "LKFT",
+    #         "ORKA",
+    #         "ARGX",
+    #         "IIIN",
+    #         "PHIL",
+    #         "CRDO",
+    #         "UFPI",
+    #         "CART",
+    #         "RMS",
+    #         "TFG",
+    #         "WPK",
+    #         "SNA",
+    #         "VRTX",
+    #         "INCY",
+    #         "ALAB",
+    #         "FDXF",
     #     ],
     #     watchlist_id="playbook_a_tactical_mar_jun2026",
     # )

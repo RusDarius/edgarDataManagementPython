@@ -10,6 +10,8 @@ from data_analysis_scripts.trading_view_move_prediction_overlap_report import (
     run_suite_overlap_report,
 )
 from data_analysis_scripts.trading_view_move_prediction_profile_config import (
+    ProfileConfigRegistry,
+    get_default_profile_registry,
     load_profile_suite,
 )
 
@@ -174,6 +176,53 @@ def _fortress_row() -> dict:
     }
 
 
+def _pullback_reversal_row() -> dict:
+    return {
+        "symbol": "NASDAQ:REV",
+        "name": "Pullback Reversal",
+        "market_cap_basic": 2_000_000_000,
+        "close": 45.0,
+        "price_52_week_high": 90.0,
+        "price_52_week_low": 40.0,
+        "RSI": 32.0,
+        "RSI7": 28.0,
+        "Stoch.RSI.K": 22.0,
+        "Stoch.RSI.D": 18.0,
+        "Perf.5D": 4.5,
+        "Perf.W": 6.0,
+        "Perf.1M": -12.0,
+        "Perf.3M": -18.0,
+        "Perf.6M": -8.0,
+        "Perf.Y": -5.0,
+        "relative_volume_10d_calc": 1.8,
+        "volume_trend": 1.2,
+        "change": 1.8,
+        "Aroon.Up": 35.0,
+        "Aroon.Down": 75.0,
+        "ADX+DI": 18.0,
+        "ADX-DI": 28.0,
+        "SMA10": 44.0,
+        "SMA20": 46.0,
+        "SMA50": 52.0,
+        "SMA200": 65.0,
+        "EMA10": 44.5,
+        "EMA20": 46.5,
+        "EMA50": 53.0,
+        "EMA200": 66.0,
+        "DonchCh20.Upper": 48.0,
+        "DonchCh20.Lower": 41.0,
+        "P.SAR": 47.0,
+        "ChaikinMoneyFlow": 0.08,
+        "BB.upper": 48.0,
+        "BB.lower": 42.0,
+        "altman_z_score_ttm": 2.8,
+        "total_debt_to_ebitda_fq": 2.5,
+        "return_on_invested_capital": 6.0,
+        "piotroski_f_score_ttm": 4.0,
+        "free_cash_flow_margin_ttm": 8.0,
+    }
+
+
 def _filler_rows(count: int = 12) -> list[dict]:
     rows: list[dict] = []
     for index in range(count):
@@ -193,10 +242,10 @@ def _filler_rows(count: int = 12) -> list[dict]:
 
 
 class TestActiveManagerV4Suite(unittest.TestCase):
-    def test_active_manager_v4_has_twelve_profiles(self):
+    def test_active_manager_v4_has_eight_profiles(self):
         suite = load_profile_suite(CONFIG_ROOT / "suites" / "active_manager_v4.json")
         self.assertEqual(suite["suite_id"], "active_manager_v4")
-        self.assertEqual(len(suite["profile_names"]), 12)
+        self.assertEqual(len(suite["profile_names"]), 8)
         self.assertAlmostEqual(
             sum(suite["consensus_profile_weights"].values()), 1.0, places=6
         )
@@ -298,13 +347,16 @@ class TestMovePredictionOverlapReport(unittest.TestCase):
         profile_name: str,
         horizon_name: str,
         symbol: str,
+        *,
+        profile_registry: ProfileConfigRegistry | None = None,
     ) -> float:
+        registry = profile_registry or self.v3_suite["registry"]
         rankings = build_profile_rankings_for_horizon(
             scan_rows,
             [profile_name],
             horizon_name=horizon_name,
             top_n=len(scan_rows),
-            profile_registry=self.v3_suite["registry"],
+            profile_registry=registry,
         )
         for row in rankings[profile_name]:
             if row["symbol"] == symbol:
@@ -321,6 +373,27 @@ class TestMovePredictionOverlapReport(unittest.TestCase):
             profile_registry=self.v3_suite["registry"],
         )
         self.assertEqual(rankings["breakout_long_v1"][0]["symbol"], "NASDAQ:BREAK")
+
+    def test_upside_reversal_prefers_pullback_row_over_breakout_row(self):
+        v4_suite = load_profile_suite(
+            CONFIG_ROOT / "suites" / "active_manager_v4.json"
+        )
+        scan_rows = [_breakout_row(), _pullback_reversal_row(), *_filler_rows()]
+        rankings = build_profile_rankings_for_horizon(
+            scan_rows,
+            ["upside_reversal_v1"],
+            horizon_name="weeks",
+            top_n=3,
+            profile_registry=v4_suite["registry"],
+        )
+        reversal_score = next(
+            row["score"] for row in rankings["upside_reversal_v1"] if row["symbol"] == "NASDAQ:REV"
+        )
+        breakout_score = next(
+            row["score"] for row in rankings["upside_reversal_v1"] if row["symbol"] == "NASDAQ:BREAK"
+        )
+        self.assertGreater(reversal_score, breakout_score)
+        self.assertEqual(rankings["upside_reversal_v1"][0]["symbol"], "NASDAQ:REV")
 
     def test_quality_continuation_prefers_quality_row(self):
         scan_rows = [_breakout_row(), _quality_continuation_row(), *_filler_rows()]
@@ -341,6 +414,84 @@ class TestMovePredictionOverlapReport(unittest.TestCase):
             scan_rows, "asymmetric_value", "months", "NASDAQ:TURN"
         )
         self.assertGreater(recovery_turn, asymmetric_turn)
+
+    def test_value_recovery_v3_prefers_turnaround_over_breakout(self):
+        scan_rows = [_turnaround_row(), _breakout_row(), *_filler_rows(6)]
+        registry = get_default_profile_registry()
+        turnaround_score = self._score_symbol(
+            scan_rows,
+            "value_recovery_v3",
+            "months",
+            "NASDAQ:TURN",
+            profile_registry=registry,
+        )
+        breakout_score = self._score_symbol(
+            scan_rows,
+            "value_recovery_v3",
+            "months",
+            "NASDAQ:BREAK",
+            profile_registry=registry,
+        )
+        self.assertGreater(turnaround_score, breakout_score)
+
+    def test_value_recovery_v3_prefers_turnaround_over_quality_continuation(self):
+        scan_rows = [_turnaround_row(), _quality_continuation_row(), *_filler_rows(6)]
+        registry = get_default_profile_registry()
+        turnaround_score = self._score_symbol(
+            scan_rows,
+            "value_recovery_v3",
+            "months",
+            "NASDAQ:TURN",
+            profile_registry=registry,
+        )
+        quality_score = self._score_symbol(
+            scan_rows,
+            "value_recovery_v3",
+            "months",
+            "NASDAQ:QCONT",
+            profile_registry=registry,
+        )
+        self.assertGreater(turnaround_score, quality_score)
+
+    def test_value_recovery_v3_still_beats_asymmetric_on_turnaround_row(self):
+        scan_rows = [_turnaround_row(), _static_value_row(), *_filler_rows(6)]
+        registry = get_default_profile_registry()
+        recovery_turn = self._score_symbol(
+            scan_rows,
+            "value_recovery_v3",
+            "months",
+            "NASDAQ:TURN",
+            profile_registry=registry,
+        )
+        asymmetric_turn = self._score_symbol(
+            scan_rows, "asymmetric_value", "months", "NASDAQ:TURN"
+        )
+        self.assertGreater(recovery_turn, asymmetric_turn)
+
+    def test_value_recovery_v3_breakout_overlap_gate_passes_fixture(self):
+        scan_rows = [
+            _breakout_row(),
+            _turnaround_row(),
+            _pullback_reversal_row(),
+            _static_value_row(),
+            *_filler_rows(12),
+        ]
+        report = build_move_prediction_overlap_report(
+            scan_rows,
+            ["breakout_long_v1", "value_recovery_v3", "upside_reversal_v1"],
+            top_n=3,
+            profile_registry=get_default_profile_registry(),
+            horizon_names=["weeks", "months"],
+        )
+        for horizon_name in ("weeks",):
+            for pair in report["horizons"][horizon_name]["pair_overlaps"]:
+                profiles = {pair["left_profile"], pair["right_profile"]}
+                if profiles == {"breakout_long_v1", "value_recovery_v3"}:
+                    self.assertLessEqual(
+                        pair["jaccard_top_n"],
+                        CRITICAL_PAIR_GATES[("breakout_long_v1", "value_recovery_v3")],
+                        msg=f"{horizon_name} breakout/value_recovery_v3 overlap too high: {pair}",
+                    )
 
     def test_evaluate_overlap_gates_detects_violation(self):
         horizon_reports = {

@@ -347,6 +347,9 @@ DERIVED_PROFILE_FIELDS = [
     "regime_oversold_daily",
     "regime_extended_tape",
     "repair_confirmation_score",
+    "pullback_context_score",
+    "snapback_divergence_score",
+    "structural_bleed_score",
     "upside_room_score",
     "distress_floor",
 ]
@@ -473,6 +476,9 @@ EXTENDED_SIGNALS: frozenset[str] = frozenset(
         "regime_oversold_daily",
         "regime_extended_tape",
         "repair_confirmation_score",
+        "pullback_context_score",
+        "snapback_divergence_score",
+        "structural_bleed_score",
         "upside_room_score",
         "distress_floor",
     }
@@ -3631,8 +3637,11 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
         oversold_inputs.append(_clamp(williams_r_centered / 25.0, -3.0, 3.0))
     regime_oversold_daily = _mean_signal_values(oversold_inputs)
 
+    perf_1m = _coerce_numeric(row.get("Perf.1M"))
     perf_3m = _coerce_numeric(row.get("Perf.3M"))
     perf_6m = _coerce_numeric(row.get("Perf.6M"))
+    perf_ytd = _coerce_numeric(row.get("Perf.YTD"))
+    perf_y = _coerce_numeric(row.get("Perf.Y"))
     extended_inputs: list[float] = []
     if near_52w_high_score is not None:
         extended_inputs.append(near_52w_high_score)
@@ -3664,6 +3673,47 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
     repair_confirmation_score = _mean_signal_values(repair_inputs)
     if monthly_oversold_only and repair_confirmation_score is not None:
         repair_confirmation_score *= 0.35
+    if repair_confirmation_score is not None:
+        if regime_oversold_daily is not None and regime_oversold_daily > 0:
+            repair_confirmation_score *= _clamp(regime_oversold_daily / 1.5, 0.25, 1.0)
+        else:
+            repair_confirmation_score *= 0.15
+        if regime_extended_tape is not None and regime_extended_tape > 0:
+            repair_confirmation_score *= _clamp(
+                1.0 - regime_extended_tape / 2.0, 0.0, 1.0
+            )
+
+    pullback_inputs: list[float] = []
+    for perf_value, scale in ((perf_1m, 15.0), (perf_3m, 20.0)):
+        if perf_value is not None and -25.0 <= perf_value < 0:
+            pullback_inputs.append(_clamp(-perf_value / scale, 0.0, 2.5))
+    pullback_context_score = _mean_signal_values(pullback_inputs)
+
+    snapback_inputs: list[float] = []
+    short_bounce_inputs: list[float] = []
+    if perf_5d is not None and perf_5d > 0:
+        short_bounce_inputs.append(_clamp(perf_5d / 10.0, 0.0, 3.0))
+    if perf_w is not None and perf_w > 0:
+        short_bounce_inputs.append(_clamp(perf_w / 15.0, 0.0, 3.0))
+    medium_pullback_inputs: list[float] = []
+    if perf_1m is not None and perf_1m < 0:
+        medium_pullback_inputs.append(_clamp(-perf_1m / 15.0, 0.0, 3.0))
+    if perf_3m is not None and perf_3m < 0:
+        medium_pullback_inputs.append(_clamp(-perf_3m / 20.0, 0.0, 3.0))
+    short_bounce = _mean_signal_values(short_bounce_inputs)
+    medium_pullback = _mean_signal_values(medium_pullback_inputs)
+    if short_bounce is not None and medium_pullback is not None:
+        snapback_inputs.append(min(short_bounce, medium_pullback) * 1.25)
+    snapback_divergence_score = _mean_signal_values(snapback_inputs)
+
+    bleed_inputs: list[float] = []
+    if perf_6m is not None and perf_6m < -20.0:
+        bleed_inputs.append(_clamp((-perf_6m - 20.0) / 30.0, 0.0, 3.0))
+    if perf_y is not None and perf_y < -30.0:
+        bleed_inputs.append(_clamp((-perf_y - 30.0) / 50.0, 0.0, 3.0))
+    if perf_ytd is not None and perf_ytd < -35.0:
+        bleed_inputs.append(_clamp((-perf_ytd - 35.0) / 50.0, 0.0, 2.5))
+    structural_bleed_score = _mean_signal_values(bleed_inputs)
 
     upside_inputs: list[float] = []
     if distance_from_52w_high is not None:
@@ -3773,6 +3823,9 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
         "regime_oversold_daily": regime_oversold_daily,
         "regime_extended_tape": regime_extended_tape,
         "repair_confirmation_score": repair_confirmation_score,
+        "pullback_context_score": pullback_context_score,
+        "snapback_divergence_score": snapback_divergence_score,
+        "structural_bleed_score": structural_bleed_score,
         "upside_room_score": upside_room_score,
         "distress_floor": distress_floor,
     }
@@ -4087,23 +4140,24 @@ def _build_component_signal_map(
             "recommend_tf_spread": _derived_signal(
                 derived_row, profiles, "recommend_tf_spread"
             ),
-            "near_52w_high_score": _derived_signal(
-                derived_row, profiles, "near_52w_high_score"
-            ),
+            "near_52w_high_score": derived_row.get("near_52w_high_score"),
             "exhaustion_range_position": _derived_signal(
                 derived_row, profiles, "exhaustion_range_position"
             ),
-            "williams_r_centered": _derived_signal(
-                derived_row, profiles, "williams_r_centered"
+            "williams_r_centered": derived_row.get("williams_r_centered"),
+            "regime_oversold_daily": derived_row.get("regime_oversold_daily"),
+            "regime_extended_tape": (
+                -derived_row["regime_extended_tape"]
+                if derived_row.get("regime_extended_tape") is not None
+                else None
             ),
-            "regime_oversold_daily": _derived_signal(
-                derived_row, profiles, "regime_oversold_daily"
-            ),
-            "regime_extended_tape": _derived_signal(
-                derived_row, profiles, "regime_extended_tape"
-            ),
-            "repair_confirmation_score": _derived_signal(
-                derived_row, profiles, "repair_confirmation_score"
+            "repair_confirmation_score": derived_row.get("repair_confirmation_score"),
+            "pullback_context_score": derived_row.get("pullback_context_score"),
+            "snapback_divergence_score": derived_row.get("snapback_divergence_score"),
+            "structural_bleed_score": (
+                -derived_row["structural_bleed_score"]
+                if derived_row.get("structural_bleed_score") is not None
+                else None
             ),
         },
         "trend": {
@@ -4743,7 +4797,10 @@ def _breakout_composite_risk_score(
 def _profile_action_family(profile_name: str | None) -> str | None:
     if not profile_name:
         return None
-    return profile_name.removesuffix("_v1")
+    for suffix in ("_v3", "_v2", "_v1"):
+        if profile_name.endswith(suffix):
+            return profile_name[: -len(suffix)]
+    return profile_name
 
 
 def _count_bullish_long_profiles(
@@ -5112,6 +5169,31 @@ def _manager_action_signal(
         if weeks is not None and weeks >= 0.35:
             return "watch_reversal_entry"
 
+    if profile_family == "value_recovery":
+        derived = derived_row or {}
+        extended_tape = derived.get("regime_extended_tape")
+        repair_confirmation = derived.get("repair_confirmation_score")
+        range_position = derived.get("range_position_52w")
+
+        if (
+            valuation < -0.5
+            or (extended_tape is not None and extended_tape > 0.3)
+            or (range_position is not None and range_position > 0.65)
+        ):
+            return "avoid_extended_recovery"
+        if (
+            weeks is not None
+            and weeks >= 0.45
+            and quality >= 0.35
+            and valuation >= 0.25
+            and repair_confirmation is not None
+            and repair_confirmation >= 0.15
+            and safety >= -0.35
+        ):
+            return "accumulate_value_recovery"
+        if weeks is not None and weeks >= 0.35 and valuation >= 0.0:
+            return "watch_value_recovery"
+
     if profile_family == "pre_earnings_drift":
         if (
             earnings_days_to_next is not None
@@ -5125,7 +5207,8 @@ def _manager_action_signal(
         return "avoid_value_trap"
     # Generic add_long_breakout (lower threshold, any profile)
     if (
-        weeks is not None
+        profile_family != "value_recovery"
+        and weeks is not None
         and days is not None
         and weeks >= 0.75
         and days >= 0.35
@@ -8127,6 +8210,12 @@ def run_full_analysis_suite_duckdb(
         result["_industry_packs"] = industry_pack_result
         generated_logs["_industry_packs_overview"] = industry_pack_result[
             "overview_log"
+        ]
+        generated_logs["_industry_packs_perf_overview"] = industry_pack_result[
+            "perf_overview_log"
+        ]
+        generated_logs["_industry_packs_analysis_overview"] = industry_pack_result[
+            "analysis_overview_log"
         ]
     return result
 

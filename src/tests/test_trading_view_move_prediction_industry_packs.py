@@ -37,6 +37,7 @@ def _sample_scan_row(symbol: str, **overrides) -> dict:
         "Value.Traded": 15_000_000,
         "Perf.W": 4.2,
         "Perf.1M": 8.5,
+        "Perf.3M": 12.0,
         "Perf.YTD": 18.0,
         "Perf.Y": 35.0,
         "Perf.5Y": 120.0,
@@ -104,8 +105,27 @@ class TestTradingViewMovePredictionIndustryPacks(unittest.TestCase):
 
         packs_dir = pack_result["industry_packs_dir"]
         overview_log = pack_result["overview_log"]
+        perf_overview_log = pack_result["perf_overview_log"]
+        analysis_overview_log = pack_result["analysis_overview_log"]
         self.assertTrue(packs_dir.exists())
         self.assertTrue(overview_log.exists())
+        self.assertTrue(perf_overview_log.exists())
+        self.assertTrue(analysis_overview_log.exists())
+
+        overview_text = overview_log.read_text(encoding="utf-8")
+        self.assertIn("MedScore", overview_text)
+        self.assertIn("PkAvg1M", overview_text)
+        self.assertIn("PkMed1M", overview_text)
+        self.assertIn("TopP1M", overview_text)
+
+        perf_overview_text = perf_overview_log.read_text(encoding="utf-8")
+        self.assertIn("perf overview", perf_overview_text.lower())
+        self.assertIn("A1M", perf_overview_text)
+        self.assertIn("M1Y", perf_overview_text)
+
+        analysis_text = analysis_overview_log.read_text(encoding="utf-8")
+        self.assertIn("CatchUp", analysis_text)
+        self.assertIn("GateF%", analysis_text)
 
         semis_meta = pack_result["industries"]["Semiconductors"]
         self.assertEqual(semis_meta["row_count"], 6)

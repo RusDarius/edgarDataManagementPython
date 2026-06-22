@@ -137,7 +137,10 @@ class TestProfileConfigLoader(unittest.TestCase):
         momentum_weights = profile.component_signal_weights.get("momentum", {})
         safety_weights = profile.component_signal_weights.get("safety", {})
         self.assertGreaterEqual(
-            momentum_weights.get("repair_confirmation_score", 0.0), 1.6
+            momentum_weights.get("snapback_divergence_score", 0.0), 2.0
+        )
+        self.assertGreaterEqual(
+            momentum_weights.get("pullback_context_score", 0.0), 1.9
         )
         self.assertGreaterEqual(momentum_weights.get("regime_oversold_daily", 0.0), 1.5)
         self.assertGreaterEqual(safety_weights.get("distress_floor", 0.0), 1.2)
@@ -152,22 +155,46 @@ class TestProfileConfigLoader(unittest.TestCase):
             sum(suite["consensus_profile_weights"].values()), 1.0, places=6
         )
 
+    def test_value_recovery_v3_profile_loads(self):
+        meta = load_profile_config_file(
+            CONFIG_ROOT / "profiles" / "value_recovery_v3.json"
+        )
+        profile = resolve_move_prediction_scoring_profile("value_recovery_v3")
+        self.assertEqual(meta["profile_id"], "value_recovery_v3")
+        self.assertEqual(meta["base_profile_id"], "value_recovery")
+        self.assertEqual(profile.name, "value_recovery_v3")
+        momentum_weights = profile.component_signal_weights.get("momentum", {})
+        valuation_weights = profile.component_signal_weights.get("valuation", {})
+        self.assertGreaterEqual(
+            momentum_weights.get("pullback_context_score", 0.0), 1.5
+        )
+        self.assertGreaterEqual(
+            momentum_weights.get("regime_extended_tape", 0.0), 1.6
+        )
+        self.assertEqual(momentum_weights.get("aroon_spread", -1.0), 0.0)
+        self.assertGreaterEqual(valuation_weights.get("upside_room_score", 0.0), 1.5)
+        valuation_bias = profile.component_directional_bias.get("valuation")
+        self.assertIsNotNone(valuation_bias)
+        self.assertGreaterEqual(valuation_bias.negative_multiplier, 1.45)
+
     def test_active_manager_v4_includes_upside_reversal_v1(self):
         suite = load_profile_suite(
             CONFIG_ROOT / "suites" / "active_manager_v4.json"
         )
         self.assertEqual(suite["suite_id"], "active_manager_v4")
-        self.assertEqual(len(suite["profile_names"]), 12)
+        self.assertEqual(len(suite["profile_names"]), 8)
         self.assertIn("upside_reversal_v1", suite["profile_names"])
+        self.assertIn("value_recovery_v3", suite["profile_names"])
         self.assertIn("upside_reversal_v1", suite["long_consensus_profiles"])
         self.assertNotIn(
             "upside_reversal_v1", suite["inverted_consensus_profiles"]
         )
+        self.assertNotIn("breakout_long_v1", suite["profile_names"])
         self.assertAlmostEqual(
             sum(suite["consensus_profile_weights"].values()), 1.0, places=6
         )
         self.assertAlmostEqual(
-            suite["consensus_profile_weights"]["upside_reversal_v1"], 0.07, places=6
+            suite["consensus_profile_weights"]["upside_reversal_v1"], 0.125, places=6
         )
 
 

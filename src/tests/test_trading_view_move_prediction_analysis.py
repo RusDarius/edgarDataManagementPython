@@ -76,8 +76,106 @@ class TestTierOneDerivedSignals(unittest.TestCase):
         self.assertGreater(derived["regime_oversold_daily"], 0.0)
         self.assertIsNotNone(derived["repair_confirmation_score"])
         self.assertGreater(derived["repair_confirmation_score"], 0.0)
+        self.assertIsNotNone(derived["pullback_context_score"])
+        self.assertIsNotNone(derived["snapback_divergence_score"])
+        self.assertGreater(derived["snapback_divergence_score"], 0.0)
         self.assertIsNotNone(derived["upside_room_score"])
         self.assertIsNotNone(derived["distress_floor"])
+
+    def test_pullback_composites_favor_snapback_over_extended_momentum(self):
+        pullback_row = {
+            "close": 45.0,
+            "RSI": 32.0,
+            "RSI7": 28.0,
+            "Stoch.RSI.K": 22.0,
+            "BB.upper": 48.0,
+            "BB.lower": 42.0,
+            "price_52_week_high": 90.0,
+            "price_52_week_low": 40.0,
+            "Perf.5D": 4.5,
+            "Perf.W": 6.0,
+            "Perf.1M": -12.0,
+            "Perf.3M": -18.0,
+            "Perf.6M": -8.0,
+            "Perf.Y": -5.0,
+            "relative_volume_10d_calc": 1.8,
+            "ATRP": 3.0,
+            "SMA10": 44.0,
+            "SMA20": 46.0,
+            "SMA50": 52.0,
+            "SMA200": 65.0,
+            "EMA10": 44.5,
+            "EMA20": 46.5,
+            "EMA50": 53.0,
+            "EMA200": 66.0,
+        }
+        breakout_row = {
+            "close": 120.0,
+            "RSI": 68.0,
+            "RSI7": 70.0,
+            "Stoch.RSI.K": 75.0,
+            "BB.upper": 125.0,
+            "BB.lower": 110.0,
+            "price_52_week_high": 125.0,
+            "price_52_week_low": 40.0,
+            "Perf.5D": 8.0,
+            "Perf.W": 12.0,
+            "Perf.1M": 15.0,
+            "Perf.3M": 35.0,
+            "Perf.6M": 50.0,
+            "Perf.Y": 80.0,
+            "relative_volume_10d_calc": 2.2,
+            "ATRP": 2.5,
+            "SMA10": 115.0,
+            "SMA20": 112.0,
+            "SMA50": 100.0,
+            "SMA200": 80.0,
+            "EMA10": 116.0,
+            "EMA20": 113.0,
+            "EMA50": 105.0,
+            "EMA200": 82.0,
+            "Aroon.Up": 90.0,
+            "Aroon.Down": 20.0,
+            "ADX+DI": 35.0,
+            "ADX-DI": 15.0,
+        }
+        pullback = _build_derived_metrics(pullback_row)
+        breakout = _build_derived_metrics(breakout_row)
+
+        self.assertGreater(
+            pullback.get("snapback_divergence_score") or 0.0,
+            breakout.get("snapback_divergence_score") or 0.0,
+        )
+        self.assertGreater(
+            pullback.get("pullback_context_score") or 0.0,
+            breakout.get("pullback_context_score") or 0.0,
+        )
+        self.assertGreater(
+            breakout.get("regime_extended_tape") or 0.0,
+            pullback.get("regime_extended_tape") or 0.0,
+        )
+        self.assertGreater(
+            pullback.get("repair_confirmation_score") or 0.0,
+            breakout.get("repair_confirmation_score") or 0.0,
+        )
+
+    def test_structural_bleed_score_flags_long_duration_collapse(self):
+        bleeder = {
+            "close": 10.0,
+            "Perf.6M": -45.0,
+            "Perf.Y": -60.0,
+            "Perf.YTD": -55.0,
+        }
+        pullback = {
+            "close": 45.0,
+            "Perf.6M": -8.0,
+            "Perf.Y": -5.0,
+            "Perf.YTD": -10.0,
+        }
+        self.assertGreater(
+            _build_derived_metrics(bleeder).get("structural_bleed_score") or 0.0,
+            _build_derived_metrics(pullback).get("structural_bleed_score") or 0.0,
+        )
 
     def test_reversal_composites_are_extended_by_default(self):
         for signal_name in (
@@ -85,6 +183,9 @@ class TestTierOneDerivedSignals(unittest.TestCase):
             "regime_oversold_daily",
             "regime_extended_tape",
             "repair_confirmation_score",
+            "pullback_context_score",
+            "snapback_divergence_score",
+            "structural_bleed_score",
             "upside_room_score",
             "distress_floor",
         ):
@@ -249,6 +350,60 @@ class TestManagerActionSignals(unittest.TestCase):
             },
         )
         self.assertEqual(signal, "avoid_reversal_trap")
+
+    def test_value_recovery_v3_avoids_extended_expensive_tape(self):
+        horizons = {
+            "days": {"score": 1.10},
+            "weeks": {"score": 1.20},
+            "months": {"score": 1.00},
+            "years": {"score": 0.50},
+        }
+        components = {
+            "attention": 1.0,
+            "momentum": 2.0,
+            "trend": 1.5,
+            "quality": 2.5,
+            "valuation": -1.8,
+            "safety": 1.0,
+        }
+        signal = _manager_action_signal(
+            horizons,
+            components,
+            scoring_profile_name="value_recovery_v3",
+            derived_row={
+                "regime_extended_tape": 0.9,
+                "range_position_52w": 0.85,
+                "repair_confirmation_score": 0.5,
+            },
+        )
+        self.assertEqual(signal, "avoid_extended_recovery")
+
+    def test_value_recovery_v3_emits_accumulate_when_recovery_aligned(self):
+        horizons = {
+            "days": {"score": 0.55},
+            "weeks": {"score": 0.60},
+            "months": {"score": 0.70},
+            "years": {"score": 0.40},
+        }
+        components = {
+            "attention": 0.1,
+            "momentum": 0.3,
+            "trend": 0.4,
+            "quality": 0.8,
+            "valuation": 0.6,
+            "safety": 0.2,
+        }
+        signal = _manager_action_signal(
+            horizons,
+            components,
+            scoring_profile_name="value_recovery_v3",
+            derived_row={
+                "regime_extended_tape": -0.2,
+                "range_position_52w": 0.30,
+                "repair_confirmation_score": 0.25,
+            },
+        )
+        self.assertEqual(signal, "accumulate_value_recovery")
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ import csv
 import json
 import math
 import os
+import re
 import sys
 import tempfile
 import time
@@ -6836,11 +6837,25 @@ _NOISE_PREDICTOR_MARKERS: tuple[str, ...] = (
 )
 
 
+def _predictor_marker_matches_field(field_name: str, marker: str) -> bool:
+    from data_analysis_scripts.trading_view_field_semantic_classifier import parse_name
+
+    base_name, _, _ = parse_name(field_name)
+    lowered = base_name.lower()
+    if marker.endswith("."):
+        return lowered.startswith(marker)
+    pattern = rf"(^|[._]){re.escape(marker)}($|[._])"
+    return re.search(pattern, lowered) is not None
+
+
 def _classify_scan_period_predictor_profile(predictor_field: str) -> str:
     lowered = predictor_field.lower()
     if any(marker in lowered for marker in _STRUCTURAL_PREDICTOR_MARKERS):
         return "structural_non_tradable"
-    if any(marker in lowered for marker in _NOISE_PREDICTOR_MARKERS):
+    if any(
+        _predictor_marker_matches_field(predictor_field, marker)
+        for marker in _NOISE_PREDICTOR_MARKERS
+    ):
         return "sparse_or_noise"
     return "tradable_price_indicator"
 

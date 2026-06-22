@@ -735,18 +735,24 @@ def _write_per_profile_regime_conviction_section(
     log_to_file(path, f"PROFILE: {profile_name} — REGIME + CONVICTION TOP {top_n}")
     log_to_file(path, "-" * 160)
     has_conviction = bool(conviction_lookup)
+    log_to_file(
+        path,
+        f"Playbook A gate: ATRP|1W elevated + RelVol >= "
+        f"{config.playbook_a_min_relative_volume:.1f}. "
+        f"Aligned=YES when tier=playbook_a or "
+        f"(watch/composite + RelVol gate + WeeksRAS >= 0.25).",
+    )
+    header = (
+        f"{'#':<4}{'Ticker':<10}{'Score':>8}{'RAdj':>8}{'RegFit':>8}{'Tier':<12}"
+        f"{'ATRP':>8}{'RelVol':>8}"
+    )
     if has_conviction:
-        log_to_file(
-            path,
-            f"{'#':<4}{'Ticker':<10}{'Score':>8}{'RAdj':>8}{'RegFit':>8}{'Tier':<12}"
-            f"{'Conv':>8}{'CnvRk':>6}{'Sleeve':<10}{'Warn':>5}{'Aligned':<8}",
+        header += (
+            f"{'Conv':>8}{'CnvRk':>6}{'Sleeve':<10}{'Warn':>5}{'Aligned':<8}"
         )
     else:
-        log_to_file(
-            path,
-            f"{'#':<4}{'Ticker':<10}{'Score':>8}{'RAdj':>8}{'RegFit':>8}{'Tier':<12}"
-            f"{'ATRP':>8}{'RelVol':>8}{'Warn':>5}{'Aligned':<8}",
-        )
+        header += f"{'Warn':>5}{'Aligned':<8}"
+    log_to_file(path, header)
     for index, (combined, prediction, record) in enumerate(ranked[:top_n], start=1):
         row = prediction.get("row") or {}
         symbol = _prediction_row_symbol(row)
@@ -759,6 +765,15 @@ def _write_per_profile_regime_conviction_section(
             weeks_ras,
             min_relative_volume=config.playbook_a_min_relative_volume,
         )
+        row_text = (
+            f"{index:<4}{ticker:<10}"
+            f"{float(weeks_score or 0.0):>8.2f}"
+            f"{weeks_ras:>8.2f}"
+            f"{record.regime_fit_score:>8.1f}"
+            f"{_format_regime_tier_short(record.active_mgmt_tier):<12}"
+            f"{(record.atrp_1w or 0.0):>8.1f}"
+            f"{(record.relative_volume or 0.0):>8.2f}"
+        )
         if has_conviction:
             conv_record = _conviction_lookup_for_symbol(symbol, conviction_lookup)
             conv_score = conv_record.get("conviction_score") if conv_record else None
@@ -768,32 +783,19 @@ def _write_per_profile_regime_conviction_section(
             rank_text = (
                 f"{int(conv_rank):>6}" if conv_rank is not None else "   n/a"
             )
-            log_to_file(
-                path,
-                f"{index:<4}{ticker:<10}"
-                f"{float(weeks_score or 0.0):>8.2f}"
-                f"{weeks_ras:>8.2f}"
-                f"{record.regime_fit_score:>8.1f}"
-                f"{_format_regime_tier_short(record.active_mgmt_tier):<12}"
+            row_text += (
                 f"{conv_text}"
                 f"{rank_text}"
                 f"{sleeve:<10}"
                 f"{record.warning_flag_count:>5}"
-                f"{'YES' if aligned_flag else 'no':<8}",
+                f"{'YES' if aligned_flag else 'no':<8}"
             )
         else:
-            log_to_file(
-                path,
-                f"{index:<4}{ticker:<10}"
-                f"{float(weeks_score or 0.0):>8.2f}"
-                f"{weeks_ras:>8.2f}"
-                f"{record.regime_fit_score:>8.1f}"
-                f"{_format_regime_tier_short(record.active_mgmt_tier):<12}"
-                f"{(record.atrp_1w or 0.0):>8.1f}"
-                f"{(record.relative_volume or 0.0):>8.2f}"
+            row_text += (
                 f"{record.warning_flag_count:>5}"
-                f"{'YES' if aligned_flag else 'no':<8}",
+                f"{'YES' if aligned_flag else 'no':<8}"
             )
+        log_to_file(path, row_text)
     if not ranked:
         log_to_file(path, "  (no regime-scored rows for this profile)")
     log_to_file(path, "")
@@ -910,7 +912,8 @@ def write_regime_context_focus_log(
         log_to_file(
             path,
             f"{'#':<4}{'Ticker':<10}{'Conv':>8}{'CnvRk':>6}{'Sleeve':<10}"
-            f"{'RegFit':>8}{'Tier':<12}{'WeeksRAS':>10}{'Warn':>5}",
+            f"{'RegFit':>8}{'Tier':<12}{'ATRP':>8}{'RelVol':>8}"
+            f"{'WeeksRAS':>10}{'Warn':>5}{'Aligned':<8}",
         )
         for record in conviction_leaders:
             symbol = str(record.get("symbol") or "")
@@ -934,6 +937,26 @@ def write_regime_context_focus_log(
                 if regime_record is not None
                 else int(record.get("regime_warning_count") or 0)
             )
+            weeks_ras = float(record.get("weeks_ras") or 0.0)
+            aligned_flag = (
+                _is_regime_aligned(
+                    regime_record,
+                    weeks_ras,
+                    min_relative_volume=config.playbook_a_min_relative_volume,
+                )
+                if regime_record is not None
+                else False
+            )
+            atrp_value = (
+                regime_record.atrp_1w
+                if regime_record is not None
+                else None
+            )
+            relvol_value = (
+                regime_record.relative_volume
+                if regime_record is not None
+                else None
+            )
             log_to_file(
                 path,
                 f"{int(record.get('rank_overall') or 0):<4}{ticker:<10}"
@@ -942,8 +965,11 @@ def write_regime_context_focus_log(
                 f"{str(record.get('sleeve') or '')[:10]:<10}"
                 f"{reg_fit:>8.1f}"
                 f"{_format_regime_tier_short(tier):<12}"
-                f"{float(record.get('weeks_ras') or 0.0):>10.2f}"
-                f"{warn_count:>5}",
+                f"{(atrp_value or 0.0):>8.1f}"
+                f"{(relvol_value or 0.0):>8.2f}"
+                f"{weeks_ras:>10.2f}"
+                f"{warn_count:>5}"
+                f"{'YES' if aligned_flag else 'no':<8}",
             )
         log_to_file(path, "")
 

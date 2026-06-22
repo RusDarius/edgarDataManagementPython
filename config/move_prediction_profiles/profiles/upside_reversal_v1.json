@@ -2,128 +2,132 @@
   "schema_version": "move_prediction_profile_file_v1",
   "profile_id": "upside_reversal_v1",
   "base_profile_id": "upside_reversal",
-  "version": "1.0.0",
-  "effective_from": "2026-06-19",
-  "changelog": "Long-oriented upside reversal lens with extension rejection, repair confirmation, and safety floor.",
+  "version": "1.1.0",
+  "effective_from": "2026-06-20",
+  "changelog": "Pullback-bounce calibration: contextual repair, snapback divergence, extension/bleed rejection in-score.",
   "profile": {
     "name": "upside_reversal_v1",
-    "description": "Long-only upside reversal profile for depressed names showing early tape repair with upside room. Finds pullback-to-bounce setups: oversold context (RSI/Stoch/52w range floor), repair triggers (Perf.5D/W bounce, stoch crossover, volume confirmation), and analyst/support headroom — while hard-rejecting extended momentum leaders and value traps. Unlike value_recovery_v2, operating turnaround is not required; fundamentals serve as a safety floor only. Unlike early_momentum_inflection_v1, depressed range_position_52w and low regime_extended_tape are required context, not coiled pre-breakout energy.",
+    "description": "Long-only pullback-to-bounce profile. Targets names that were downbeat over weeks to a few months (not multi-year bleeders), show depressed tape (52w range floor, oversold oscillators), and are beginning a positive swing (Perf.5D/W turn, stoch crossover, volume confirmation) with analyst/support headroom. Extended momentum leaders and structural decline traps are penalized in-score — not only via manager_action. Fundamentals are a safety floor, not a turnaround requirement.",
     "horizon_weights": {
       "days": {
-        "attention": 0.10,
+        "attention": 0.08,
         "event": 0.05,
-        "momentum": 0.28,
-        "trend": 0.27,
-        "quality": 0.05,
-        "valuation": 0.08,
-        "safety": 0.17
+        "momentum": 0.24,
+        "trend": 0.18,
+        "quality": 0.06,
+        "valuation": 0.14,
+        "safety": 0.25
       },
       "weeks": {
-        "attention": 0.08,
+        "attention": 0.07,
         "event": 0.04,
-        "momentum": 0.26,
-        "trend": 0.26,
-        "quality": 0.08,
-        "valuation": 0.10,
-        "safety": 0.18
+        "momentum": 0.22,
+        "trend": 0.18,
+        "quality": 0.09,
+        "valuation": 0.14,
+        "safety": 0.26
       },
       "months": {
         "attention": 0.05,
         "event": 0.03,
-        "momentum": 0.16,
-        "trend": 0.22,
-        "quality": 0.14,
-        "valuation": 0.14,
-        "safety": 0.26
+        "momentum": 0.14,
+        "trend": 0.18,
+        "quality": 0.15,
+        "valuation": 0.16,
+        "safety": 0.29
       },
       "years": {
         "attention": 0.03,
         "event": 0.02,
-        "momentum": 0.08,
-        "trend": 0.16,
-        "quality": 0.20,
+        "momentum": 0.06,
+        "trend": 0.14,
+        "quality": 0.22,
         "valuation": 0.18,
-        "safety": 0.33
+        "safety": 0.35
       }
     },
     "component_signal_weights": {
       "attention": {
         "relative_volume_10d_calc": 1.05,
-        "float_turnover": 0.85,
-        "dollar_turnover_intensity": 0.85,
-        "volume_trend": 1.30,
-        "chaikin_money_flow_signal": 1.20,
-        "bb_squeeze": 0.75,
-        "intraday_momentum": 0.80
+        "float_turnover": 0.75,
+        "dollar_turnover_intensity": 0.75,
+        "volume_trend": 0.95,
+        "chaikin_money_flow_signal": 0.90,
+        "bb_squeeze": 0.85,
+        "intraday_momentum": 0.50
       },
       "event": {
-        "gap": 0.90,
-        "gap_down": 0.85,
-        "premarket_change": 0.80,
-        "postmarket_change": 0.80,
-        "event_intensity": 0.75
+        "gap": 0.85,
+        "gap_down": 1.00,
+        "premarket_change": 0.75,
+        "postmarket_change": 0.75,
+        "event_intensity": 0.70
       },
       "momentum": {
-        "change": 0.95,
-        "Perf.5D": 1.20,
-        "Perf.W": 1.25,
-        "Perf.1M": 0.35,
-        "Perf.3M": 0.30,
-        "Perf.6M": 0.15,
-        "Perf.YTD": 0.12,
-        "Perf.Y": 0.05,
-        "ROC": 0.80,
-        "Mom": 0.75,
-        "macd_spread": 1.20,
-        "Recommend.All": 0.50,
-        "Recommend.MA": 0.45,
-        "Recommend.Other": 0.50,
-        "rsi_centered": 1.15,
-        "rsi7_centered": 1.20,
-        "stoch_rsi_centered": 1.25,
-        "stoch_rsi_crossover": 1.65,
+        "pullback_context_score": 2.00,
+        "snapback_divergence_score": 2.05,
+        "regime_oversold_daily": 1.90,
+        "regime_extended_tape": 1.85,
+        "structural_bleed_score": 1.55,
+        "repair_confirmation_score": 1.25,
         "bbpower_divergence": 1.35,
-        "aroon_spread": 1.30,
-        "adx_directional_spread": 1.25,
-        "CCI20": 0.95,
         "williams_r_centered": 1.20,
-        "regime_oversold_daily": 1.55,
-        "repair_confirmation_score": 1.60,
-        "near_52w_high_score": 0.25
+        "near_52w_high_score": 1.35,
+        "macd_spread": 0.70,
+        "CCI20": 0.65,
+        "Recommend.All": 0.40,
+        "Recommend.MA": 0.35,
+        "Recommend.Other": 0.40,
+        "ROC": 0.45,
+        "Mom": 0.40,
+        "Perf.5D": 0.0,
+        "Perf.W": 0.0,
+        "change": 0.0,
+        "Perf.1M": 0.0,
+        "Perf.3M": 0.0,
+        "Perf.6M": 0.0,
+        "Perf.YTD": 0.0,
+        "Perf.Y": 0.0,
+        "rsi_centered": 0.0,
+        "rsi7_centered": 0.0,
+        "stoch_rsi_centered": 0.0,
+        "stoch_rsi_crossover": 0.0,
+        "aroon_spread": 0.0,
+        "adx_directional_spread": 0.0
       },
       "trend": {
-        "close_vs_sma10": 1.30,
-        "close_vs_sma20": 1.15,
-        "close_vs_sma30": 1.00,
-        "close_vs_sma50": 0.70,
-        "close_vs_sma200": 0.40,
-        "close_vs_ema10": 1.30,
-        "close_vs_ema20": 1.15,
-        "close_vs_ema30": 1.00,
-        "close_vs_ema50": 0.70,
-        "close_vs_ema200": 0.40,
-        "close_vs_vwap": 0.85,
-        "close_vs_vwma": 0.80,
-        "trend_alignment": 0.55,
-        "pivot_distance": 1.10,
-        "short_trend_emergence": 1.50,
+        "close_vs_camarilla_s1": 1.50,
+        "close_vs_camarilla_s2": 1.40,
         "bb_position": 1.35,
-        "donchian_position": 1.15,
-        "close_vs_psar": 1.20,
-        "close_vs_camarilla_s1": 1.40,
-        "close_vs_camarilla_s2": 1.30
+        "pivot_distance": 1.15,
+        "close_vs_sma10": 0.80,
+        "close_vs_sma20": 0.75,
+        "close_vs_ema10": 0.80,
+        "close_vs_ema20": 0.75,
+        "close_vs_sma30": 0.65,
+        "close_vs_ema30": 0.65,
+        "close_vs_sma50": 0.55,
+        "close_vs_ema50": 0.55,
+        "close_vs_sma200": 0.35,
+        "close_vs_ema200": 0.35,
+        "close_vs_vwap": 0.70,
+        "close_vs_vwma": 0.65,
+        "trend_alignment": 0.30,
+        "short_trend_emergence": 0.55,
+        "donchian_position": 0.70,
+        "close_vs_psar": 0.75
       },
       "valuation": {
-        "range_position_52w": 1.45,
-        "distance_from_52w_high": 1.30,
-        "upside_room_score": 1.45,
-        "price_target_downside_floor": 1.15,
+        "range_position_52w": 1.65,
+        "upside_room_score": 1.60,
+        "distance_from_52w_high": 1.45,
+        "price_target_downside_floor": 1.20,
+        "price_target_upside_median": 1.05,
         "earnings_yield": 1.10,
         "book_value_discount": 0.95,
         "price_earnings_ttm": 0.90,
         "price_book_fq": 0.95,
-        "enterprise_value_ebitda_ttm": 0.90,
-        "price_target_upside_median": 0.90
+        "enterprise_value_ebitda_ttm": 0.90
       },
       "quality": {
         "piotroski_f_score_ttm": 1.15,
@@ -138,13 +142,13 @@
         "free_cash_flow_qoq_growth_fq": 0.55
       },
       "safety": {
-        "distress_floor": 1.25,
-        "altman_z_score_ttm": 1.35,
-        "total_debt_to_ebitda_fq": 1.35,
-        "net_cash_to_market_cap": 1.25,
-        "short_term_cash_coverage": 1.25,
-        "zmijewski_score_ttm": 1.15,
-        "beta_adjusted_atrp": 1.15,
+        "distress_floor": 1.35,
+        "altman_z_score_ttm": 1.40,
+        "total_debt_to_ebitda_fq": 1.40,
+        "net_cash_to_market_cap": 1.30,
+        "short_term_cash_coverage": 1.30,
+        "zmijewski_score_ttm": 1.20,
+        "beta_adjusted_atrp": 1.10,
         "current_ratio": 1.10,
         "quick_ratio": 1.05,
         "cash_ratio": 1.00,
@@ -154,7 +158,7 @@
         "total_debt_to_ebitda_fy": 1.15,
         "net_debt_to_ebitda_fq": 1.15,
         "interst_cover_ttm": 1.10,
-        "price_target_dispersion": 0.75
+        "price_target_dispersion": 0.80
       }
     },
     "component_directional_bias": {
@@ -163,16 +167,16 @@
         "negative_multiplier": 1.15
       },
       "momentum": {
-        "positive_multiplier": 1.30,
-        "negative_multiplier": 0.35
+        "positive_multiplier": 1.10,
+        "negative_multiplier": 0.80
       },
       "trend": {
-        "positive_multiplier": 1.25,
-        "negative_multiplier": 0.65
+        "positive_multiplier": 1.08,
+        "negative_multiplier": 0.85
       },
       "valuation": {
         "positive_multiplier": 1.15,
-        "negative_multiplier": 1.05
+        "negative_multiplier": 1.10
       },
       "quality": {
         "positive_multiplier": 1.10,
@@ -186,37 +190,38 @@
     "missing_component_scores_by_horizon": {
       "days": {
         "attention": -0.15,
-        "valuation": -0.70,
-        "quality": -0.75,
-        "safety": -0.90
+        "valuation": -0.75,
+        "quality": -0.80,
+        "safety": -0.95
       },
       "weeks": {
         "attention": -0.12,
-        "valuation": -0.80,
-        "quality": -0.90,
-        "safety": -1.00
+        "valuation": -0.85,
+        "quality": -0.95,
+        "safety": -1.05
       },
       "months": {
         "attention": -0.10,
-        "valuation": -0.90,
-        "quality": -1.00,
-        "safety": -1.15
+        "valuation": -0.95,
+        "quality": -1.05,
+        "safety": -1.20
       },
       "years": {
-        "valuation": -0.95,
-        "quality": -1.10,
-        "safety": -1.25
+        "valuation": -1.00,
+        "quality": -1.15,
+        "safety": -1.30
       }
     },
     "performance_tracking_periods": {},
     "intro_metric_notes": [
-      "Long-only upside reversal — depressed tape with repair confirmation, not extended momentum.",
-      "Extension rejection: near_52w_high_score=0.25, Perf.1M=0.35, Perf.3M=0.30; manager_action gates regime_extended_tape.",
-      "Oversold stack: regime_oversold_daily=1.55, range_position_52w=1.45, stoch_rsi_centered=1.25, williams_r_centered=1.20.",
-      "Repair triggers: repair_confirmation_score=1.60, stoch_rsi_crossover=1.65, short_trend_emergence=1.50, Perf.5D=1.20, Perf.W=1.25.",
-      "Upside room: upside_room_score=1.45, distance_from_52w_high=1.30.",
-      "Safety floor: distress_floor=1.25, altman_z=1.35, total_debt_to_ebitda_fq=1.35 — value traps penalized hard.",
-      "Cross-check mean_reversion_exhaustion_v1 before sizing; exhaustion conflict = avoid new longs."
+      "Pullback-to-bounce lens — recent drawdown (1M/3M) with early snapback (5D/W), not extended momentum.",
+      "Primary pair: pullback_context_score=2.00 + snapback_divergence_score=2.05 encode downbeat-then-bounce tape (raw composites, not z-scored).",
+      "Extension rejection in-score: regime_extended_tape=1.85 (inverted raw), near_52w_high_score=1.35 rewards distance below 52w high.",
+      "Bleed-trap filter: structural_bleed_score=1.55 (inverted raw) down-weights multi-quarter/year collapse names.",
+      "Repair is contextual: repair_confirmation_score gated by oversold context and anti-extension in derived logic.",
+      "Breakout overlap cut: raw Perf/stoch/aroon/adx/change weights zeroed; oversold handled via regime_oversold_daily.",
+      "Upside room: range_position_52w=1.65, upside_room_score=1.60, distance_from_52w_high=1.45.",
+      "Safety floor: distress_floor=1.35 — avoids value traps without requiring operating turnaround."
     ],
     "confidence_multiplier": 1.02,
     "confidence_offset": 0.0
