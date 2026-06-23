@@ -105,7 +105,14 @@ class TestProfileConfigLoader(unittest.TestCase):
             CONFIG_ROOT / "suites" / "active_manager_v3.json"
         )
         self.assertEqual(suite["suite_id"], "active_manager_v3")
-        self.assertEqual(len(suite["profile_names"]), 11)
+        self.assertEqual(len(suite["profile_names"]), 12)
+        self.assertIn("sustained_momentum_safety_v1", suite["profile_names"])
+        sustained = suite["registry"].get_profile("sustained_momentum_safety_v1")
+        self.assertIsNotNone(sustained)
+        momentum_weights = sustained.component_signal_weights.get("momentum", {})
+        self.assertGreater(
+            momentum_weights.get("momentum_horizon_alignment", 0.0), 1.3
+        )
         quality_continuation = suite["registry"].get_profile("quality_continuation_v1")
         self.assertIsNotNone(quality_continuation)
         quality_weights = quality_continuation.component_signal_weights.get(
@@ -176,6 +183,22 @@ class TestProfileConfigLoader(unittest.TestCase):
         valuation_bias = profile.component_directional_bias.get("valuation")
         self.assertIsNotNone(valuation_bias)
         self.assertGreaterEqual(valuation_bias.negative_multiplier, 1.45)
+
+    def test_sustained_momentum_safety_v1_profile_loads(self):
+        meta = load_profile_config_file(
+            CONFIG_ROOT / "profiles" / "sustained_momentum_safety_v1.json"
+        )
+        profile = resolve_move_prediction_scoring_profile("sustained_momentum_safety_v1")
+        self.assertEqual(meta["profile_id"], "sustained_momentum_safety_v1")
+        self.assertEqual(meta["base_profile_id"], "sustained_momentum_safety")
+        momentum_weights = profile.component_signal_weights.get("momentum", {})
+        safety_weights = profile.component_signal_weights.get("safety", {})
+        self.assertGreaterEqual(
+            momentum_weights.get("industry_perf_leadership_1m", 0.0), 1.2
+        )
+        self.assertGreaterEqual(
+            safety_weights.get("move_sustainability_score", 0.0), 1.2
+        )
 
     def test_active_manager_v4_includes_upside_reversal_v1(self):
         suite = load_profile_suite(

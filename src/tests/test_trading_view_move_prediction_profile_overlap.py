@@ -254,27 +254,27 @@ class TestActiveManagerV4Suite(unittest.TestCase):
 
 
 class TestActiveManagerV3Suite(unittest.TestCase):
-    def test_active_manager_v3_has_eleven_profiles(self):
+    def test_active_manager_v3_has_twelve_profiles(self):
         suite = load_profile_suite(CONFIG_ROOT / "suites" / "active_manager_v3.json")
         self.assertEqual(suite["suite_id"], "active_manager_v3")
-        self.assertEqual(len(suite["profile_names"]), 11)
+        self.assertEqual(len(suite["profile_names"]), 12)
         self.assertAlmostEqual(
             sum(suite["consensus_profile_weights"].values()), 1.0, places=6
         )
+        self.assertIn("sustained_momentum_safety_v1", suite["profile_names"])
         self.assertIn("quality_continuation_v1", suite["profile_names"])
         self.assertIn("forward_edge_active_v2", suite["profile_names"])
-        self.assertIn("value_recovery_v2", suite["profile_names"])
+        self.assertIn("value_recovery_v3", suite["profile_names"])
         self.assertIn("defensive_fortress_v2", suite["profile_names"])
         self.assertNotIn("pre_earnings_drift_v1", suite["profile_names"])
         self.assertNotIn("swing_reversal_v1", suite["profile_names"])
 
-    def test_baseline_v2_matches_active_manager_v3_profiles(self):
+    def test_baseline_v2_is_separate_from_active_manager_v3(self):
         v3 = load_profile_suite(CONFIG_ROOT / "suites" / "active_manager_v3.json")
         baseline = load_profile_suite(CONFIG_ROOT / "suites" / "baseline_v2.json")
-        self.assertEqual(baseline["profile_names"], v3["profile_names"])
-        self.assertEqual(
-            baseline["consensus_profile_weights"], v3["consensus_profile_weights"]
-        )
+        self.assertNotEqual(baseline["profile_names"], v3["profile_names"])
+        self.assertIn("sustained_momentum_safety_v1", v3["profile_names"])
+        self.assertNotIn("sustained_momentum_safety_v1", baseline["profile_names"])
 
 
 class TestMovePredictionOverlapReport(unittest.TestCase):
@@ -408,7 +408,7 @@ class TestMovePredictionOverlapReport(unittest.TestCase):
     def test_value_recovery_beats_asymmetric_on_turnaround_row(self):
         scan_rows = [_turnaround_row(), _static_value_row(), *_filler_rows(6)]
         recovery_turn = self._score_symbol(
-            scan_rows, "value_recovery_v2", "months", "NASDAQ:TURN"
+            scan_rows, "value_recovery_v3", "months", "NASDAQ:TURN"
         )
         asymmetric_turn = self._score_symbol(
             scan_rows, "asymmetric_value", "months", "NASDAQ:TURN"

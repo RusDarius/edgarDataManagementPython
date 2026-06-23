@@ -352,6 +352,10 @@ DERIVED_PROFILE_FIELDS = [
     "structural_bleed_score",
     "upside_room_score",
     "distress_floor",
+    "momentum_horizon_alignment",
+    "industry_perf_leadership_1m",
+    "industry_perf_leadership_3m",
+    "move_sustainability_score",
 ]
 
 EXTENDED_SIGNALS: frozenset[str] = frozenset(
@@ -481,6 +485,10 @@ EXTENDED_SIGNALS: frozenset[str] = frozenset(
         "structural_bleed_score",
         "upside_room_score",
         "distress_floor",
+        "momentum_horizon_alignment",
+        "industry_perf_leadership_1m",
+        "industry_perf_leadership_3m",
+        "move_sustainability_score",
     }
 )
 
@@ -3655,6 +3663,62 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
 
     perf_5d = _coerce_numeric(row.get("Perf.5D"))
     perf_w = _coerce_numeric(row.get("Perf.W"))
+
+    ladder_steps: list[float] = []
+    for perf_value, scale in (
+        (perf_5d, 10.0),
+        (perf_w, 15.0),
+        (perf_1m, 20.0),
+        (perf_3m, 25.0),
+    ):
+        if perf_value is not None and perf_value > 0:
+            ladder_steps.append(_clamp(perf_value / scale, 0.0, 3.0))
+    momentum_horizon_alignment = _mean_signal_values(ladder_steps)
+    if momentum_horizon_alignment is not None:
+        ordered_perfs = [
+            value
+            for value in (perf_5d, perf_w, perf_1m, perf_3m)
+            if value is not None
+        ]
+        monotonic_penalty = 0.0
+        for index in range(1, len(ordered_perfs)):
+            if ordered_perfs[index] < ordered_perfs[index - 1]:
+                monotonic_penalty += 0.5
+        momentum_horizon_alignment = max(
+            0.0, momentum_horizon_alignment - monotonic_penalty
+        )
+
+    industry_median_1m = _coerce_numeric(row.get("_industry_perf_1m_median"))
+    industry_median_3m = _coerce_numeric(row.get("_industry_perf_3m_median"))
+    industry_perf_leadership_1m = (
+        perf_1m - industry_median_1m
+        if perf_1m is not None and industry_median_1m is not None
+        else None
+    )
+    industry_perf_leadership_3m = (
+        perf_3m - industry_median_3m
+        if perf_3m is not None and industry_median_3m is not None
+        else None
+    )
+
+    sustain_inputs: list[float] = []
+    if volume_trend is not None and volume_trend > 1.0:
+        sustain_inputs.append(_clamp((volume_trend - 1.0) * 2.0, 0.0, 3.0))
+    if chaikin_money_flow is not None:
+        sustain_inputs.append(_clamp(chaikin_money_flow * 3.0, -3.0, 3.0))
+    if adx_directional_spread is not None and adx_directional_spread > 0:
+        sustain_inputs.append(_clamp(adx_directional_spread / 10.0, 0.0, 3.0))
+    if trend_alignment is not None and trend_alignment > 0:
+        sustain_inputs.append(_clamp(trend_alignment * 2.0, 0.0, 3.0))
+    move_sustainability_score = _mean_signal_values(sustain_inputs)
+    if (
+        move_sustainability_score is not None
+        and regime_extended_tape is not None
+        and regime_extended_tape > 0
+    ):
+        move_sustainability_score *= _clamp(
+            1.0 - regime_extended_tape / 3.0, 0.0, 1.0
+        )
     relative_volume = _coerce_numeric(row.get("relative_volume_10d_calc"))
     repair_inputs: list[float] = []
     if perf_5d is not None and perf_5d > 0:
@@ -3828,6 +3892,10 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
         "structural_bleed_score": structural_bleed_score,
         "upside_room_score": upside_room_score,
         "distress_floor": distress_floor,
+        "momentum_horizon_alignment": momentum_horizon_alignment,
+        "industry_perf_leadership_1m": industry_perf_leadership_1m,
+        "industry_perf_leadership_3m": industry_perf_leadership_3m,
+        "move_sustainability_score": move_sustainability_score,
     }
 
 
@@ -3895,13 +3963,39 @@ def _enrich_with_peer_metrics(scan_data: list[dict[str, Any]]) -> None:
     industry_totals: dict[tuple[str, str], dict[str, float]] = collections.defaultdict(
         lambda: {"market_cap": 0.0, "revenue": 0.0}
     )
+    industry_perf_values: dict[tuple[str, str], dict[str, list[float]]] = (
+        collections.defaultdict(
+            lambda: {"Perf.W": [], "Perf.1M": [], "Perf.3M": []}
+        )
+    )
     for row in scan_data:
-        industry_totals[_industry_key(row)]["market_cap"] += (
+        industry_key = _industry_key(row)
+        industry_totals[industry_key]["market_cap"] += (
             _coerce_numeric(row.get("market_cap_basic")) or 0.0
         )
-        industry_totals[_industry_key(row)]["revenue"] += (
+        industry_totals[industry_key]["revenue"] += (
             _coerce_numeric(row.get("total_revenue")) or 0.0
         )
+        for perf_field in ("Perf.W", "Perf.1M", "Perf.3M"):
+            perf_value = _coerce_numeric(row.get(perf_field))
+            if perf_value is not None:
+                industry_perf_values[industry_key][perf_field].append(perf_value)
+
+    def _industry_median(values: list[float]) -> float | None:
+        if not values:
+            return None
+        sorted_values = sorted(values)
+        mid = len(sorted_values) // 2
+        if len(sorted_values) % 2:
+            return sorted_values[mid]
+        return (sorted_values[mid - 1] + sorted_values[mid]) / 2.0
+
+    industry_perf_medians: dict[tuple[str, str], dict[str, float | None]] = {}
+    for industry_key, perf_map in industry_perf_values.items():
+        industry_perf_medians[industry_key] = {
+            perf_field: _industry_median(values)
+            for perf_field, values in perf_map.items()
+        }
 
     for row in scan_data:
         mcap = _coerce_numeric(row.get("market_cap_basic"))
@@ -3921,6 +4015,10 @@ def _enrich_with_peer_metrics(scan_data: list[dict[str, Any]]) -> None:
         row["_industry_revenue_share"] = (
             (rev / industry_revenue * 100) if rev and industry_revenue else None
         )
+        industry_medians = industry_perf_medians.get(_industry_key(row), {})
+        row["_industry_perf_w_median"] = industry_medians.get("Perf.W")
+        row["_industry_perf_1m_median"] = industry_medians.get("Perf.1M")
+        row["_industry_perf_3m_median"] = industry_medians.get("Perf.3M")
 
 
 def _robust_signal(
@@ -4158,6 +4256,15 @@ def _build_component_signal_map(
                 -derived_row["structural_bleed_score"]
                 if derived_row.get("structural_bleed_score") is not None
                 else None
+            ),
+            "momentum_horizon_alignment": _derived_signal(
+                derived_row, profiles, "momentum_horizon_alignment"
+            ),
+            "industry_perf_leadership_1m": _derived_signal(
+                derived_row, profiles, "industry_perf_leadership_1m"
+            ),
+            "industry_perf_leadership_3m": _derived_signal(
+                derived_row, profiles, "industry_perf_leadership_3m"
             ),
         },
         "trend": {
@@ -4471,6 +4578,9 @@ def _build_component_signal_map(
                 positive_only=True,
             ),
             "distress_floor": _derived_signal(derived_row, profiles, "distress_floor"),
+            "move_sustainability_score": _derived_signal(
+                derived_row, profiles, "move_sustainability_score"
+            ),
             "price_target_dispersion": _derived_signal(
                 derived_row,
                 profiles,

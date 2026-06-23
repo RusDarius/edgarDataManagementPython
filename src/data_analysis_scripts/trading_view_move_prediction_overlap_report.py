@@ -23,6 +23,9 @@ from data_analysis_scripts.trading_view_move_prediction_profile_config import (
 
 CRITICAL_PAIR_GATES: dict[tuple[str, str], float] = {
     ("breakout_long_v1", "quality_continuation_v1"): 0.35,
+    ("breakout_long_v1", "sustained_momentum_safety_v1"): 0.35,
+    ("sustained_momentum_safety_v1", "quality_continuation_v1"): 0.35,
+    ("sustained_momentum_safety_v1", "early_momentum_inflection_v1"): 0.35,
     ("asymmetric_value", "value_recovery_v2"): 0.35,
     ("asymmetric_value", "value_recovery_v3"): 0.35,
     ("forward_edge_active_v2", "quality_value_compounder"): 0.35,

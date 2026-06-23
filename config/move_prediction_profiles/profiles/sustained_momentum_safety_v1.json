@@ -1,0 +1,183 @@
+{
+  "schema_version": "move_prediction_profile_file_v1",
+  "profile_id": "sustained_momentum_safety_v1",
+  "base_profile_id": "sustained_momentum_safety",
+  "version": "1.0.0",
+  "effective_from": "2026-06-22",
+  "changelog": "Confirmed-move continuation with peer leadership, multi-horizon alignment, and extension-aware safety margin.",
+  "profile": {
+    "name": "sustained_momentum_safety_v1",
+    "description": "Sustained momentum profile for names already in motion where price leadership should continue with margin of safety. Starts from confirmed tape participation (Perf ladder + volume accumulation), requires multi-horizon momentum alignment and industry-peer performance leadership, and penalizes extension/exhaustion signatures inline. Lighter quality floor than quality_continuation; heavier safety and anti-extension guards than breakout_long. Designed to bridge pure tape chase and fundamental continuation.",
+    "horizon_weights": {
+      "days": {
+        "attention": 0.18,
+        "event": 0.1,
+        "momentum": 0.28,
+        "trend": 0.16,
+        "quality": 0.06,
+        "valuation": 0.04,
+        "safety": 0.12,
+        "scale": 0.06
+      },
+      "weeks": {
+        "attention": 0.14,
+        "event": 0.08,
+        "momentum": 0.24,
+        "trend": 0.22,
+        "quality": 0.1,
+        "valuation": 0.06,
+        "safety": 0.16,
+        "scale": 0.0
+      },
+      "months": {
+        "attention": 0.08,
+        "event": 0.04,
+        "momentum": 0.18,
+        "trend": 0.2,
+        "quality": 0.14,
+        "valuation": 0.1,
+        "safety": 0.18,
+        "scale": 0.08
+      },
+      "years": {
+        "attention": 0.03,
+        "event": 0.02,
+        "momentum": 0.08,
+        "trend": 0.14,
+        "quality": 0.22,
+        "valuation": 0.14,
+        "safety": 0.28,
+        "scale": 0.09
+      }
+    },
+    "component_signal_weights": {
+      "attention": {
+        "relative_volume_10d_calc": 1.1,
+        "float_turnover": 0.85,
+        "volume_trend": 1.45,
+        "chaikin_money_flow_signal": 1.35,
+        "intraday_momentum": 0.95
+      },
+      "event": {
+        "premarket_change": 1.0,
+        "postmarket_change": 1.0,
+        "gap": 1.0,
+        "event_intensity": 1.05,
+        "eps_surprise_percent_fq": 1.05
+      },
+      "momentum": {
+        "change": 0.9,
+        "Perf.5D": 1.0,
+        "Perf.W": 1.15,
+        "Perf.1M": 1.25,
+        "Perf.3M": 1.15,
+        "Perf.6M": 0.7,
+        "Perf.YTD": 0.35,
+        "Perf.Y": 0.2,
+        "ROC": 1.0,
+        "Mom": 1.0,
+        "macd_spread": 1.1,
+        "aroon_spread": 1.3,
+        "adx_directional_spread": 1.35,
+        "momentum_horizon_alignment": 1.4,
+        "industry_perf_leadership_1m": 1.25,
+        "industry_perf_leadership_3m": 1.2,
+        "regime_extended_tape": 1.3,
+        "near_52w_high_score": 1.2,
+        "exhaustion_range_position": 1.15,
+        "bbpower_divergence": 1.1
+      },
+      "trend": {
+        "trend_alignment": 1.3,
+        "donchian_position": 1.25,
+        "close_vs_psar": 1.2,
+        "close_vs_sma50": 1.1,
+        "close_vs_hullma9": 1.05,
+        "close_vs_vwap": 1.0,
+        "pivot_distance": 0.95
+      },
+      "quality": {
+        "return_on_invested_capital": 1.2,
+        "piotroski_f_score_ttm": 1.1,
+        "free_cash_flow_margin_ttm": 1.1,
+        "revenue_per_employee": 1.1
+      },
+      "valuation": {
+        "industry_revenue_value_gap": 1.2,
+        "peer_revenue_value_gap": 1.1,
+        "earnings_yield": 0.95
+      },
+      "safety": {
+        "move_sustainability_score": 1.3,
+        "beta_adjusted_atrp": 1.15,
+        "beta_1_year": 0.9,
+        "altman_z_score_ttm": 1.2,
+        "debt_to_equity": 1.1,
+        "price_target_dispersion": 1.05
+      }
+    },
+    "component_directional_bias": {
+      "attention": {
+        "positive_multiplier": 1.2,
+        "negative_multiplier": 0.8
+      },
+      "event": {
+        "positive_multiplier": 1.1,
+        "negative_multiplier": 0.85
+      },
+      "momentum": {
+        "positive_multiplier": 1.25,
+        "negative_multiplier": 0.65
+      },
+      "trend": {
+        "positive_multiplier": 1.2,
+        "negative_multiplier": 0.78
+      },
+      "quality": {
+        "positive_multiplier": 1.15,
+        "negative_multiplier": 1.2
+      },
+      "valuation": {
+        "positive_multiplier": 1.08,
+        "negative_multiplier": 1.12
+      },
+      "safety": {
+        "positive_multiplier": 0.85,
+        "negative_multiplier": 1.25
+      }
+    },
+    "missing_component_scores_by_horizon": {
+      "days": {
+        "attention": -0.65,
+        "momentum": -0.7,
+        "safety": -0.55
+      },
+      "weeks": {
+        "attention": -0.5,
+        "momentum": -0.6,
+        "safety": -0.65
+      },
+      "months": {
+        "momentum": -0.45,
+        "quality": -0.7,
+        "safety": -0.75
+      },
+      "years": {
+        "quality": -0.85,
+        "safety": -0.9
+      }
+    },
+    "performance_tracking_periods": {},
+    "intro_metric_notes": [
+      "Sustained momentum with margin of safety — confirmed move, not pre-inflection setup.",
+      "Perf ladder: Perf.1M=1.25, Perf.3M=1.15 outweigh Perf.5D=1.00; momentum_horizon_alignment=1.40 rewards monotonic multi-horizon leadership.",
+      "Peer context: industry_perf_leadership_1m/3m=1.25/1.20 plus industry/peer revenue value gaps surface industry-relative leaders.",
+      "Extension guards inline: regime_extended_tape, near_52w_high_score, exhaustion_range_position, bbpower_divergence penalize overextension before consensus inversion.",
+      "Sustain composite: move_sustainability_score=1.30 (volume_trend + CMF + ADX + trend, damped by extension).",
+      "Safety margin: altman=1.20, beta_adjusted_atrp=1.15, debt_to_equity=1.10; safety negative bias 1.25x.",
+      "Light quality floor: ROIC=1.20, piotroski=1.10 — substance without full QVC gate."
+    ],
+    "confidence_multiplier": 1.04,
+    "confidence_offset": 0.0
+  }
+}

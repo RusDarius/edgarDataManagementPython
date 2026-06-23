@@ -11,9 +11,9 @@
     {
       "ticker": "SEZL",
       "sleeve": "core",
-      "invested_sum": 1999,
+      "invested_sum": 3000,
       "invested_currency": "USD",
-      "average_price": 155.48,
+      "average_price": 159.9,
       "price_currency": "USD"
     },
     {
@@ -27,9 +27,9 @@
     {
       "ticker": "UNH",
       "sleeve": "core",
-      "invested_sum": 9491.13,
+      "invested_sum": 7950.13,
       "invested_currency": "USD",
-      "average_price": 277.30,
+      "average_price": 271.30,
       "price_currency": "USD"
     },
     {
@@ -61,9 +61,9 @@
     {
       "ticker": "DUOL",
       "sleeve": "core",
-      "invested_sum": 1996.42,
+      "invested_sum": 3497.42,
       "invested_currency": "USD",
-      "average_price": 111.73,
+      "average_price": 111.79,
       "price_currency": "USD",
       "notes": "Duolingo"
     },
@@ -93,15 +93,6 @@
       "average_price": 11.39,
       "price_currency": "USD",
       "notes": "UiPath"
-    },
-    {
-      "ticker": "META",
-      "sleeve": "core",
-      "invested_sum": 999.35,
-      "invested_currency": "USD",
-      "average_price": 667.66,
-      "price_currency": "USD",
-      "notes": "Meta"
     },
     {
       "ticker": "FNV",

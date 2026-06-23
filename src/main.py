@@ -59,6 +59,9 @@ from data_analysis_scripts.trading_view_all_fields_metric_pattern_analyzer impor
     market_cap_basic_universe_filter,
     preferred_markets_universe_filter,
 )
+from data_analysis_scripts.trading_view_ticker_field_pattern_scan import (
+    run_ticker_field_pattern_scan,
+)
 from data_analysis_scripts.trading_view_priceperf_analysis import (
     analyze_global_price_performance,
 )
@@ -447,40 +450,40 @@ def main():
     # )
 
     # # # Model Analysis scan with duckdb storage solution
-    move_prediction_scan_response = (
-        TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-            min_market_cap_usd=500_000_000,
-            markets=PREFERRED_MARKETS,
-        )
-    )
-    # Default (omit profile_suite_path): built-in 10-profile baseline — see DEFAULT_MOVE_PREDICTION_PROFILE_SUITE.
-    # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3
-    # Legacy 17-profile suite: MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
-    # Realigned baseline (11 lenses): MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
-    # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
-    base_duckdb_result = run_full_analysis_suite_duckdb(
-        scan_data=move_prediction_scan_response,
-        min_market_cap_usd=500_000_000,
-        include_blind_spot_sections=True,
-        profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
-        conviction_mode_config_path=CONVICTION_MODE_CONFIG,
-        defer_conviction_to_earnings=True,
-        regime_context_config_path=REGIME_CONTEXT_CONFIG,
-        write_industry_packs=True,
-    )
+    # move_prediction_scan_response = (
+    #     TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+    #         min_market_cap_usd=500_000_000,
+    #         markets=PREFERRED_MARKETS,
+    #     )
+    # )
+    # # Default (omit profile_suite_path): built-in 10-profile baseline — see DEFAULT_MOVE_PREDICTION_PROFILE_SUITE.
+    # # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3
+    # # Legacy 17-profile suite: MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
+    # # Realigned baseline (11 lenses): MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
+    # # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
+    # base_duckdb_result = run_full_analysis_suite_duckdb(
+    #     scan_data=move_prediction_scan_response,
+    #     min_market_cap_usd=500_000_000,
+    #     include_blind_spot_sections=True,
+    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+    #     conviction_mode_config_path=CONVICTION_MODE_CONFIG,
+    #     defer_conviction_to_earnings=True,
+    #     regime_context_config_path=REGIME_CONTEXT_CONFIG,
+    #     write_industry_packs=True,
+    # )
 
-    # FOR INDUSTRY RUN SPLIT Or post-process an existing run:
-    # write_industry_packs_from_duckdb_run(base_duckdb_result)
+    # # # FOR INDUSTRY RUN SPLIT Or post-process an existing run:
+    # # # write_industry_packs_from_duckdb_run(base_duckdb_result)
 
-    run_full_analysis_suite_with_earnings_priority_duckdb(
-        scan_data=move_prediction_scan_response,
-        min_market_cap_usd=500_000_000,
-        include_blind_spot_sections=True,
-        base_result=base_duckdb_result,
-        profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
-        conviction_mode_config_path=CONVICTION_MODE_CONFIG,
-        regime_context_config_path=REGIME_CONTEXT_CONFIG,
-    )
+    # run_full_analysis_suite_with_earnings_priority_duckdb(
+    #     scan_data=move_prediction_scan_response,
+    #     min_market_cap_usd=500_000_000,
+    #     include_blind_spot_sections=True,
+    #     base_result=base_duckdb_result,
+    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+    #     conviction_mode_config_path=CONVICTION_MODE_CONFIG,
+    #     regime_context_config_path=REGIME_CONTEXT_CONFIG,
+    # )
 
     # # Price-driven decile analysis: bucket by change / Perf.5D / Perf.1M, score profiles,
     # # surface upward-move opportunities in worst performers. Output:
@@ -671,6 +674,19 @@ def main():
     #     },
     # )
 
+    # --- Single ticker backward field-pattern scan ---
+    # Tracks one symbol through daily all-fields snapshots, surfaces unusual field
+    # shifts vs same-day universe, and links them to close forward returns.
+    # run_ticker_field_pattern_scan(
+    #     ticker="NASDAQ:NVDA",
+    #     start_day_label="01_03_2026",
+    #     end_day_label="22_06_2026",
+    #     min_market_cap_usd=500_000_000,
+    #     max_fields=250,
+    #     forward_days=(1, 5, 10, 20),
+    #     constrain_to_industry=True,
+    # )
+
     # run_all_fields_pattern_analysis_batch(
     #     start_day_label="01_03_2026",
     #     end_day_label="13_06_2026",
@@ -710,37 +726,8 @@ def main():
     #     min_market_cap_usd=1_000_000_000,
     # )
 
-    # run_cross_scanner_aggregate(
-    #     scan_data=TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-    #         min_market_cap_usd=1_000_000_000,
-    #         markets=PREFERRED_MARKETS,
-    #     ).get("data", []),
-    #     min_market_cap_usd=1_000_000_000,
-    # )
-
     # Aggregate stored DuckDB runs across selected weekly databases.
     # run_move_prediction_history_aggregation_duckdb_example()
-
-    # daily use to get all market data for a day
-    # exported_file = export_all_tradingview_fields()
-    # print(f"TradingView all-fields export written to: {exported_file}")
-    # split_csv_by_rows(
-    #     input_csv=Path(
-    #         "d:/FinanceProjects/edgarDataManagementPython/logs/tradingview_analysis/trading_view_all_fields_data/22_05_2026/tradingview_global_all_tdfields_22_05_2026.csv"
-    #     )
-    # )
-
-    # # 1. Pull new articles from sitemap into the feed
-    # gather_result = gather_sherwood_markets_feed()
-    # print(
-    #     f"New: {gather_result['new_articles']}, Total: {gather_result['total_articles']}"
-    # )
-
-    # # 2. Fetch full body text for articles missing it & write .log dump
-    # scan_result = fetch_and_log_full_articles(max_articles=20)
-    # print(
-    #     f"Fetched: {scan_result['articles_fetched']}, Log: {scan_result['session_log']}"
-    # )
 
     # print(len(get_bvb_tickers_filtered()))
 

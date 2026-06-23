@@ -1,10 +1,11 @@
 {
   "schema_version": "move_prediction_profile_suite_v1",
   "suite_id": "active_manager_v3",
-  "suite_version": "1.0.0",
-  "description": "Consolidated active-manager suite: 11 distinct style lenses (9 long + 2 inverted overlays). Successor to active_manager_v2.",
+  "suite_version": "1.1.0",
+  "description": "Consolidated active-manager suite: 12 distinct style lenses (10 long + 2 inverted overlays). Adds sustained_momentum_safety_v1 for peer-relative continuation with extension-aware safety.",
   "profile_names": [
     "breakout_long_v1",
+    "sustained_momentum_safety_v1",
     "early_momentum_inflection_v1",
     "forward_edge_active_v2",
     "quality_continuation_v1",
@@ -17,13 +18,14 @@
     "mean_reversion_exhaustion_v1"
   ],
   "consensus_profile_weights": {
-    "breakout_long_v1": 0.17,
-    "early_momentum_inflection_v1": 0.11,
-    "forward_edge_active_v2": 0.11,
-    "quality_continuation_v1": 0.09,
+    "breakout_long_v1": 0.14,
+    "sustained_momentum_safety_v1": 0.10,
+    "early_momentum_inflection_v1": 0.10,
+    "forward_edge_active_v2": 0.09,
+    "quality_continuation_v1": 0.08,
     "quality_value_compounder": 0.10,
-    "durable_value_compounder_v1": 0.09,
-    "asymmetric_value": 0.09,
+    "durable_value_compounder_v1": 0.07,
+    "asymmetric_value": 0.08,
     "value_recovery_v3": 0.08,
     "defensive_fortress_v2": 0.07,
     "fragility_short": 0.06,
@@ -35,6 +37,7 @@
   ],
   "long_consensus_profiles": [
     "breakout_long_v1",
+    "sustained_momentum_safety_v1",
     "early_momentum_inflection_v1",
     "forward_edge_active_v2",
     "quality_continuation_v1",

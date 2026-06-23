@@ -15,7 +15,7 @@ config/move_prediction_profiles/
     baseline_v2.json       # realigned 11-profile consolidated suite
     active_manager_v1.json
     active_manager_v2.json # legacy 17-profile suite
-    active_manager_v3.json # production consolidated 11-profile suite
+    active_manager_v3.json # production consolidated 12-profile suite
     active_manager_v4.json # v3 plus upside_reversal_v1 long reversal lens
 ```
 
@@ -73,7 +73,7 @@ Explicit baseline JSON (same lenses as built-in default):
 profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_BASELINE
 ```
 
-Realigned consolidated baseline (11 lenses, same as `active_manager_v3`):
+Realigned consolidated baseline (11 lenses; `active_manager_v3` is now 12 lenses with `sustained_momentum_safety_v1`):
 
 ```python
 profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
@@ -111,13 +111,14 @@ run_full_analysis_suite_duckdb(
 | Investing style | Profile |
 | --- | --- |
 | Continuation (pure tape) | `breakout_long_v1` |
+| Sustained momentum + safety | `sustained_momentum_safety_v1` |
 | Swing (coiled setup) | `early_momentum_inflection_v1` |
 | Forward edge + earnings catalyst | `forward_edge_active_v2` |
 | Quality-backed continuation | `quality_continuation_v1` |
 | Core quality compounder | `quality_value_compounder` |
 | Quality at value | `durable_value_compounder_v1` |
 | Fundamental undervalue | `asymmetric_value` |
-| Structural recovery | `value_recovery_v2` |
+| Structural recovery | `value_recovery_v3` |
 | Fortress with action | `defensive_fortress_v2` |
 | Bearish overlay (inverted) | `fragility_short` |
 | Extension trim overlay (inverted) | `mean_reversion_exhaustion_v1` |
