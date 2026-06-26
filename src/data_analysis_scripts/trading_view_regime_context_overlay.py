@@ -23,6 +23,9 @@ from generic_utils.log_to_files_util import log_to_file
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
+# Match move-prediction profile logs: EXCHANGE:TICKER when exchange is known.
+SYMBOL_LOG_WIDTH = 18
+
 BULLISH_PREDICTORS_DEFAULT = (
     "ATRP|1W",
     "ATRP",
@@ -657,6 +660,25 @@ def _bare_symbol(symbol: str) -> str:
     return symbol.split(":", 1)[-1]
 
 
+def _display_symbol_label(row_or_symbol: Mapping[str, Any] | str) -> str:
+    """Return EXCHANGE:TICKER for log output when exchange is known."""
+    if isinstance(row_or_symbol, Mapping):
+        from data_analysis_scripts.trading_view_move_prediction_analysis import (
+            _get_exchange_ticker_symbol,
+        )
+
+        return _get_exchange_ticker_symbol(dict(row_or_symbol))
+
+    symbol = str(row_or_symbol or "").strip()
+    if not symbol:
+        return "N/A"
+    if ":" in symbol:
+        exchange, ticker = symbol.split(":", 1)
+        if exchange and ticker:
+            return f"{exchange.upper()}:{ticker.upper()}"
+    return symbol.upper()
+
+
 def _prediction_row_symbol(row: Mapping[str, Any]) -> str:
     return str(row.get("symbol") or row.get("ticker") or "")
 
@@ -743,7 +765,7 @@ def _write_per_profile_regime_conviction_section(
         f"(watch/composite + RelVol gate + WeeksRAS >= 0.25).",
     )
     header = (
-        f"{'#':<4}{'Ticker':<10}{'Score':>8}{'RAdj':>8}{'RegFit':>8}{'Tier':<12}"
+        f"{'#':<4}{'Ticker':<{SYMBOL_LOG_WIDTH}}{'Score':>8}{'RAdj':>8}{'RegFit':>8}{'Tier':<12}"
         f"{'ATRP':>8}{'RelVol':>8}"
     )
     if has_conviction:
@@ -756,7 +778,7 @@ def _write_per_profile_regime_conviction_section(
     for index, (combined, prediction, record) in enumerate(ranked[:top_n], start=1):
         row = prediction.get("row") or {}
         symbol = _prediction_row_symbol(row)
-        ticker = _bare_symbol(symbol) if symbol else "N/A"
+        ticker = _display_symbol_label(row) if row else "N/A"
         weeks = (prediction.get("horizons") or {}).get("weeks") or {}
         weeks_ras = float(weeks.get("risk_adjusted_score") or 0.0)
         weeks_score = weeks.get("score")
@@ -766,7 +788,7 @@ def _write_per_profile_regime_conviction_section(
             min_relative_volume=config.playbook_a_min_relative_volume,
         )
         row_text = (
-            f"{index:<4}{ticker:<10}"
+            f"{index:<4}{ticker:<{SYMBOL_LOG_WIDTH}}"
             f"{float(weeks_score or 0.0):>8.2f}"
             f"{weeks_ras:>8.2f}"
             f"{record.regime_fit_score:>8.1f}"
@@ -821,6 +843,11 @@ def write_regime_context_focus_log(
 
     log_to_file(path, "REGIME CONTEXT DAILY FOCUS")
     log_to_file(path, "=" * 160)
+    log_to_file(
+        path,
+        "Symbol labels use EXCHANGE:TICKER for uniqueness across listings "
+        "(bare ticker only when exchange is unknown).",
+    )
     log_to_file(
         path,
         "Regime confirmation layer — not a live trading signal. "
@@ -911,13 +938,13 @@ def write_regime_context_focus_log(
         log_to_file(path, "-" * 160)
         log_to_file(
             path,
-            f"{'#':<4}{'Ticker':<10}{'Conv':>8}{'CnvRk':>6}{'Sleeve':<10}"
+            f"{'#':<4}{'Ticker':<{SYMBOL_LOG_WIDTH}}{'Conv':>8}{'CnvRk':>6}{'Sleeve':<10}"
             f"{'RegFit':>8}{'Tier':<12}{'ATRP':>8}{'RelVol':>8}"
             f"{'WeeksRAS':>10}{'Warn':>5}{'Aligned':<8}",
         )
         for record in conviction_leaders:
             symbol = str(record.get("symbol") or "")
-            ticker = _bare_symbol(symbol) if symbol else "N/A"
+            ticker = _display_symbol_label(symbol) if symbol else "N/A"
             regime_record = get_regime_record_for_row(
                 {"symbol": symbol},
                 overlay.by_symbol,
@@ -959,7 +986,7 @@ def write_regime_context_focus_log(
             )
             log_to_file(
                 path,
-                f"{int(record.get('rank_overall') or 0):<4}{ticker:<10}"
+                f"{int(record.get('rank_overall') or 0):<4}{ticker:<{SYMBOL_LOG_WIDTH}}"
                 f"{float(record.get('conviction_score') or 0.0):>8.3f}"
                 f"{int(record.get('rank_overall') or 0):>6}"
                 f"{str(record.get('sleeve') or '')[:10]:<10}"
@@ -1014,7 +1041,7 @@ def write_regime_context_focus_log(
     log_to_file(path, "-" * 160)
     log_to_file(
         path,
-        f"{'#':<4}{'Ticker':<14}{'RegFit':>8}{'WeeksRAS':>10}{'Tier':<14}"
+        f"{'#':<4}{'Ticker':<{SYMBOL_LOG_WIDTH}}{'RegFit':>8}{'WeeksRAS':>10}{'Tier':<14}"
         f"{'ATRP1W':>8}{'RelVol':>8}{'Warn':>5}{'Aligned':<8}",
     )
     for index, (symbol, record) in enumerate(aligned_rows, start=1):
@@ -1034,7 +1061,7 @@ def write_regime_context_focus_log(
         )
         log_to_file(
             path,
-            f"{index:<4}{symbol.split(':', 1)[-1]:<14}"
+            f"{index:<4}{_display_symbol_label(symbol):<{SYMBOL_LOG_WIDTH}}"
             f"{record.regime_fit_score:>8.1f}"
             f"{weeks_ras:>10.2f}"
             f"{_format_regime_tier_short(record.active_mgmt_tier):<14}"
@@ -1059,7 +1086,7 @@ def write_regime_context_focus_log(
         for symbol, record in playbook_a_rows[:top_n]:
             log_to_file(
                 path,
-                f"  {symbol.split(':', 1)[-1]:<12} "
+                f"  {_display_symbol_label(symbol):<{SYMBOL_LOG_WIDTH}} "
                 f"RegFit={record.regime_fit_score:.1f} "
                 f"ATRP|1W={record.atrp_1w or 0:.1f} "
                 f"relvol={record.relative_volume or 0:.2f}",
@@ -1098,7 +1125,7 @@ def write_regime_context_focus_log(
         for ticker, record, _ in warning_hits[:top_n]:
             log_to_file(
                 path,
-                f"  {ticker.split(':', 1)[-1]:<12} "
+                f"  {_display_symbol_label(ticker):<{SYMBOL_LOG_WIDTH}} "
                 f"warn_flags={record.warning_flag_count} "
                 f"RegFit={record.regime_fit_score:.1f}",
             )

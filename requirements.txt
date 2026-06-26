@@ -7,3 +7,4 @@ psutil
 lxml==4.9.3
 beautifulsoup4==4.12.2
 arelle-release
+plotly

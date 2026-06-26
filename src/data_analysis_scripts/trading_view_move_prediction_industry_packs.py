@@ -58,9 +58,6 @@ def _bare_symbol_from_row(row: Mapping[str, Any]) -> str:
 
 
 def _full_qualified_symbol(row: Mapping[str, Any]) -> str:
-    symbol = str(row.get("symbol") or "").strip()
-    if symbol:
-        return symbol[:FULL_SYMBOL_MAX_LEN]
     return _get_symbol_name(row)[:FULL_SYMBOL_MAX_LEN]
 
 

@@ -18,6 +18,13 @@ from data_analysis_scripts.trading_view_activity_float_attention import (
     run_activity_float_attention_scan,
     run_activity_float_attention_scan_grouped_industries,
 )
+from data_analysis_scripts.trading_view_backwards_progression_symbol_plot import (
+    plot_backwards_progression_for_symbols,
+)
+from data_analysis_scripts.trading_view_backwards_profile_cohort_attribution import (
+    format_profile_cohort_markdown_table,
+    run_backwards_profile_cohort_attribution,
+)
 from data_analysis_scripts.trading_view_cross_scanner_aggregator import (
     run_cross_scanner_aggregate,
 )
@@ -35,8 +42,7 @@ from data_analysis_scripts.trading_view_move_prediction_multi_run_pool_aggregato
     run_move_prediction_run_pool_aggregation,
 )
 from data_analysis_scripts.trading_view_backwards_prediction_analysis import (
-    AnchorSpec,
-    run_backwards_prediction_analysis,
+    run_backwards_prediction_sparse_weekly_analysis,
 )
 from data_analysis_scripts.trading_view_backwards_prediction_scout_report import (
     run_backwards_prediction_scout_report,
@@ -69,6 +75,7 @@ from data_analysis_scripts.trading_view_price_driven_score_analysis import (
     run_price_driven_score_analysis_duckdb,
 )
 from data_analysis_scripts.trading_view_holdings_scoring_analysis import (
+    load_holdings_config,
     run_holdings_scoring_analysis,
 )
 from data_analysis_scripts.trading_view_move_prediction_analysis import (
@@ -86,8 +93,14 @@ from data_analysis_scripts.trading_view_scan_period_ticker_watchlist import (
 from data_analysis_scripts.trading_view_move_prediction_industry_packs import (
     write_industry_packs_from_duckdb_run,
 )
+from data_analysis_scripts.trading_view_industry_price_mover_relative_scan import (
+    run_industry_price_mover_relative_scan,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+CURRENT_HOLDINGS_CONFIG = (
+    PROJECT_ROOT / "config" / "holdings_scoring" / "current_holdings.json"
+)
 MOVE_PREDICTION_PROFILE_SUITE_BASELINE = (
     PROJECT_ROOT / "config" / "move_prediction_profiles" / "suites" / "baseline.json"
 )
@@ -461,6 +474,8 @@ def main():
     # # Legacy 17-profile suite: MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
     # # Realigned baseline (11 lenses): MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
     # # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
+    # # Move-prediction suite outputs (.log / .csv / DuckDB / regime_context_focus.log)
+    # # use EXCHANGE:TICKER labels via _get_symbol_name to avoid bare-ticker collisions.
     # base_duckdb_result = run_full_analysis_suite_duckdb(
     #     scan_data=move_prediction_scan_response,
     #     min_market_cap_usd=500_000_000,
@@ -472,9 +487,27 @@ def main():
     #     write_industry_packs=True,
     # )
 
-    # # # FOR INDUSTRY RUN SPLIT Or post-process an existing run:
-    # # # write_industry_packs_from_duckdb_run(base_duckdb_result)
+    # # FOR INDUSTRY RUN SPLIT Or post-process an existing run:
+    # #   write_industry_packs_from_duckdb_run(base_duckdb_result)
 
+    # # Top-10 industries by price action + better-scored peer alternatives (bang-for-buck).
+    # # Output: <run_output_dir>/industry_price_mover_relative_scan/
+    # #   industry_price_mover_relative_scan__overview.log
+    # #   industry_relative_opportunities.csv
+    # #   <industry>/industry_relative_scan.log
+    # # industry_mover_scan = run_industry_price_mover_relative_scan(
+    # #     base_duckdb_result,
+    # #     perf_field="Perf.1M",
+    # #     top_industries=10,
+    # #     price_movers_per_industry=5,
+    # #     catch_up_per_industry=10,
+    # #     alternatives_per_mover=3,
+    # # )
+    # # print(industry_mover_scan["overview_log"])
+    # # print(industry_mover_scan["opportunities_csv"])
+
+    # # # Reuses base_duckdb_result; earnings-priority and regime_context_focus logs
+    # # # share the same EXCHANGE:TICKER labels.
     # run_full_analysis_suite_with_earnings_priority_duckdb(
     #     scan_data=move_prediction_scan_response,
     #     min_market_cap_usd=500_000_000,
@@ -786,26 +819,107 @@ def main():
     # )
     # print(result["database_path"])
 
-    # # Compare current move-prediction scores vs historical anchor runs
-    # with MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3.open(
-    #     encoding="utf-8"
-    # ) as handle:
-    #     backwards_profiles = json.load(handle)["profile_names"]
-
-    # backwards_result = run_backwards_prediction_analysis(
-    #     anchors=[
-    #         AnchorSpec.preset("yesterday"),
-    #         AnchorSpec.preset("last_week"),
-    #         AnchorSpec.preset("last_month"),
-    #         AnchorSpec.preset("oldest"),
-    #     ],
-    #     include_profiles=backwards_profiles,
-    #     include_consensus=True,
-    #     include_components=True,
+    # Oldest indexed run -> today, 2 distinct-day anchors per ISO week (use runs_per_week=3
+    # for three anchors/week with even_spread selection).
+    # min_scan_data_count filters the *current* run only; anchors include all indexed
+    # backfill weeks by default (anchor_min_scan_data_count=None).
+    #
+    # Week range: omit start_week to begin at oldest indexed week; set iso_year+start_week
+    # to begin at a specific ISO week (still 2 anchors/week with runs_per_week=2).
+    # backwards_result = run_backwards_prediction_sparse_weekly_analysis(
+    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+    #     runs_per_week=2,
     #     min_scan_data_count=3000,
+    #     # iso_year=2026,
+    #     start_week=13,  # from week=16; omit for oldest indexed week
+    #     # end_week=24,    # optional upper cap
     # )
     # print(backwards_result["database_path"])
+    # print(backwards_result["anchor_plan_summary"])
     # print(Path(backwards_result["overview_log"]).read_text(encoding="utf-8"))
+
+    # Weekly sparse-anchor progression (2-3 move-prediction runs per ISO week).
+    # Oldest anchor comes from the move-prediction run index under duckdb_runs/
+    # (currently week=13 backfill from 2026-03-29; day 01_04_2026 is included).
+    # Earlier raw CSV days are not anchored until ingested into weekly DuckDB pools.
+    #
+    # Profile families: profile_suite_path loads all suite names for the backwards
+    # build; anchor snapshots match by profile_family so breakout_long_v1 anchors
+    # align with older breakout_long rows. Plotting resolves latest _vN per family.
+
+    # # Resume plotting from an existing backwards scan (skips rebuild; needs plotly installed)
+    # Merges exchange-qualified + bare snapshot symbol keys per anchor so lines run
+    # through the latest backwards anchor (not only the early qualified-key window).
+    # _, current_holdings, _ = load_holdings_config(CURRENT_HOLDINGS_CONFIG)
+    # progression_plot_symbols: list[str] = []
+    # seen_progression_symbols: set[str] = set()
+    # for ticker in [holding.ticker for holding in current_holdings] + ["MU"]:
+    #     key = ticker.upper()
+    #     if key in seen_progression_symbols:
+    #         continue
+    #     seen_progression_symbols.add(key)
+    #     progression_plot_symbols.append(ticker)
+
+    # symbol_plot_result = plot_backwards_progression_for_symbols(
+    #     run_folder_pattern="backwards_prediction_analysis_20260625_1621_utc_b00e6c1d",
+    #     symbols=[
+    #         "MU",
+    #         "AYI",
+    #         "GLW",
+    #         "EZJ",
+    #         "SNDK",
+    #         "HFD",
+    #         "TER",
+    #         "AMS",
+    #         "AMAT",
+    #         "BLZE",
+    #         "ONTO",
+    #         "KLIC",
+    #         "FLEX",
+    #         "LGND",
+    #         "CDNL",
+    #         "BB",
+    #     ],
+    #     profile_suite_path=PROJECT_ROOT
+    #     / "config"
+    #     / "move_prediction_profiles"
+    #     / "suites"
+    #     / "active_manager_v3.json",
+    #     horizon_name="weeks",
+    #     watchlist_path=CURRENT_HOLDINGS_CONFIG,
+    # )
+    # print(symbol_plot_result["database_path"])
+    # print(symbol_plot_result["html_path"])
+    # print(symbol_plot_result.get("browser_file_uri"))
+    # print(symbol_plot_result.get("index_file_uri"))
+    # print(symbol_plot_result.get("plot_manifest_path"))
+    # for plot in symbol_plot_result.get("profile_plots", []):
+    #     print(
+    #         plot["resolved_profile_name"],
+    #         plot.get("browser_file_uri"),
+    #         plot.get("browser_shortcut_path"),
+    #         plot["point_count"],
+    #     )
+
+    # # Top-250 profile cohort attribution from the same backwards run (weeks horizon).
+    # # period_boundary = memo-style first→last window return for ever-top-250 names.
+    # # inclusion_entry = buy at first top-250 inclusion anchor, sell at last anchor.
+    # cohort_result = run_backwards_profile_cohort_attribution(
+    #     run_folder_pattern="backwards_prediction_analysis_20260625_1621_utc_b00e6c1d",
+    #     profile_suite_path=PROJECT_ROOT
+    #     / "config"
+    #     / "move_prediction_profiles"
+    #     / "suites"
+    #     / "active_manager_v3.json",
+    #     horizon_name="weeks",
+    #     top_n=250,
+    #     rank_scope="min1bil",
+    #     # start_anchor_name="w2026_14_open",
+    #     # end_anchor_name="w2026_21_open",
+    # )
+    # print(cohort_result["summary_csv"])
+    # print(format_profile_cohort_markdown_table(cohort_result["summaries"], method="period_boundary"))
+    # print(format_profile_cohort_markdown_table(cohort_result["summaries"], method="inclusion_entry"))
 
     # scout_result = run_backwards_prediction_scout_report(
     #     database_path=backwards_result["database_path"],

@@ -48,7 +48,7 @@ OVERSOLD_WARNING_FIELDS: frozenset[str] = frozenset(
 )
 
 PLAYBOOK_A_LOG_PATTERN = re.compile(
-    r"^\s{2}(?P<symbol>[A-Z0-9._-]+)\s+"
+    r"^\s{2}(?P<symbol>[A-Z0-9._:-]+)\s+"
     r"RegFit=(?P<regfit>[\d.]+)\s+"
     r"ATRP\|1W=(?P<atrp>[\d.]+)\s+"
     r"relvol=(?P<relvol>[\d.]+)\s*$"

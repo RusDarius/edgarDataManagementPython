@@ -4,11 +4,16 @@ documentation/data_analysis_screens/
 sql_connections_space/query_saved_results/
 savedData
 logs
+plots/
+latest_plot.html
 venv39
 venv
 src/tests/_tmp_module2_run
 src/parquet
 parquet
+tmp_plotly_file_tests
+tmp_cohort_min1bil
+tmp_cohort_global
 
 # Python cache directories
 __pycache__/

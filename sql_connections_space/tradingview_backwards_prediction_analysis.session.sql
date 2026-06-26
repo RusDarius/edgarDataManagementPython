@@ -633,6 +633,52 @@ WHERE d.profile_name = f.profile_name
 ORDER BY ABS(score_delta) DESC NULLS LAST,
     symbol ASC
 LIMIT 80;
+-- @block q_backwards_ticker_rank_progression
+-- Rank/score progression for ONE ticker across all anchors (one profile + horizon).
+-- Edit ticker, profile_name, and horizon_name before running.
+-- Negative rank_delta = moved up in the universe ranking.
+WITH filters AS (
+    SELECT 'VSH' AS ticker,
+        'breakout_long_v1' AS profile_name,
+        'weeks' AS horizon_name
+)
+SELECT d.anchor_name,
+    d.symbol,
+    d.company,
+    d.profile_name,
+    d.horizon_name,
+    d.anchor_rank,
+    d.current_rank,
+    d.rank_delta,
+    ROUND(d.anchor_score, 4) AS anchor_score,
+    ROUND(d.current_score, 4) AS current_score,
+    ROUND(d.score_delta, 4) AS score_delta,
+    d.anchor_direction,
+    d.current_direction,
+    d.direction_changed,
+    ROUND(d.anchor_close, 4) AS anchor_close,
+    ROUND(d.current_close, 4) AS current_close,
+    ROUND(d.close_delta_pct, 4) AS close_delta_pct,
+    ROUND(d.anchor_perf_w, 4) AS anchor_perf_w,
+    ROUND(d.current_perf_w, 4) AS current_perf_w,
+    ROUND(d.perf_w_delta, 4) AS perf_w_delta
+FROM backwards_profile_horizon_deltas AS d
+    CROSS JOIN filters AS f
+WHERE d.profile_name = f.profile_name
+    AND d.horizon_name = f.horizon_name
+    AND d.in_current
+    AND d.in_anchor
+    AND (
+        upper(trim(d.symbol)) = upper(trim(f.ticker))
+        OR upper(trim(d.symbol)) LIKE '%:' || upper(trim(f.ticker))
+    )
+ORDER BY CASE d.anchor_name
+        WHEN 'yesterday' THEN 1
+        WHEN 'last_week' THEN 2
+        WHEN 'last_month' THEN 3
+        WHEN 'oldest' THEN 4
+        ELSE 99
+    END;
 -- @block q_backwards_rank_movers
 -- Largest rank improvements (negative rank_delta = moved up in ranking).
 WITH filters AS (

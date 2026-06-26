@@ -8,6 +8,7 @@ from data_analysis_scripts.trading_view_move_prediction_analysis import (
     PRESET_SCORING_PROFILES,
     _build_derived_metrics,
     _count_bullish_long_profiles,
+    _get_exchange_ticker_symbol,
     _manager_action_signal,
     resolve_move_prediction_scoring_profile,
 )
@@ -404,6 +405,39 @@ class TestManagerActionSignals(unittest.TestCase):
             },
         )
         self.assertEqual(signal, "accumulate_value_recovery")
+
+
+class TestExchangeTickerSymbol(unittest.TestCase):
+    def test_prefers_row_symbol_when_already_qualified(self):
+        row = {
+            "symbol": "NASDAQ:MU",
+            "ticker-view": {"name": "MU", "exchange": "NASDAQ"},
+        }
+        self.assertEqual(_get_exchange_ticker_symbol(row), "NASDAQ:MU")
+
+    def test_builds_from_exchange_and_ticker_view_when_bare(self):
+        row = {
+            "symbol": "MU",
+            "exchange": "NASDAQ",
+            "ticker-view": {"name": "MU", "exchange": "NASDAQ"},
+        }
+        self.assertEqual(_get_exchange_ticker_symbol(row), "NASDAQ:MU")
+
+    def test_disambiguates_duplicate_bare_tickers(self):
+        lse_row = {
+            "symbol": "LSE:PLUS",
+            "ticker-view": {"name": "PLUS", "exchange": "LSE", "description": "Plus500 Ltd."},
+        }
+        nasdaq_row = {
+            "symbol": "NASDAQ:PLUS",
+            "ticker-view": {"name": "PLUS", "exchange": "NASDAQ", "description": "ePlus inc."},
+        }
+        self.assertEqual(_get_exchange_ticker_symbol(lse_row), "LSE:PLUS")
+        self.assertEqual(_get_exchange_ticker_symbol(nasdaq_row), "NASDAQ:PLUS")
+        self.assertNotEqual(
+            _get_exchange_ticker_symbol(lse_row),
+            _get_exchange_ticker_symbol(nasdaq_row),
+        )
 
 
 if __name__ == "__main__":

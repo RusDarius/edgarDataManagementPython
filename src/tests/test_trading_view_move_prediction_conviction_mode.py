@@ -241,9 +241,11 @@ class TestTradingViewMovePredictionConvictionMode(unittest.TestCase):
         with csv_path.open(encoding="utf-8", newline="") as handle:
             rows = list(csv.DictReader(handle))
 
-        plus_rows = [row for row in rows if row.get("symbol") == "PLUS"]
-        self.assertEqual(len(plus_rows), 2)
-        companies = {row.get("company") for row in plus_rows}
+        plus_rows = [row for row in rows if row.get("symbol") == "LSE:PLUS"]
+        self.assertEqual(len(plus_rows), 1)
+        plus_rows = [row for row in rows if row.get("symbol") == "NASDAQ:PLUS"]
+        self.assertEqual(len(plus_rows), 1)
+        companies = {row.get("company") for row in rows if row.get("symbol", "").endswith(":PLUS")}
         self.assertIn("Plus500 Ltd.", companies)
         self.assertIn("ePlus inc.", companies)
 

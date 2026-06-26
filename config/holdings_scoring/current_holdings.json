@@ -4,7 +4,7 @@
   "portfolio_currency": "USD",
   "description": "Current book — set invested_sum/average_price in their currencies; portfolio aggregates in USD. Use optional symbol (EXCHANGE:TICKER) when ticker alone is ambiguous.",
   "cash_position": {
-    "value": 10450,
+    "value": 12850,
     "currency": "USD"
   },
   "holdings": [
@@ -14,14 +14,6 @@
       "invested_sum": 3000,
       "invested_currency": "USD",
       "average_price": 159.9,
-      "price_currency": "USD"
-    },
-    {
-      "ticker": "VSH",
-      "sleeve": "core",
-      "invested_sum": 2004.69,
-      "invested_currency": "USD",
-      "average_price": 24.69,
       "price_currency": "USD"
     },
     {
@@ -35,9 +27,9 @@
     {
       "ticker": "STMPA",
       "sleeve": "core",
-      "invested_sum": 2758.02,
+      "invested_sum": 2700.02,
       "invested_currency": "EUR",
-      "average_price": 33.98,
+      "average_price": 43.98,
       "price_currency": "EUR",
       "quote_currency": "EUR"
     },
@@ -50,38 +42,28 @@
       "price_currency": "USD"
     },
     {
-      "ticker": "SYNA",
+      "ticker": "GOOG",
       "sleeve": "core",
-      "invested_sum": 1507.94,
+      "invested_sum": 4000,
       "invested_currency": "USD",
-      "average_price": 97.44,
-      "price_currency": "USD",
-      "notes": "Synaptics"
+      "average_price": 345.11,
+      "price_currency": "USD"
     },
     {
       "ticker": "DUOL",
       "sleeve": "core",
-      "invested_sum": 3497.42,
+      "invested_sum": 6497.42,
       "invested_currency": "USD",
-      "average_price": 111.79,
+      "average_price": 121.28,
       "price_currency": "USD",
       "notes": "Duolingo"
     },
     {
-      "ticker": "NTAP",
-      "sleeve": "core",
-      "invested_sum": 2000.13,
-      "invested_currency": "USD",
-      "average_price": 141.92,
-      "price_currency": "USD",
-      "notes": "NetApp"
-    },
-    {
       "ticker": "TEAM",
       "sleeve": "core",
-      "invested_sum": 2682.02,
+      "invested_sum": 3682.02,
       "invested_currency": "USD",
-      "average_price": 89.72,
+      "average_price": 86.22,
       "price_currency": "USD",
       "notes": "Atlassian"
     },
@@ -106,9 +88,9 @@
     {
       "ticker": "VEEV",
       "sleeve": "core",
-      "invested_sum": 2496.77,
+      "invested_sum": 3596.77,
       "invested_currency": "USD",
-      "average_price": 181.77,
+      "average_price": 175.85,
       "price_currency": "USD",
       "notes": "Veeva Systems"
     },

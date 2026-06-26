@@ -116,7 +116,17 @@ ORDER BY m.created_at_utc DESC NULLS LAST,
 WITH tickers AS (
     SELECT unnest(
             [
+                'STMPA',
+                'DUOL',
+                'VEEV',
+                'SEZL',
                 'GOOG',
+                'ZS',
+                'UNH',
+                'NOVO_B',
+                'GTLB',
+                'PATH',
+
             ]
         ) AS ticker
 ),

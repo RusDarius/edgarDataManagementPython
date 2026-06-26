@@ -67,6 +67,8 @@ DEFAULT_PERFORMANCE_TRACKING_PERIODS = {
     "years": ["Perf.Y", "Perf.5Y"],
 }
 
+SYMBOL_LOG_WIDTH = 18
+
 ENTRY_METADATA_FIELDS = [
     "symbol",
     "name",
@@ -2872,13 +2874,32 @@ def _get_profile_config_metadata(
     return None
 
 
-def _get_symbol_name(row: dict[str, Any]) -> str:
+def _get_exchange_ticker_symbol(row: dict[str, Any]) -> str:
+    """Return EXCHANGE:TICKER when possible for unambiguous human-readable output."""
+    symbol = str(row.get("symbol") or "").strip()
+    if symbol and ":" in symbol:
+        exchange, ticker = symbol.split(":", 1)
+        if exchange and ticker:
+            return f"{exchange.upper()}:{ticker.upper()}"
+
     ticker_view = row.get("ticker-view")
-    if isinstance(ticker_view, dict):
-        name = ticker_view.get("name")
-        if name:
-            return str(name)
-    return str(row.get("symbol") or row.get("name") or "N/A")
+    tv = ticker_view if isinstance(ticker_view, dict) else {}
+    exchange = str(row.get("exchange") or tv.get("exchange") or "").strip()
+    ticker = str(tv.get("name") or row.get("name") or "").strip()
+    if not ticker and symbol:
+        ticker = symbol.split(":", 1)[-1] if ":" in symbol else symbol
+
+    if exchange and ticker:
+        return f"{exchange.upper()}:{ticker.upper()}"
+    if symbol:
+        return symbol.upper()
+    if ticker:
+        return ticker.upper()
+    return "N/A"
+
+
+def _get_symbol_name(row: dict[str, Any]) -> str:
+    return _get_exchange_ticker_symbol(row)
 
 
 def _get_company_name(row: dict[str, Any]) -> str:
@@ -3215,7 +3236,7 @@ def _build_raw_csv_rows(scan_data: list[dict[str, Any]]) -> list[list[str]]:
     field_names = _collect_raw_scan_field_names(scan_data)
     rows: list[list[str]] = []
     for row in scan_data:
-        csv_row = [_serialize_csv_value(row.get("symbol")), _get_company_name(row)]
+        csv_row = [_serialize_csv_value(_get_symbol_name(row)), _get_company_name(row)]
         csv_row.extend(
             _serialize_csv_value(row.get(field_name)) for field_name in field_names
         )
@@ -5899,7 +5920,7 @@ def _log_regime_aligned_section(
     log_to_file(log_file, "-" * 160)
     log_to_file(
         log_file,
-        f"{'Ticker':<12} {'Score':>8} {'RAdj':>8} {'RegFit':>8} {'Tier':<14} "
+        f"{'Ticker':<{SYMBOL_LOG_WIDTH}} {'Score':>8} {'RAdj':>8} {'RegFit':>8} {'Tier':<14} "
         f"{'ATRP':>8} {'RelVol':>8} {'Warn':>5} {'Combined':>10}",
     )
     log_to_file(log_file, "-" * 160)
@@ -5911,7 +5932,7 @@ def _log_regime_aligned_section(
             continue
         log_to_file(
             log_file,
-            f"{_get_symbol_name(row):<12} "
+            f"{_get_symbol_name(row):<{SYMBOL_LOG_WIDTH}} "
             f"{_format_score(weeks.get('score')):>8} "
             f"{_format_score(weeks.get('risk_adjusted_score')):>8} "
             f"{record.regime_fit_score:>8.1f} "
@@ -5947,7 +5968,7 @@ def _log_horizon_section(
     log_to_file(
         log_file,
         (
-            f"{'Ticker':<12} {'Company':<28} {'Industry':<26} {'MCap':>10} {'Float%':>8} {'Score':>8} {'Dir':<12} {'Conf':>6} "
+            f"{'Ticker':<{SYMBOL_LOG_WIDTH}} {'Company':<28} {'Industry':<26} {'MCap':>10} {'Float%':>8} {'Score':>8} {'Dir':<12} {'Conf':>6} "
             f"{'Attn':>8} {'Event':>8} {'Mom':>8} {'Trend':>8} {'Qual':>8} {'Value':>8} {'Safe':>8} {'Scale':>8} {'STSafe':>8} {'Setup':<28}"
             f" {'RAdj':>8} {'Risk':<14} {'Action':<24}{regime_header}"
         ),
@@ -5969,7 +5990,7 @@ def _log_horizon_section(
         log_to_file(
             log_file,
             (
-                f"{_get_symbol_name(row):<12} {_get_company_name(row)[:28]:<28} {str(row.get('industry') or '')[:26]:<26} "
+                f"{_get_symbol_name(row):<{SYMBOL_LOG_WIDTH}} {_get_company_name(row)[:28]:<28} {str(row.get('industry') or '')[:26]:<26} "
                 f"{_format_market_cap(_coerce_numeric(row.get('market_cap_basic'))):>10} {_format_percent(_coerce_numeric(row.get('float_shares_percent_current'))):>8} {_format_score(horizon['score']):>8} "
                 f"{str(horizon['direction']):<12} {_format_confidence(horizon['confidence']):>6} "
                 f"{_format_score(components['attention']):>8} {_format_score(components['event']):>8} {_format_score(components['momentum']):>8} "
@@ -5987,7 +6008,7 @@ def _log_horizon_section(
         log_to_file(
             log_file,
             (
-                f"{'Ticker':<12} {'Company':<28} {'Industry':<26} {'MCap':>10} {'Float%':>8} {'Score':>8} {'Dir':<12} {'Conf':>6} "
+                f"{'Ticker':<{SYMBOL_LOG_WIDTH}} {'Company':<28} {'Industry':<26} {'MCap':>10} {'Float%':>8} {'Score':>8} {'Dir':<12} {'Conf':>6} "
                 f"{'Attn':>8} {'Event':>8} {'Mom':>8} {'Trend':>8} {'Qual':>8} {'Value':>8} {'Safe':>8} {'Scale':>8} {'STSafe':>8} {'Setup':<28}"
                 f" {'RAdj':>8} {'Risk':<14} {'Action':<24}{regime_header}"
             ),
@@ -6009,7 +6030,7 @@ def _log_horizon_section(
         log_to_file(
             log_file,
             (
-                f"{_get_symbol_name(row):<12} {_get_company_name(row)[:28]:<28} {str(row.get('industry') or '')[:26]:<26} "
+                f"{_get_symbol_name(row):<{SYMBOL_LOG_WIDTH}} {_get_company_name(row)[:28]:<28} {str(row.get('industry') or '')[:26]:<26} "
                 f"{_format_market_cap(_coerce_numeric(row.get('market_cap_basic'))):>10} {_format_percent(_coerce_numeric(row.get('float_shares_percent_current'))):>8} {_format_score(horizon['score']):>8} "
                 f"{str(horizon['direction']):<12} {_format_confidence(horizon['confidence']):>6} "
                 f"{_format_score(components['attention']):>8} {_format_score(components['event']):>8} {_format_score(components['momentum']):>8} "
@@ -6350,7 +6371,7 @@ def _log_tracking_period_section(
     log_to_file(
         log_file,
         (
-            f"{'Ticker':<12} {'Company':<28} {'Industry':<26} {'Score':>8} {'Dir':<12} {'Perf.W':>10} {'Perf.1M':>10} {'Perf.YTD':>10} {'Perf.Y':>10} {'Perf.5Y':>10}"
+            f"{'Ticker':<{SYMBOL_LOG_WIDTH}} {'Company':<28} {'Industry':<26} {'Score':>8} {'Dir':<12} {'Perf.W':>10} {'Perf.1M':>10} {'Perf.YTD':>10} {'Perf.Y':>10} {'Perf.5Y':>10}"
         ),
     )
     log_to_file(log_file, "-" * 160)
@@ -6359,7 +6380,7 @@ def _log_tracking_period_section(
         log_to_file(
             log_file,
             (
-                f"{_get_symbol_name(row):<12} {_get_company_name(row)[:28]:<28} {str(row.get('industry') or '')[:26]:<26} "
+                f"{_get_symbol_name(row):<{SYMBOL_LOG_WIDTH}} {_get_company_name(row)[:28]:<28} {str(row.get('industry') or '')[:26]:<26} "
                 f"{_format_score(score):>8} {str(prediction['horizons'][horizon_name]['direction']):<12} "
                 f"{_format_percent(_coerce_numeric(row.get('Perf.W'))):>10} {_format_percent(_coerce_numeric(row.get('Perf.1M'))):>10} "
                 f"{_format_percent(_coerce_numeric(row.get('Perf.YTD'))):>10} {_format_percent(_coerce_numeric(row.get('Perf.Y'))):>10} "
@@ -6372,7 +6393,7 @@ def _log_tracking_period_section(
     log_to_file(
         log_file,
         (
-            f"{'Ticker':<12} {'Company':<28} {'Industry':<26} {'Score':>8} {'Dir':<12} {'Perf.W':>10} {'Perf.1M':>10} {'Perf.YTD':>10} {'Perf.Y':>10} {'Perf.5Y':>10}"
+            f"{'Ticker':<{SYMBOL_LOG_WIDTH}} {'Company':<28} {'Industry':<26} {'Score':>8} {'Dir':<12} {'Perf.W':>10} {'Perf.1M':>10} {'Perf.YTD':>10} {'Perf.Y':>10} {'Perf.5Y':>10}"
         ),
     )
     log_to_file(log_file, "-" * 160)
@@ -6381,7 +6402,7 @@ def _log_tracking_period_section(
         log_to_file(
             log_file,
             (
-                f"{_get_symbol_name(row):<12} {_get_company_name(row)[:28]:<28} {str(row.get('industry') or '')[:26]:<26} "
+                f"{_get_symbol_name(row):<{SYMBOL_LOG_WIDTH}} {_get_company_name(row)[:28]:<28} {str(row.get('industry') or '')[:26]:<26} "
                 f"{_format_score(score):>8} {str(prediction['horizons'][horizon_name]['direction']):<12} "
                 f"{_format_percent(_coerce_numeric(row.get('Perf.W'))):>10} {_format_percent(_coerce_numeric(row.get('Perf.1M'))):>10} "
                 f"{_format_percent(_coerce_numeric(row.get('Perf.YTD'))):>10} {_format_percent(_coerce_numeric(row.get('Perf.Y'))):>10} "
@@ -6911,7 +6932,7 @@ def _log_consensus_aggregator_report(
         log_to_file(log_file, "=" * 160)
         log_to_file(
             log_file,
-            f"{'Rank':<6} {'Ticker':<12} {'Company':<28} {'Score':>8} {'Dir':<12} "
+            f"{'Rank':<6} {'Ticker':<{SYMBOL_LOG_WIDTH}} {'Company':<28} {'Score':>8} {'Dir':<12} "
             f"{'RAdj':>8} {'Risk':<14} {'Action':<24} {'Conf':>6} {'Agree':>7} {'Opinions':>9} "
             f"{'MCap':>14} {'Perf.W':>8} {'Perf.1M':>8} {'Perf.YTD':>8}",
         )
@@ -6923,7 +6944,7 @@ def _log_consensus_aggregator_report(
             row = consensus_row["row"]
             log_to_file(
                 log_file,
-                f"{rank:<6} {consensus_row['ticker']:<12} "
+                f"{rank:<6} {consensus_row['ticker']:<{SYMBOL_LOG_WIDTH}} "
                 f"{(consensus_row['company'] or 'N/A')[:27]:<28} "
                 f"{_format_score(horizon_data['score']):>8} "
                 f"{horizon_data['direction']:<12} "
@@ -6944,7 +6965,7 @@ def _log_consensus_aggregator_report(
         log_to_file(log_file, "-" * 160)
         log_to_file(
             log_file,
-            f"{'Rank':<6} {'Ticker':<12} {'Company':<28} {'Score':>8} {'Dir':<12} "
+            f"{'Rank':<6} {'Ticker':<{SYMBOL_LOG_WIDTH}} {'Company':<28} {'Score':>8} {'Dir':<12} "
             f"{'RAdj':>8} {'Risk':<14} {'Action':<24} {'Conf':>6} {'Agree':>7} {'Opinions':>9} "
             f"{'MCap':>14} {'Perf.W':>8} {'Perf.1M':>8} {'Perf.YTD':>8}",
         )
@@ -6955,7 +6976,7 @@ def _log_consensus_aggregator_report(
             row = consensus_row["row"]
             log_to_file(
                 log_file,
-                f"{rank:<6} {consensus_row['ticker']:<12} "
+                f"{rank:<6} {consensus_row['ticker']:<{SYMBOL_LOG_WIDTH}} "
                 f"{(consensus_row['company'] or 'N/A')[:27]:<28} "
                 f"{_format_score(horizon_data['score']):>8} "
                 f"{horizon_data['direction']:<12} "
@@ -7005,7 +7026,7 @@ def _log_consensus_aggregator_report(
             h = consensus_row["horizons"][horizon_name]
             log_to_file(
                 log_file,
-                f"    {consensus_row['ticker']:<12} "
+                f"    {consensus_row['ticker']:<{SYMBOL_LOG_WIDTH}} "
                 f"{(consensus_row['company'] or '')[:25]:<26} "
                 f"score={_format_score(h['score'])} "
                 f"dir={h['direction']:<12} "
@@ -7047,7 +7068,7 @@ def _log_consensus_aggregator_report(
         log_to_file(log_file, "-" * 160)
         log_to_file(
             log_file,
-            f"  {'Ticker':<12} {'Company':<28} {'Industry':<26} {'Weeks':>8} {'RAdj':>8} {'Risk':<14} {'Agree':>7} {'Qual':>8} {'Value':>8} {'Safe':>8}",
+            f"  {'Ticker':<{SYMBOL_LOG_WIDTH}} {'Company':<28} {'Industry':<26} {'Weeks':>8} {'RAdj':>8} {'Risk':<14} {'Agree':>7} {'Qual':>8} {'Value':>8} {'Safe':>8}",
         )
         for consensus_row in action_rows[:20]:
             h = consensus_row["horizons"].get("weeks", {})
@@ -7055,7 +7076,7 @@ def _log_consensus_aggregator_report(
             row = consensus_row["row"]
             log_to_file(
                 log_file,
-                f"  {consensus_row['ticker']:<12} "
+                f"  {consensus_row['ticker']:<{SYMBOL_LOG_WIDTH}} "
                 f"{(consensus_row['company'] or '')[:27]:<28} "
                 f"{str(row.get('industry') or '')[:25]:<26} "
                 f"{_format_score(h.get('score')):>8} "
@@ -7505,7 +7526,7 @@ def _log_breakout_narrative_sections(
     else:
         log_to_file(
             log_file,
-            f"{'Rank':<5} {'Symbol':<8} {'Company':<25} {'Weeks':>6} {'Days':>6} {'RAS':>6} {'Risk':>5} {'Entry':<12} {'Size':<8} {'Composite Risk':<15}"
+            f"{'Rank':<5} {'Symbol':<{SYMBOL_LOG_WIDTH}} {'Company':<25} {'Weeks':>6} {'Days':>6} {'RAS':>6} {'Risk':>5} {'Entry':<12} {'Size':<8} {'Composite Risk':<15}"
         )
         log_to_file(log_file, "-" * 120)
         for i, (pred, story) in enumerate(validated[:top_n], 1):
@@ -7528,7 +7549,7 @@ def _log_breakout_narrative_sections(
 
             log_to_file(
                 log_file,
-                f"{i:<5} {_get_symbol_name(row):<8} {company:<25} "
+                f"{i:<5} {_get_symbol_name(row):<{SYMBOL_LOG_WIDTH}} {company:<25} "
                 f"{story.get('weeks_score', 0):>6.2f} "
                 f"{story.get('days_score', 0):>6.2f} "
                 f"{story.get('weeks_ras', 0):>6.2f} "
@@ -7561,7 +7582,7 @@ def _log_breakout_narrative_sections(
     else:
         log_to_file(
             log_file,
-            f"{'Rank':<5} {'Symbol':<8} {'Company':<25} {'Weeks':>6} {'Days':>6} {'RAS':>6} {'Risk':>6} {'Reject Reason':<25} {'Entry':<12}"
+            f"{'Rank':<5} {'Symbol':<{SYMBOL_LOG_WIDTH}} {'Company':<25} {'Weeks':>6} {'Days':>6} {'RAS':>6} {'Risk':>6} {'Reject Reason':<25} {'Entry':<12}"
         )
         log_to_file(log_file, "-" * 120)
         for i, (pred, story) in enumerate(near_misses[:20], 1):
@@ -7587,7 +7608,7 @@ def _log_breakout_narrative_sections(
 
             log_to_file(
                 log_file,
-                f"{i:<5} {_get_symbol_name(row):<8} {company:<25} "
+                f"{i:<5} {_get_symbol_name(row):<{SYMBOL_LOG_WIDTH}} {company:<25} "
                 f"{story.get('weeks_score', 0):>6.2f} "
                 f"{story.get('days_score', 0):>6.2f} "
                 f"{story.get('weeks_ras', 0):>6.2f} "
@@ -8709,7 +8730,7 @@ def _log_earnings_priority_report(
         log_to_file(log_file, "=" * 200)
         log_to_file(
             log_file,
-            f"{'Days':>6} {'Earnings':<11} {'Ticker':<12} {'Company':<28} "
+            f"{'Days':>6} {'Earnings':<11} {'Ticker':<{SYMBOL_LOG_WIDTH}} {'Company':<28} "
             f"{'Sector':<22} {'MCap':>14} "
             f"{'Days/Score':>11} {'Days/Cov':>9} "
             f"{'Wks/Score':>11} {'Wks/Cov':>9} "
@@ -8739,7 +8760,7 @@ def _log_earnings_priority_report(
                     log_file,
                     f"{entry['days_until']:>6.1f} "
                     f"{_format_earnings_date(entry['next_earnings_dt']):<11} "
-                    f"{consensus_row['ticker']:<12} "
+                    f"{consensus_row['ticker']:<{SYMBOL_LOG_WIDTH}} "
                     f"{(consensus_row['company'] or 'N/A')[:27]:<28} "
                     f"{str(row.get('sector') or 'N/A')[:21]:<22} "
                     f"{_format_market_cap(consensus_row['market_cap']):>14} "
@@ -8777,7 +8798,7 @@ def _log_earnings_priority_report(
     else:
         log_to_file(
             log_file,
-            f"{'Days':>6} {'Earnings':<11} {'Ticker':<12} {'Company':<28} "
+            f"{'Days':>6} {'Earnings':<11} {'Ticker':<{SYMBOL_LOG_WIDTH}} {'Company':<28} "
             f"{'DaysScore':>10} {'Dir':<10} {'Conf':>5} {'Agree':>6} {'Opin':>5}",
         )
         log_to_file(log_file, "-" * 200)
@@ -8797,7 +8818,7 @@ def _log_earnings_priority_report(
                     log_file,
                     f"{entry['days_until']:>6.1f} "
                     f"{_format_earnings_date(entry['next_earnings_dt']):<11} "
-                    f"{consensus_row['ticker']:<12} "
+                    f"{consensus_row['ticker']:<{SYMBOL_LOG_WIDTH}} "
                     f"{(consensus_row['company'] or 'N/A')[:27]:<28} "
                     f"{_format_score(horizon_data.get('score')):>10} "
                     f"{str(horizon_data.get('direction') or 'N/A'):<10} "
@@ -8880,7 +8901,7 @@ def _log_earnings_priority_report_for_profile(
         log_to_file(log_file, "=" * 220)
         # Header: base identity columns + per-horizon (Score Dir Conf Cov)
         col_header = (
-            f"{'Days':>6} {'Earnings':<11} {'Ticker':<12} {'Company':<28} "
+            f"{'Days':>6} {'Earnings':<11} {'Ticker':<{SYMBOL_LOG_WIDTH}} {'Company':<28} "
             f"{'Sector':<22} {'MCap':>14}"
         )
         for h_name in horizon_names:
@@ -8917,7 +8938,7 @@ def _log_earnings_priority_report_for_profile(
                     log_file,
                     f"{entry['days_until']:>6.1f} "
                     f"{_format_earnings_date(entry['next_earnings_dt']):<11} "
-                    f"{consensus_row['ticker']:<12} "
+                    f"{consensus_row['ticker']:<{SYMBOL_LOG_WIDTH}} "
                     f"{(consensus_row['company'] or 'N/A')[:27]:<28} "
                     f"{str(row.get('sector') or 'N/A')[:21]:<22} "
                     f"{_format_market_cap(consensus_row['market_cap']):>14}"
@@ -8960,7 +8981,7 @@ def _log_earnings_priority_report_for_profile(
     else:
         log_to_file(
             log_file,
-            f"{'Days':>6} {'Earnings':<11} {'Ticker':<12} {'Company':<28} "
+            f"{'Days':>6} {'Earnings':<11} {'Ticker':<{SYMBOL_LOG_WIDTH}} {'Company':<28} "
             f"{'DaysScore':>10} {'Dir':<11} {'Conf':>7} {'Cov':>6}",
         )
         log_to_file(log_file, "-" * 220)
@@ -8988,7 +9009,7 @@ def _log_earnings_priority_report_for_profile(
                     log_file,
                     f"{entry['days_until']:>6.1f} "
                     f"{_format_earnings_date(entry['next_earnings_dt']):<11} "
-                    f"{consensus_row['ticker']:<12} "
+                    f"{consensus_row['ticker']:<{SYMBOL_LOG_WIDTH}} "
                     f"{(consensus_row['company'] or 'N/A')[:27]:<28} "
                     f"{_format_score(h.get('score')):>10} "
                     f"{str(h.get('direction') or 'N/A'):<11} "
