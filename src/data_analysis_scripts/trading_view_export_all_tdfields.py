@@ -10,6 +10,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +19,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 import uuid
 
 import requests
+from requests.exceptions import ChunkedEncodingError, ConnectionError, HTTPError, Timeout
 
 SRC_DIR = Path(__file__).resolve().parents[1]
 if str(SRC_DIR) not in sys.path:
@@ -42,6 +44,9 @@ OUTPUT_DIR = Path(
 DUCKDB_OUTPUT_DIR = OUTPUT_DIR / "trading_view_all_fields_data"
 CHUNK_SIZE = 600
 REQUEST_TIMEOUT_SECONDS = 60
+REQUEST_MAX_RETRIES = 6
+REQUEST_RETRY_BACKOFF_SECONDS = 2.0
+_RETRYABLE_HTTP_STATUS_CODES = frozenset({429, 502, 503, 504})
 SCAN_RANGE_END = 100_000
 DB_MERGE_BATCH_SIZE = 500
 ALL_FIELDS_API_REQUEST_PROVENANCE_SCHEMA_VERSION = (
@@ -258,23 +263,125 @@ def _collect_all_fields_code_version_metadata() -> dict[str, Any]:
     }
 
 
+def _scan_error_is_dns_failure(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return (
+        "getaddrinfo failed" in message
+        or "name or service not known" in message
+        or "nodename nor servname provided" in message
+        or "name resolution" in message
+    )
+
+
+def _scan_connectivity_hint(exc: BaseException) -> str:
+    if _scan_error_is_dns_failure(exc):
+        return (
+            "Could not resolve scanner.tradingview.com (DNS/network). "
+            "Check internet connection, VPN, proxy, firewall, and DNS settings, "
+            "then retry."
+        )
+    if isinstance(exc, Timeout):
+        return (
+            "TradingView scan request timed out. Retry when the network is stable "
+            "or increase REQUEST_TIMEOUT_SECONDS."
+        )
+    if isinstance(exc, ChunkedEncodingError):
+        return (
+            "TradingView closed the HTTP response early. This is usually transient; "
+            "the export will retry automatically."
+        )
+    return "Retry when the network is stable."
+
+
+def _verify_tradingview_scan_connectivity(
+    client: ApiTradingViewClient,
+    *,
+    timeout: int = 15,
+) -> None:
+    probe_payload = {
+        "columns": ["name", "close"],
+        "markets": ["america"],
+        "range": [0, 1],
+        "ignore_unknown_fields": True,
+    }
+    try:
+        response = requests.post(
+            TRADINGVIEW_GLOBAL_SCAN_URL,
+            headers=client.headers,
+            data=json.dumps(probe_payload),
+            timeout=timeout,
+        )
+        response.raise_for_status()
+    except Exception as exc:
+        hint = _scan_connectivity_hint(exc)
+        raise ConnectionError(
+            f"TradingView scan API is not reachable before export started. {hint}"
+        ) from exc
+
+
+def _is_retryable_scan_error(exc: BaseException) -> bool:
+    if isinstance(exc, (ChunkedEncodingError, ConnectionError, Timeout)):
+        return True
+    if isinstance(exc, HTTPError) and exc.response is not None:
+        return exc.response.status_code in _RETRYABLE_HTTP_STATUS_CODES
+    return False
+
+
 def _fetch_scan_chunk(
     client: ApiTradingViewClient,
     columns: list[str],
     timeout: int = REQUEST_TIMEOUT_SECONDS,
+    *,
+    max_retries: int = REQUEST_MAX_RETRIES,
+    retry_backoff_seconds: float = REQUEST_RETRY_BACKOFF_SECONDS,
+    session: requests.Session | None = None,
 ) -> list[dict[str, Any]]:
     payload = _build_scan_payload(columns)
-    response = requests.post(
-        TRADINGVIEW_GLOBAL_SCAN_URL,
-        headers=client.headers,
-        data=json.dumps(payload),
-        timeout=timeout,
-    )
-    response.raise_for_status()
+    request_session = session or requests.Session()
+    owns_session = session is None
+    last_error: BaseException | None = None
 
-    response_payload = response.json()
-    mapped_payload = ApiTradingViewClient._attach_mapped_rows(response_payload, columns)
-    return list(mapped_payload.get("data", []))
+    try:
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = request_session.post(
+                    TRADINGVIEW_GLOBAL_SCAN_URL,
+                    headers=client.headers,
+                    data=json.dumps(payload),
+                    timeout=timeout,
+                )
+                response.raise_for_status()
+                response_payload = response.json()
+                mapped_payload = ApiTradingViewClient._attach_mapped_rows(
+                    response_payload, columns
+                )
+                return list(mapped_payload.get("data", []))
+            except Exception as exc:
+                if not _is_retryable_scan_error(exc) or attempt >= max_retries:
+                    hint = _scan_connectivity_hint(exc)
+                    raise ConnectionError(
+                        "TradingView scan chunk failed after "
+                        f"{attempt}/{max_retries} attempts "
+                        f"({len(columns)} columns). {hint}"
+                    ) from exc
+                last_error = exc
+                sleep_seconds = retry_backoff_seconds * (2 ** (attempt - 1))
+                hint = _scan_connectivity_hint(exc)
+                print(
+                    "TradingView scan chunk failed "
+                    f"(attempt {attempt}/{max_retries}, {len(columns)} columns): "
+                    f"{type(exc).__name__}: {exc}. "
+                    f"Retrying in {sleep_seconds:.1f}s... {hint}",
+                    flush=True,
+                )
+                time.sleep(sleep_seconds)
+    finally:
+        if owns_session:
+            request_session.close()
+
+    if last_error is not None:
+        raise last_error
+    return []
 
 
 def _build_all_fields_api_request_metadata(
@@ -1738,6 +1845,8 @@ def export_all_tradingview_fields(
         raise ValueError(f"No TradingView field names found in {field_catalog_csv}")
 
     client = ApiTradingViewClient(user_agent=USER_AGENT)
+    print("Checking TradingView scan API connectivity...", flush=True)
+    _verify_tradingview_scan_connectivity(client, timeout=min(15, timeout))
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         db_path = Path(tmp_dir) / "merge_buffer.db"
@@ -1751,11 +1860,15 @@ def export_all_tradingview_fields(
             ")"
         )
 
-        for field_chunk in _chunked(field_names, chunk_size):
-            chunk_rows = _fetch_scan_chunk(
-                client=client, columns=field_chunk, timeout=timeout
-            )
-            _merge_chunk_to_db(conn, chunk_rows)
+        with requests.Session() as session:
+            for field_chunk in _chunked(field_names, chunk_size):
+                chunk_rows = _fetch_scan_chunk(
+                    client=client,
+                    columns=field_chunk,
+                    timeout=timeout,
+                    session=session,
+                )
+                _merge_chunk_to_db(conn, chunk_rows)
 
         output_file = _build_output_file_name(output_dir)
         _stream_csv_from_db(conn, field_names, output_file)
@@ -1814,6 +1927,8 @@ def export_all_tradingview_fields_duckdb(
     parquet_exports: dict[str, Path] = {}
 
     client = ApiTradingViewClient(user_agent=USER_AGENT)
+    print("Checking TradingView scan API connectivity...", flush=True)
+    _verify_tradingview_scan_connectivity(client, timeout=min(15, timeout))
     with tempfile.TemporaryDirectory() as tmp_dir:
         merge_db_path = Path(tmp_dir) / "merge_buffer.db"
         conn = sqlite3.connect(str(merge_db_path))
@@ -1827,13 +1942,21 @@ def export_all_tradingview_fields_duckdb(
         )
 
         try:
-            for field_chunk in field_chunks:
-                chunk_rows = _fetch_scan_chunk(
-                    client=client,
-                    columns=field_chunk,
-                    timeout=timeout,
-                )
-                _merge_chunk_to_db(conn, chunk_rows)
+            with requests.Session() as session:
+                for chunk_index, field_chunk in enumerate(field_chunks, start=1):
+                    print(
+                        f"Fetching TradingView all-fields chunk "
+                        f"{chunk_index}/{len(field_chunks)} "
+                        f"({len(field_chunk)} columns)...",
+                        flush=True,
+                    )
+                    chunk_rows = _fetch_scan_chunk(
+                        client=client,
+                        columns=field_chunk,
+                        timeout=timeout,
+                        session=session,
+                    )
+                    _merge_chunk_to_db(conn, chunk_rows)
 
             row_count = _count_merged_rows(conn)
 

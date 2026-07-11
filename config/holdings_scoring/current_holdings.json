@@ -4,7 +4,7 @@
   "portfolio_currency": "USD",
   "description": "Current book — set invested_sum/average_price in their currencies; portfolio aggregates in USD. Use optional symbol (EXCHANGE:TICKER) when ticker alone is ambiguous.",
   "cash_position": {
-    "value": 12850,
+    "value": 11100,
     "currency": "USD"
   },
   "holdings": [
@@ -25,15 +25,6 @@
       "price_currency": "USD"
     },
     {
-      "ticker": "STMPA",
-      "sleeve": "core",
-      "invested_sum": 2700.02,
-      "invested_currency": "EUR",
-      "average_price": 43.98,
-      "price_currency": "EUR",
-      "quote_currency": "EUR"
-    },
-    {
       "ticker": "GOOG",
       "sleeve": "core",
       "invested_sum": 1999.72,
@@ -52,27 +43,27 @@
     {
       "ticker": "DUOL",
       "sleeve": "core",
-      "invested_sum": 6497.42,
+      "invested_sum": 7497.42,
       "invested_currency": "USD",
-      "average_price": 121.28,
+      "average_price": 120.55,
       "price_currency": "USD",
       "notes": "Duolingo"
     },
     {
       "ticker": "TEAM",
       "sleeve": "core",
-      "invested_sum": 3682.02,
+      "invested_sum": 4682.02,
       "invested_currency": "USD",
-      "average_price": 86.22,
+      "average_price": 85.42,
       "price_currency": "USD",
       "notes": "Atlassian"
     },
     {
       "ticker": "PATH",
       "sleeve": "core",
-      "invested_sum": 1999.1,
+      "invested_sum": 3999.1,
       "invested_currency": "USD",
-      "average_price": 11.39,
+      "average_price": 11.31,
       "price_currency": "USD",
       "notes": "UiPath"
     },
@@ -88,9 +79,9 @@
     {
       "ticker": "VEEV",
       "sleeve": "core",
-      "invested_sum": 3596.77,
+      "invested_sum": 5495.77,
       "invested_currency": "USD",
-      "average_price": 175.85,
+      "average_price": 177.75,
       "price_currency": "USD",
       "notes": "Veeva Systems"
     },

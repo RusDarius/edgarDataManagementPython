@@ -3,7 +3,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from data_analysis_scripts.trading_view_export_all_tdfields import (
     _build_all_fields_daily_storage_layout,
@@ -527,6 +527,56 @@ class TestBackfillHistoricalAllFieldsCsv(unittest.TestCase):
             self.assertEqual(rows[0]["close"], "10.5")
             self.assertIsNone(rows[0]["AnalystRating"])
             self.assertIsNone(rows[0]["volume"])
+
+
+class TestFetchScanChunkRetry(unittest.TestCase):
+    def test_scan_connectivity_hint_for_dns_failure(self) -> None:
+        from data_analysis_scripts.trading_view_export_all_tdfields import (
+            _scan_connectivity_hint,
+            _scan_error_is_dns_failure,
+        )
+        from requests.exceptions import ConnectionError
+
+        exc = ConnectionError(
+            "HTTPSConnectionPool(host='scanner.tradingview.com', port=443): "
+            "Max retries exceeded ... Failed to establish a new connection: "
+            "[Errno 11001] getaddrinfo failed"
+        )
+        self.assertTrue(_scan_error_is_dns_failure(exc))
+        self.assertIn("DNS/network", _scan_connectivity_hint(exc))
+
+    @patch(
+        "data_analysis_scripts.trading_view_export_all_tdfields.ApiTradingViewClient._attach_mapped_rows"
+    )
+    @patch("data_analysis_scripts.trading_view_export_all_tdfields.time.sleep")
+    @patch("data_analysis_scripts.trading_view_export_all_tdfields.requests.Session")
+    def test_retries_chunked_encoding_error(
+        self, session_cls_mock, sleep_mock, attach_mock
+    ):
+        from data_analysis_scripts.trading_view_export_all_tdfields import _fetch_scan_chunk
+        from data_loaders.api_tradingview_client import ApiTradingViewClient
+        from requests.exceptions import ChunkedEncodingError
+
+        session = session_cls_mock.return_value
+        success_response = Mock()
+        success_response.json.return_value = {"data": []}
+        attach_mock.return_value = {"data": [{"symbol": "NASDAQ:AAA", "close": 1.0}]}
+        session.post.side_effect = [
+            ChunkedEncodingError("Connection broken"),
+            success_response,
+        ]
+
+        rows = _fetch_scan_chunk(
+            client=ApiTradingViewClient(user_agent="test-agent"),
+            columns=["close"],
+            session=session,
+            max_retries=3,
+            retry_backoff_seconds=0.0,
+        )
+
+        self.assertEqual(session.post.call_count, 2)
+        sleep_mock.assert_called_once()
+        self.assertEqual(rows, [{"symbol": "NASDAQ:AAA", "close": 1.0}])
 
 
 if __name__ == "__main__":

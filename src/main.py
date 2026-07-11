@@ -42,6 +42,7 @@ from data_analysis_scripts.trading_view_move_prediction_multi_run_pool_aggregato
     run_move_prediction_run_pool_aggregation,
 )
 from data_analysis_scripts.trading_view_backwards_prediction_analysis import (
+    run_backwards_prediction_dense_day_spacing_analysis,
     run_backwards_prediction_sparse_weekly_analysis,
 )
 from data_analysis_scripts.trading_view_backwards_prediction_scout_report import (
@@ -95,6 +96,18 @@ from data_analysis_scripts.trading_view_move_prediction_industry_packs import (
 )
 from data_analysis_scripts.trading_view_industry_price_mover_relative_scan import (
     run_industry_price_mover_relative_scan,
+)
+from data_analysis_scripts.trading_view_execution_backtest_suite import (
+    run_existing_backwards_execution_examples,
+    run_execution_backtest_suite,
+)
+from data_analysis_scripts.trading_view_all_fields_upside_edge_research import (
+    run_mar_jun_best_trade_ladders,
+    run_mar_jun_best_trade_ladder_realism_suite,
+    run_mar_jun_best_trade_profile_tracking,
+    run_mar_jun_trade_ladder_entry_field_diagnostics,
+    run_mar_jun_trade_ladder_entry_profile_capture,
+    run_mar_jun_upside_edge_research,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -430,6 +443,96 @@ def run_move_prediction_history_aggregation_duckdb_example() -> dict[str, object
     return aggregation_result
 
 
+def run_execution_backtest_suite_example() -> dict[str, object]:
+    result = run_execution_backtest_suite()
+    print(f"Execution backtest database: {result['database_path']}")
+    print(f"Execution suite output: {result['output_dir']}")
+    print(f"Execution manifest: {result['manifest_path']}")
+    print(f"Execution summary CSV: {result['execution']['summary_csv']}")
+    for rule_id, path in result["execution"].get("trade_csv_paths", {}).items():
+        print(f"Positions CSV ({rule_id}): {path}")
+    return result
+
+
+def run_existing_backwards_execution_examples_example() -> dict[str, object]:
+    result = run_existing_backwards_execution_examples()
+    print(f"Existing backwards execution output: {result['output_dir']}")
+    print(f"Existing backwards guidance report: {result['guidance_report']}")
+    print(f"Existing backwards summary CSV: {result['execution']['summary_csv']}")
+    print(
+        "Existing backwards profile/rule summary CSV: "
+        f"{result['execution']['profile_rule_summary_csv']}"
+    )
+    return result
+
+
+def run_all_fields_upside_edge_research_example() -> dict[str, object]:
+    result = run_mar_jun_upside_edge_research()
+    print(f"Upside field candidate CSV: {result['candidate_csv']}")
+    print(f"Upside field candidate report: {result['report_md']}")
+    print(f"Upside field candidate manifest: {result['manifest_path']}")
+    return result
+
+
+def run_mar_jun_best_trade_profile_tracking_example() -> dict[str, object]:
+    result = run_mar_jun_best_trade_profile_tracking()
+    print(f"Best-trade tracking report: {result['report_md']}")
+    print(f"Best-trade tracking CSV: {result['best_trades_csv']}")
+    print(f"Indicator hindsight summary CSV: {result['indicator_summary_csv']}")
+    print(f"Profile capture summary CSV: {result['profile_summary_csv']}")
+    return result
+
+
+def run_mar_jun_best_trade_ladders_example() -> dict[str, object]:
+    result = run_mar_jun_best_trade_ladders()
+    print(f"Best-trade ladder report: {result['report_md']}")
+    print(f"Best-trade ladder ranking CSV: {result['ranking_csv']}")
+    print(f"Best-trade ladder trades CSV: {result['trades_csv']}")
+    return result
+
+
+def run_mar_jun_best_trade_ladder_realism_suite_example() -> dict[str, object]:
+    result = run_mar_jun_best_trade_ladder_realism_suite()
+    print(f"Trade ladder realism report: {result['report_md']}")
+    print(f"Trade ladder realism summary CSV: {result['summary_csv']}")
+    return result
+
+
+def run_mar_jun_trade_ladder_entry_profile_capture_example() -> dict[str, object]:
+    result = run_mar_jun_trade_ladder_entry_profile_capture()
+    print(f"Trade ladder profile-entry report: {result['report_md']}")
+    print(f"Trade ladder profile-entry summary CSV: {result['summary_csv']}")
+    print(f"Trade ladder profile-entry detail CSV: {result['detail_csv']}")
+    return result
+
+
+def run_mar_jun_trade_ladder_entry_field_diagnostics_example() -> dict[str, object]:
+    result = run_mar_jun_trade_ladder_entry_field_diagnostics()
+    print(f"Trade ladder entry-field report: {result['report_md']}")
+    print(f"Trade ladder entry-field summary CSV: {result['summary_csv']}")
+    print(f"Trade ladder entry-field detail CSV: {result['detail_csv']}")
+    return result
+
+
+def run_dense_backwards_every_2_days_example() -> dict[str, object]:
+    result = run_backwards_prediction_dense_day_spacing_analysis(
+        start_day_label="29_03_2026",
+        spacing_days=2,
+        min_scan_data_count=3000,
+        anchor_min_scan_data_count=None,
+        profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+        include_consensus=True,
+        include_components=False,
+        duckdb_threads=20,
+        memory_gb=28,
+    )
+    print(f"Dense backwards database: {result['database_path']}")
+    print(f"Dense backwards output: {result['output_dir']}")
+    print(f"Dense backwards overview log: {result['overview_log']}")
+    print(f"Dense backwards anchor summary: {result['dense_anchor_summary']}")
+    return result
+
+
 # Main entry point for running workflows and data loaders.
 def main():
     # analyze_global_price_performance(
@@ -462,61 +565,61 @@ def main():
     #     / "current_holdings.json",
     # )
 
-    # # # Model Analysis scan with duckdb storage solution
-    # move_prediction_scan_response = (
-    #     TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-    #         min_market_cap_usd=500_000_000,
-    #         markets=PREFERRED_MARKETS,
-    #     )
-    # )
-    # # Default (omit profile_suite_path): built-in 10-profile baseline — see DEFAULT_MOVE_PREDICTION_PROFILE_SUITE.
-    # # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3
-    # # Legacy 17-profile suite: MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
-    # # Realigned baseline (11 lenses): MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
-    # # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
-    # # Move-prediction suite outputs (.log / .csv / DuckDB / regime_context_focus.log)
-    # # use EXCHANGE:TICKER labels via _get_symbol_name to avoid bare-ticker collisions.
-    # base_duckdb_result = run_full_analysis_suite_duckdb(
-    #     scan_data=move_prediction_scan_response,
-    #     min_market_cap_usd=500_000_000,
-    #     include_blind_spot_sections=True,
-    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
-    #     conviction_mode_config_path=CONVICTION_MODE_CONFIG,
-    #     defer_conviction_to_earnings=True,
-    #     regime_context_config_path=REGIME_CONTEXT_CONFIG,
-    #     write_industry_packs=True,
-    # )
+    # Model Analysis scan with duckdb storage solution
+    move_prediction_scan_response = (
+        TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+            min_market_cap_usd=500_000_000,
+            markets=PREFERRED_MARKETS,
+        )
+    )
+    # Default (omit profile_suite_path): built-in 10-profile baseline — see DEFAULT_MOVE_PREDICTION_PROFILE_SUITE.
+    # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3
+    # Legacy 17-profile suite: MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
+    # Realigned baseline (11 lenses): MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
+    # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
+    # Move-prediction suite outputs (.log / .csv / DuckDB / regime_context_focus.log)
+    # use EXCHANGE:TICKER labels via _get_symbol_name to avoid bare-ticker collisions.
+    base_duckdb_result = run_full_analysis_suite_duckdb(
+        scan_data=move_prediction_scan_response,
+        min_market_cap_usd=500_000_000,
+        include_blind_spot_sections=True,
+        profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+        conviction_mode_config_path=CONVICTION_MODE_CONFIG,
+        defer_conviction_to_earnings=True,
+        regime_context_config_path=REGIME_CONTEXT_CONFIG,
+        write_industry_packs=True,
+    )
 
-    # # FOR INDUSTRY RUN SPLIT Or post-process an existing run:
-    # #   write_industry_packs_from_duckdb_run(base_duckdb_result)
+    # FOR INDUSTRY RUN SPLIT Or post-process an existing run:
+    #   write_industry_packs_from_duckdb_run(base_duckdb_result)
 
-    # # Top-10 industries by price action + better-scored peer alternatives (bang-for-buck).
-    # # Output: <run_output_dir>/industry_price_mover_relative_scan/
-    # #   industry_price_mover_relative_scan__overview.log
-    # #   industry_relative_opportunities.csv
-    # #   <industry>/industry_relative_scan.log
-    # # industry_mover_scan = run_industry_price_mover_relative_scan(
-    # #     base_duckdb_result,
-    # #     perf_field="Perf.1M",
-    # #     top_industries=10,
-    # #     price_movers_per_industry=5,
-    # #     catch_up_per_industry=10,
-    # #     alternatives_per_mover=3,
-    # # )
-    # # print(industry_mover_scan["overview_log"])
-    # # print(industry_mover_scan["opportunities_csv"])
-
-    # # # Reuses base_duckdb_result; earnings-priority and regime_context_focus logs
-    # # # share the same EXCHANGE:TICKER labels.
-    # run_full_analysis_suite_with_earnings_priority_duckdb(
-    #     scan_data=move_prediction_scan_response,
-    #     min_market_cap_usd=500_000_000,
-    #     include_blind_spot_sections=True,
-    #     base_result=base_duckdb_result,
-    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
-    #     conviction_mode_config_path=CONVICTION_MODE_CONFIG,
-    #     regime_context_config_path=REGIME_CONTEXT_CONFIG,
+    # Top-10 industries by price action + better-scored peer alternatives (bang-for-buck).
+    # Output: <run_output_dir>/industry_price_mover_relative_scan/
+    #   industry_price_mover_relative_scan__overview.log
+    #   industry_relative_opportunities.csv
+    #   <industry>/industry_relative_scan.log
+    # industry_mover_scan = run_industry_price_mover_relative_scan(
+    #     base_duckdb_result,
+    #     perf_field="Perf.1M",
+    #     top_industries=10,
+    #     price_movers_per_industry=5,
+    #     catch_up_per_industry=10,
+    #     alternatives_per_mover=3,
     # )
+    # print(industry_mover_scan["overview_log"])
+    # print(industry_mover_scan["opportunities_csv"])
+
+    # # Reuses base_duckdb_result; earnings-priority and regime_context_focus logs
+    # # share the same EXCHANGE:TICKER labels.
+    run_full_analysis_suite_with_earnings_priority_duckdb(
+        scan_data=move_prediction_scan_response,
+        min_market_cap_usd=500_000_000,
+        include_blind_spot_sections=True,
+        base_result=base_duckdb_result,
+        profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+        conviction_mode_config_path=CONVICTION_MODE_CONFIG,
+        regime_context_config_path=REGIME_CONTEXT_CONFIG,
+    )
 
     # # Price-driven decile analysis: bucket by change / Perf.5D / Perf.1M, score profiles,
     # # surface upward-move opportunities in worst performers. Output:
@@ -542,8 +645,8 @@ def main():
     # Market flow screening (paired daily DuckDB snapshots)
     # Output: logs/tradingview_analysis/market_flow_screening/runs/flow_<base>_<compare>_<id>/
     # run_market_flow_screening_suite(
-    #     base_day_label="12_06_2026",
-    #     compare_day_label="18_06_2026",
+    #     base_day_label="29_06_2026",
+    #     compare_day_label="01_07_2026",
     #     min_market_cap_usd=100_000_000,
     #     # optional refinement overrides:
     #     # max_abs_price_return_pct=150.0,
@@ -611,6 +714,12 @@ def main():
     #
     # (A) Field-level conclusions for the same scan period:
     # export_scan_period_data_set_conclusions(run_root=SCAN_PERIOD_TRACKING_RUN_ROOT)
+    # run_all_fields_upside_edge_research_example()
+    # run_mar_jun_best_trade_profile_tracking_example()
+    # run_mar_jun_best_trade_ladders_example()
+    # run_mar_jun_best_trade_ladder_realism_suite_example()
+    # run_mar_jun_trade_ladder_entry_profile_capture_example()
+    # run_mar_jun_trade_ladder_entry_field_diagnostics_example()
     #
     # (A2) Field taxonomy splits (meaning / usage / relevance):
     # from data_analysis_scripts.trading_view_field_taxonomy_builder import build_trading_view_field_taxonomy
@@ -838,6 +947,19 @@ def main():
     # print(backwards_result["anchor_plan_summary"])
     # print(Path(backwards_result["overview_log"]).read_text(encoding="utf-8"))
 
+    # Denser execution backtest suite: runs_per_week=5 backwards rebuild,
+    # top-50/top-100 cohorts, fresh inclusion, and trade-level positions CSVs.
+    # run_execution_backtest_suite_example()
+
+    # Existing sparse backwards run: entry/exit rule examples, cohorts,
+    # positions CSVs, and a small guidance report.
+    # run_existing_backwards_execution_examples_example()
+
+    # Dense backwards build: resolves unique anchors on a 2-day grid from the
+    # Mar-29 history start through the latest eligible current run. Heavier than
+    # the weekly sparse sampler; components are disabled to control size.
+    # run_dense_backwards_every_2_days_example()
+
     # Weekly sparse-anchor progression (2-3 move-prediction runs per ISO week).
     # Oldest anchor comes from the move-prediction run index under duckdb_runs/
     # (currently week=13 backfill from 2026-03-29; day 01_04_2026 is included).
@@ -863,22 +985,26 @@ def main():
     # symbol_plot_result = plot_backwards_progression_for_symbols(
     #     run_folder_pattern="backwards_prediction_analysis_20260625_1621_utc_b00e6c1d",
     #     symbols=[
-    #         "MU",
-    #         "AYI",
-    #         "GLW",
-    #         "EZJ",
-    #         "SNDK",
-    #         "HFD",
-    #         "TER",
-    #         "AMS",
-    #         "AMAT",
-    #         "BLZE",
-    #         "ONTO",
-    #         "KLIC",
-    #         "FLEX",
-    #         "LGND",
-    #         "CDNL",
-    #         "BB",
+    #         "NASDAQ:RMBS",
+    #         "NASDAQ:ALAB",
+    #         "NASDAQ:PLTR",
+    #         "NASDAQ:MDB",
+    #         "NYSE:HUBS",
+    #         "NASDAQ:MU",
+    #         "NASDAQ:FORM",
+    #         "NASDAQ:ENPH",
+    #         "AMEX:UEC",
+    #         "NYSE:CVNA",
+    #         "NYSE:SMR",
+    #         "NASDAQ:CRDO",
+    #         "NYSE:KVYO",
+    #         "NYSE:PATH",
+    #         "NASDAQ:PGY",
+    #         "NASDAQ:DOCU",
+    #         "NYSE:IOT",
+    #         "NYSE:GWRE",
+    #         "NYSE:FIG",
+    #         "NASDAQ:WDAY",
     #     ],
     #     profile_suite_path=PROJECT_ROOT
     #     / "config"

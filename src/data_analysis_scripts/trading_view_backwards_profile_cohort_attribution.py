@@ -17,17 +17,21 @@ from data_analysis_scripts.trading_view_backwards_prediction_progression_viz imp
 from data_analysis_scripts.trading_view_backwards_prediction_scout_report import (
     resolve_backwards_analysis_database,
 )
-from db.trading_view_backwards_prediction_duckdb import query_backwards_prediction_duckdb
+from db.trading_view_backwards_prediction_duckdb import (
+    query_backwards_prediction_duckdb,
+)
 
 AttributionMethod = Literal[
     "period_boundary",
     "inclusion_entry",
     "hold_until_rank_exit",
+    "fresh_inclusion",
 ]
 RankScope = Literal["global", "min1bil"]
 
 DEFAULT_TOP_N = 250
 DEFAULT_MIN_MARKET_CAP_USD = 1_000_000_000.0
+DEFAULT_FRESH_RANK_THRESHOLD = 250
 
 
 @dataclass(frozen=True)
@@ -65,6 +69,12 @@ class SymbolWindowAttribution:
     exit_close: float | None = None
     hold_until_rank_exit_return_pct: float | None = None
     exited_by_rank: bool = False
+    fresh_entry_anchor_name: str | None = None
+    fresh_entry_prior_anchor_name: str | None = None
+    fresh_entry_rank: int | None = None
+    fresh_entry_prior_rank: int | None = None
+    fresh_entry_close: float | None = None
+    fresh_inclusion_return_pct: float | None = None
 
 
 @dataclass(frozen=True)
@@ -158,12 +168,16 @@ def _load_anchor_observations(
                 company=_normalize_text(row.get("company")),
                 close=float(close) if close is not None else None,
                 score=float(row["score"]) if row.get("score") is not None else None,
-                profile_rank=int(row["profile_rank"])
-                if row.get("profile_rank") is not None
-                else None,
-                market_cap_basic=float(row["market_cap_basic"])
-                if row.get("market_cap_basic") is not None
-                else None,
+                profile_rank=(
+                    int(row["profile_rank"])
+                    if row.get("profile_rank") is not None
+                    else None
+                ),
+                market_cap_basic=(
+                    float(row["market_cap_basic"])
+                    if row.get("market_cap_basic") is not None
+                    else None
+                ),
             )
         )
     return observations
@@ -206,17 +220,27 @@ def _merge_observations_by_bare_ticker(
             symbol=preferred_symbol,
             bare_ticker=bare_ticker,
             company=next(
-                (_normalize_text(row.company) for row in group if _normalize_text(row.company)),
+                (
+                    _normalize_text(row.company)
+                    for row in group
+                    if _normalize_text(row.company)
+                ),
                 None,
             ),
             close=merged_close,
-            score=max((row.score for row in group if row.score is not None), default=None),
+            score=max(
+                (row.score for row in group if row.score is not None), default=None
+            ),
             profile_rank=min(
                 (row.profile_rank for row in group if row.profile_rank is not None),
                 default=None,
             ),
             market_cap_basic=max(
-                (row.market_cap_basic for row in group if row.market_cap_basic is not None),
+                (
+                    row.market_cap_basic
+                    for row in group
+                    if row.market_cap_basic is not None
+                ),
                 default=None,
             ),
         )
@@ -259,7 +283,9 @@ def _build_min1bil_ranks(
         for row in rows:
             bare = row.bare_ticker.upper()
             existing = bare_best.get(bare)
-            if existing is None or (row.score or float("-inf")) > (existing.score or float("-inf")):
+            if existing is None or (row.score or float("-inf")) > (
+                existing.score or float("-inf")
+            ):
                 bare_best[bare] = row
         ordered = sorted(
             bare_best.values(),
@@ -304,6 +330,7 @@ def compute_symbol_window_attributions(
     start_anchor_name: str | None = None,
     end_anchor_name: str | None = None,
     exit_rank_threshold: int | None = None,
+    fresh_rank_threshold: int = DEFAULT_FRESH_RANK_THRESHOLD,
 ) -> list[SymbolWindowAttribution]:
     resolved_db = Path(database_path)
     if profile_names is None and profile_suite_path is not None:
@@ -330,7 +357,9 @@ def compute_symbol_window_attributions(
     company_by_key: dict[tuple[str, str], str | None] = {}
     for row in observations:
         if row.company:
-            company_by_key[(row.profile_name.lower(), row.bare_ticker.upper())] = row.company
+            company_by_key[(row.profile_name.lower(), row.bare_ticker.upper())] = (
+                row.company
+            )
 
     results: list[SymbolWindowAttribution] = []
     for (profile_name, bare_ticker), timeline in sorted(merged.items()):
@@ -339,7 +368,11 @@ def compute_symbol_window_attributions(
 
         if start_anchor_name is not None:
             start_index = next(
-                (index for index, row in enumerate(timeline) if row.anchor_name == start_anchor_name),
+                (
+                    index
+                    for index, row in enumerate(timeline)
+                    if row.anchor_name == start_anchor_name
+                ),
                 None,
             )
             if start_index is None:
@@ -368,7 +401,11 @@ def compute_symbol_window_attributions(
         ranks = [
             rank
             for row in timeline
-            if (rank := _effective_rank(row, rank_scope=rank_scope, min1bil_ranks=min1bil_ranks))
+            if (
+                rank := _effective_rank(
+                    row, rank_scope=rank_scope, min1bil_ranks=min1bil_ranks
+                )
+            )
             is not None
         ]
         best_rank = min(ranks) if ranks else None
@@ -376,15 +413,48 @@ def compute_symbol_window_attributions(
 
         entry_row = None
         for row in timeline:
-            rank = _effective_rank(row, rank_scope=rank_scope, min1bil_ranks=min1bil_ranks)
+            rank = _effective_rank(
+                row, rank_scope=rank_scope, min1bil_ranks=min1bil_ranks
+            )
             if rank is not None and rank <= top_n and row.close is not None:
                 entry_row = row
                 break
         if entry_row is None:
             entry_row = first_row
 
+        fresh_entry_row: AnchorObservation | None = None
+        fresh_prior_row: AnchorObservation | None = None
+        fresh_entry_rank: int | None = None
+        fresh_prior_rank: int | None = None
+        previous_row: AnchorObservation | None = None
+        previous_rank: int | None = None
+        for row in timeline:
+            rank = _effective_rank(
+                row, rank_scope=rank_scope, min1bil_ranks=min1bil_ranks
+            )
+            if (
+                rank is not None
+                and rank <= top_n
+                and row.close is not None
+                and previous_row is not None
+                and previous_rank is not None
+                and previous_rank > fresh_rank_threshold
+            ):
+                fresh_entry_row = row
+                fresh_prior_row = previous_row
+                fresh_entry_rank = rank
+                fresh_prior_rank = previous_rank
+                break
+            previous_row = row
+            previous_rank = rank
+
         period_return_pct = _pct_return(last_row.close, first_row.close)
         inclusion_return_pct = _pct_return(last_row.close, entry_row.close)
+        fresh_inclusion_return_pct = (
+            _pct_return(last_row.close, fresh_entry_row.close)
+            if fresh_entry_row is not None and fresh_entry_row.close is not None
+            else None
+        )
 
         exit_anchor_name: str | None = None
         exit_close: float | None = None
@@ -402,7 +472,11 @@ def compute_symbol_window_attributions(
                     rank_scope=rank_scope,
                     min1bil_ranks=min1bil_ranks,
                 )
-                if rank is not None and rank > exit_rank_threshold and row.close is not None:
+                if (
+                    rank is not None
+                    and rank > exit_rank_threshold
+                    and row.close is not None
+                ):
                     exit_row = row
                     exited_by_rank = True
                     break
@@ -434,6 +508,18 @@ def compute_symbol_window_attributions(
                 exit_close=exit_close,
                 hold_until_rank_exit_return_pct=hold_until_rank_exit_return_pct,
                 exited_by_rank=exited_by_rank,
+                fresh_entry_anchor_name=(
+                    fresh_entry_row.anchor_name if fresh_entry_row is not None else None
+                ),
+                fresh_entry_prior_anchor_name=(
+                    fresh_prior_row.anchor_name if fresh_prior_row is not None else None
+                ),
+                fresh_entry_rank=fresh_entry_rank,
+                fresh_entry_prior_rank=fresh_prior_rank,
+                fresh_entry_close=(
+                    fresh_entry_row.close if fresh_entry_row is not None else None
+                ),
+                fresh_inclusion_return_pct=fresh_inclusion_return_pct,
             )
         )
     return results
@@ -460,7 +546,11 @@ def summarize_profile_cohorts(
     summaries: list[ProfileCohortSummary] = []
     profiles = sorted({row.profile_name for row in symbol_rows})
     for profile_name in profiles:
-        cohort = [row for row in symbol_rows if row.profile_name == profile_name and row.in_top_n]
+        cohort = [
+            row
+            for row in symbol_rows
+            if row.profile_name == profile_name and row.in_top_n
+        ]
         for method in resolved_methods:
             returns: list[float] = []
             for row in cohort:
@@ -472,6 +562,11 @@ def summarize_profile_cohorts(
                     value = row.hold_until_rank_exit_return_pct
                     if value is None:
                         continue
+                elif method == "fresh_inclusion":
+                    entry_close = row.fresh_entry_close
+                    value = row.fresh_inclusion_return_pct
+                    if entry_close is None or value is None:
+                        continue
                 else:
                     entry_close = row.entry_close
                     value = row.inclusion_return_pct
@@ -481,7 +576,9 @@ def summarize_profile_cohorts(
                     continue
                 returns.append(value)
             win_rate = (
-                sum(1 for value in returns if value > 0) / len(returns) if returns else None
+                sum(1 for value in returns if value > 0) / len(returns)
+                if returns
+                else None
             )
             summaries.append(
                 ProfileCohortSummary(
@@ -515,6 +612,8 @@ def run_backwards_profile_cohort_attribution(
     start_anchor_name: str | None = None,
     end_anchor_name: str | None = None,
     exit_rank_threshold: int | None = None,
+    fresh_rank_threshold: int = DEFAULT_FRESH_RANK_THRESHOLD,
+    methods: Sequence[AttributionMethod] | None = None,
 ) -> dict[str, Any]:
     """
     Rebuild memo-style top-N profile cohort returns from a backwards analysis DuckDB.
@@ -524,6 +623,8 @@ def run_backwards_profile_cohort_attribution(
     - ``inclusion_entry``: same cohort; return from first top-N inclusion anchor→last anchor close.
     - ``hold_until_rank_exit``: enter at first top-N inclusion; exit at first anchor where
       rank exceeds ``exit_rank_threshold``, otherwise last anchor close.
+        - ``fresh_inclusion``: enter at first top-N inclusion whose prior anchor rank was above
+            ``fresh_rank_threshold``; exit at last anchor close.
     """
     started = time.perf_counter()
     resolved_db = resolve_backwards_analysis_database(
@@ -542,6 +643,7 @@ def run_backwards_profile_cohort_attribution(
         start_anchor_name=start_anchor_name,
         end_anchor_name=end_anchor_name,
         exit_rank_threshold=exit_rank_threshold,
+        fresh_rank_threshold=fresh_rank_threshold,
     )
     summaries = summarize_profile_cohorts(
         symbol_rows,
@@ -550,6 +652,7 @@ def run_backwards_profile_cohort_attribution(
         min_entry_close=min_entry_close,
         max_abs_return_pct=max_abs_return_pct,
         exit_rank_threshold=exit_rank_threshold,
+        methods=methods,
     )
 
     run_output_dir = (
@@ -576,6 +679,8 @@ def run_backwards_profile_cohort_attribution(
                 "start_anchor_name": start_anchor_name,
                 "end_anchor_name": end_anchor_name,
                 "exit_rank_threshold": exit_rank_threshold,
+                "fresh_rank_threshold": fresh_rank_threshold,
+                "methods": list(methods) if methods is not None else None,
                 "symbol_count": len(symbol_rows),
                 "summaries": [asdict(row) for row in summaries],
             },
@@ -618,6 +723,12 @@ def _write_symbol_csv(path: Path, rows: Sequence[SymbolWindowAttribution]) -> No
         "exit_close",
         "hold_until_rank_exit_return_pct",
         "exited_by_rank",
+        "fresh_entry_anchor_name",
+        "fresh_entry_prior_anchor_name",
+        "fresh_entry_rank",
+        "fresh_entry_prior_rank",
+        "fresh_entry_close",
+        "fresh_inclusion_return_pct",
     ]
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=headers)
@@ -668,9 +779,15 @@ def format_profile_cohort_markdown_table(
         "| Profile | Cohort n | Avg return | Median return | Win rate |",
         "|---|---:|---:|---:|---:|",
     ]
-    for row in sorted(rows, key=lambda item: item.avg_return_pct or float("-inf"), reverse=True):
+    for row in sorted(
+        rows, key=lambda item: item.avg_return_pct or float("-inf"), reverse=True
+    ):
         avg = f"{row.avg_return_pct:.1f}%" if row.avg_return_pct is not None else "—"
-        med = f"{row.median_return_pct:.1f}%" if row.median_return_pct is not None else "—"
+        med = (
+            f"{row.median_return_pct:.1f}%"
+            if row.median_return_pct is not None
+            else "—"
+        )
         win = f"{row.win_rate * 100:.1f}%" if row.win_rate is not None else "—"
         lines.append(
             f"| {row.profile_name} | {row.cohort_size} | {avg} | {med} | {win} |"
@@ -681,6 +798,7 @@ def format_profile_cohort_markdown_table(
 __all__ = [
     "AnchorObservation",
     "AttributionMethod",
+    "DEFAULT_FRESH_RANK_THRESHOLD",
     "ProfileCohortSummary",
     "RankScope",
     "SymbolWindowAttribution",

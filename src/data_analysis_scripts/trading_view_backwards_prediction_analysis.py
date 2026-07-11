@@ -102,9 +102,9 @@ def canonical_profiles_per_family(profiles: Iterable[str]) -> dict[str, str]:
             continue
         family = profile_family(normalized)
         existing = canonical.get(family)
-        if existing is None or profile_version_number(normalized) > profile_version_number(
-            existing
-        ):
+        if existing is None or profile_version_number(
+            normalized
+        ) > profile_version_number(existing):
             canonical[family] = normalized
     return canonical
 
@@ -127,11 +127,11 @@ def build_profile_family_variant_groups(
     profiles_root: str | None = None,
 ) -> dict[str, frozenset[str]]:
     """
-  Map profile family -> all known profile name variants (versioned + unversioned).
+    Map profile family -> all known profile name variants (versioned + unversioned).
 
-  Built from profile JSON files (profile_id + base_profile_id), suite manifests,
-  and frozen Python preset names so anchor matching can fall back to names like
-  ``breakout_long`` when the current run uses ``breakout_long_v1``.
+    Built from profile JSON files (profile_id + base_profile_id), suite manifests,
+    and frozen Python preset names so anchor matching can fall back to names like
+    ``breakout_long`` when the current run uses ``breakout_long_v1``.
     """
     root = (
         Path(profiles_root)
@@ -370,6 +370,21 @@ def _parse_target_date(value: date | str | None) -> date | None:
     return date.fromisoformat(normalized)
 
 
+def _parse_day_label_date(value: str | None) -> date | None:
+    normalized = _normalize_text(value)
+    if normalized is None:
+        return None
+    for parser in (
+        lambda text: datetime.strptime(text, "%d_%m_%Y").date(),
+        date.fromisoformat,
+    ):
+        try:
+            return parser(normalized)
+        except ValueError:
+            continue
+    return None
+
+
 def _build_snapshot_session(
     *,
     run_id: str,
@@ -420,15 +435,18 @@ def _build_run_index(
                 continue
             scan_data_count = row.get("scan_data_count")
             if min_scan_data_count is not None:
-                if scan_data_count is None or int(scan_data_count) < min_scan_data_count:
+                if (
+                    scan_data_count is None
+                    or int(scan_data_count) < min_scan_data_count
+                ):
                     continue
             entries.append(
                 RunIndexEntry(
                     run_id=run_id,
                     created_at_utc=created_at_utc,
-                    scan_data_count=int(scan_data_count)
-                    if scan_data_count is not None
-                    else None,
+                    scan_data_count=(
+                        int(scan_data_count) if scan_data_count is not None else None
+                    ),
                     database_path=database_path,
                     run_label=_normalize_text(row.get("run_label")),
                     suite_name=_normalize_text(row.get("suite_name")),
@@ -453,11 +471,11 @@ def _resolve_current_run(
 
     if current_database_path is not None:
         resolved_path = Path(current_database_path)
-        candidates = [entry for entry in run_index if entry.database_path == resolved_path]
+        candidates = [
+            entry for entry in run_index if entry.database_path == resolved_path
+        ]
         if not candidates:
-            raise ValueError(
-                f"No runs found in current database path: {resolved_path}"
-            )
+            raise ValueError(f"No runs found in current database path: {resolved_path}")
         return candidates[-1]
 
     if not run_index:
@@ -475,8 +493,7 @@ def _resolve_offset_days_anchor(
     candidates = [
         entry
         for entry in run_index
-        if entry.run_id != current.run_id
-        and entry.created_at_utc <= target_time
+        if entry.run_id != current.run_id and entry.created_at_utc <= target_time
     ]
     if not candidates:
         return None
@@ -529,9 +546,13 @@ def _resolve_run_folder_anchor(
     if len(exact_matches) == 1:
         return exact_matches[0]
     if len(exact_matches) > 1:
-        raise ValueError(f"Ambiguous run_folder {run_folder!r}; multiple exact matches found.")
+        raise ValueError(
+            f"Ambiguous run_folder {run_folder!r}; multiple exact matches found."
+        )
 
-    suffix_matches = [entry for entry in run_index if entry.run_id.lower().endswith(search)]
+    suffix_matches = [
+        entry for entry in run_index if entry.run_id.lower().endswith(search)
+    ]
     if len(suffix_matches) == 1:
         return suffix_matches[0]
 
@@ -613,14 +634,16 @@ def _resolve_weekly_anchor_iso_week_bounds(
     if end_week is not None:
         year = iso_year if iso_year is not None else default_iso_year
         if year is None:
-            raise ValueError(
-                "iso_year is required when end_week is set."
-            )
+            raise ValueError("iso_year is required when end_week is set.")
         if end_week < 1 or end_week > 53:
             raise ValueError("end_week must be between 1 and 53.")
         resolved_end = (year, end_week)
 
-    if resolved_start is not None and resolved_end is not None and resolved_start > resolved_end:
+    if (
+        resolved_start is not None
+        and resolved_end is not None
+        and resolved_start > resolved_end
+    ):
         raise ValueError(
             f"start week {resolved_start} cannot be after end week {resolved_end}."
         )
@@ -655,7 +678,10 @@ def _pick_weekly_anchor_entries(
         if max_points == 1:
             return [("only", ordered[-1])]
         selected_indexes = sorted(
-            {round(i * (len(ordered) - 1) / (max_points - 1)) for i in range(max_points)}
+            {
+                round(i * (len(ordered) - 1) / (max_points - 1))
+                for i in range(max_points)
+            }
         )
         selected: list[tuple[str, RunIndexEntry]] = []
         for idx, index in enumerate(selected_indexes):
@@ -727,7 +753,7 @@ def build_weekly_sample_anchors(
 
     anchors: list[AnchorSpec] = []
     seen_run_ids: set[str] = set()
-    for (iso_year, iso_week) in sorted(weekly_groups.keys()):
+    for iso_year, iso_week in sorted(weekly_groups.keys()):
         week_entries = sorted(
             weekly_groups[(iso_year, iso_week)],
             key=lambda item: (item.created_at_utc, item.run_id),
@@ -761,7 +787,11 @@ def resolve_weekly_progression_anchors(
     anchor_min_scan_data_count: int | None = None,
     extra_anchors: Sequence[AnchorSpec] | None = None,
 ) -> dict[str, Any]:
-    root = Path(duckdb_runs_root) if duckdb_runs_root is not None else DEFAULT_DUCKDB_RUNS_ROOT
+    root = (
+        Path(duckdb_runs_root)
+        if duckdb_runs_root is not None
+        else DEFAULT_DUCKDB_RUNS_ROOT
+    )
     current_index = _build_run_index(
         duckdb_runs_root=root,
         min_scan_data_count=min_scan_data_count,
@@ -776,13 +806,15 @@ def resolve_weekly_progression_anchors(
         current_database_path=current_database_path,
     )
     default_iso_year, _, _ = current.created_at_utc.isocalendar()
-    resolved_start_iso_week, resolved_end_iso_week = _resolve_weekly_anchor_iso_week_bounds(
-        iso_year=iso_year,
-        start_week=start_week,
-        end_week=end_week,
-        start_iso_week=start_iso_week,
-        end_iso_week=end_iso_week,
-        default_iso_year=default_iso_year,
+    resolved_start_iso_week, resolved_end_iso_week = (
+        _resolve_weekly_anchor_iso_week_bounds(
+            iso_year=iso_year,
+            start_week=start_week,
+            end_week=end_week,
+            start_iso_week=start_iso_week,
+            end_iso_week=end_iso_week,
+            default_iso_year=default_iso_year,
+        )
     )
     weekly_anchors = build_weekly_sample_anchors(
         run_index=anchor_index,
@@ -860,9 +892,11 @@ def summarize_weekly_anchor_plan(anchor_plan: dict[str, Any]) -> dict[str, Any]:
         "newest_anchor_time": newest.entry.created_at_utc.isoformat(),
         "newest_run_id": newest.entry.run_id,
         "current_run_id": getattr(current, "run_id", None),
-        "current_run_time": getattr(current, "created_at_utc", None).isoformat()
-        if getattr(current, "created_at_utc", None)
-        else None,
+        "current_run_time": (
+            getattr(current, "created_at_utc", None).isoformat()
+            if getattr(current, "created_at_utc", None)
+            else None
+        ),
     }
     for key in (
         "iso_year",
@@ -902,7 +936,11 @@ def resolve_anchor_specs(
         if spec.run_id:
             normalized_run_id = _normalize_text(spec.run_id)
             entry = next(
-                (candidate for candidate in run_index if candidate.run_id == normalized_run_id),
+                (
+                    candidate
+                    for candidate in run_index
+                    if candidate.run_id == normalized_run_id
+                ),
                 None,
             )
             resolution_method = "explicit_run_id"
@@ -1001,7 +1039,9 @@ def _resolve_included_profiles(
     current_run_id: str,
 ) -> set[str]:
     if include_profiles:
-        return {profile.strip().lower() for profile in include_profiles if profile.strip()}
+        return {
+            profile.strip().lower() for profile in include_profiles if profile.strip()
+        }
     rows = query_move_prediction_duckdb(
         current_database_path,
         """
@@ -1075,10 +1115,160 @@ def _profile_filter_sql(
 ) -> str:
     if not include_profiles:
         return ""
-    values = ", ".join(_quote_sql_literal(profile) for profile in sorted(include_profiles))
-    return (
-        f" AND LOWER(TRIM(CAST({alias}.profile_name AS VARCHAR))) IN ({values})"
+    values = ", ".join(
+        _quote_sql_literal(profile) for profile in sorted(include_profiles)
     )
+    return f" AND LOWER(TRIM(CAST({alias}.profile_name AS VARCHAR))) IN ({values})"
+
+
+def _build_dense_day_spacing_anchor_specs(
+    *,
+    run_index: Sequence[RunIndexEntry],
+    current: RunIndexEntry,
+    start_date: date,
+    end_date: date,
+    spacing_days: int,
+) -> tuple[list[AnchorSpec], list[date]]:
+    if spacing_days < 1:
+        raise ValueError("spacing_days must be at least 1.")
+    if start_date > end_date:
+        raise ValueError("start_date cannot be after end_date.")
+
+    anchors: list[AnchorSpec] = []
+    target_dates: list[date] = []
+    seen_run_ids: set[str] = set()
+    current_date = start_date
+    while current_date <= end_date:
+        target_dates.append(current_date)
+        entry = _resolve_target_date_anchor(
+            run_index=run_index,
+            current=current,
+            target_date=current_date,
+        )
+        if entry is not None and entry.run_id not in seen_run_ids:
+            seen_run_ids.add(entry.run_id)
+            anchors.append(
+                AnchorSpec(
+                    name=f"dense_{current_date.strftime('%Y_%m_%d')}",
+                    run_id=entry.run_id,
+                )
+            )
+        current_date += timedelta(days=spacing_days)
+    return anchors, target_dates
+
+
+def run_backwards_prediction_dense_day_spacing_analysis(
+    *,
+    start_day_label: str,
+    end_day_label: str | None = None,
+    spacing_days: int = 1,
+    duckdb_runs_root: str | Path | None = None,
+    current_run_id: str | None = None,
+    current_database_path: str | Path | None = None,
+    min_scan_data_count: int | None = None,
+    anchor_min_scan_data_count: int | None = None,
+    profile_suite_path: str | Path | None = None,
+    include_profiles: Sequence[str] | None = None,
+    include_consensus: bool = True,
+    include_components: bool = True,
+    output_dir: str | Path | None = None,
+    backwards_analysis_id: str | None = None,
+    export_parquet: bool = False,
+    duckdb_threads: int | None = None,
+    memory_gb: float | None = None,
+) -> dict[str, Any]:
+    """Backwards analysis using unique anchors resolved on a fixed day grid.
+
+    Unlike the weekly sparse sampler, this helper requests target dates every
+    ``spacing_days`` days across the chosen window and resolves the latest run on
+    or before each date. Duplicate run resolutions are collapsed, so the final
+    anchor set stays as dense as the indexed run history allows.
+    """
+
+    root = (
+        Path(duckdb_runs_root)
+        if duckdb_runs_root is not None
+        else DEFAULT_DUCKDB_RUNS_ROOT
+    )
+    current_index = _build_run_index(
+        duckdb_runs_root=root,
+        min_scan_data_count=min_scan_data_count,
+    )
+    anchor_index = _build_run_index(
+        duckdb_runs_root=root,
+        min_scan_data_count=anchor_min_scan_data_count,
+    )
+    current = _resolve_current_run(
+        run_index=current_index,
+        current_run_id=current_run_id,
+        current_database_path=current_database_path,
+    )
+
+    resolved_start_date = _parse_day_label_date(start_day_label)
+    if resolved_start_date is None:
+        raise ValueError(f"Invalid start_day_label: {start_day_label!r}")
+    resolved_end_date = (
+        _parse_day_label_date(end_day_label)
+        if end_day_label is not None
+        else current.snapshot_date
+    )
+    if resolved_end_date is None:
+        raise ValueError(f"Invalid end_day_label: {end_day_label!r}")
+
+    anchors, target_dates = _build_dense_day_spacing_anchor_specs(
+        run_index=anchor_index,
+        current=current,
+        start_date=resolved_start_date,
+        end_date=resolved_end_date,
+        spacing_days=spacing_days,
+    )
+    if not anchors:
+        raise ValueError(
+            "No dense anchors could be resolved for the requested day range."
+        )
+
+    profiles: list[str] | None
+    if include_profiles is not None:
+        profiles = list(include_profiles)
+    elif profile_suite_path is not None:
+        from data_analysis_scripts.trading_view_move_prediction_profile_config import (
+            resolve_profile_suite,
+        )
+
+        suite = resolve_profile_suite(profile_suite_path)
+        profiles = list(suite.get("profile_names", []))
+    else:
+        profiles = None
+
+    result = run_backwards_prediction_analysis(
+        current_run_id=current_run_id,
+        current_database_path=current_database_path,
+        anchors=anchors,
+        duckdb_runs_root=root,
+        include_profiles=profiles,
+        include_consensus=include_consensus,
+        include_components=include_components,
+        min_scan_data_count=min_scan_data_count,
+        anchor_min_scan_data_count=anchor_min_scan_data_count,
+        output_dir=output_dir,
+        backwards_analysis_id=backwards_analysis_id,
+        export_parquet=export_parquet,
+        duckdb_threads=duckdb_threads,
+        memory_gb=memory_gb,
+    )
+    result["dense_anchor_summary"] = {
+        "spacing_days": spacing_days,
+        "start_day_label": resolved_start_date.strftime("%d_%m_%Y"),
+        "end_day_label": resolved_end_date.strftime("%d_%m_%Y"),
+        "requested_target_dates_count": len(target_dates),
+        "selected_anchor_count": len(anchors),
+        "first_anchor_name": anchors[0].name if anchors else None,
+        "last_anchor_name": anchors[-1].name if anchors else None,
+    }
+    result["spacing_days"] = spacing_days
+    result["start_day_label"] = resolved_start_date.strftime("%d_%m_%Y")
+    result["end_day_label"] = resolved_end_date.strftime("%d_%m_%Y")
+    return result
 
 
 def _profile_family_filter_sql(
@@ -1088,7 +1278,9 @@ def _profile_family_filter_sql(
 ) -> str:
     if not profile_families:
         return ""
-    values = ", ".join(_quote_sql_literal(family) for family in sorted(profile_families))
+    values = ", ".join(
+        _quote_sql_literal(family) for family in sorted(profile_families)
+    )
     return f" AND {_profile_family_expr(alias=alias)} IN ({values})"
 
 
@@ -1767,8 +1959,7 @@ def _discover_anchor_profile_family_bindings(
         return []
 
     families_sql = ", ".join(
-        _quote_sql_literal(family)
-        for family in sorted(canonical_profiles_by_family)
+        _quote_sql_literal(family) for family in sorted(canonical_profiles_by_family)
     )
     rows = conn.execute(
         f"""
@@ -1829,11 +2020,11 @@ def _discover_anchor_profile_family_bindings(
                 "match_mode": (
                     "exact"
                     if anchor_name == canonical_name
-                    else "unversioned_fallback"
-                    if anchor_name == family
-                    else "family_fallback"
-                    if anchor_name
-                    else "missing"
+                    else (
+                        "unversioned_fallback"
+                        if anchor_name == family
+                        else "family_fallback" if anchor_name else "missing"
+                    )
                 ),
             }
         )
@@ -1861,7 +2052,9 @@ def _process_anchor_comparison(
         "profile_family_bindings": [],
     }
 
-    _attach_source_database(conn, database_path=current.database_path, alias=current_alias)
+    _attach_source_database(
+        conn, database_path=current.database_path, alias=current_alias
+    )
     if anchor.entry.database_path.resolve() == current.database_path.resolve():
         anchor_alias = current_alias
     else:
@@ -1881,11 +2074,13 @@ def _process_anchor_comparison(
             )
         )
 
-        row_counts["profile_family_bindings"] = _discover_anchor_profile_family_bindings(
-            conn,
-            anchor_alias=anchor_alias,
-            anchor_run_id=anchor.entry.run_id,
-            canonical_profiles_by_family=canonical_profiles_by_family,
+        row_counts["profile_family_bindings"] = (
+            _discover_anchor_profile_family_bindings(
+                conn,
+                anchor_alias=anchor_alias,
+                anchor_run_id=anchor.entry.run_id,
+                canonical_profiles_by_family=canonical_profiles_by_family,
+            )
         )
 
         if build_options.include_deltas:
@@ -1917,7 +2112,7 @@ def _process_anchor_comparison(
             build_options.include_deltas
             and build_options.include_consensus
             and _table_exists_in_attached(
-            conn, current_alias, "consensus_horizon_scores"
+                conn, current_alias, "consensus_horizon_scores"
             )
         ):
             consensus_sql = _build_consensus_horizon_delta_insert_sql(
@@ -2012,7 +2207,9 @@ def _insert_current_anchor_snapshots(
 ) -> int:
     conn = store.conn
     current_alias = "src_current_snapshot"
-    _attach_source_database(conn, database_path=current.database_path, alias=current_alias)
+    _attach_source_database(
+        conn, database_path=current.database_path, alias=current_alias
+    )
     try:
         snapshot_sql = _build_anchor_snapshot_insert_sql(
             layout=layout,
@@ -2041,7 +2238,9 @@ def _insert_current_anchor_snapshots(
         _detach_source_database(conn, alias=current_alias)
 
 
-def _export_parquet_tables(store: BackwardsPredictionDuckDBStore, parquet_dir: Path) -> None:
+def _export_parquet_tables(
+    store: BackwardsPredictionDuckDBStore, parquet_dir: Path
+) -> None:
     parquet_dir.mkdir(parents=True, exist_ok=True)
     tables = [
         "backwards_analysis_runs",
@@ -2157,24 +2356,24 @@ def run_backwards_prediction_sparse_weekly_analysis(
 ) -> dict[str, Any]:
     """Backwards analysis from oldest indexed run through today with sparse weekly anchors.
 
-    Anchors are chosen from the move-prediction DuckDB run index (``duckdb_runs/``),
-    not raw CSV folders. By default every ISO week between the oldest eligible run
-    and the current run contributes up to ``runs_per_week`` anchors on distinct days
-    (2 = first/last run of the week, 3 = evenly spread).
+      Anchors are chosen from the move-prediction DuckDB run index (``duckdb_runs/``),
+      not raw CSV folders. By default every ISO week between the oldest eligible run
+      and the current run contributes up to ``runs_per_week`` anchors on distinct days
+      (2 = first/last run of the week, 3 = evenly spread).
 
-  Week range (omit ``start_week`` to begin at the oldest indexed week)::
+    Week range (omit ``start_week`` to begin at the oldest indexed week)::
 
-        # Oldest indexed week -> current (2 anchors/week)
-        run_backwards_prediction_sparse_weekly_analysis(runs_per_week=2)
+          # Oldest indexed week -> current (2 anchors/week)
+          run_backwards_prediction_sparse_weekly_analysis(runs_per_week=2)
 
-        # From ISO week 16 of 2026 -> current (2 anchors/week)
-        run_backwards_prediction_sparse_weekly_analysis(
-            iso_year=2026, start_week=16, runs_per_week=2,
-        )
+          # From ISO week 16 of 2026 -> current (2 anchors/week)
+          run_backwards_prediction_sparse_weekly_analysis(
+              iso_year=2026, start_week=16, runs_per_week=2,
+          )
 
-    ``min_scan_data_count`` filters which run is treated as *current* (latest live
-    scan by default). ``anchor_min_scan_data_count`` (default ``None``) controls
-    anchor eligibility separately so low-row CSV backfill weeks are still anchored.
+      ``min_scan_data_count`` filters which run is treated as *current* (latest live
+      scan by default). ``anchor_min_scan_data_count`` (default ``None``) controls
+      anchor eligibility separately so low-row CSV backfill weeks are still anchored.
     """
 
     resolved_selection = selection or _default_weekly_anchor_selection(runs_per_week)
@@ -2255,7 +2454,11 @@ def run_backwards_prediction_analysis(
     del include_performance_tracking  # reserved for a later extension
 
     started = time.perf_counter()
-    root = Path(duckdb_runs_root) if duckdb_runs_root is not None else DEFAULT_DUCKDB_RUNS_ROOT
+    root = (
+        Path(duckdb_runs_root)
+        if duckdb_runs_root is not None
+        else DEFAULT_DUCKDB_RUNS_ROOT
+    )
     layout = resolve_backwards_analysis_layout(
         output_dir=output_dir,
         backwards_analysis_id=backwards_analysis_id,
@@ -2430,6 +2633,7 @@ __all__ = [
     "resolve_backwards_analysis_layout",
     "resolve_weekly_progression_anchors",
     "run_backwards_prediction_analysis",
+    "run_backwards_prediction_dense_day_spacing_analysis",
     "run_backwards_prediction_sparse_weekly_analysis",
     "summarize_weekly_anchor_plan",
     "variant_names_for_family",

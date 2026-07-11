@@ -125,13 +125,84 @@ def _build_backwards_db(temp_root: Path) -> Path:
         profile_name="breakout_long_v1",
         rows=[
             {"symbol": "NYSE:AAA", "company": "AAA Corp", "score": 2.0, "close": 200.0},
-            {"symbol": "NASDAQ:BBB", "company": "BBB Corp", "score": 1.0, "close": 110.0},
+            {
+                "symbol": "NASDAQ:BBB",
+                "company": "BBB Corp",
+                "score": 1.0,
+                "close": 110.0,
+            },
         ],
     )
     backwards_result = run_backwards_prediction_analysis(
         current_run_id="move_prediction_20260624_1400_utc_current1",
         duckdb_runs_root=temp_root / "duckdb_runs",
-        anchors=[AnchorSpec(name="a1", run_id="move_prediction_20260618_1400_utc_anchor02")],
+        anchors=[
+            AnchorSpec(name="a1", run_id="move_prediction_20260618_1400_utc_anchor02")
+        ],
+        output_dir=temp_root / "backwards_output",
+        include_consensus=False,
+        include_components=False,
+    )
+    return Path(backwards_result["database_path"])
+
+
+def _build_fresh_inclusion_backwards_db(temp_root: Path) -> Path:
+    current_time = datetime(2026, 6, 24, 14, 0, tzinfo=timezone.utc)
+    _build_weekly_db(
+        temp_root=temp_root,
+        week_name="week=23",
+        run_id="move_prediction_20260604_1400_utc_anchor01",
+        created_at_utc=current_time - timedelta(days=20),
+        profile_name="breakout_long_v1",
+        rows=[
+            {"symbol": "NYSE:AAA", "company": "AAA Corp", "score": 0.5, "close": 100.0},
+            {
+                "symbol": "NASDAQ:BBB",
+                "company": "BBB Corp",
+                "score": 1.0,
+                "close": 100.0,
+            },
+        ],
+    )
+    _build_weekly_db(
+        temp_root=temp_root,
+        week_name="week=24",
+        run_id="move_prediction_20260611_1400_utc_anchor02",
+        created_at_utc=current_time - timedelta(days=13),
+        profile_name="breakout_long_v1",
+        rows=[
+            {"symbol": "NYSE:AAA", "company": "AAA Corp", "score": 2.0, "close": 120.0},
+            {
+                "symbol": "NASDAQ:BBB",
+                "company": "BBB Corp",
+                "score": 1.0,
+                "close": 100.0,
+            },
+        ],
+    )
+    _build_weekly_db(
+        temp_root=temp_root,
+        week_name="week=25",
+        run_id="move_prediction_20260624_1400_utc_current1",
+        created_at_utc=current_time,
+        profile_name="breakout_long_v1",
+        rows=[
+            {"symbol": "NYSE:AAA", "company": "AAA Corp", "score": 2.2, "close": 150.0},
+            {
+                "symbol": "NASDAQ:BBB",
+                "company": "BBB Corp",
+                "score": 0.9,
+                "close": 95.0,
+            },
+        ],
+    )
+    backwards_result = run_backwards_prediction_analysis(
+        current_run_id="move_prediction_20260624_1400_utc_current1",
+        duckdb_runs_root=temp_root / "duckdb_runs",
+        anchors=[
+            AnchorSpec(name="a1", run_id="move_prediction_20260604_1400_utc_anchor01"),
+            AnchorSpec(name="a2", run_id="move_prediction_20260611_1400_utc_anchor02"),
+        ],
         output_dir=temp_root / "backwards_output",
         include_consensus=False,
         include_components=False,
@@ -195,9 +266,7 @@ class TestBackwardsProfileCohortAttribution(unittest.TestCase):
             )
             self.assertTrue(Path(result["summary_csv"]).exists())
             summaries = result["summaries"]
-            period = next(
-                row for row in summaries if row.method == "period_boundary"
-            )
+            period = next(row for row in summaries if row.method == "period_boundary")
             inclusion = next(
                 row for row in summaries if row.method == "inclusion_entry"
             )
@@ -227,7 +296,9 @@ class TestBackwardsProfileCohortAttribution(unittest.TestCase):
                 in_top_n=True,
             )
         ]
-        summaries = summarize_profile_cohorts(symbol_rows, top_n=250, rank_scope="global")
+        summaries = summarize_profile_cohorts(
+            symbol_rows, top_n=250, rank_scope="global"
+        )
         period = next(row for row in summaries if row.method == "period_boundary")
         inclusion = next(row for row in summaries if row.method == "inclusion_entry")
         self.assertAlmostEqual(period.avg_return_pct, 50.0)
@@ -264,6 +335,36 @@ class TestBackwardsProfileCohortAttribution(unittest.TestCase):
         )
         hold = next(row for row in summaries if row.method == "hold_until_rank_exit")
         self.assertAlmostEqual(hold.avg_return_pct, 36.36)
+
+    @unittest.skipUnless(_duckdb_available(), "duckdb not installed")
+    def test_fresh_inclusion_uses_prior_anchor_rank_threshold(self):
+        with TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            backwards_db = _build_fresh_inclusion_backwards_db(temp_root)
+            result = run_backwards_profile_cohort_attribution(
+                database_path=backwards_db,
+                profile_names=["breakout_long_v1"],
+                top_n=1,
+                rank_scope="global",
+                include_current=True,
+                fresh_rank_threshold=1,
+                methods=["fresh_inclusion"],
+                output_dir=temp_root / "cohort_out",
+            )
+            summary = result["summaries"][0]
+            self.assertEqual(summary.method, "fresh_inclusion")
+            self.assertEqual(summary.cohort_size, 1)
+            self.assertAlmostEqual(summary.avg_return_pct, 25.0)
+
+            aaa_row = next(
+                row for row in result["symbol_rows"] if row.bare_ticker == "AAA"
+            )
+            self.assertEqual(aaa_row.fresh_entry_anchor_name, "a2")
+            self.assertEqual(aaa_row.fresh_entry_prior_anchor_name, "a1")
+            self.assertEqual(aaa_row.fresh_entry_rank, 1)
+            self.assertEqual(aaa_row.fresh_entry_prior_rank, 2)
+            self.assertAlmostEqual(aaa_row.fresh_entry_close or 0.0, 120.0)
+            self.assertAlmostEqual(aaa_row.fresh_inclusion_return_pct or 0.0, 25.0)
 
 
 if __name__ == "__main__":

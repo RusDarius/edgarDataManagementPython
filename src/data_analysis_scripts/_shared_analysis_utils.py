@@ -21,6 +21,14 @@ def coerce_numeric(value: Any) -> float | None:
         return None
     if isinstance(value, (int, float)):
         return float(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            return float(text)
+        except ValueError:
+            return None
     return None
 
 
