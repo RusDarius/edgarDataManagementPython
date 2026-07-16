@@ -65,8 +65,10 @@ def _clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
 
 
 def _read_csv_rows(path: str | Path) -> list[dict[str, str]]:
+    if not path:
+        return []
     csv_path = Path(path)
-    if not csv_path.exists():
+    if not csv_path.exists() or csv_path.is_dir():
         return []
     with csv_path.open("r", encoding="utf-8", newline="") as handle:
         return list(csv.DictReader(handle))
@@ -508,6 +510,8 @@ def write_unified_edge_highlights_duckdb(
     lane_leader_rows: Sequence[Mapping[str, Any]],
     edge_group_rows: Sequence[Mapping[str, Any]],
     manifest: Mapping[str, Any],
+    safety_scored_rows: Sequence[Mapping[str, Any]] = (),
+    safety_group_summary_rows: Sequence[Mapping[str, Any]] = (),
 ) -> None:
     database_path.parent.mkdir(parents=True, exist_ok=True)
     if database_path.exists():
@@ -551,6 +555,28 @@ def write_unified_edge_highlights_duckdb(
                 "CREATE TABLE edge_group_bootstrap_summary(group_value VARCHAR)"
             )
 
+        if safety_scored_rows:
+            safety_scored_csv = database_path.with_suffix(".safety_scored_rows.csv")
+            _write_csv_rows(safety_scored_csv, safety_scored_rows)
+            conn.execute(f"""
+                CREATE TABLE safety_scored_universe AS
+                SELECT * FROM read_csv({_q(safety_scored_csv.as_posix())}, header = true, auto_detect = true)
+                """)
+            safety_scored_csv.unlink(missing_ok=True)
+        else:
+            conn.execute("CREATE TABLE safety_scored_universe(symbol VARCHAR)")
+
+        if safety_group_summary_rows:
+            safety_group_csv = database_path.with_suffix(".safety_group_rows.csv")
+            _write_csv_rows(safety_group_csv, safety_group_summary_rows)
+            conn.execute(f"""
+                CREATE TABLE safety_group_summary AS
+                SELECT * FROM read_csv({_q(safety_group_csv.as_posix())}, header = true, auto_detect = true)
+                """)
+            safety_group_csv.unlink(missing_ok=True)
+        else:
+            conn.execute("CREATE TABLE safety_group_summary(group_value VARCHAR)")
+
         conn.execute("""
             CREATE TABLE unified_run_manifest (
                 key VARCHAR,
@@ -577,6 +603,10 @@ def _write_unified_edge_highlights_report(
     csv_path: Path,
     row_count: int,
     ranking_horizon: int,
+    safety_scored_universe_csv: Path,
+    safety_group_summary_csv: Path,
+    safety_scored_row_count: int,
+    safety_group_row_count: int,
 ) -> None:
     lines = [
         "# Unified Edge Highlights Store",
@@ -592,12 +622,19 @@ def _write_unified_edge_highlights_report(
         "- `outlook_*_score` columns hold normalized 0-1 scores for each outlook lens.",
         "- `lane_leader_*` columns carry bootstrap median-forward CI context for the symbol's lane group.",
         "- `edge_group_*` columns carry grouped edge-summary bootstrap context.",
-        "- `safety_detail_*` columns carry the full safety scored universe metrics.",
+        "- `safety_detail_*` columns carry the full safety scored universe metrics for shortlist symbols.",
         "",
         "## Supporting tables",
         "",
         "- `lane_bootstrap_leaders`: lane-level bootstrap leaders from highlights.",
         "- `edge_group_bootstrap_summary`: grouped edge summary with bootstrap CIs.",
+        "- `safety_scored_universe`: the full balance-sheet-safety / cash-generation-value",
+        "  scored universe (every scanned symbol, not just the highlights shortlist). This",
+        "  is the safety companion scan folded directly into the unified aggregate output",
+        "  instead of a separate top-level `safety_highlights/` folder.",
+        "- `safety_group_summary`: industry/sector rollup of the safety scores above --",
+        "  useful for spotting durable, well-capitalized lanes even when they are not on",
+        "  the volatility-liquidity radar.",
         "- `unified_run_manifest`: run metadata key/value pairs.",
         "",
         "## Example queries",
@@ -608,10 +645,19 @@ def _write_unified_edge_highlights_report(
         "FROM symbol_unified_highlights",
         "ORDER BY unified_edge_highlight_rank",
         "LIMIT 20;",
+        "",
+        "SELECT group_value, median_safety_companion_score, shortlist_count",
+        "FROM safety_group_summary",
+        "ORDER BY median_safety_companion_score DESC",
+        "LIMIT 20;",
         "```",
         "",
         f"- ranking_horizon: {int(ranking_horizon)}d",
         f"- symbol rows: {int(row_count)}",
+        f"- safety scored universe rows: {int(safety_scored_row_count)} "
+        f"-> `{safety_scored_universe_csv.as_posix()}`",
+        f"- safety group summary rows: {int(safety_group_row_count)} "
+        f"-> `{safety_group_summary_csv.as_posix()}`",
         f"- duckdb: `{database_path.as_posix()}`",
         f"- csv mirror: `{csv_path.as_posix()}`",
     ]
@@ -638,6 +684,7 @@ def build_unified_edge_highlights_store(
     ]
     lane_leader_rows = _read_csv_rows(highlights_result.get("lane_leaders_csv", ""))
     safety_rows = _read_csv_rows(safety_result["scored_csv"])
+    safety_group_rows = _read_csv_rows(safety_result.get("group_summary_csv", ""))
     upside_rows = _read_csv_rows(upside_prediction_lens_result["ranked_csv"])
     tradeable_rows = (
         _read_csv_rows(tradeable_safety_result["overlay_csv"])
@@ -686,8 +733,16 @@ def build_unified_edge_highlights_store(
     csv_path = output_path / "edge_unified_highlights.csv"
     report_md = output_path / "edge_unified_highlights_report.md"
     manifest_path = output_path / "edge_unified_highlights_manifest.json"
+    safety_scored_universe_csv = (
+        output_path / "edge_unified_highlights_safety_scored_universe.csv"
+    )
+    safety_group_summary_csv = (
+        output_path / "edge_unified_highlights_safety_group_summary.csv"
+    )
 
     _write_csv_rows(csv_path, unified_rows)
+    _write_csv_rows(safety_scored_universe_csv, safety_rows)
+    _write_csv_rows(safety_group_summary_csv, safety_group_rows)
     manifest = {
         "command": "unified-edge-highlights",
         "ranking_horizon": ranking_horizon,
@@ -712,6 +767,10 @@ def build_unified_edge_highlights_store(
             str(scan_edge_result.get("summary_csv")) if scan_edge_result else ""
         ),
         "outlook_names": [item["name"] for item in OUTLOOK_DEFINITIONS],
+        "safety_scored_universe_csv": safety_scored_universe_csv.as_posix(),
+        "safety_group_summary_csv": safety_group_summary_csv.as_posix(),
+        "safety_scored_universe_row_count": len(safety_rows),
+        "safety_group_summary_row_count": len(safety_group_rows),
     }
     write_unified_edge_highlights_duckdb(
         database_path=database_path,
@@ -719,6 +778,8 @@ def build_unified_edge_highlights_store(
         lane_leader_rows=lane_leader_rows,
         edge_group_rows=edge_group_rows,
         manifest=manifest,
+        safety_scored_rows=safety_rows,
+        safety_group_summary_rows=safety_group_rows,
     )
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     _write_unified_edge_highlights_report(
@@ -727,6 +788,10 @@ def build_unified_edge_highlights_store(
         csv_path=csv_path,
         row_count=len(unified_rows),
         ranking_horizon=ranking_horizon,
+        safety_scored_universe_csv=safety_scored_universe_csv,
+        safety_group_summary_csv=safety_group_summary_csv,
+        safety_scored_row_count=len(safety_rows),
+        safety_group_row_count=len(safety_group_rows),
     )
 
     return {
@@ -737,4 +802,8 @@ def build_unified_edge_highlights_store(
         "manifest_path": manifest_path,
         "row_count": len(unified_rows),
         "ranking_horizon": ranking_horizon,
+        "safety_scored_universe_csv": safety_scored_universe_csv,
+        "safety_group_summary_csv": safety_group_summary_csv,
+        "safety_scored_universe_row_count": len(safety_rows),
+        "safety_group_summary_row_count": len(safety_group_rows),
     }

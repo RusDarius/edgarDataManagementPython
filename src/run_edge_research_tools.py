@@ -3,10 +3,11 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Literal, Mapping, Sequence
 
 from constants.trading_view_constants import (
     PREFERRED_MARKETS as TRADING_VIEW_PREFERRED_MARKETS,
@@ -22,6 +23,11 @@ from edge_research_tools.forward_upside_valuation import (
     project_forward_upside_valuation_row,
     sort_rows_by_forward_upside_valuation,
 )
+from edge_research_tools.edge_trade_plan import build_edge_trade_plan_store
+from edge_research_tools.earnings_priority_lens import build_earnings_priority_lens
+from edge_research_tools.historical_edge_progression import (
+    build_daily_historical_edge_progression,
+)
 from edge_research_tools.unified_edge_highlights import (
     build_unified_edge_highlights_store,
 )
@@ -36,6 +42,7 @@ from edge_research_tools import (
     DEFAULT_HIGHLIGHTS_MIN_SHORTLIST_COUNT,
     run_forward_label_generation,
     run_edge_research_source_inventory,
+    run_edge_blindspot_lane,
     run_edge_highlights,
     run_edge_safety_highlights,
     run_symbol_day_feature_snapshot,
@@ -47,6 +54,13 @@ from edge_research_tools import (
     resolve_edge_research_paths,
 )
 from edge_research_tools.config import PROJECT_ROOT
+from edge_research_tools.foundation_base import (
+    extend_ongoing_foundation_base,
+    normalize_foundation_snapshot_mode,
+    rebuild_ongoing_foundation_base,
+    resolve_ongoing_foundation_base_dir,
+)
+from edge_research_tools import run_resolution as _run_resolution
 
 OUTPUT_ROOT = (
     PROJECT_ROOT / "logs" / "tradingview_analysis" / "edge_research_tools" / "runs"
@@ -358,22 +372,7 @@ def _discover_latest_edge_parent_run_dir(
     *,
     output_root: str | Path | None,
 ) -> Path:
-    output_paths = resolve_edge_research_paths(output_root=output_root)
-    candidates = sorted(
-        (
-            path
-            for path in output_paths.output_root.iterdir()
-            if path.is_dir() and (path / "parent_run_manifest.json").exists()
-        ),
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
-    )
-    if not candidates:
-        raise FileNotFoundError(
-            "No parent edge-research run directories were found under "
-            f"{output_paths.output_root.as_posix()}."
-        )
-    return candidates[0]
+    return _run_resolution.discover_latest_edge_parent_run_dir(output_root=output_root)
 
 
 def _resolve_edge_parent_run_dir(
@@ -382,28 +381,11 @@ def _resolve_edge_parent_run_dir(
     output_root: str | Path | None,
     auto_discover_latest: bool,
 ) -> Path:
-    if run_ref is None:
-        if not auto_discover_latest:
-            raise ValueError("run_ref is required when auto_discover_latest is False.")
-        return _discover_latest_edge_parent_run_dir(output_root=output_root)
-
-    path = _resolve_project_path(run_ref)
-    if path.is_file():
-        current = path.parent
-    else:
-        current = path
-    for candidate in (current, *current.parents):
-        if (candidate / "parent_run_manifest.json").exists():
-            return candidate
-
-    context = _resolve_edge_research_run_reference(path)
-    parent_run_dir = context.get("parent_run_dir")
-    if parent_run_dir is None:
-        raise ValueError(
-            "Run reference does not resolve to an aggregate parent run directory: "
-            f"{path.as_posix()}"
-        )
-    return Path(parent_run_dir)
+    return _run_resolution.resolve_edge_parent_run_dir(
+        run_ref=run_ref,
+        output_root=output_root,
+        auto_discover_latest=auto_discover_latest,
+    )
 
 
 def _resolve_requested_symbol(
@@ -510,7 +492,9 @@ def run_edge_symbol_inspection_method(
         },
         {
             "name": "safety_companion",
-            "path": parent_run_dir / "safety_highlights" / "edge_safety_scored.csv",
+            "path": parent_run_dir
+            / "edge_unified_highlights"
+            / "edge_unified_highlights_safety_scored_universe.csv",
             "rank_key": "safety_rank",
             "score_key": "safety_companion_score",
         },
@@ -1395,6 +1379,163 @@ def _build_unified_edge_highlights_lens(
     )
 
 
+def _build_edge_trade_plan_lens(
+    *,
+    parent_run_dir: Path,
+    unified_edge_highlights_result: Mapping[str, Any],
+    safety_result: Mapping[str, Any],
+    snapshot_database_path: str | Path,
+    top_count: int,
+) -> dict[str, Any]:
+    return build_edge_trade_plan_store(
+        output_dir=parent_run_dir / "edge_trade_plan",
+        unified_csv_path=unified_edge_highlights_result["csv_path"],
+        latest_all_fields_database_path=safety_result["source_database_path"],
+        snapshot_database_path=snapshot_database_path,
+        top_count=top_count,
+    )
+
+
+def _build_historical_edge_progression_lens(
+    *,
+    parent_run_dir: Path,
+    unified_edge_highlights_result: Mapping[str, Any],
+    snapshot_database_path: str | Path,
+    duckdb_threads: int,
+) -> dict[str, Any]:
+    return build_daily_historical_edge_progression(
+        snapshot_database_path=snapshot_database_path,
+        unified_csv_path=unified_edge_highlights_result["csv_path"],
+        unified_database_path=unified_edge_highlights_result["database_path"],
+        output_dir=parent_run_dir / "historical_edge_progression",
+        historical_top_n=2000,
+        min_composite=0.45,
+        markets=PREFERRED_MARKETS,
+        duckdb_threads=duckdb_threads,
+    )
+
+
+def _build_earnings_priority_lens(
+    *,
+    parent_run_dir: Path,
+    unified_edge_highlights_result: Mapping[str, Any],
+    safety_result: Mapping[str, Any],
+    screen_result: Mapping[str, Any] | None,
+    scan_day: str,
+    markets: Sequence[str] | None,
+    countries: Sequence[str] | None,
+    exchanges: Sequence[str] | None,
+    us_only: bool,
+    min_market_cap_usd: float | None,
+    lookahead_days: int,
+    duckdb_threads: int,
+) -> dict[str, Any]:
+    """Earnings-priority coverage lens: every symbol with earnings due soon.
+
+    Unlike every other lens in this suite, membership here is not gated by
+    the quantitative screen or highlights shortlist. It is scoped straight
+    from the raw daily all-fields database (via the safety scan's source
+    database) and then backfilled with whatever quantitative context already
+    exists for each symbol -- unified highlights first, then the
+    point-in-time screen, then the safety-scored universe. Output is written
+    to its own CSV/DuckDB store, separate from the unified highlights store.
+    """
+    return build_earnings_priority_lens(
+        output_dir=parent_run_dir / "earnings_priority_lens",
+        source_database_path=safety_result["source_database_path"],
+        unified_csv_path=unified_edge_highlights_result["csv_path"],
+        scan_day=scan_day,
+        screen_ranked_csv_path=(screen_result or {}).get("ranked_csv"),
+        safety_scored_csv_path=unified_edge_highlights_result.get(
+            "safety_scored_universe_csv"
+        ),
+        lookahead_days=lookahead_days,
+        markets=markets,
+        countries=countries,
+        exchanges=exchanges,
+        us_only=us_only,
+        min_market_cap_usd=min_market_cap_usd,
+        duckdb_threads=duckdb_threads,
+    )
+
+
+def _consolidate_safety_into_unified_highlights(
+    *,
+    safety_result: dict[str, Any],
+    unified_edge_highlights_result: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Fold the safety companion scan into the unified highlights folder.
+
+    The safety-highlights scan runs in scratch staging space so the forward
+    valuation / tradeable safety / upside prediction / unified highlights
+    lenses can consume it, but it no longer gets its own top-level
+    ``safety_highlights`` folder in the parent run. Its full scored universe
+    and group summary are written inside ``edge_unified_highlights`` instead
+    (see ``build_unified_edge_highlights_store``), and the staging copy is
+    removed once nothing else needs it.
+    """
+    staging_output_dir = Path(safety_result.get("output_dir") or "")
+    unified_output_dir = Path(unified_edge_highlights_result["output_dir"])
+    updated = dict(safety_result)
+    updated["output_dir"] = unified_output_dir
+    updated["scored_csv"] = unified_edge_highlights_result["safety_scored_universe_csv"]
+    updated["group_summary_csv"] = unified_edge_highlights_result[
+        "safety_group_summary_csv"
+    ]
+    # These per-run staging artifacts get deleted below; their content is already
+    # superseded by safety_shortlist_flag / safety_focus_flag columns on the
+    # unified rows, so drop the now-dangling paths rather than leave stale
+    # references to a deleted directory.
+    for stale_key in (
+        "shortlist_csv",
+        "top30_csv",
+        "top10_csv",
+        "report_md",
+        "manifest_path",
+    ):
+        updated.pop(stale_key, None)
+    if staging_output_dir.exists():
+        shutil.rmtree(staging_output_dir, ignore_errors=True)
+    return updated
+
+
+def _build_blindspot_lane(
+    *,
+    parent_run_dir: Path,
+    snapshot_database_path: str | Path,
+    scan_day: str,
+    highlights_result: Mapping[str, Any],
+    markets: Sequence[str] | None,
+    countries: Sequence[str] | None,
+    exchanges: Sequence[str] | None,
+    us_only: bool,
+    top_count: int,
+    duckdb_threads: int,
+) -> dict[str, Any]:
+    shortlist_rows = _read_csv_rows(Path(highlights_result["shortlist_csv"]))
+    shortlist_symbols = {
+        str(row.get("symbol")) for row in shortlist_rows if row.get("symbol")
+    }
+    blindspot_result = run_edge_blindspot_lane(
+        snapshot_database_path=snapshot_database_path,
+        output_root=parent_run_dir / "_staging",
+        as_of_date=scan_day,
+        ranking_horizon=int(highlights_result.get("ranking_horizon") or 5),
+        shortlist_symbols=shortlist_symbols,
+        markets=markets,
+        countries=countries,
+        exchanges=exchanges,
+        us_only=us_only,
+        top_count=top_count,
+        duckdb_threads=duckdb_threads,
+    )
+    return _move_child_run_to_parent(
+        result=blindspot_result,
+        parent_run_dir=parent_run_dir,
+        child_name="blindspot_lane",
+    )
+
+
 def run_inventory_method(
     *,
     limit: int = 10,
@@ -2028,6 +2169,7 @@ def run_integrated_extension_method(
     top10_count: int = 10,
     upside_top_count: int = 20,
     forward_upside_top_count: int = 20,
+    blindspot_top_count: int = 40,
     edge_bootstrap_iterations: int = 1000,
     edge_bootstrap_confidence_level: float = 0.95,
     edge_bootstrap_seed: int = 17,
@@ -2038,6 +2180,8 @@ def run_integrated_extension_method(
     min_cash_generation_score: float = 0.40,
     min_combined_score: float = 0.50,
     safety_group_min_count: int = 3,
+    earnings_lookahead_days: int = 30,
+    earnings_min_market_cap_usd: float | None = None,
     parent_run_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     """Standalone Method 3: region filters + bootstrap CI + safety companion integration."""
@@ -2094,11 +2238,6 @@ def run_integrated_extension_method(
         output_root=parent_dir / "_staging",
         duckdb_threads=duckdb_threads,
     )
-    safety_result = _move_child_run_to_parent(
-        result=safety_result,
-        parent_run_dir=parent_dir,
-        child_name="safety_highlights",
-    )
     forward_upside_valuation_lens_result = _build_forward_upside_valuation_lens(
         parent_run_dir=parent_dir,
         highlights_result=quantitative_result["highlights"],
@@ -2131,6 +2270,61 @@ def run_integrated_extension_method(
         upside_prediction_lens_result=upside_prediction_lens_result,
         forward_upside_valuation_lens_result=forward_upside_valuation_lens_result,
     )
+    safety_result = _consolidate_safety_into_unified_highlights(
+        safety_result=safety_result,
+        unified_edge_highlights_result=unified_edge_highlights_result,
+    )
+    blindspot_lane_result = _build_blindspot_lane(
+        parent_run_dir=parent_dir,
+        snapshot_database_path=snapshot_db,
+        scan_day=scan_day,
+        highlights_result=quantitative_result["highlights"],
+        markets=markets,
+        countries=countries,
+        exchanges=exchanges,
+        us_only=us_only,
+        top_count=blindspot_top_count,
+        duckdb_threads=duckdb_threads,
+    )
+    historical_edge_progression_result = _build_historical_edge_progression_lens(
+        parent_run_dir=parent_dir,
+        unified_edge_highlights_result=unified_edge_highlights_result,
+        snapshot_database_path=snapshot_db,
+        duckdb_threads=duckdb_threads,
+    )
+    unified_edge_highlights_result["base_csv_path"] = unified_edge_highlights_result[
+        "csv_path"
+    ]
+    unified_edge_highlights_result["base_database_path"] = (
+        unified_edge_highlights_result["database_path"]
+    )
+    unified_edge_highlights_result["csv_path"] = historical_edge_progression_result[
+        "augmented_unified_csv"
+    ]
+    unified_edge_highlights_result["database_path"] = (
+        historical_edge_progression_result["augmented_unified_database"]
+    )
+    edge_trade_plan_result = _build_edge_trade_plan_lens(
+        parent_run_dir=parent_dir,
+        unified_edge_highlights_result=unified_edge_highlights_result,
+        safety_result=safety_result,
+        snapshot_database_path=snapshot_db,
+        top_count=top10_count,
+    )
+    earnings_priority_lens_result = _build_earnings_priority_lens(
+        parent_run_dir=parent_dir,
+        unified_edge_highlights_result=unified_edge_highlights_result,
+        safety_result=safety_result,
+        screen_result=quantitative_result.get("screen"),
+        scan_day=scan_day,
+        markets=markets,
+        countries=countries,
+        exchanges=exchanges,
+        us_only=us_only,
+        min_market_cap_usd=earnings_min_market_cap_usd,
+        lookahead_days=earnings_lookahead_days,
+        duckdb_threads=duckdb_threads,
+    )
     _cleanup_staging_dir(parent_dir / "_staging")
 
     final_result = {
@@ -2141,6 +2335,10 @@ def run_integrated_extension_method(
         "upside_prediction_lens": upside_prediction_lens_result,
         "forward_upside_valuation_lens": forward_upside_valuation_lens_result,
         "edge_unified_highlights": unified_edge_highlights_result,
+        "blindspot_lane": blindspot_lane_result,
+        "historical_edge_progression": historical_edge_progression_result,
+        "edge_trade_plan": edge_trade_plan_result,
+        "earnings_priority_lens": earnings_priority_lens_result,
     }
     _write_parent_manifest(
         parent_run_dir=parent_dir,
@@ -2178,6 +2376,14 @@ def run_integrated_extension_method(
                 "edge_unified_highlights": str(
                     unified_edge_highlights_result.get("output_dir")
                 ),
+                "blindspot_lane": str(blindspot_lane_result.get("output_dir")),
+                "historical_edge_progression": str(
+                    historical_edge_progression_result.get("output_dir")
+                ),
+                "edge_trade_plan": str(edge_trade_plan_result.get("output_dir")),
+                "earnings_priority_lens": str(
+                    earnings_priority_lens_result.get("output_dir")
+                ),
             },
         },
     )
@@ -2213,11 +2419,13 @@ def run_historic_current_aggregate_suite_preferred_markets(
     top10_count: int = 10,
     upside_top_count: int = 20,
     forward_upside_top_count: int = 20,
+    blindspot_top_count: int = 40,
     duckdb_threads: int = 16,
     horizons: Sequence[int] = DEFAULT_FORWARD_LABEL_HORIZONS,
     target_pct: float = 10.0,
     stop_pct: float = 7.0,
     memory_limit_gb: float = 24.0,
+    earnings_lookahead_days: int = 30,
 ) -> dict[str, Any]:
     """
     Preferred-markets full analysis suite:
@@ -2268,10 +2476,13 @@ def run_historic_current_aggregate_suite_preferred_markets(
         top10_count=top10_count,
         upside_top_count=upside_top_count,
         forward_upside_top_count=forward_upside_top_count,
+        blindspot_top_count=blindspot_top_count,
         edge_bootstrap_iterations=1000,
         edge_bootstrap_confidence_level=0.95,
         highlights_bootstrap_iterations=1000,
         highlights_bootstrap_confidence_level=0.95,
+        earnings_lookahead_days=earnings_lookahead_days,
+        earnings_min_market_cap_usd=float(requested_min_market_cap_usd),
         parent_run_dir=parent_dir,
     )
 
@@ -2326,6 +2537,22 @@ def run_historic_current_aggregate_suite_preferred_markets(
                         "output_dir"
                     )
                 ),
+                "blindspot_lane": str(
+                    integrated_result.get("blindspot_lane", {}).get("output_dir")
+                ),
+                "historical_edge_progression": str(
+                    integrated_result.get("historical_edge_progression", {}).get(
+                        "output_dir"
+                    )
+                ),
+                "edge_trade_plan": str(
+                    integrated_result.get("edge_trade_plan", {}).get("output_dir")
+                ),
+                "earnings_priority_lens": str(
+                    integrated_result.get("earnings_priority_lens", {}).get(
+                        "output_dir"
+                    )
+                ),
             },
         },
     )
@@ -2345,30 +2572,13 @@ def run_historic_current_aggregate_suite_preferred_markets(
 
 
 def _resolve_project_path(path: str | Path) -> Path:
-    candidate = Path(path)
-    if candidate.is_absolute():
-        return candidate
-    return (PROJECT_ROOT / candidate).resolve()
+    return _run_resolution.resolve_project_path(path)
 
 
 def _discover_edge_snapshot_run_refs(
     output_root: str | Path | None = None,
 ) -> list[Path]:
-    paths = resolve_edge_research_paths(output_root=output_root)
-    discovered: list[tuple[float, Path]] = []
-    seen: set[str] = set()
-    for root in (paths.output_root, paths.foundation_root):
-        if not root.exists():
-            continue
-        for db_path in root.glob("**/symbol_day_feature_snapshot.duckdb"):
-            parent = db_path.parent.resolve()
-            key = parent.as_posix()
-            if key in seen:
-                continue
-            seen.add(key)
-            discovered.append((db_path.stat().st_mtime, parent))
-    discovered.sort(key=lambda item: item[0], reverse=True)
-    return [parent for _, parent in discovered]
+    return _run_resolution.discover_edge_snapshot_run_refs(output_root=output_root)
 
 
 def _coalesce_existing_run_ref(
@@ -2377,49 +2587,11 @@ def _coalesce_existing_run_ref(
     output_root: str | Path | None = None,
     auto_discover_latest: bool = False,
 ) -> Path | None:
-    if existing_run_ref is None:
-        if not auto_discover_latest:
-            return None
-        discovered = _discover_edge_snapshot_run_refs(output_root=output_root)
-        if not discovered:
-            raise FileNotFoundError(
-                "No snapshot runs found under edge_research_tools. "
-                "Set rebuild_foundation_snapshot=True in run_edge_research_local_main() "
-                "to build a new foundation snapshot."
-            )
-        return discovered[0]
-
-    path = _resolve_project_path(existing_run_ref)
-    if path.exists():
-        return path
-
-    if path.name.startswith(
-        ("edge_feature_snapshot_", "edge_latest_500m_full_parent_")
-    ):
-        alt_roots = []
-        paths = resolve_edge_research_paths(output_root=output_root)
-        alt_roots.extend([paths.foundation_root, paths.output_root])
-        for alt_root in alt_roots:
-            alt_path = alt_root / path.name
-            if alt_path.exists():
-                return alt_path.resolve()
-
-    discovered = _discover_edge_snapshot_run_refs(output_root=output_root)
-    message_lines = [f"Edge research run reference not found: {path}"]
-    if discovered:
-        message_lines.append("Available snapshot runs:")
-        for candidate in discovered[:10]:
-            try:
-                rel = candidate.relative_to(PROJECT_ROOT).as_posix()
-            except ValueError:
-                rel = candidate.as_posix()
-            message_lines.append(f"  - {rel}")
-    else:
-        message_lines.append(
-            "No snapshot runs found under edge_research_tools. "
-            "Set existing_run_ref = None to build a fresh foundation snapshot."
-        )
-    raise FileNotFoundError("\n".join(message_lines))
+    return _run_resolution.coalesce_existing_run_ref(
+        existing_run_ref,
+        output_root=output_root,
+        auto_discover_latest=auto_discover_latest,
+    )
 
 
 AGGREGATE_REQUIRED_TABLES: tuple[str, ...] = (
@@ -2506,7 +2678,7 @@ def _ensure_snapshot_ready_for_aggregate(
 
 
 def _day_label_to_iso_date(day_label: str) -> str:
-    return datetime.strptime(day_label, "%d_%m_%Y").date().isoformat()
+    return _run_resolution.day_label_to_iso_date(day_label)
 
 
 def _read_snapshot_day_range(
@@ -2515,179 +2687,18 @@ def _read_snapshot_day_range(
     start_day_label: str | None = None,
     end_day_label: str | None = None,
 ) -> tuple[str, str]:
-    if start_day_label and end_day_label:
-        return start_day_label, end_day_label
-
-    manifest_path = (
-        Path(snapshot_db).parent / "symbol_day_feature_snapshot_manifest.json"
+    return _run_resolution.read_snapshot_day_range(
+        snapshot_db=snapshot_db,
+        start_day_label=start_day_label,
+        end_day_label=end_day_label,
     )
-    if not manifest_path.exists():
-        raise ValueError(
-            "Could not resolve snapshot day range. Provide start_day_label and "
-            f"end_day_label, or use a snapshot with manifest: {manifest_path}"
-        )
-    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-    resolved_start = payload.get("start_day_label")
-    resolved_end = payload.get("end_day_label")
-    if not resolved_start or not resolved_end:
-        raise ValueError(
-            f"Snapshot manifest is missing start_day_label/end_day_label: {manifest_path}"
-        )
-    return str(resolved_start), str(resolved_end)
 
 
 def _resolve_edge_research_run_reference(
     run_ref: str | Path,
 ) -> dict[str, Any]:
     """Resolve a prior run folder or snapshot DB into reusable scan context."""
-    path = _resolve_project_path(run_ref)
-    if not path.exists():
-        raise FileNotFoundError(f"Edge research run reference not found: {path}")
-
-    def _context_from_snapshot_db(
-        snapshot_db: Path,
-        *,
-        source_run_ref: Path | None = None,
-        parent_run_dir: Path | None = None,
-    ) -> dict[str, Any]:
-        start_day_label, end_day_label = _read_snapshot_day_range(
-            snapshot_db=snapshot_db
-        )
-        return {
-            "snapshot_db": snapshot_db.resolve(),
-            "start_day_label": start_day_label,
-            "end_day_label": end_day_label,
-            "scan_day": _day_label_to_iso_date(end_day_label),
-            "window_start_date": _day_label_to_iso_date(start_day_label),
-            "source_run_ref": (source_run_ref or path).resolve(),
-            "parent_run_dir": parent_run_dir.resolve() if parent_run_dir else None,
-        }
-
-    def _apply_parent_manifest_dates(
-        context: dict[str, Any],
-        payload: dict[str, Any],
-    ) -> dict[str, Any]:
-        if payload.get("start_day_label"):
-            context["start_day_label"] = str(payload["start_day_label"])
-        if payload.get("end_day_label"):
-            context["end_day_label"] = str(payload["end_day_label"])
-        if payload.get("scan_day"):
-            context["scan_day"] = str(payload["scan_day"])
-        if payload.get("window_start_date"):
-            context["window_start_date"] = str(payload["window_start_date"])
-        elif context.get("start_day_label") and context.get("end_day_label"):
-            context["window_start_date"] = _day_label_to_iso_date(
-                str(context["start_day_label"])
-            )
-            context["scan_day"] = _day_label_to_iso_date(str(context["end_day_label"]))
-        return context
-
-    def _context_from_suite_manifest(
-        manifest_path: Path,
-        *,
-        source_run_ref: Path,
-        parent_run_dir: Path | None = None,
-    ) -> dict[str, Any]:
-        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-        snapshot_result = payload.get("snapshot_result")
-        if not isinstance(snapshot_result, dict):
-            raise ValueError(
-                f"Suite manifest is missing snapshot_result: {manifest_path}"
-            )
-        snapshot_db_raw = snapshot_result.get("database_path")
-        if not snapshot_db_raw:
-            raise ValueError(
-                f"Suite manifest is missing snapshot_result.database_path: {manifest_path}"
-            )
-        snapshot_db = Path(str(snapshot_db_raw))
-        if not snapshot_db.exists():
-            raise FileNotFoundError(
-                f"Snapshot database from suite manifest does not exist: {snapshot_db}"
-            )
-        context = _context_from_snapshot_db(
-            snapshot_db,
-            source_run_ref=source_run_ref,
-            parent_run_dir=parent_run_dir,
-        )
-        if payload.get("start_day_label"):
-            context["start_day_label"] = str(payload["start_day_label"])
-        if payload.get("end_day_label"):
-            context["end_day_label"] = str(payload["end_day_label"])
-        if context.get("start_day_label") and context.get("end_day_label"):
-            context["window_start_date"] = _day_label_to_iso_date(
-                str(context["start_day_label"])
-            )
-            context["scan_day"] = _day_label_to_iso_date(str(context["end_day_label"]))
-        return context
-
-    if path.is_file():
-        if path.suffix.lower() != ".duckdb":
-            raise ValueError(f"Expected a .duckdb file, got: {path}")
-        return _context_from_snapshot_db(path)
-
-    direct_db = path / "symbol_day_feature_snapshot.duckdb"
-    if direct_db.exists():
-        return _context_from_snapshot_db(direct_db, source_run_ref=path)
-
-    parent_manifest_path = path / "parent_run_manifest.json"
-    if parent_manifest_path.exists():
-        parent_payload = json.loads(parent_manifest_path.read_text(encoding="utf-8"))
-        snapshot_db_raw = parent_payload.get("snapshot_db")
-        if snapshot_db_raw:
-            snapshot_db = Path(str(snapshot_db_raw))
-            if snapshot_db.exists():
-                context = _context_from_snapshot_db(
-                    snapshot_db,
-                    source_run_ref=path,
-                    parent_run_dir=path,
-                )
-                return _apply_parent_manifest_dates(context, parent_payload)
-
-        foundation_suite_manifest = (
-            path / "foundation" / "volatility_liquidity_edge_suite_manifest.json"
-        )
-        if foundation_suite_manifest.exists():
-            return _context_from_suite_manifest(
-                foundation_suite_manifest,
-                source_run_ref=path,
-                parent_run_dir=path,
-            )
-
-    suite_manifest_path = path / "volatility_liquidity_edge_suite_manifest.json"
-    if suite_manifest_path.exists():
-        return _context_from_suite_manifest(
-            suite_manifest_path,
-            source_run_ref=path,
-        )
-
-    foundation_suite_manifest = (
-        path / "foundation" / "volatility_liquidity_edge_suite_manifest.json"
-    )
-    if foundation_suite_manifest.exists():
-        return _context_from_suite_manifest(
-            foundation_suite_manifest,
-            source_run_ref=path,
-            parent_run_dir=path,
-        )
-
-    matches = sorted(path.glob("**/symbol_day_feature_snapshot.duckdb"))
-    if len(matches) == 1:
-        return _context_from_snapshot_db(
-            matches[0],
-            source_run_ref=path,
-            parent_run_dir=path if matches[0].parent != path else None,
-        )
-    if len(matches) > 1:
-        preview = ", ".join(match.as_posix() for match in matches[:5])
-        raise ValueError(
-            "Ambiguous edge research run reference; multiple snapshot databases "
-            f"found under {path.as_posix()}: {preview}"
-        )
-
-    raise ValueError(
-        "Could not resolve an edge research snapshot database from run reference: "
-        f"{path.as_posix()}"
-    )
+    return _run_resolution.resolve_edge_research_run_reference(run_ref)
 
 
 def run_latest_500m_full_edge_research_suite(
@@ -2697,7 +2708,10 @@ def run_latest_500m_full_edge_research_suite(
     end_day_label: str | None = None,
     min_market_cap_usd: float = DEFAULT_FULL_SCAN_MIN_MARKET_CAP_USD,
     output_root: str | Path = OUTPUT_ROOT,
-    rebuild_foundation_snapshot: bool = False,
+    rebuild_foundation_snapshot: bool | Literal["extend"] | None = False,
+    foundation_base_ref: str | Path | None = None,
+    foundation_extend_chunk_days: int = 30,
+    foundation_max_trading_days: int | None = 504,
     existing_run_ref: str | Path | None = None,
     auto_discover_latest_snapshot: bool = True,
     primary_only: bool = True,
@@ -2715,13 +2729,18 @@ def run_latest_500m_full_edge_research_suite(
     top10_count: int = 10,
     upside_top_count: int = 20,
     forward_upside_top_count: int = 20,
+    blindspot_top_count: int = 40,
 ) -> dict[str, Any]:
     """
     Full edge-research parent chain: foundation suite + preferred-markets aggregate.
 
-    By default this reuses the latest existing snapshot and only runs aggregate scans.
-    Set ``rebuild_foundation_snapshot=True`` to build a fresh foundation snapshot first.
+    Foundation snapshot modes via ``rebuild_foundation_snapshot``:
+
+    - ``False`` (default): reuse an existing snapshot and run aggregate scans only.
+    - ``True``: full rebuild into the ongoing foundation base directory.
+    - ``"extend"``: append new all-fields days to the ongoing base (chunked), then aggregate.
     """
+    foundation_mode = normalize_foundation_snapshot_mode(rebuild_foundation_snapshot)
     resolved_run_context: dict[str, Any] | None = None
     foundation_result: dict[str, Any] | None = None
     snapshot_prep_result: dict[str, Any] | None = None
@@ -2732,33 +2751,59 @@ def run_latest_500m_full_edge_research_suite(
     )
     staging_root = parent_dir / "_staging"
 
-    if rebuild_foundation_snapshot:
-        foundation_result = run_suite_method(
+    if foundation_mode == "rebuild":
+        foundation_result = rebuild_ongoing_foundation_base(
             start_day_label=start_day_label,
             end_day_label=end_day_label,
             use_full_range=bool(use_full_range),
-            output_root=staging_root,
-            include_non_primary=not bool(primary_only),
+            output_root=output_root,
+            foundation_base_ref=foundation_base_ref,
+            primary_only=bool(primary_only),
             min_market_cap_usd=min_market_cap_usd,
-            horizons=horizons,
+            horizons=tuple(horizons),
             target_pct=target_pct,
             stop_pct=stop_pct,
-            groupings=foundation_groupings,
             duckdb_threads=duckdb_threads,
             memory_limit_gb=memory_limit_gb,
         )
-        foundation_result = _move_child_run_to_parent(
-            result=foundation_result,
-            parent_run_dir=parent_dir,
-            child_name="foundation",
-        )
         snapshot_db = Path(foundation_result["snapshot_result"]["database_path"])
-        suite_manifest_path = Path(foundation_result["suite_manifest"])
-        suite_payload = json.loads(suite_manifest_path.read_text(encoding="utf-8"))
-        resolved_start_day_label = str(suite_payload["start_day_label"])
-        resolved_end_day_label = str(suite_payload["end_day_label"])
+        resolved_start_day_label = str(foundation_result["start_day_label"])
+        resolved_end_day_label = str(foundation_result["end_day_label"])
         scan_day = _day_label_to_iso_date(resolved_end_day_label)
         window_start_date = _day_label_to_iso_date(resolved_start_day_label)
+    elif foundation_mode == "extend":
+        foundation_result = extend_ongoing_foundation_base(
+            end_day_label=end_day_label,
+            output_root=output_root,
+            foundation_base_ref=foundation_base_ref,
+            min_market_cap_usd=min_market_cap_usd,
+            primary_only=bool(primary_only),
+            extend_chunk_days=int(foundation_extend_chunk_days),
+            max_trading_days=foundation_max_trading_days,
+            horizons=tuple(horizons),
+            target_pct=target_pct,
+            stop_pct=stop_pct,
+            duckdb_threads=duckdb_threads,
+            memory_limit_gb=memory_limit_gb,
+        )
+        snapshot_db = Path(foundation_result["snapshot_result"]["database_path"])
+        resolved_start_day_label = str(foundation_result["start_day_label"])
+        resolved_end_day_label = str(foundation_result["end_day_label"])
+        scan_day = _day_label_to_iso_date(resolved_end_day_label)
+        window_start_date = _day_label_to_iso_date(resolved_start_day_label)
+        resolved_run_context = {
+            "snapshot_db": snapshot_db,
+            "start_day_label": resolved_start_day_label,
+            "end_day_label": resolved_end_day_label,
+            "scan_day": scan_day,
+            "window_start_date": window_start_date,
+            "source_run_ref": resolve_ongoing_foundation_base_dir(
+                output_root=output_root,
+                min_market_cap_usd=min_market_cap_usd,
+                foundation_base_ref=foundation_base_ref,
+            ),
+            "parent_run_dir": None,
+        }
     else:
         resolved_existing_run_ref = _coalesce_existing_run_ref(
             existing_run_ref,
@@ -2804,6 +2849,7 @@ def run_latest_500m_full_edge_research_suite(
         top10_count=top10_count,
         upside_top_count=upside_top_count,
         forward_upside_top_count=forward_upside_top_count,
+        blindspot_top_count=blindspot_top_count,
         duckdb_threads=duckdb_threads,
         horizons=horizons,
         target_pct=target_pct,
@@ -2842,7 +2888,19 @@ def run_latest_500m_full_edge_research_suite(
             "scan_day": scan_day,
             "window_start_date": window_start_date,
             "min_market_cap_usd": float(min_market_cap_usd),
-            "rebuild_foundation_snapshot": bool(rebuild_foundation_snapshot),
+            "foundation_mode": foundation_mode,
+            "rebuild_foundation_snapshot": rebuild_foundation_snapshot,
+            "foundation_base_ref": (
+                resolve_ongoing_foundation_base_dir(
+                    output_root=output_root,
+                    min_market_cap_usd=min_market_cap_usd,
+                    foundation_base_ref=foundation_base_ref,
+                ).as_posix()
+                if foundation_mode in {"rebuild", "extend"}
+                else None
+            ),
+            "foundation_extend_chunk_days": int(foundation_extend_chunk_days),
+            "foundation_max_trading_days": foundation_max_trading_days,
             "auto_discover_latest_snapshot": bool(auto_discover_latest_snapshot),
             "existing_run_ref": (
                 str(resolved_run_context["source_run_ref"])
@@ -2888,6 +2946,17 @@ def run_latest_500m_full_edge_research_suite(
                     aggregate_result.get("edge_unified_highlights", {}).get(
                         "output_dir"
                     )
+                ),
+                "blindspot_lane": str(
+                    aggregate_result.get("blindspot_lane", {}).get("output_dir")
+                ),
+                "historical_edge_progression": str(
+                    aggregate_result.get("historical_edge_progression", {}).get(
+                        "output_dir"
+                    )
+                ),
+                "edge_trade_plan": str(
+                    aggregate_result.get("edge_trade_plan", {}).get("output_dir")
                 ),
             },
         },
@@ -2992,7 +3061,10 @@ def run_local_workflow_method(
     workflow_name: str = "latest_500m_full_edge_research",
     existing_run_ref: str | Path | None = None,
     auto_discover_latest_snapshot: bool = False,
-    rebuild_foundation_snapshot: bool | None = None,
+    rebuild_foundation_snapshot: bool | Literal["extend"] | None = None,
+    foundation_base_ref: str | Path | None = None,
+    foundation_extend_chunk_days: int = 30,
+    foundation_max_trading_days: int | None = 504,
     use_full_range: bool = True,
     start_day_label: str | None = None,
     end_day_label: str | None = None,
@@ -3008,6 +3080,7 @@ def run_local_workflow_method(
     top10_count: int = 10,
     upside_top_count: int = 20,
     forward_upside_top_count: int = 20,
+    blindspot_top_count: int = 40,
 ) -> dict[str, Any]:
     """
       Deliberate parameter-driven local entrypoint.
@@ -3033,7 +3106,8 @@ def run_local_workflow_method(
         auto_discover_latest=(
             auto_discover_latest_snapshot
             and existing_run_ref is None
-            and rebuild_foundation_snapshot is not True
+            and normalize_foundation_snapshot_mode(rebuild_foundation_snapshot)
+            not in {"rebuild", "extend"}
         ),
     )
     if resolved_existing_run_ref is not None:
@@ -3072,6 +3146,9 @@ def run_local_workflow_method(
                 if rebuild_foundation_snapshot is None
                 else rebuild_foundation_snapshot
             ),
+            foundation_base_ref=foundation_base_ref,
+            foundation_extend_chunk_days=foundation_extend_chunk_days,
+            foundation_max_trading_days=foundation_max_trading_days,
             existing_run_ref=existing_run_ref,
             auto_discover_latest_snapshot=auto_discover_latest_snapshot,
             duckdb_threads=duckdb_threads,
@@ -3084,6 +3161,7 @@ def run_local_workflow_method(
             top10_count=top10_count,
             upside_top_count=upside_top_count,
             forward_upside_top_count=forward_upside_top_count,
+            blindspot_top_count=blindspot_top_count,
         )
 
     if snapshot_db is None:
@@ -3176,6 +3254,7 @@ def run_local_workflow_method(
             top10_count=top10_count,
             upside_top_count=upside_top_count,
             forward_upside_top_count=forward_upside_top_count,
+            blindspot_top_count=blindspot_top_count,
             duckdb_threads=duckdb_threads,
         )
 
@@ -3200,10 +3279,17 @@ def run_edge_research_local_main() -> dict[str, Any]:
 
     # Reuse a prior run: snapshot folder, parent run folder, or .duckdb path.
     # Leave None to auto-pick the latest snapshot from foundations/ or runs/.
-    # Set rebuild_foundation_snapshot=True only when you want a fresh foundation build.
+    #
+    # rebuild_foundation_snapshot controls the foundation layer:
+    #   False          — reuse existing snapshot, aggregate-only (fast daily scan)
+    #   True           — full rebuild into foundations/edge_ongoing_base_min{cap}/
+    #   "extend"       — append new all-fields days to ongoing base, then aggregate
     existing_run_ref: str | Path | None = None
     auto_discover_latest_snapshot = True
-    rebuild_foundation_snapshot: bool | None = True
+    rebuild_foundation_snapshot: bool | Literal["extend"] | None = "extend"
+    foundation_base_ref: str | Path | None = None
+    foundation_extend_chunk_days = 30
+    foundation_max_trading_days = 504
 
     use_full_range = True
     start_day_label: str | None = None
@@ -3220,6 +3306,7 @@ def run_edge_research_local_main() -> dict[str, Any]:
     top10_count = 20
     upside_top_count = 20
     forward_upside_top_count = 20
+    blindspot_top_count = 40
     # ===== end params =====
 
     result = run_local_workflow_method(
@@ -3227,6 +3314,9 @@ def run_edge_research_local_main() -> dict[str, Any]:
         existing_run_ref=existing_run_ref,
         auto_discover_latest_snapshot=auto_discover_latest_snapshot,
         rebuild_foundation_snapshot=rebuild_foundation_snapshot,
+        foundation_base_ref=foundation_base_ref,
+        foundation_extend_chunk_days=foundation_extend_chunk_days,
+        foundation_max_trading_days=foundation_max_trading_days,
         use_full_range=use_full_range,
         start_day_label=start_day_label,
         end_day_label=end_day_label,
@@ -3242,6 +3332,7 @@ def run_edge_research_local_main() -> dict[str, Any]:
         top10_count=top10_count,
         upside_top_count=upside_top_count,
         forward_upside_top_count=forward_upside_top_count,
+        blindspot_top_count=blindspot_top_count,
     )
     print_edge_research_parent_result(result)
     return result
@@ -3281,6 +3372,11 @@ def _print_local_workflow_result(result: dict[str, Any]) -> None:
 
     foundation = result.get("foundation")
     if isinstance(foundation, dict):
+        foundation_mode = foundation.get("mode")
+        if foundation_mode:
+            print(f"Foundation mode: {foundation_mode}")
+        if foundation.get("days_appended") is not None:
+            print(f"Foundation days appended: {foundation['days_appended']}")
         print(f"Foundation suite output: {foundation.get('output_dir')}")
         snapshot_result = foundation.get("snapshot_result")
         if isinstance(snapshot_result, dict):
@@ -3309,6 +3405,32 @@ def _print_local_workflow_result(result: dict[str, Any]) -> None:
             print(
                 "Unified edge highlights DuckDB: "
                 f"{unified_highlights.get('database_path')}"
+            )
+        blindspot_lane = aggregate.get("blindspot_lane")
+        if isinstance(blindspot_lane, dict):
+            print(
+                "Blindspot lane output: "
+                f"{blindspot_lane.get('output_dir')} "
+                f"({blindspot_lane.get('blindspot_flag_count')} flagged symbols, "
+                f"{blindspot_lane.get('industry_row_count')} industries scanned)"
+            )
+        historical_progression = aggregate.get("historical_edge_progression")
+        if isinstance(historical_progression, dict):
+            print(
+                "Historical edge progression: "
+                f"{historical_progression.get('output_dir')} "
+                f"({historical_progression.get('historical_anchor_count')} anchors, "
+                f"{historical_progression.get('historical_new_anchor_count')} new)"
+            )
+        edge_trade_plan = aggregate.get("edge_trade_plan")
+        if isinstance(edge_trade_plan, dict):
+            print(f"Edge trade plan output: {edge_trade_plan.get('output_dir')}")
+        earnings_priority_lens = aggregate.get("earnings_priority_lens")
+        if isinstance(earnings_priority_lens, dict):
+            print(
+                "Earnings priority lens output: "
+                f"{earnings_priority_lens.get('output_dir')} "
+                f"({earnings_priority_lens.get('row_count')} candidates)"
             )
         if "needs_new_500m_scan" in aggregate:
             print(
@@ -3356,6 +3478,25 @@ def _print_local_workflow_result(result: dict[str, Any]) -> None:
         print(
             "Unified edge highlights DuckDB: "
             f"{result['edge_unified_highlights']['database_path']}"
+        )
+    if "historical_edge_progression" in result:
+        progression = result["historical_edge_progression"]
+        print(
+            "Historical edge progression child output: "
+            f"{progression['output_dir']} "
+            f"({progression['historical_anchor_count']} anchors, "
+            f"{progression['historical_new_anchor_count']} new)"
+        )
+    if "edge_trade_plan" in result:
+        print(
+            f"Edge trade plan child output: {result['edge_trade_plan']['output_dir']}"
+        )
+    if "earnings_priority_lens" in result:
+        earnings_priority_lens = result["earnings_priority_lens"]
+        print(
+            "Earnings priority lens child output: "
+            f"{earnings_priority_lens['output_dir']} "
+            f"({earnings_priority_lens.get('row_count')} candidates)"
         )
     if "needs_new_500m_scan" in result:
         print(
@@ -4173,6 +4314,12 @@ def _add_historic_current_aggregate_parser(subparsers: argparse._SubParsersActio
         default=20,
         help="Number of forward-upside-valuation-ranked names to keep in focused output (default: 20).",
     )
+    p.add_argument(
+        "--blindspot-top-count",
+        type=int,
+        default=40,
+        help="Number of flagged blindspot-lane candidates to keep in focused output (default: 40).",
+    )
     p.add_argument("--output-root", type=Path, default=None)
     p.add_argument("--duckdb-threads", type=int, default=16)
 
@@ -4508,6 +4655,7 @@ def _handle_historic_current_aggregate_suite(args: argparse.Namespace) -> int:
         top10_count=int(getattr(args, "top10_count", 10)),
         upside_top_count=int(getattr(args, "upside_top_count", 20)),
         forward_upside_top_count=int(getattr(args, "forward_upside_top_count", 20)),
+        blindspot_top_count=int(getattr(args, "blindspot_top_count", 40)),
         duckdb_threads=int(getattr(args, "duckdb_threads", 16)),
     )
     print(f"Parent suite run output: {result['parent_run_dir']}")
@@ -4533,6 +4681,12 @@ def _handle_historic_current_aggregate_suite(args: argparse.Namespace) -> int:
         print(
             "Unified edge highlights DuckDB: "
             f"{result['edge_unified_highlights']['database_path']}"
+        )
+    if "blindspot_lane" in result:
+        print(
+            "Blindspot lane child output: "
+            f"{result['blindspot_lane']['output_dir']} "
+            f"({result['blindspot_lane'].get('blindspot_flag_count')} flagged symbols)"
         )
     print(f"Requested min market-cap: {result['requested_min_market_cap_usd']}")
     if "highlights_min_shortlist_count" in result:

@@ -59,7 +59,6 @@ def test_run_edge_symbol_inspection_method_uses_exact_symbol_match(
     (parent_dir / "upside_prediction_lens").mkdir()
     (parent_dir / "forward_upside_valuation_lens").mkdir()
     (parent_dir / "tradeable_safety_lens").mkdir()
-    (parent_dir / "safety_highlights").mkdir()
     (parent_dir / "parent_run_manifest.json").write_text("{}\n", encoding="utf-8")
 
     (parent_dir / "edge_unified_highlights" / "edge_unified_highlights.csv").write_text(
@@ -98,7 +97,11 @@ def test_run_edge_symbol_inspection_method_uses_exact_symbol_match(
         "NASDAQ:WDC,10,0.76,0.74,strong\n",
         encoding="utf-8",
     )
-    (parent_dir / "safety_highlights" / "edge_safety_scored.csv").write_text(
+    (
+        parent_dir
+        / "edge_unified_highlights"
+        / "edge_unified_highlights_safety_scored_universe.csv"
+    ).write_text(
         "symbol,safety_rank,safety_companion_score\n" "NASDAQ:WDC,40,0.67\n",
         encoding="utf-8",
     )

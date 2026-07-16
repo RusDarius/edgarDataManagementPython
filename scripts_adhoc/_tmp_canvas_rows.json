@@ -1,0 +1,2398 @@
+{
+  "quadrant_counts": {
+    "Avoid / unwind": 69,
+    "Early rotation (price lag)": 9,
+    "Late / fading edge": 47,
+    "Momentum + edge": 4
+  },
+  "sector_rows": [
+    [
+      "Energy Minerals",
+      "4",
+      "298",
+      "+1.47%",
+      "+3.95%",
+      "0.26",
+      "12"
+    ],
+    [
+      "Commercial Services",
+      "5",
+      "434",
+      "-0.16%",
+      "+2.69%",
+      "0.75",
+      "24"
+    ],
+    [
+      "Transportation",
+      "6",
+      "458",
+      "+0.28%",
+      "+2.57%",
+      "0.68",
+      "12"
+    ],
+    [
+      "Health Technology",
+      "5",
+      "1050",
+      "-0.37%",
+      "+2.23%",
+      "0.73",
+      "74"
+    ],
+    [
+      "Technology Services",
+      "4",
+      "919",
+      "-0.52%",
+      "+1.80%",
+      "0.55",
+      "139"
+    ],
+    [
+      "Finance",
+      "14",
+      "2546",
+      "+0.00%",
+      "+1.64%",
+      "0.70",
+      "36"
+    ],
+    [
+      "Health Services",
+      "4",
+      "163",
+      "+0.75%",
+      "+1.51%",
+      "0.80",
+      "9"
+    ],
+    [
+      "Distribution Services",
+      "4",
+      "324",
+      "-0.01%",
+      "+1.50%",
+      "0.51",
+      "3"
+    ],
+    [
+      "Consumer Non-Durables",
+      "9",
+      "620",
+      "+0.06%",
+      "+1.41%",
+      "0.48",
+      "13"
+    ],
+    [
+      "Consumer Services",
+      "9",
+      "440",
+      "+0.30%",
+      "+0.97%",
+      "0.41",
+      "22"
+    ],
+    [
+      "Industrial Services",
+      "5",
+      "498",
+      "+0.74%",
+      "+0.81%",
+      "0.58",
+      "17"
+    ],
+    [
+      "Utilities",
+      "4",
+      "499",
+      "+0.05%",
+      "+0.75%",
+      "0.61",
+      "6"
+    ],
+    [
+      "Communications",
+      "3",
+      "173",
+      "+0.17%",
+      "+0.68%",
+      "0.34",
+      "7"
+    ],
+    [
+      "Retail Trade",
+      "10",
+      "469",
+      "+0.06%",
+      "+0.50%",
+      "0.61",
+      "23"
+    ],
+    [
+      "Miscellaneous",
+      "2",
+      "82",
+      "+0.01%",
+      "+0.38%",
+      "0.63",
+      "4"
+    ],
+    [
+      "Consumer Durables",
+      "8",
+      "498",
+      "-0.68%",
+      "-0.36%",
+      "0.63",
+      "10"
+    ],
+    [
+      "Non-Energy Minerals",
+      "6",
+      "770",
+      "-0.77%",
+      "-0.99%",
+      "0.54",
+      "30"
+    ],
+    [
+      "Process Industries",
+      "8",
+      "1047",
+      "-0.95%",
+      "-1.28%",
+      "0.49",
+      "14"
+    ]
+  ],
+  "price_leaders_1w": [
+    [
+      "Personnel Services",
+      "Commercial Services",
+      "27",
+      "+2.16%",
+      "+6.34%",
+      "77%"
+    ],
+    [
+      "Integrated Oil",
+      "Energy Minerals",
+      "103",
+      "+2.10%",
+      "+4.75%",
+      "82%"
+    ],
+    [
+      "Managed Health Care",
+      "Health Services",
+      "8",
+      "+1.81%",
+      "+5.39%",
+      "100%"
+    ],
+    [
+      "Financial Publishing/Services",
+      "Commercial Services",
+      "12",
+      "+1.56%",
+      "+8.51%",
+      "83%"
+    ],
+    [
+      "Oil & Gas Production",
+      "Energy Minerals",
+      "69",
+      "+1.54%",
+      "+3.15%",
+      "84%"
+    ],
+    [
+      "Services to the Health Industry",
+      "Health Services",
+      "4",
+      "+1.50%",
+      "-1.73%",
+      "100%"
+    ],
+    [
+      "Oil Refining/Marketing",
+      "Energy Minerals",
+      "56",
+      "+1.39%",
+      "+6.65%",
+      "75%"
+    ],
+    [
+      "Publishing: Newspapers",
+      "Consumer Services",
+      "8",
+      "+1.27%",
+      "+3.37%",
+      "87%"
+    ],
+    [
+      "Insurance Brokers/Services",
+      "Finance",
+      "20",
+      "+1.25%",
+      "+5.23%",
+      "85%"
+    ],
+    [
+      "Oil & Gas Pipelines",
+      "Industrial Services",
+      "29",
+      "+0.95%",
+      "+2.88%",
+      "72%"
+    ],
+    [
+      "Broadcasting",
+      "Consumer Services",
+      "28",
+      "+0.81%",
+      "+0.97%",
+      "60%"
+    ],
+    [
+      "Restaurants",
+      "Consumer Services",
+      "88",
+      "+0.80%",
+      "+2.51%",
+      "69%"
+    ],
+    [
+      "Trucking",
+      "Transportation",
+      "34",
+      "+0.79%",
+      "+2.50%",
+      "64%"
+    ],
+    [
+      "Oilfield Services/Equipment",
+      "Industrial Services",
+      "43",
+      "+0.74%",
+      "-0.73%",
+      "62%"
+    ],
+    [
+      "Contract Drilling",
+      "Industrial Services",
+      "20",
+      "+0.74%",
+      "+4.16%",
+      "70%"
+    ],
+    [
+      "Medical Distributors",
+      "Distribution Services",
+      "40",
+      "+0.68%",
+      "+3.43%",
+      "77%"
+    ],
+    [
+      "Coal",
+      "Energy Minerals",
+      "70",
+      "+0.66%",
+      "+2.37%",
+      "61%"
+    ],
+    [
+      "Railroads",
+      "Transportation",
+      "27",
+      "+0.55%",
+      "+2.88%",
+      "70%"
+    ],
+    [
+      "Consumer Sundries",
+      "Consumer Non-Durables",
+      "7",
+      "+0.51%",
+      "+1.71%",
+      "85%"
+    ],
+    [
+      "Wireless Telecommunications",
+      "Communications",
+      "68",
+      "+0.51%",
+      "+0.63%",
+      "54%"
+    ],
+    [
+      "Specialty Insurance",
+      "Finance",
+      "17",
+      "+0.50%",
+      "+1.89%",
+      "70%"
+    ],
+    [
+      "Apparel/Footwear",
+      "Consumer Non-Durables",
+      "111",
+      "+0.49%",
+      "+2.48%",
+      "57%"
+    ],
+    [
+      "Marine Shipping",
+      "Transportation",
+      "107",
+      "+0.49%",
+      "+5.97%",
+      "57%"
+    ],
+    [
+      "Property/Casualty Insurance",
+      "Finance",
+      "61",
+      "+0.49%",
+      "+2.23%",
+      "70%"
+    ],
+    [
+      "Discount Stores",
+      "Retail Trade",
+      "10",
+      "+0.44%",
+      "+1.51%",
+      "60%"
+    ]
+  ],
+  "price_laggards_1w": [
+    [
+      "Electronic Components",
+      "Electronic Technology",
+      "202",
+      "-5.04%",
+      "-15.02%",
+      "14%"
+    ],
+    [
+      "Semiconductors",
+      "Electronic Technology",
+      "402",
+      "-4.31%",
+      "-12.08%",
+      "12%"
+    ],
+    [
+      "Telecommunications Equipment",
+      "Electronic Technology",
+      "115",
+      "-4.26%",
+      "-5.57%",
+      "19%"
+    ],
+    [
+      "Metal Fabrication",
+      "Producer Manufacturing",
+      "129",
+      "-3.95%",
+      "-6.87%",
+      "20%"
+    ],
+    [
+      "Electrical Products",
+      "Producer Manufacturing",
+      "436",
+      "-3.94%",
+      "-9.33%",
+      "11%"
+    ],
+    [
+      "Electronic Production Equipment",
+      "Electronic Technology",
+      "165",
+      "-3.50%",
+      "-10.48%",
+      "13%"
+    ],
+    [
+      "Computer Processing Hardware",
+      "Electronic Technology",
+      "55",
+      "-3.22%",
+      "-2.60%",
+      "12%"
+    ],
+    [
+      "Industrial Machinery",
+      "Producer Manufacturing",
+      "587",
+      "-3.17%",
+      "-6.44%",
+      "17%"
+    ],
+    [
+      "Electronic Equipment/Instruments",
+      "Electronic Technology",
+      "186",
+      "-3.07%",
+      "-7.33%",
+      "14%"
+    ],
+    [
+      "Computer Communications",
+      "Electronic Technology",
+      "21",
+      "-3.05%",
+      "-3.46%",
+      "23%"
+    ],
+    [
+      "Other Metals/Minerals",
+      "Non-Energy Minerals",
+      "233",
+      "-2.99%",
+      "-6.07%",
+      "13%"
+    ],
+    [
+      "Computer Peripherals",
+      "Electronic Technology",
+      "86",
+      "-2.70%",
+      "-3.42%",
+      "16%"
+    ],
+    [
+      "Precious Metals",
+      "Non-Energy Minerals",
+      "155",
+      "-2.35%",
+      "-1.13%",
+      "14%"
+    ],
+    [
+      "Miscellaneous Manufacturing",
+      "Producer Manufacturing",
+      "79",
+      "-2.34%",
+      "-3.43%",
+      "25%"
+    ],
+    [
+      "Biotechnology",
+      "Health Technology",
+      "231",
+      "-2.31%",
+      "+0.24%",
+      "18%"
+    ],
+    [
+      "Auto Parts: OEM",
+      "Producer Manufacturing",
+      "244",
+      "-2.17%",
+      "-2.00%",
+      "22%"
+    ],
+    [
+      "Tools & Hardware",
+      "Consumer Durables",
+      "21",
+      "-2.12%",
+      "-4.20%",
+      "19%"
+    ],
+    [
+      "Aerospace & Defense",
+      "Electronic Technology",
+      "158",
+      "-2.05%",
+      "-2.52%",
+      "14%"
+    ],
+    [
+      "Chemicals: Specialty",
+      "Process Industries",
+      "343",
+      "-1.95%",
+      "-4.68%",
+      "28%"
+    ],
+    [
+      "Office Equipment/Supplies",
+      "Producer Manufacturing",
+      "14",
+      "-1.75%",
+      "-0.78%",
+      "28%"
+    ],
+    [
+      "Industrial Specialties",
+      "Process Industries",
+      "150",
+      "-1.67%",
+      "-5.17%",
+      "23%"
+    ],
+    [
+      "Chemicals: Major Diversified",
+      "Process Industries",
+      "99",
+      "-1.56%",
+      "-2.68%",
+      "33%"
+    ],
+    [
+      "Airlines",
+      "Transportation",
+      "68",
+      "-1.53%",
+      "-3.85%",
+      "14%"
+    ],
+    [
+      "Electronics/Appliances",
+      "Consumer Durables",
+      "95",
+      "-1.31%",
+      "-0.85%",
+      "29%"
+    ],
+    [
+      "Textiles",
+      "Process Industries",
+      "75",
+      "-1.31%",
+      "-1.46%",
+      "24%"
+    ]
+  ],
+  "price_leaders_1m": [
+    [
+      "Financial Publishing/Services",
+      "Commercial Services",
+      "12",
+      "+8.51%",
+      "+1.56%",
+      "91%"
+    ],
+    [
+      "Oil Refining/Marketing",
+      "Energy Minerals",
+      "56",
+      "+6.65%",
+      "+1.39%",
+      "85%"
+    ],
+    [
+      "Personnel Services",
+      "Commercial Services",
+      "27",
+      "+6.34%",
+      "+2.16%",
+      "77%"
+    ],
+    [
+      "Marine Shipping",
+      "Transportation",
+      "107",
+      "+5.97%",
+      "+0.49%",
+      "78%"
+    ],
+    [
+      "Managed Health Care",
+      "Health Services",
+      "8",
+      "+5.39%",
+      "+1.81%",
+      "87%"
+    ],
+    [
+      "Insurance Brokers/Services",
+      "Finance",
+      "20",
+      "+5.23%",
+      "+1.25%",
+      "80%"
+    ],
+    [
+      "Integrated Oil",
+      "Energy Minerals",
+      "103",
+      "+4.75%",
+      "+2.10%",
+      "77%"
+    ],
+    [
+      "Contract Drilling",
+      "Industrial Services",
+      "20",
+      "+4.16%",
+      "+0.74%",
+      "85%"
+    ],
+    [
+      "Automotive Aftermarket",
+      "Consumer Durables",
+      "38",
+      "+3.71%",
+      "+0.11%",
+      "78%"
+    ],
+    [
+      "Internet Retail",
+      "Retail Trade",
+      "44",
+      "+3.63%",
+      "+0.09%",
+      "70%"
+    ],
+    [
+      "Other Consumer Specialties",
+      "Consumer Durables",
+      "29",
+      "+3.54%",
+      "-0.70%",
+      "65%"
+    ],
+    [
+      "Medical Distributors",
+      "Distribution Services",
+      "40",
+      "+3.43%",
+      "+0.68%",
+      "77%"
+    ],
+    [
+      "Publishing: Newspapers",
+      "Consumer Services",
+      "8",
+      "+3.37%",
+      "+1.27%",
+      "87%"
+    ],
+    [
+      "Life/Health Insurance",
+      "Finance",
+      "58",
+      "+3.25%",
+      "+0.00%",
+      "67%"
+    ],
+    [
+      "Oil & Gas Production",
+      "Energy Minerals",
+      "69",
+      "+3.15%",
+      "+1.54%",
+      "68%"
+    ],
+    [
+      "Pharmaceuticals: Other",
+      "Health Technology",
+      "54",
+      "+3.13%",
+      "+0.30%",
+      "68%"
+    ],
+    [
+      "Internet Software/Services",
+      "Technology Services",
+      "103",
+      "+3.08%",
+      "-0.15%",
+      "71%"
+    ],
+    [
+      "Railroads",
+      "Transportation",
+      "27",
+      "+2.88%",
+      "+0.55%",
+      "77%"
+    ],
+    [
+      "Oil & Gas Pipelines",
+      "Industrial Services",
+      "29",
+      "+2.88%",
+      "+0.95%",
+      "75%"
+    ],
+    [
+      "Publishing: Books/Magazines",
+      "Consumer Services",
+      "25",
+      "+2.87%",
+      "+0.30%",
+      "80%"
+    ],
+    [
+      "Agricultural Commodities/Milling",
+      "Process Industries",
+      "159",
+      "+2.74%",
+      "+0.00%",
+      "64%"
+    ],
+    [
+      "Advertising/Marketing Services",
+      "Commercial Services",
+      "48",
+      "+2.69%",
+      "-0.16%",
+      "62%"
+    ],
+    [
+      "Air Freight/Couriers",
+      "Transportation",
+      "88",
+      "+2.65%",
+      "-0.11%",
+      "71%"
+    ],
+    [
+      "Multi-Line Insurance",
+      "Finance",
+      "114",
+      "+2.65%",
+      "+0.14%",
+      "76%"
+    ],
+    [
+      "Pharmaceuticals: Generic",
+      "Health Technology",
+      "8",
+      "+2.58%",
+      "-0.37%",
+      "75%"
+    ]
+  ],
+  "edge_improvers": [
+    [
+      "Electronic Components",
+      "+2.85",
+      "6.70",
+      "6",
+      "80%"
+    ],
+    [
+      "Financial Conglomerates",
+      "+1.24",
+      "-4.98",
+      "7",
+      "40%"
+    ],
+    [
+      "Packaged Software",
+      "+1.10",
+      "3.58",
+      "383",
+      "64%"
+    ],
+    [
+      "Advertising/Marketing Services",
+      "+1.09",
+      "-4.90",
+      "13",
+      "38%"
+    ],
+    [
+      "Telecommunications Equipment",
+      "+0.92",
+      "4.67",
+      "37",
+      "64%"
+    ],
+    [
+      "Household/Personal Care",
+      "+0.62",
+      "3.40",
+      "22",
+      "75%"
+    ],
+    [
+      "Information Technology Services",
+      "+0.49",
+      "2.80",
+      "63",
+      "67%"
+    ],
+    [
+      "Industrial Machinery",
+      "+0.43",
+      "-3.14",
+      "28",
+      "27%"
+    ],
+    [
+      "Precious Metals",
+      "+0.43",
+      "-1.58",
+      "40",
+      "48%"
+    ],
+    [
+      "Specialty Stores",
+      "+0.33",
+      "4.54",
+      "30",
+      "74%"
+    ],
+    [
+      "Investment Trusts/Mutual Funds",
+      "+0.29",
+      "2.88",
+      "10",
+      "80%"
+    ],
+    [
+      "Casinos/Gaming",
+      "+0.15",
+      "1.39",
+      "13",
+      "77%"
+    ],
+    [
+      "Medical Specialties",
+      "+0.08",
+      "-1.61",
+      "28",
+      "48%"
+    ],
+    [
+      "Biotechnology",
+      "+0.00",
+      "5.83",
+      "96",
+      "73%"
+    ],
+    [
+      "Computer Peripherals",
+      "+0.00",
+      "3.56",
+      "6",
+      "67%"
+    ],
+    [
+      "Financial Publishing/Services",
+      "+0.00",
+      "5.53",
+      "5",
+      "60%"
+    ],
+    [
+      "Electronic Equipment/Instruments",
+      "+0.00",
+      "4.00",
+      "35",
+      "78%"
+    ],
+    [
+      "Apparel/Footwear",
+      "+0.00",
+      "1.20",
+      "5",
+      "60%"
+    ],
+    [
+      "Beverages: Non-Alcoholic",
+      "+0.00",
+      "1.05",
+      "8",
+      "62%"
+    ],
+    [
+      "Data Processing Services",
+      "+0.00",
+      "-2.69",
+      "77",
+      "33%"
+    ],
+    [
+      "Apparel/Footwear Retail",
+      "+0.00",
+      "4.81",
+      "5",
+      "60%"
+    ],
+    [
+      "Air Freight/Couriers",
+      "+0.00",
+      "4.67",
+      "9",
+      "89%"
+    ],
+    [
+      "Airlines",
+      "+0.00",
+      "4.08",
+      "15",
+      "72%"
+    ],
+    [
+      "Unknown",
+      "+0.00",
+      "3.64",
+      "24",
+      "79%"
+    ],
+    [
+      "Real Estate Development",
+      "+0.00",
+      "5.59",
+      "8",
+      "62%"
+    ]
+  ],
+  "edge_decliners": [
+    [
+      "Alternative Power Generation",
+      "-7.98",
+      "-9.90",
+      "9",
+      "25%"
+    ],
+    [
+      "Electrical Products",
+      "-7.93",
+      "1.95",
+      "90",
+      "50%"
+    ],
+    [
+      "Integrated Oil",
+      "-7.35",
+      "-1.74",
+      "9",
+      "50%"
+    ],
+    [
+      "Computer Processing Hardware",
+      "-3.30",
+      "-0.91",
+      "37",
+      "48%"
+    ],
+    [
+      "Electronic Production Equipment",
+      "-2.03",
+      "0.30",
+      "41",
+      "58%"
+    ],
+    [
+      "Aerospace & Defense",
+      "-0.91",
+      "-2.33",
+      "129",
+      "38%"
+    ],
+    [
+      "Finance/Rental/Leasing",
+      "-0.73",
+      "5.51",
+      "57",
+      "57%"
+    ],
+    [
+      "Chemicals: Agricultural",
+      "-0.61",
+      "-0.27",
+      "7",
+      "43%"
+    ],
+    [
+      "Semiconductors",
+      "-0.23",
+      "4.30",
+      "145",
+      "63%"
+    ],
+    [
+      "Investment Banks/Brokers",
+      "-0.23",
+      "2.64",
+      "35",
+      "54%"
+    ],
+    [
+      "Pharmaceuticals: Major",
+      "-0.13",
+      "2.86",
+      "53",
+      "63%"
+    ],
+    [
+      "Computer Peripherals",
+      "+0.00",
+      "3.56",
+      "6",
+      "67%"
+    ],
+    [
+      "Data Processing Services",
+      "+0.00",
+      "-2.69",
+      "77",
+      "33%"
+    ],
+    [
+      "Beverages: Non-Alcoholic",
+      "+0.00",
+      "1.05",
+      "8",
+      "62%"
+    ],
+    [
+      "Apparel/Footwear",
+      "+0.00",
+      "1.20",
+      "5",
+      "60%"
+    ],
+    [
+      "Biotechnology",
+      "+0.00",
+      "5.83",
+      "96",
+      "73%"
+    ],
+    [
+      "Internet Software/Services",
+      "+0.00",
+      "2.86",
+      "75",
+      "47%"
+    ],
+    [
+      "Hotels/Resorts/Cruise lines",
+      "+0.00",
+      "1.30",
+      "6",
+      "60%"
+    ],
+    [
+      "Commercial Printing/Forms",
+      "+0.00",
+      "-6.59",
+      "6",
+      "17%"
+    ],
+    [
+      "Engineering & Construction",
+      "+0.00",
+      "0.18",
+      "16",
+      "53%"
+    ],
+    [
+      "Food: Specialty/Candy",
+      "+0.00",
+      "4.24",
+      "7",
+      "57%"
+    ],
+    [
+      "Financial Publishing/Services",
+      "+0.00",
+      "5.53",
+      "5",
+      "60%"
+    ],
+    [
+      "Home Improvement Chains",
+      "+0.00",
+      "2.52",
+      "7",
+      "100%"
+    ],
+    [
+      "Electronic Equipment/Instruments",
+      "+0.00",
+      "4.00",
+      "35",
+      "78%"
+    ],
+    [
+      "Internet Retail",
+      "+0.00",
+      "0.85",
+      "9",
+      "56%"
+    ]
+  ],
+  "rotation_rows": [
+    [
+      "1",
+      "Biotechnology",
+      "Health Technology",
+      "0.894",
+      "+21.32%",
+      "NASDAQ:CLDX, NASDAQ:COGT, NASDAQ:XERS, EURONEXT:LKFT, N"
+    ],
+    [
+      "2",
+      "Insurance Brokers/Services",
+      "Finance",
+      "0.887",
+      "+13.99%",
+      "NASDAQ:BWIN, NYSE:BRO, NASDAQ:GSHD, NASDAQ:WTW, NYSE:CR"
+    ],
+    [
+      "3",
+      "Life/Health Insurance",
+      "Finance",
+      "0.872",
+      "+10.10%",
+      "NYSE:PRI, NASDAQ:PRVA, NYSE:EQH, NYSE:VOYA, LSE:SDLF"
+    ],
+    [
+      "4",
+      "Specialty Insurance",
+      "Finance",
+      "0.870",
+      "+6.08%",
+      "NYSE:ESNT, NYSE:RDN, NYSE:STC, TSX:IFC, NYSE:FAF"
+    ],
+    [
+      "5",
+      "Textiles",
+      "Process Industries",
+      "0.864",
+      "+4.53%",
+      "VIE:LNZ, NYSE:AIN, SIX:OERL, OTC:BWEL, LSE:COA"
+    ],
+    [
+      "6",
+      "Automotive Aftermarket",
+      "Consumer Durables",
+      "0.856",
+      "+7.45%",
+      "MIL:PIRC, NASDAQ:GT, NASDAQ:XPEL, EURONEXT:ML, NASDAQ:D"
+    ],
+    [
+      "7",
+      "Commercial Printing/Forms",
+      "Commercial Services",
+      "0.855",
+      "+3.36%",
+      "NYSE:EBF, NYSE:GPGI, NYSE:DLX, LSE:FOUR, NASDAQ:CMPR"
+    ],
+    [
+      "8",
+      "Pharmaceuticals: Major",
+      "Health Technology",
+      "0.844",
+      "+10.24%",
+      "NASDAQ:LGND, NASDAQ:NUVL, NASDAQ:VRTX, NASDAQ:INCY, NAS"
+    ],
+    [
+      "9",
+      "Multi-Line Insurance",
+      "Finance",
+      "0.843",
+      "+8.26%",
+      "NYSE:AXS, NYSE:RLI, NASDAQ:DGICA, NASDAQ:SKWD, NASDAQ:T"
+    ],
+    [
+      "10",
+      "Hospital/Nursing Management",
+      "Health Services",
+      "0.841",
+      "+6.84%",
+      "XETR:RHK, TSX:EXE, NYSE:BKD, NYSE:ARDT, AMEX:NHC"
+    ],
+    [
+      "11",
+      "Property/Casualty Insurance",
+      "Finance",
+      "0.840",
+      "+9.59%",
+      "NYSE:TRV, NYSE:HMN, NYSE:CB, NYSE:EIG, NYSE:MCY"
+    ],
+    [
+      "12",
+      "Containers/Packaging",
+      "Process Industries",
+      "0.840",
+      "+9.13%",
+      "NYSE:AMBP, TSX:WPK, BME:VID, NASDAQ:KRT, NYSE:SLGN"
+    ],
+    [
+      "13",
+      "Restaurants",
+      "Consumer Services",
+      "0.831",
+      "+7.68%",
+      "NASDAQ:CBRL, NASDAQ:BJRI, LSE:MAB, NASDAQ:KRUS, LSE:SSP"
+    ],
+    [
+      "14",
+      "Internet Retail",
+      "Retail Trade",
+      "0.814",
+      "+9.09%",
+      "NYSE:GIC, NYSE:CPNG, NYSE:ETSY, NASDAQ:GLBE, NASDAQ:LQD"
+    ],
+    [
+      "15",
+      "Miscellaneous Manufacturing",
+      "Producer Manufacturing",
+      "0.814",
+      "+4.02%",
+      "NYSE:MYE, NASDAQ:MATW, NYSE:WMS, NYSE:BRC, NASDAQ:SWIM"
+    ],
+    [
+      "16",
+      "Other Consumer Services",
+      "Consumer Services",
+      "0.807",
+      "+5.97%",
+      "NYSE:SCI, NASDAQ:TRIP, LSE:SAGA, NASDAQ:BKNG, NASDAQ:OS"
+    ],
+    [
+      "17",
+      "Medical/Nursing Services",
+      "Health Services",
+      "0.798",
+      "+11.44%",
+      "NASDAQ:NEO, NASDAQ:AVAH, NYSE:CON, NASDAQ:PNTG, EURONEX"
+    ],
+    [
+      "18",
+      "Other Transportation",
+      "Transportation",
+      "0.794",
+      "+3.33%",
+      "NYSE:UBER, NYSE:PFGC, LSE:FGP, TSX:SVI, NASDAQ:LYFT"
+    ],
+    [
+      "19",
+      "Industrial Conglomerates",
+      "Producer Manufacturing",
+      "0.794",
+      "+4.00%",
+      "BME:GSJ, EURONEXT:BB, NYSE:MMM, NASDAQ:AIIR, BME:CIRSA"
+    ],
+    [
+      "20",
+      "Water Utilities",
+      "Utilities",
+      "0.793",
+      "+3.23%",
+      "NYSE:AWK, NYSE:AWR, EURONEXT:VIE, NYSE:CWT, NASDAQ:MSEX"
+    ],
+    [
+      "21",
+      "Construction Materials",
+      "Non-Energy Minerals",
+      "0.791",
+      "+2.99%",
+      "NYSE:ACA, NYSE:KNF, NYSE:TTAM, MIL:CALT, NYSE:VMC"
+    ],
+    [
+      "22",
+      "Advertising/Marketing Services",
+      "Commercial Services",
+      "0.788",
+      "+5.62%",
+      "NASDAQ:QNST, NASDAQ:CRTO, NASDAQ:PTRN, EURONEXT:DEC, EU"
+    ],
+    [
+      "23",
+      "Food: Major Diversified",
+      "Consumer Non-Durables",
+      "0.786",
+      "+4.47%",
+      "NYSE:CAG, NYSE:GIS, NYSE:HLF, NASDAQ:SMPL, SIX:NESN"
+    ],
+    [
+      "24",
+      "Internet Software/Services",
+      "Technology Services",
+      "0.781",
+      "+8.97%",
+      "NASDAQ:ZD, LSE:MOON, NYSE:ATHM, NASDAQ:TRVG, NYSE:GRND"
+    ],
+    [
+      "25",
+      "Chemicals: Agricultural",
+      "Process Industries",
+      "0.772",
+      "+0.75%",
+      "NYSE:ODC, EURONEXT:OCI, NYSE:SMG, NYSE:FMC, TSX:NTR"
+    ],
+    [
+      "26",
+      "Precious Metals",
+      "Non-Energy Minerals",
+      "0.770",
+      "+2.86%",
+      "TSX:FF, TSX:GMIN, TSXV:BZ, TSX:DPM, TSX:MAU"
+    ],
+    [
+      "27",
+      "Packaged Software",
+      "Technology Services",
+      "0.769",
+      "+6.44%",
+      "NASDAQ:HQ, NASDAQ:INNV, NYSE:VIA, XETR:CHG, NYSE:DV"
+    ],
+    [
+      "28",
+      "Miscellaneous Commercial Services",
+      "Commercial Services",
+      "0.748",
+      "+4.40%",
+      "NASDAQ:PAYO, NYSE:ABM, NYSE:CXW, NASDAQ:PRAA, NYSE:NVRI"
+    ]
+  ],
+  "lane_rows": [
+    [
+      "Other Metals/Minerals",
+      "26",
+      "5.53%",
+      "69%",
+      "-5.4%"
+    ],
+    [
+      "Finance/Rental/Leasing",
+      "34",
+      "5.51%",
+      "56%",
+      "-9.7%"
+    ],
+    [
+      "Specialty Stores",
+      "22",
+      "4.65%",
+      "73%",
+      "1.3%"
+    ],
+    [
+      "Semiconductors",
+      "76",
+      "4.59%",
+      "61%",
+      "25.1%"
+    ],
+    [
+      "Packaged Software",
+      "260",
+      "3.58%",
+      "64%",
+      "9.4%"
+    ],
+    [
+      "Biotechnology",
+      "72",
+      "3.30%",
+      "70%",
+      "2.1%"
+    ],
+    [
+      "Internet Software/Services",
+      "48",
+      "2.86%",
+      "55%",
+      "0.8%"
+    ],
+    [
+      "Pharmaceuticals: Major",
+      "39",
+      "2.86%",
+      "64%",
+      "3.6%"
+    ],
+    [
+      "Electrical Products",
+      "54",
+      "2.75%",
+      "60%",
+      "13.6%"
+    ],
+    [
+      "Information Technology Services",
+      "43",
+      "2.31%",
+      "62%",
+      "7.3%"
+    ],
+    [
+      "Electronic Equipment/Instruments",
+      "23",
+      "1.41%",
+      "62%",
+      "-11.4%"
+    ]
+  ],
+  "opportunity_rows": [
+    [
+      "Insurance Brokers/Services",
+      "Finance",
+      "Late / fading edge",
+      "+1.25%",
+      "+5.23%",
+      "\u2014",
+      "0.89",
+      "1",
+      "RYAN"
+    ],
+    [
+      "Automotive Aftermarket",
+      "Consumer Durables",
+      "Late / fading edge",
+      "+0.11%",
+      "+3.71%",
+      "\u2014",
+      "0.86",
+      "\u2014",
+      "\u2014"
+    ],
+    [
+      "Consumer Sundries",
+      "Consumer Non-Durables",
+      "Late / fading edge",
+      "+0.51%",
+      "+1.71%",
+      "\u2014",
+      "\u2014",
+      "\u2014",
+      "\u2014"
+    ],
+    [
+      "Specialty Insurance",
+      "Finance",
+      "Late / fading edge",
+      "+0.50%",
+      "+1.89%",
+      "\u2014",
+      "0.87",
+      "\u2014",
+      "\u2014"
+    ],
+    [
+      "Life/Health Insurance",
+      "Finance",
+      "Avoid / unwind",
+      "+0.00%",
+      "+3.25%",
+      "\u2014",
+      "0.87",
+      "1",
+      "CLOV"
+    ],
+    [
+      "Unknown",
+      "\u2014",
+      "Avoid / unwind",
+      "\u2014",
+      "\u2014",
+      "0.00",
+      "\u2014",
+      "\u2014",
+      "\u2014"
+    ],
+    [
+      "Oil Refining/Marketing",
+      "Energy Minerals",
+      "Late / fading edge",
+      "+1.39%",
+      "+6.65%",
+      "\u2014",
+      "0.66",
+      "2",
+      "PARR"
+    ],
+    [
+      "Multi-Line Insurance",
+      "Finance",
+      "Late / fading edge",
+      "+0.14%",
+      "+2.65%",
+      "\u2014",
+      "0.84",
+      "\u2014",
+      "\u2014"
+    ],
+    [
+      "Marine Shipping",
+      "Transportation",
+      "Late / fading edge",
+      "+0.49%",
+      "+5.97%",
+      "\u2014",
+      "0.70",
+      "1",
+      "DHT"
+    ],
+    [
+      "Drugstore Chains",
+      "Retail Trade",
+      "Late / fading edge",
+      "+0.17%",
+      "+1.42%",
+      "\u2014",
+      "\u2014",
+      "\u2014",
+      "\u2014"
+    ],
+    [
+      "Railroads",
+      "Transportation",
+      "Late / fading edge",
+      "+0.55%",
+      "+2.88%",
+      "\u2014",
+      "0.69",
+      "\u2014",
+      "\u2014"
+    ],
+    [
+      "Pharmaceuticals: Generic",
+      "Health Technology",
+      "Avoid / unwind",
+      "-0.37%",
+      "+2.58%",
+      "\u2014",
+      "\u2014",
+      "\u2014",
+      "\u2014"
+    ],
+    [
+      "Industrial Conglomerates",
+      "Producer Manufacturing",
+      "Late / fading edge",
+      "+0.01%",
+      "+2.58%",
+      "\u2014",
+      "0.79",
+      "\u2014",
+      "\u2014"
+    ],
+    [
+      "Water Utilities",
+      "Utilities",
+      "Late / fading edge",
+      "+0.20%",
+      "+1.77%",
+      "\u2014",
+      "0.79",
+      "\u2014",
+      "\u2014"
+    ],
+    [
+      "Other Transportation",
+      "Transportation",
+      "Late / fading edge",
+      "+0.07%",
+      "+2.07%",
+      "\u2014",
+      "0.79",
+      "1",
+      "DIDIY"
+    ],
+    [
+      "Oil & Gas Pipelines",
+      "Industrial Services",
+      "Late / fading edge",
+      "+0.95%",
+      "+2.88%",
+      "\u2014",
+      "0.58",
+      "1",
+      "VG"
+    ],
+    [
+      "Food Distributors",
+      "Distribution Services",
+      "Late / fading edge",
+      "+0.02%",
+      "+2.52%",
+      "\u2014",
+      "0.73",
+      "\u2014",
+      "\u2014"
+    ],
+    [
+      "Services to the Health Industry",
+      "Health Services",
+      "Late / fading edge",
+      "+1.50%",
+      "-1.73%",
+      "\u2014",
+      "\u2014",
+      "\u2014",
+      "\u2014"
+    ],
+    [
+      "Pharmaceuticals: Other",
+      "Health Technology",
+      "Late / fading edge",
+      "+0.30%",
+      "+3.13%",
+      "\u2014",
+      "0.62",
+      "1",
+      "BRBR"
+    ],
+    [
+      "Hospital/Nursing Management",
+      "Health Services",
+      "Late / fading edge",
+      "+0.01%",
+      "+1.09%",
+      "\u2014",
+      "0.84",
+      "1",
+      "THC"
+    ],
+    [
+      "Publishing: Newspapers",
+      "Consumer Services",
+      "Late / fading edge",
+      "+1.27%",
+      "+3.37%",
+      "\u2014",
+      "0.47",
+      "\u2014",
+      "\u2014"
+    ],
+    [
+      "Medical Distributors",
+      "Distribution Services",
+      "Late / fading edge",
+      "+0.68%",
+      "+3.43%",
+      "\u2014",
+      "0.50",
+      "\u2014",
+      "\u2014"
+    ],
+    [
+      "Food: Major Diversified",
+      "Consumer Non-Durables",
+      "Late / fading edge",
+      "+0.06%",
+      "+1.17%",
+      "\u2014",
+      "0.79",
+      "1",
+      "SMPL"
+    ],
+    [
+      "Restaurants",
+      "Consumer Services",
+      "Late / fading edge",
+      "+0.80%",
+      "+2.51%",
+      "0.00",
+      "0.83",
+      "9",
+      "WEN"
+    ],
+    [
+      "Investment Managers",
+      "Finance",
+      "Avoid / unwind",
+      "-0.14%",
+      "+2.49%",
+      "\u2014",
+      "0.70",
+      "3",
+      "HLNE"
+    ],
+    [
+      "Internet Retail",
+      "Retail Trade",
+      "Late / fading edge",
+      "+0.09%",
+      "+3.63%",
+      "0.00",
+      "0.81",
+      "5",
+      "GLBE"
+    ],
+    [
+      "Miscellaneous",
+      "Miscellaneous",
+      "Avoid / unwind",
+      "+0.00%",
+      "-0.57%",
+      "\u2014",
+      "\u2014",
+      "1",
+      "HUT"
+    ],
+    [
+      "Discount Stores",
+      "Retail Trade",
+      "Late / fading edge",
+      "+0.44%",
+      "+1.51%",
+      "\u2014",
+      "0.59",
+      "\u2014",
+      "\u2014"
+    ]
+  ],
+  "early_rotation_rows": [
+    [
+      "Advertising/Marketing Services",
+      "Commercial Services",
+      "-0.16%",
+      "1.09",
+      "0.79",
+      "\u2014",
+      "2",
+      "SBET"
+    ],
+    [
+      "Medical Specialties",
+      "Health Technology",
+      "-0.15%",
+      "0.08",
+      "0.53",
+      "\u2014",
+      "16",
+      "GH"
+    ],
+    [
+      "Packaged Software",
+      "Technology Services",
+      "-0.96%",
+      "1.10",
+      "0.77",
+      "3.58%",
+      "89",
+      "PGY"
+    ],
+    [
+      "Financial Conglomerates",
+      "Finance",
+      "-0.18%",
+      "1.24",
+      "0.52",
+      "\u2014",
+      "1",
+      "BMNR"
+    ],
+    [
+      "Precious Metals",
+      "Non-Energy Minerals",
+      "-2.35%",
+      "0.43",
+      "0.77",
+      "\u2014",
+      "13",
+      "CDE"
+    ],
+    [
+      "Information Technology Services",
+      "Technology Services",
+      "-0.14%",
+      "0.49",
+      "0.32",
+      "2.31%",
+      "17",
+      "EPAM"
+    ],
+    [
+      "Telecommunications Equipment",
+      "Electronic Technology",
+      "-4.26%",
+      "0.92",
+      "0.46",
+      "\u2014",
+      "6",
+      "ONDS"
+    ],
+    [
+      "Industrial Machinery",
+      "Producer Manufacturing",
+      "-3.17%",
+      "0.43",
+      "0.40",
+      "\u2014",
+      "12",
+      "OKLO"
+    ],
+    [
+      "Electronic Components",
+      "Electronic Technology",
+      "-5.04%",
+      "2.85",
+      "0.21",
+      "\u2014",
+      "5",
+      "HTRO"
+    ]
+  ],
+  "momentum_rows": [
+    [
+      "Household/Personal Care",
+      "Consumer Non-Durables",
+      "+0.12%",
+      "0.62",
+      "0.67",
+      "\u2014",
+      "3",
+      "COTY"
+    ],
+    [
+      "Investment Trusts/Mutual Funds",
+      "Miscellaneous",
+      "+0.01%",
+      "0.29",
+      "0.63",
+      "\u2014",
+      "3",
+      "ASST"
+    ],
+    [
+      "Specialty Stores",
+      "Retail Trade",
+      "+0.20%",
+      "0.33",
+      "0.66",
+      "4.65%",
+      "9",
+      "BBWI"
+    ],
+    [
+      "Casinos/Gaming",
+      "Consumer Services",
+      "+0.17%",
+      "0.15",
+      "0.26",
+      "\u2014",
+      "2",
+      "FLUT"
+    ]
+  ],
+  "avoid_rows": [
+    [
+      "Semiconductors",
+      "Electronic Technology",
+      "-4.31%",
+      "-0.23",
+      "0.30",
+      "4.59%",
+      "33",
+      "WOLF"
+    ],
+    [
+      "Metal Fabrication",
+      "Producer Manufacturing",
+      "-3.95%",
+      "\u2014",
+      "0.43",
+      "\u2014",
+      "1",
+      "USAR"
+    ],
+    [
+      "Electrical Products",
+      "Producer Manufacturing",
+      "-3.94%",
+      "-7.93",
+      "0.34",
+      "2.75%",
+      "19",
+      "SLDP"
+    ],
+    [
+      "Electronic Production Equipment",
+      "Electronic Technology",
+      "-3.50%",
+      "-2.03",
+      "0.15",
+      "\u2014",
+      "9",
+      "VSH"
+    ],
+    [
+      "Computer Processing Hardware",
+      "Electronic Technology",
+      "-3.22%",
+      "-3.30",
+      "0.21",
+      "\u2014",
+      "7",
+      "INFQ"
+    ],
+    [
+      "Electronic Equipment/Instruments",
+      "Electronic Technology",
+      "-3.07%",
+      "0.00",
+      "0.44",
+      "1.41%",
+      "11",
+      "OPUS"
+    ],
+    [
+      "Computer Communications",
+      "Electronic Technology",
+      "-3.05%",
+      "\u2014",
+      "\u2014",
+      "\u2014",
+      "\u2014",
+      "\u2014"
+    ],
+    [
+      "Other Metals/Minerals",
+      "Non-Energy Minerals",
+      "-2.99%",
+      "0.00",
+      "0.56",
+      "5.53%",
+      "13",
+      "LAC"
+    ],
+    [
+      "Computer Peripherals",
+      "Electronic Technology",
+      "-2.70%",
+      "0.00",
+      "0.54",
+      "\u2014",
+      "3",
+      "SNDK"
+    ],
+    [
+      "Miscellaneous Manufacturing",
+      "Producer Manufacturing",
+      "-2.34%",
+      "\u2014",
+      "0.81",
+      "\u2014",
+      "2",
+      "TOM"
+    ],
+    [
+      "Biotechnology",
+      "Health Technology",
+      "-2.31%",
+      "0.00",
+      "0.89",
+      "3.30%",
+      "32",
+      "ZEAL"
+    ],
+    [
+      "Auto Parts: OEM",
+      "Producer Manufacturing",
+      "-2.17%",
+      "\u2014",
+      "0.21",
+      "\u2014",
+      "2",
+      "HYLN"
+    ],
+    [
+      "Tools & Hardware",
+      "Consumer Durables",
+      "-2.12%",
+      "\u2014",
+      "0.73",
+      "\u2014",
+      "\u2014",
+      "\u2014"
+    ],
+    [
+      "Aerospace & Defense",
+      "Electronic Technology",
+      "-2.05%",
+      "-0.91",
+      "0.53",
+      "\u2014",
+      "24",
+      "AVAV"
+    ],
+    [
+      "Chemicals: Specialty",
+      "Process Industries",
+      "-1.95%",
+      "\u2014",
+      "0.46",
+      "\u2014",
+      "3",
+      "LWLG"
+    ],
+    [
+      "Office Equipment/Supplies",
+      "Producer Manufacturing",
+      "-1.75%",
+      "\u2014",
+      "\u2014",
+      "\u2014",
+      "\u2014",
+      "\u2014"
+    ],
+    [
+      "Industrial Specialties",
+      "Process Industries",
+      "-1.67%",
+      "\u2014",
+      "0.40",
+      "\u2014",
+      "\u2014",
+      "\u2014"
+    ],
+    [
+      "Chemicals: Major Diversified",
+      "Process Industries",
+      "-1.56%",
+      "\u2014",
+      "0.47",
+      "\u2014",
+      "2",
+      "HUN"
+    ]
+  ],
+  "setup_rows": [
+    [
+      "Insurance Brokers/Services",
+      "Late / fading edge",
+      "+1.25%",
+      "0.89",
+      "RYAN: unified #526, fwd +3%, safety 0.41, thin"
+    ],
+    [
+      "Life/Health Insurance",
+      "Avoid / unwind",
+      "+0.00%",
+      "0.87",
+      "CLOV: unified #369, fwd -27%, safety 0.52, thin \u00b7 STJ: screen #63, composite 0.68 \u00b7 JXN: screen #407, composite 0.56"
+    ],
+    [
+      "Oil Refining/Marketing",
+      "Late / fading edge",
+      "+1.39%",
+      "0.66",
+      "PARR: unified #371, fwd +12%, safety 0.55, mixed \u00b7 PBF: unified #383, fwd +2%, safety 0.42, mixed"
+    ],
+    [
+      "Multi-Line Insurance",
+      "Late / fading edge",
+      "+0.14%",
+      "0.84",
+      "AXS: blindspot quiet 0.92, 1M +14.3%"
+    ],
+    [
+      "Marine Shipping",
+      "Late / fading edge",
+      "+0.49%",
+      "0.70",
+      "DHT: unified #464, fwd -4%, safety 0.60, thin"
+    ],
+    [
+      "Other Transportation",
+      "Late / fading edge",
+      "+0.07%",
+      "0.79",
+      "DIDIY: unified #222, fwd +87%, safety 0.40, thin \u00b7 FGP: screen #373, composite 0.56"
+    ],
+    [
+      "Oil & Gas Pipelines",
+      "Late / fading edge",
+      "+0.95%",
+      "0.58",
+      "VG: unified #251, fwd +50%, safety 0.41, thin"
+    ],
+    [
+      "Pharmaceuticals: Other",
+      "Late / fading edge",
+      "+0.30%",
+      "0.62",
+      "BRBR: unified #259, fwd +87%, safety 0.56, thin"
+    ],
+    [
+      "Hospital/Nursing Management",
+      "Late / fading edge",
+      "+0.00%",
+      "0.84",
+      "THC: unified #356, fwd +30%, safety 0.57, thin \u00b7 BKD: screen #97, composite 0.66"
+    ],
+    [
+      "Medical Distributors",
+      "Late / fading edge",
+      "+0.68%",
+      "0.50",
+      "RDC: screen #292, composite 0.58"
+    ],
+    [
+      "Food: Major Diversified",
+      "Late / fading edge",
+      "+0.06%",
+      "0.79",
+      "SMPL: unified #289, fwd +24%, safety 0.58, mixed"
+    ],
+    [
+      "Restaurants",
+      "Late / fading edge",
+      "+0.80%",
+      "0.83",
+      "WEN: unified #269, fwd +24%, safety 0.45, thin \u00b7 EAT: unified #410, fwd -8%, safety 0.46, thin \u00b7 CAVA: unified #461, fwd"
+    ],
+    [
+      "Investment Managers",
+      "Avoid / unwind",
+      "-0.14%",
+      "0.70",
+      "HLNE: unified #425, fwd +25%, safety 0.75, thin \u00b7 STEP: unified #471, fwd +46%, safety 0.39, thin \u00b7 N91: unified #536, f"
+    ],
+    [
+      "Internet Retail",
+      "Late / fading edge",
+      "+0.09%",
+      "0.81",
+      "GLBE: unified #382, fwd -20%, safety 0.70, thin \u00b7 THG: unified #386, fwd +38%, safety 0.24, thin \u00b7 RVLV: unified #480, f"
+    ],
+    [
+      "Miscellaneous",
+      "Avoid / unwind",
+      "+0.00%",
+      "\u2014",
+      "HUT: unified #285, fwd +27%, safety 0.35, thin"
+    ],
+    [
+      "Discount Stores",
+      "Late / fading edge",
+      "+0.44%",
+      "0.59",
+      "BME: screen #335, composite 0.57"
+    ],
+    [
+      "Major Banks",
+      "Avoid / unwind",
+      "-0.15%",
+      "0.71",
+      "INTR: unified #358, fwd +63%, safety 0.48, thin \u00b7 DAVE: unified #334, fwd -33%, safety 0.66, thin \u00b7 BAP: blindspot quiet"
+    ],
+    [
+      "Property/Casualty Insurance",
+      "Late / fading edge",
+      "+0.49%",
+      "0.84",
+      "LMND: unified #419, fwd -16%, safety 0.44, mixed \u00b7 TRV: blindspot quiet 0.91, 1M +12.0%"
+    ],
+    [
+      "Gas Distributors",
+      "Late / fading edge",
+      "+0.36%",
+      "0.59",
+      "CTRI: unified #574, fwd +21%, safety 0.35, thin"
+    ],
+    [
+      "Personnel Services",
+      "Late / fading edge",
+      "+2.16%",
+      "0.57",
+      "HAS: unified #357, fwd -14%, safety 0.51, thin \u00b7 UPWK: unified #474, fwd +23%, safety 0.69, thin \u00b7 RHI: unified #405, fw"
+    ],
+    [
+      "Advertising/Marketing Services",
+      "Early rotation (price lag)",
+      "-0.16%",
+      "0.79",
+      "SBET: unified #178, fwd +91%, safety 0.45, mixed \u00b7 DJT: unified #316, fwd +82%, safety 0.32, thin \u00b7 WPP: screen #84, com"
+    ],
+    [
+      "Agricultural Commodities/Milling",
+      "Avoid / unwind",
+      "+0.00%",
+      "0.52",
+      "TLRY: unified #381, fwd +120%, safety 0.33, thin \u00b7 VITL: unified #442, fwd +18%, safety 0.54, thin \u00b7 GNS: unified #508, "
+    ],
+    [
+      "Other Consumer Services",
+      "Avoid / unwind",
+      "-0.53%",
+      "0.81",
+      "JET2: unified #108, fwd +60%, safety 0.66, thin \u00b7 TRIP: unified #364, fwd +15%, safety 0.49, thin \u00b7 PLNT: unified #435, "
+    ],
+    [
+      "Contract Drilling",
+      "Late / fading edge",
+      "+0.74%",
+      "0.21",
+      "PTEN: unified #288, fwd +31%, safety 0.55, thin \u00b7 RIG: unified #338, fwd +34%, safety 0.49, thin \u00b7 BORR: unified #514, f"
+    ],
+    [
+      "Regional Banks",
+      "Avoid / unwind",
+      "+0.00%",
+      "0.60",
+      "CHYM: unified #563, fwd -19%, safety 0.55, thin \u00b7 CREDIA: unified #518, fwd -8%, safety 0.41, thin \u00b7 FSBC: blindspot qui"
+    ],
+    [
+      "Household/Personal Care",
+      "Momentum + edge",
+      "+0.12%",
+      "0.67",
+      "COTY: unified #174, fwd +123%, safety 0.38, thin \u00b7 ELF: unified #413, fwd -16%, safety 0.48, supported \u00b7 EL: unified #50"
+    ],
+    [
+      "Recreational Products",
+      "Late / fading edge",
+      "+0.09%",
+      "0.63",
+      "PII: unified #463, fwd -3%, safety 0.32, mixed"
+    ],
+    [
+      "Containers/Packaging",
+      "Avoid / unwind",
+      "-0.53%",
+      "0.84",
+      "OI: unified #468, fwd +42%, safety 0.30, thin \u00b7 AMBP: blindspot quiet 0.97, 1M +11.6% \u00b7 WPK: blindspot quiet 0.96, 1M +7"
+    ],
+    [
+      "Construction Materials",
+      "Avoid / unwind",
+      "-0.28%",
+      "0.79",
+      "SRC: unified #580, fwd -24%, safety 0.50, thin \u00b7 ACA: blindspot quiet 0.94, 1M +12.7% \u00b7 BREE: screen #329, composite 0.5"
+    ],
+    [
+      "Financial Publishing/Services",
+      "Late / fading edge",
+      "+1.56%",
+      "0.41",
+      "FICO: unified #375, fwd -9%, safety 0.54, mixed \u00b7 EFX: unified #543, fwd +22%, safety 0.47, thin \u00b7 LSEG: unified #548, f"
+    ],
+    [
+      "Electronics/Appliance Stores",
+      "Late / fading edge",
+      "+0.03%",
+      "0.58",
+      "PUUILO: blindspot quiet 0.92, 1M +23.1%"
+    ],
+    [
+      "Food: Meat/Fish/Dairy",
+      "Avoid / unwind",
+      "-0.15%",
+      "0.54",
+      "BN: blindspot quiet 0.91, 1M +9.8%"
+    ],
+    [
+      "Managed Health Care",
+      "Late / fading edge",
+      "+1.81%",
+      "0.41",
+      "CNC: unified #164, fwd +72%, safety 0.57, mixed \u00b7 OSCR: unified #304, fwd +41%, safety 0.67, thin \u00b7 ALHC: unified #462, "
+    ],
+    [
+      "Medical/Nursing Services",
+      "Avoid / unwind",
+      "-0.25%",
+      "0.80",
+      "AZTA: unified #513, fwd +37%, safety 0.59, thin \u00b7 HIMS: unified #507, fwd -19%, safety 0.33, thin \u00b7 WGS: unified #498, f"
+    ],
+    [
+      "Savings Banks",
+      "Avoid / unwind",
+      "+0.00%",
+      "0.66",
+      "SHAW: unified #530, fwd +31%, safety 0.53, thin \u00b7 KRNY: blindspot quiet 0.94, 1M +9.3% \u00b7 SMBC: blindspot quiet 0.92, 1M "
+    ],
+    [
+      "Textiles",
+      "Avoid / unwind",
+      "-1.31%",
+      "0.86",
+      "COA: unified #534, fwd -23%, safety 0.53, thin"
+    ],
+    [
+      "Electric Utilities",
+      "Avoid / unwind",
+      "-0.14%",
+      "0.63",
+      "TEP: unified #155, fwd +67%, safety 0.63, thin \u00b7 CEG: unified #495, fwd +4%, safety 0.44, thin \u00b7 BEPC: unified #569, fwd"
+    ],
+    [
+      "Coal",
+      "Late / fading edge",
+      "+0.66%",
+      "\u2014",
+      "BTU: unified #496, fwd +38%, safety 0.49, thin \u00b7 CNR: unified #528, fwd +12%, safety 0.61, thin \u00b7 AMR: screen #489, comp"
+    ],
+    [
+      "Investment Trusts/Mutual Funds",
+      "Momentum + edge",
+      "+0.01%",
+      "0.63",
+      "ASST: unified #38, fwd +88%, safety 0.49, mixed \u00b7 III: unified #270, fwd -41%, safety 0.64, mixed \u00b7 TPL: unified #372, f"
+    ],
+    [
+      "Wireless Telecommunications",
+      "Late / fading edge",
+      "+0.51%",
+      "0.39",
+      "AAF: unified #516, fwd -35%, safety 0.51, thin \u00b7 VOD: screen #153, composite 0.63"
+    ]
+  ],
+  "sector_chart": {
+    "categories": [
+      "Energy Minerals",
+      "Commercial Services",
+      "Transportation",
+      "Health Technology",
+      "Technology Services",
+      "Finance",
+      "Health Services",
+      "Distribution Services",
+      "Consumer Non-Durables",
+      "Consumer Services",
+      "Industrial Services",
+      "Utilities"
+    ],
+    "series": [
+      {
+        "name": "Median 1-month price change (%)",
+        "data": [
+          3.95,
+          2.69,
+          2.57,
+          2.23,
+          1.8,
+          1.64,
+          1.51,
+          1.5,
+          1.41,
+          0.97,
+          0.81,
+          0.75
+        ]
+      },
+      {
+        "name": "Median blindspot rotation score",
+        "data": [
+          2.58,
+          7.48,
+          6.84,
+          7.3,
+          5.48,
+          7.05,
+          7.98,
+          5.09,
+          4.83,
+          4.09,
+          5.79,
+          6.14
+        ],
+        "tone": "info"
+      }
+    ]
+  }
+}
