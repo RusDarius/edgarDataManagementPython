@@ -5,6 +5,7 @@ import pytest
 from run_edge_research_tools import (
     DEFAULT_HIGHLIGHTS_MIN_SHORTLIST_COUNT,
     _build_historical_validation_fields,
+    _resolve_highlights_lens_input_csv,
     _resolve_requested_symbol,
     run_edge_symbol_inspection_method,
 )
@@ -12,6 +13,17 @@ from run_edge_research_tools import (
 
 def test_default_highlights_min_shortlist_count_is_2000() -> None:
     assert DEFAULT_HIGHLIGHTS_MIN_SHORTLIST_COUNT == 2000
+
+
+def test_resolve_highlights_lens_input_csv_prefers_universe_csv() -> None:
+    resolved = _resolve_highlights_lens_input_csv(
+        {
+            "shortlist_csv": "shortlist.csv",
+            "universe_csv": "universe.csv",
+        }
+    )
+
+    assert resolved == Path("universe.csv")
 
 
 def test_build_historical_validation_fields_flags_strong_support() -> None:

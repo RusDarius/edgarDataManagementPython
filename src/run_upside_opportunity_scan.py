@@ -22,6 +22,10 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from edge_research_tools import run_resolution
+from edge_research_tools.upside_move_potential_scanner import (
+    DEFAULT_MOVE_HORIZON_DAYS,
+    build_upside_move_potential_scan,
+)
 from edge_research_tools.upside_opportunity_scanner import (
     DEFAULT_TOP_COUNT,
     build_upside_opportunity_scan,
@@ -93,6 +97,8 @@ def run_upside_opportunity_scan_method(
     use_earnings_priority: bool = True,
     auto_discover_latest: bool = True,
     duckdb_threads: int = 16,
+    include_move_potential: bool = True,
+    move_horizon_days: int = DEFAULT_MOVE_HORIZON_DAYS,
 ) -> dict[str, Any]:
     parent_run_dir = run_resolution.resolve_edge_parent_run_dir(
         run_ref=run_ref,
@@ -101,9 +107,10 @@ def run_upside_opportunity_scan_method(
     )
     lens_root = _resolve_lens_root(parent_run_dir)
     artifacts = _resolve_run_artifacts(lens_root)
+    output_dir = lens_root / "upside_opportunity_scan"
 
     result = build_upside_opportunity_scan(
-        output_dir=lens_root / "upside_opportunity_scan",
+        output_dir=output_dir,
         unified_csv_path=artifacts["unified_csv_path"],
         source_database_path=artifacts["source_database_path"],
         earnings_priority_csv_path=(
@@ -113,6 +120,24 @@ def run_upside_opportunity_scan_method(
         duckdb_threads=duckdb_threads,
     )
     result["parent_run_dir"] = parent_run_dir
+
+    move_result: dict[str, Any] | None = None
+    if include_move_potential:
+        move_result = build_upside_move_potential_scan(
+            output_dir=output_dir,
+            unified_csv_path=artifacts["unified_csv_path"],
+            source_database_path=artifacts["source_database_path"],
+            earnings_priority_csv_path=(
+                artifacts["earnings_priority_csv_path"]
+                if use_earnings_priority
+                else None
+            ),
+            opportunity_candidates_csv_path=result["candidates_csv"],
+            top_count=top_count,
+            horizon_days=move_horizon_days,
+            duckdb_threads=duckdb_threads,
+        )
+    result["move_potential_scan_result"] = move_result
     return result
 
 
@@ -124,7 +149,12 @@ def _print_upside_opportunity_scan_result(result: dict[str, Any]) -> None:
     print(f"Database: {result['database_path']}")
     print(f"Report: {result['report_md']}")
     print(f"Tier counts: {result['tier_counts']}")
-
+    move_result = result.get("move_potential_scan_result")
+    if move_result:
+        print(f"Move-potential candidates: {move_result['row_count']}")
+        print(f"Move-potential CSV: {move_result['candidates_csv']}")
+        print(f"Move-potential database: {move_result['database_path']}")
+        print(f"Move-potential tiers: {move_result['tier_counts']}")
 
 def run_upside_opportunity_scan_local_main() -> dict[str, Any]:
     """Edit the parameters below, then run this file directly."""
@@ -134,6 +164,8 @@ def run_upside_opportunity_scan_local_main() -> dict[str, Any]:
     top_count = DEFAULT_TOP_COUNT
     use_earnings_priority = True
     duckdb_threads = 16
+    include_move_potential = True
+    move_horizon_days = DEFAULT_MOVE_HORIZON_DAYS
     # ===== end params =====
 
     result = run_upside_opportunity_scan_method(
@@ -142,6 +174,8 @@ def run_upside_opportunity_scan_local_main() -> dict[str, Any]:
         top_count=top_count,
         use_earnings_priority=use_earnings_priority,
         duckdb_threads=duckdb_threads,
+        include_move_potential=include_move_potential,
+        move_horizon_days=move_horizon_days,
     )
     _print_upside_opportunity_scan_result(result)
     return result
@@ -172,6 +206,8 @@ def run_edge_research_and_upside_opportunity_scan_local_main() -> dict[str, Any]
     top_count = DEFAULT_TOP_COUNT
     use_earnings_priority = True
     duckdb_threads = 16
+    include_move_potential = True
+    move_horizon_days = DEFAULT_MOVE_HORIZON_DAYS
     # ===== end params =====
 
     edge_research_result: dict[str, Any] | None = None
@@ -195,6 +231,8 @@ def run_edge_research_and_upside_opportunity_scan_local_main() -> dict[str, Any]
         use_earnings_priority=use_earnings_priority,
         auto_discover_latest=parent_run_dir is None,
         duckdb_threads=duckdb_threads,
+        include_move_potential=include_move_potential,
+        move_horizon_days=move_horizon_days,
     )
     _print_upside_opportunity_scan_result(scan_result)
     return {
@@ -244,6 +282,20 @@ def _build_parser() -> argparse.ArgumentParser:
             "opportunity scan on top of the resulting parent run."
         ),
     )
+    parser.add_argument(
+        "--no-move-potential",
+        action="store_true",
+        help=(
+            "Skip the parallel Mag x Tilt x Catalyst move-potential ranking "
+            "(separate DuckDB in the same upside_opportunity_scan folder)."
+        ),
+    )
+    parser.add_argument(
+        "--move-horizon-days",
+        type=int,
+        default=DEFAULT_MOVE_HORIZON_DAYS,
+        help="Horizon in trading-day units for expected_move_proxy_pct (√T × ATRP).",
+    )
     parser.add_argument("--duckdb-threads", type=int, default=16)
     return parser
 
@@ -271,6 +323,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         top_count=args.top_count,
         use_earnings_priority=not args.no_earnings_priority,
         duckdb_threads=args.duckdb_threads,
+        include_move_potential=not args.no_move_potential,
+        move_horizon_days=args.move_horizon_days,
     )
     _print_upside_opportunity_scan_result(result)
 

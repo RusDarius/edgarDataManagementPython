@@ -6,7 +6,8 @@ symbol-day snapshot from scratch on every run. Use ``rebuild_foundation_snapshot
 
 - ``False`` — reuse an existing snapshot (aggregate-only; current default)
 - ``True`` — full rebuild into the ongoing base directory
-- ``"extend"`` — append only new all-fields days to the ongoing base, in chunks
+- ``"extend"`` — append missing all-fields days and refresh the current end day
+  when a newer same-day all-fields scan is available, in chunks
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ from .labeling import DEFAULT_FORWARD_LABEL_HORIZONS, run_forward_label_generati
 FoundationSnapshotMode = Literal["reuse", "rebuild", "extend"]
 FOUNDATION_BASE_DIR_PREFIX = "edge_ongoing_base"
 FOUNDATION_BASE_STATE_FILENAME = "foundation_base_state.json"
+SnapshotDayRunMeta = dict[str, Any]
 
 
 def normalize_foundation_snapshot_mode(
@@ -119,16 +121,152 @@ def write_foundation_base_state(base_dir: Path, payload: dict[str, Any]) -> Path
     return state_path
 
 
+def _coerce_utc_datetime(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None) if value.tzinfo is not None else value
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed.replace(tzinfo=None) if parsed.tzinfo is not None else parsed
+
+
+def _run_recency_key(
+    *,
+    run_id: str | None,
+    created_at_utc: datetime | None,
+) -> tuple[bool, datetime, str]:
+    """Sort key matching snapshot ingest: newer created_at, then run_id."""
+    return (
+        created_at_utc is not None,
+        created_at_utc or datetime.min,
+        str(run_id or ""),
+    )
+
+
+def _existing_snapshot_day_runs(snapshot_db: Path) -> dict[str, SnapshotDayRunMeta]:
+    """Return the ingested run metadata per source_day_label in the foundation snapshot."""
+    import duckdb
+
+    connection = duckdb.connect(snapshot_db.as_posix(), read_only=True)
+    try:
+        tables = {
+            str(row[0]) for row in connection.execute("SHOW TABLES").fetchall()
+        }
+        if "symbol_day_feature_snapshot" not in tables:
+            return {}
+        rows = connection.execute(
+            """
+            SELECT
+                source_day_label,
+                run_id,
+                run_created_at_utc
+            FROM (
+                SELECT
+                    source_day_label,
+                    run_id,
+                    run_created_at_utc,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY source_day_label
+                        ORDER BY run_created_at_utc DESC NULLS LAST,
+                            run_id DESC
+                    ) AS row_num
+                FROM symbol_day_feature_snapshot
+            )
+            WHERE row_num = 1
+            """
+        ).fetchall()
+        return {
+            str(row[0]): {
+                "run_id": str(row[1]) if row[1] is not None else None,
+                "run_created_at_utc": _coerce_utc_datetime(row[2]),
+            }
+            for row in rows
+        }
+    finally:
+        connection.close()
+
+
+def _latest_all_fields_run_meta(database_path: Path) -> SnapshotDayRunMeta | None:
+    """Read the newest all-fields scan from a daily TradingView DuckDB export."""
+    import duckdb
+
+    try:
+        connection = duckdb.connect(database_path.as_posix(), read_only=True)
+    except Exception:
+        return None
+    try:
+        tables = {
+            str(row[0]) for row in connection.execute("SHOW TABLES").fetchall()
+        }
+        if "run_metadata" not in tables:
+            return None
+        row = connection.execute(
+            """
+            SELECT run_id, created_at_utc
+            FROM run_metadata
+            ORDER BY created_at_utc DESC NULLS LAST, run_id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        if row is None:
+            return None
+        return {
+            "run_id": str(row[0]) if row[0] is not None else None,
+            "run_created_at_utc": _coerce_utc_datetime(row[1]),
+        }
+    except Exception:
+        return None
+    finally:
+        connection.close()
+
+
+def _source_has_newer_all_fields_run(
+    *,
+    database_path: Path,
+    snapshot_run: SnapshotDayRunMeta | None,
+) -> bool:
+    """True when the daily all-fields DB has a newer scan than the snapshot day."""
+    if snapshot_run is None:
+        return True
+    source_run = _latest_all_fields_run_meta(database_path)
+    if source_run is None:
+        return False
+    return _run_recency_key(
+        run_id=source_run.get("run_id"),
+        created_at_utc=source_run.get("run_created_at_utc"),
+    ) > _run_recency_key(
+        run_id=snapshot_run.get("run_id"),
+        created_at_utc=snapshot_run.get("run_created_at_utc"),
+    )
+
+
 def discover_days_to_append(
     *,
     all_fields_root: Path,
     existing_day_labels: set[str],
     after_day_label: str | None,
     end_day_label: str | None = None,
+    snapshot_day_runs: dict[str, SnapshotDayRunMeta] | None = None,
 ) -> list[Path]:
-    start_day_label = (
-        _next_day_label(after_day_label) if after_day_label is not None else None
-    )
+    """Find all-fields daily DBs to ingest on extend.
+
+    Includes:
+    - missing days after the current foundation end (new calendar days)
+    - the current end day itself when a newer same-day all-fields scan exists
+
+    Discovery starts at ``after_day_label`` inclusive so a second TradingView
+    all-fields export on the same day can replace the first ingest.
+    """
+    # Inclusive of the current end day so same-day rescans can refresh.
+    start_day_label = after_day_label
     candidates = discover_all_fields_daily_databases(
         all_fields_root=all_fields_root,
         start_day_label=start_day_label,
@@ -137,9 +275,16 @@ def discover_days_to_append(
     pending: list[Path] = []
     for database_path in candidates:
         day_label = _extract_day_label_from_database_path(database_path)
-        if day_label in existing_day_labels:
+        if day_label not in existing_day_labels:
+            pending.append(database_path)
             continue
-        pending.append(database_path)
+        if snapshot_day_runs is None:
+            continue
+        if _source_has_newer_all_fields_run(
+            database_path=database_path,
+            snapshot_run=snapshot_day_runs.get(day_label),
+        ):
+            pending.append(database_path)
     return pending
 
 
@@ -356,7 +501,13 @@ def extend_ongoing_foundation_base(
     memory_limit_gb: float = 24.0,
     checkpoint_every_n: int = 10,
 ) -> dict[str, Any]:
-    """Append new all-fields days to the canonical ongoing foundation base."""
+    """Append missing all-fields days and refresh newer same-day scans.
+
+    Missing calendar days are ingested as before. If the foundation end day
+    already exists but the daily all-fields DuckDB has a newer ``run_id`` /
+    ``created_at_utc`` (e.g. morning scan then end-of-day rescan), that day is
+    deleted and re-ingested using the latest scan.
+    """
     paths = resolve_edge_research_paths(
         all_fields_root=all_fields_root,
         taxonomy_root=taxonomy_root,
@@ -378,13 +529,30 @@ def extend_ongoing_foundation_base(
 
     manifest = read_snapshot_manifest(base_dir)
     existing_after_day_label = str(manifest["end_day_label"])
-    existing_day_labels = _existing_snapshot_day_labels(snapshot_db)
+    snapshot_day_runs = _existing_snapshot_day_runs(snapshot_db)
+    existing_day_labels = set(snapshot_day_runs) or _existing_snapshot_day_labels(
+        snapshot_db
+    )
     pending_paths = discover_days_to_append(
         all_fields_root=paths.all_fields_root,
         existing_day_labels=existing_day_labels,
         after_day_label=existing_after_day_label,
         end_day_label=end_day_label,
+        snapshot_day_runs=snapshot_day_runs,
     )
+    pending_day_labels = [
+        _extract_day_label_from_database_path(path) for path in pending_paths
+    ]
+    refreshed_day_labels = [
+        day_label
+        for day_label in pending_day_labels
+        if day_label in existing_day_labels
+    ]
+    new_day_labels = [
+        day_label
+        for day_label in pending_day_labels
+        if day_label not in existing_day_labels
+    ]
     if not pending_paths:
         label_result = run_forward_label_generation(
             snapshot_database_path=snapshot_db,
@@ -400,8 +568,11 @@ def extend_ongoing_foundation_base(
                 "mode": "extend",
                 "end_day_label": existing_after_day_label,
                 "days_appended": 0,
+                "days_refreshed": 0,
+                "new_day_labels": [],
+                "refreshed_day_labels": [],
                 "last_extend_at_utc": datetime.utcnow().isoformat() + "Z",
-                "last_extend_note": "no_new_all_fields_days",
+                "last_extend_note": "no_new_all_fields_days_or_newer_scans",
             }
         )
         state_path = write_foundation_base_state(base_dir, state)
@@ -412,6 +583,9 @@ def extend_ongoing_foundation_base(
             "start_day_label": str(manifest["start_day_label"]),
             "end_day_label": existing_after_day_label,
             "days_appended": 0,
+            "days_refreshed": 0,
+            "new_day_labels": [],
+            "refreshed_day_labels": [],
             "extend_chunks": [],
             "prune_result": None,
             "snapshot_result": {
@@ -451,6 +625,16 @@ def extend_ongoing_foundation_base(
                 "start_day_label": chunk_day_labels[0],
                 "end_day_label": chunk_day_labels[-1],
                 "day_count": len(chunk_day_labels),
+                "new_day_labels": [
+                    label
+                    for label in chunk_day_labels
+                    if label in new_day_labels
+                ],
+                "refreshed_day_labels": [
+                    label
+                    for label in chunk_day_labels
+                    if label in refreshed_day_labels
+                ],
                 "extend_result": extend_result,
             }
         )
@@ -484,7 +668,10 @@ def extend_ongoing_foundation_base(
             "end_day_label": updated_manifest.get("end_day_label"),
             "min_market_cap_usd": min_market_cap_usd,
             "extend_chunks": extend_chunks[-50:],
-            "days_appended": len(pending_paths),
+            "days_appended": len(new_day_labels),
+            "days_refreshed": len(refreshed_day_labels),
+            "new_day_labels": new_day_labels,
+            "refreshed_day_labels": refreshed_day_labels,
             "last_extend_at_utc": datetime.utcnow().isoformat() + "Z",
             "prune_result": prune_result,
         }
@@ -496,7 +683,10 @@ def extend_ongoing_foundation_base(
         "foundation_base_state_path": state_path.as_posix(),
         "start_day_label": str(updated_manifest["start_day_label"]),
         "end_day_label": str(updated_manifest["end_day_label"]),
-        "days_appended": len(pending_paths),
+        "days_appended": len(new_day_labels),
+        "days_refreshed": len(refreshed_day_labels),
+        "new_day_labels": new_day_labels,
+        "refreshed_day_labels": refreshed_day_labels,
         "extend_chunks": chunk_results,
         "prune_result": prune_result,
         "snapshot_result": {

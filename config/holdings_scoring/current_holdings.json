@@ -4,18 +4,10 @@
   "portfolio_currency": "USD",
   "description": "Current book — set invested_sum/average_price in their currencies; portfolio aggregates in USD. Use optional symbol (EXCHANGE:TICKER) when ticker alone is ambiguous.",
   "cash_position": {
-    "value": 11100,
+    "value": 8800,
     "currency": "USD"
   },
   "holdings": [
-    {
-      "ticker": "SEZL",
-      "sleeve": "core",
-      "invested_sum": 3000,
-      "invested_currency": "USD",
-      "average_price": 159.9,
-      "price_currency": "USD"
-    },
     {
       "ticker": "UNH",
       "sleeve": "core",
@@ -33,37 +25,20 @@
       "price_currency": "USD"
     },
     {
-      "ticker": "GOOG",
-      "sleeve": "core",
-      "invested_sum": 4000,
-      "invested_currency": "USD",
-      "average_price": 345.11,
-      "price_currency": "USD"
-    },
-    {
-      "ticker": "DUOL",
-      "sleeve": "core",
-      "invested_sum": 7497.42,
-      "invested_currency": "USD",
-      "average_price": 120.55,
-      "price_currency": "USD",
-      "notes": "Duolingo"
-    },
-    {
       "ticker": "TEAM",
       "sleeve": "core",
-      "invested_sum": 4682.02,
+      "invested_sum": 9672.42,
       "invested_currency": "USD",
-      "average_price": 85.42,
+      "average_price": 87.96,
       "price_currency": "USD",
       "notes": "Atlassian"
     },
     {
       "ticker": "PATH",
       "sleeve": "core",
-      "invested_sum": 3999.1,
+      "invested_sum": 10995.1,
       "invested_currency": "USD",
-      "average_price": 11.31,
+      "average_price": 11.29,
       "price_currency": "USD",
       "notes": "UiPath"
     },
@@ -79,20 +54,11 @@
     {
       "ticker": "VEEV",
       "sleeve": "core",
-      "invested_sum": 5495.77,
+      "invested_sum": 8495.77,
       "invested_currency": "USD",
-      "average_price": 177.75,
+      "average_price": 182.75,
       "price_currency": "USD",
       "notes": "Veeva Systems"
-    },
-    {
-      "ticker": "GTLB",
-      "sleeve": "core",
-      "invested_sum": 2398.92,
-      "invested_currency": "USD",
-      "average_price": 32.76,
-      "price_currency": "USD",
-      "notes": "GitLab"
     },
     {
       "ticker": "CF",
@@ -116,9 +82,9 @@
     {
       "ticker": "ZS",
       "sleeve": "core",
-      "invested_sum": 4483,
+      "invested_sum": 9477,
       "invested_currency": "USD",
-      "average_price": 152.30,
+      "average_price": 149.20,
       "price_currency": "USD",
       "notes": "Zscaler"
     },
@@ -135,20 +101,11 @@
     {
       "ticker": "ADBE",
       "sleeve": "core",
-      "invested_sum": 5001,
+      "invested_sum": 6001,
       "invested_currency": "USD",
-      "average_price": 316.26,
+      "average_price": 298.26,
       "price_currency": "USD",
       "notes": "Adobe"
-    },
-    {
-      "ticker": "DELL",
-      "sleeve": "core",
-      "invested_sum": 1300,
-      "invested_currency": "USD",
-      "average_price": 127.81,
-      "price_currency": "USD",
-      "notes": "Dell Technologies"
     },
     {
       "ticker": "BIDU",
@@ -158,6 +115,26 @@
       "average_price": 103.9,
       "price_currency": "USD",
       "notes": "Baidu"
+    },
+    {
+      "ticker": "SOP",
+      "sleeve": "core",
+      "symbol": "EURONEXT:SOP",
+      "invested_sum": 3000,
+      "invested_currency": "EUR",
+      "average_price": 169.5,
+      "price_currency": "EUR",
+      "notes": "Sopra Steria"
+    },
+    {
+      "ticker": "LOGN",
+      "sleeve": "core",
+      "symbol": "SIX:LOGN",
+      "invested_sum": 4996,
+      "invested_currency": "USD",
+      "average_price": 108.22,
+      "price_currency": "USD",
+      "notes": "Logitech"
     }
   ]
 }

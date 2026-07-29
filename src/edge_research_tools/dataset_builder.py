@@ -766,7 +766,12 @@ def extend_symbol_day_feature_snapshot(
     memory_limit_gb: float = 24.0,
     checkpoint_every_n: int = 10,
 ) -> dict[str, Any]:
-    """Append additional all-fields days to an existing symbol-day snapshot database."""
+    """Append or refresh all-fields days on an existing symbol-day snapshot database.
+
+    Existing ``source_day_label`` rows for the provided daily databases are deleted
+    first, so calling this with a day that already exists (e.g. a newer same-day
+    TradingView all-fields scan) replaces that day with the latest run.
+    """
     resolved_snapshot_database_path = Path(snapshot_database_path)
     if not resolved_snapshot_database_path.exists():
         raise FileNotFoundError(

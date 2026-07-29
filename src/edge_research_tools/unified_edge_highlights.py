@@ -89,6 +89,17 @@ def _q(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def _resolve_highlights_input_csv(highlights_result: Mapping[str, Any]) -> Path:
+    csv_path = highlights_result.get("universe_csv") or highlights_result.get(
+        "shortlist_csv"
+    )
+    if not csv_path:
+        raise KeyError(
+            "highlights_result did not include universe_csv or shortlist_csv"
+        )
+    return Path(csv_path)
+
+
 def _round_or_blank(value: float | None, digits: int = 4) -> float | str:
     if value is None:
         return ""
@@ -678,9 +689,10 @@ def build_unified_edge_highlights_store(
     output_path.mkdir(parents=True, exist_ok=True)
 
     ranking_horizon = int(highlights_result.get("ranking_horizon") or 5)
+    highlights_input_csv = _resolve_highlights_input_csv(highlights_result)
     highlight_rows = [
         _normalize_symbol_field(dict(row))
-        for row in _read_csv_rows(highlights_result["shortlist_csv"])
+        for row in _read_csv_rows(highlights_input_csv)
     ]
     lane_leader_rows = _read_csv_rows(highlights_result.get("lane_leaders_csv", ""))
     safety_rows = _read_csv_rows(safety_result["scored_csv"])
@@ -749,6 +761,8 @@ def build_unified_edge_highlights_store(
         "row_count": len(unified_rows),
         "database_path": database_path.as_posix(),
         "csv_path": csv_path.as_posix(),
+        "highlights_input_csv": highlights_input_csv.as_posix(),
+        "highlights_universe_csv": str(highlights_result.get("universe_csv") or ""),
         "highlights_shortlist_csv": str(highlights_result.get("shortlist_csv")),
         "lane_leaders_csv": str(highlights_result.get("lane_leaders_csv")),
         "safety_scored_csv": str(safety_result.get("scored_csv")),

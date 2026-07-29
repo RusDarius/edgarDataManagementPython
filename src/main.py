@@ -565,70 +565,70 @@ def main():
     #     / "current_holdings.json",
     # )
 
-    # # Model Analysis scan with duckdb storage solution
+    # Model Analysis scan with duckdb storage solution
     move_prediction_scan_response = (
         TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
             min_market_cap_usd=500_000_000,
             markets=PREFERRED_MARKETS,
         )
     )
-    # # Default (omit profile_suite_path): built-in 10-profile baseline — see DEFAULT_MOVE_PREDICTION_PROFILE_SUITE.
-    # # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3
-    # # Legacy 17-profile suite: MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
-    # # Realigned baseline (11 lenses): MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
-    # # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
-    # # Move-prediction suite outputs (.log / .csv / DuckDB / regime_context_focus.log)
-    # # use EXCHANGE:TICKER labels via _get_symbol_name to avoid bare-ticker collisions.
-    # base_duckdb_result = run_full_analysis_suite_duckdb(
-    #     scan_data=move_prediction_scan_response,
-    #     min_market_cap_usd=500_000_000,
-    #     include_blind_spot_sections=True,
-    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
-    #     conviction_mode_config_path=CONVICTION_MODE_CONFIG,
-    #     defer_conviction_to_earnings=True,
-    #     regime_context_config_path=REGIME_CONTEXT_CONFIG,
-    #     write_industry_packs=True,
+    # Default (omit profile_suite_path): built-in 10-profile baseline — see DEFAULT_MOVE_PREDICTION_PROFILE_SUITE.
+    # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3
+    # Legacy 17-profile suite: MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
+    # Realigned baseline (11 lenses): MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
+    # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
+    # Move-prediction suite outputs (.log / .csv / DuckDB / regime_context_focus.log)
+    # use EXCHANGE:TICKER labels via _get_symbol_name to avoid bare-ticker collisions.
+    base_duckdb_result = run_full_analysis_suite_duckdb(
+        scan_data=move_prediction_scan_response,
+        min_market_cap_usd=500_000_000,
+        include_blind_spot_sections=True,
+        profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+        conviction_mode_config_path=CONVICTION_MODE_CONFIG,
+        defer_conviction_to_earnings=True,
+        regime_context_config_path=REGIME_CONTEXT_CONFIG,
+        write_industry_packs=True,
+    )
+
+    # FOR INDUSTRY RUN SPLIT Or post-process an existing run:
+    # write_industry_packs_from_duckdb_run(base_duckdb_result)
+
+    # Top-10 industries by price action + better-scored peer alternatives (bang-for-buck).
+    # Output: <run_output_dir>/industry_price_mover_relative_scan/
+    #   industry_price_mover_relative_scan__overview.log
+    #   industry_relative_opportunities.csv
+    #   <industry>/industry_relative_scan.log
+    # industry_mover_scan = run_industry_price_mover_relative_scan(
+    #     base_duckdb_result,
+    #     perf_field="Perf.1M",
+    #     top_industries=10,
+    #     price_movers_per_industry=5,
+    #     catch_up_per_industry=10,
+    #     alternatives_per_mover=3,
     # )
+    # print(industry_mover_scan["overview_log"])
+    # print(industry_mover_scan["opportunities_csv"])
 
-    # # FOR INDUSTRY RUN SPLIT Or post-process an existing run:
-    # #   write_industry_packs_from_duckdb_run(base_duckdb_result)
-
-    # # Top-10 industries by price action + better-scored peer alternatives (bang-for-buck).
-    # # Output: <run_output_dir>/industry_price_mover_relative_scan/
-    # #   industry_price_mover_relative_scan__overview.log
-    # #   industry_relative_opportunities.csv
-    # #   <industry>/industry_relative_scan.log
-    # # industry_mover_scan = run_industry_price_mover_relative_scan(
-    # #     base_duckdb_result,
-    # #     perf_field="Perf.1M",
-    # #     top_industries=10,
-    # #     price_movers_per_industry=5,
-    # #     catch_up_per_industry=10,
-    # #     alternatives_per_mover=3,
-    # # )
-    # # print(industry_mover_scan["overview_log"])
-    # # print(industry_mover_scan["opportunities_csv"])
-
-    # # # Reuses base_duckdb_result; earnings-priority and regime_context_focus logs
-    # # # share the same EXCHANGE:TICKER labels.
-    # run_full_analysis_suite_with_earnings_priority_duckdb(
-    #     scan_data=move_prediction_scan_response,
-    #     min_market_cap_usd=500_000_000,
-    #     include_blind_spot_sections=True,
-    #     base_result=base_duckdb_result,
-    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
-    #     conviction_mode_config_path=CONVICTION_MODE_CONFIG,
-    #     regime_context_config_path=REGIME_CONTEXT_CONFIG,
-    # )
+    # # Reuses base_duckdb_result; earnings-priority and regime_context_focus logs
+    # # share the same EXCHANGE:TICKER labels.
+    run_full_analysis_suite_with_earnings_priority_duckdb(
+        scan_data=move_prediction_scan_response,
+        min_market_cap_usd=500_000_000,
+        include_blind_spot_sections=True,
+        base_result=base_duckdb_result,
+        profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+        conviction_mode_config_path=CONVICTION_MODE_CONFIG,
+        regime_context_config_path=REGIME_CONTEXT_CONFIG,
+    )
 
     # Price-driven decile analysis: bucket by change / Perf.5D / Perf.1M, score profiles,
     # surface upward-move opportunities in worst performers. Output:
     # logs/tradingview_analysis/prediction_analysis/price_driven_score_analysis/duckdb_runs/...
-    run_price_driven_score_analysis_duckdb(
-        scan_data=move_prediction_scan_response,
-        min_market_cap_usd=500_000_000,
-        profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
-    )
+    # run_price_driven_score_analysis_duckdb(
+    #     scan_data=move_prediction_scan_response,
+    #     min_market_cap_usd=500_000_000,
+    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+    # )
 
     # ALL FIELDS DUCKDB EXPORT
     # export_all_tradingview_fields_duckdb()
@@ -928,7 +928,7 @@ def main():
     # to begin at a specific ISO week (still 2 anchors/week with runs_per_week=2).
     # backwards_result = run_backwards_prediction_sparse_weekly_analysis(
     #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
-    #     runs_per_week=2,
+    #     runs_per_week=3,
     #     min_scan_data_count=3000,
     #     # iso_year=2026,
     #     start_week=13,  # from week=16; omit for oldest indexed week
@@ -955,7 +955,6 @@ def main():
     # Oldest anchor comes from the move-prediction run index under duckdb_runs/
     # (currently week=13 backfill from 2026-03-29; day 01_04_2026 is included).
     # Earlier raw CSV days are not anchored until ingested into weekly DuckDB pools.
-    #
     # Profile families: profile_suite_path loads all suite names for the backwards
     # build; anchor snapshots match by profile_family so breakout_long_v1 anchors
     # align with older breakout_long rows. Plotting resolves latest _vN per family.

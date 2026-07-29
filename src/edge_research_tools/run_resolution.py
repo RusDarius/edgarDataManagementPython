@@ -61,7 +61,8 @@ def coalesce_existing_run_ref(
                 "No snapshot runs found under edge_research_tools. "
                 "Set rebuild_foundation_snapshot=True in run_edge_research_local_main() "
                 "to seed the ongoing foundation base, or "
-                'rebuild_foundation_snapshot="extend" to append new days.'
+                'rebuild_foundation_snapshot="extend" to append missing days '
+                "or refresh the current day when a newer same-day scan exists."
             )
         return discovered[0]
 

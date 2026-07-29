@@ -185,6 +185,94 @@ def test_build_store_writes_queryable_duckdb(tmp_path: Path) -> None:
         conn.close()
 
 
+def test_build_store_prefers_full_universe_csv_when_present(tmp_path: Path) -> None:
+    highlights_dir = tmp_path / "highlights"
+    safety_dir = tmp_path / "safety"
+    upside_dir = tmp_path / "upside"
+    forward_dir = tmp_path / "forward"
+    highlights_dir.mkdir()
+    safety_dir.mkdir()
+    upside_dir.mkdir()
+    forward_dir.mkdir()
+
+    shortlist = highlights_dir / "edge_name_shortlist.csv"
+    universe = highlights_dir / "edge_name_universe.csv"
+    lane_leaders = highlights_dir / "edge_lane_leaders.csv"
+    safety_csv = safety_dir / "edge_safety_scored.csv"
+    upside_csv = upside_dir / "edge_upside_prediction_ranked.csv"
+    forward_csv = forward_dir / "edge_forward_upside_valuation_ranked.csv"
+
+    shortlist.write_text(
+        "symbol,industry,lane_group_by,lane_group_value,big_mover_score,confidence_score,"
+        "median_fwd_5d_in_setup,win_rate_5d_in_setup,lane_median_fwd_5d\n"
+        "NASDAQ:ONLY_SHORTLIST,Semiconductors,industry,Semiconductors,0.8,0.7,6.0,0.6,4.0\n",
+        encoding="utf-8",
+    )
+    universe.write_text(
+        "symbol,industry,lane_group_by,lane_group_value,big_mover_score,confidence_score,"
+        "median_fwd_5d_in_setup,win_rate_5d_in_setup,lane_median_fwd_5d\n"
+        "NASDAQ:ONLY_SHORTLIST,Semiconductors,industry,Semiconductors,0.8,0.7,6.0,0.6,4.0\n"
+        "NASDAQ:EXTRA,Software,industry,Software,0.5,0.45,2.0,0.4,1.5\n",
+        encoding="utf-8",
+    )
+    lane_leaders.write_text(
+        "group_value,median_fwd_5d,median_fwd_5d_ci_low,median_fwd_5d_ci_high,"
+        "median_fwd_5d_ci_width,median_fwd_5d_bootstrap_sample_count\n"
+        "Semiconductors,4.5,2.0,7.0,5.0,25\n"
+        "Software,2.5,1.0,4.0,3.0,25\n",
+        encoding="utf-8",
+    )
+    safety_csv.write_text(
+        "symbol,safety_companion_score,balance_sheet_safety_score,safety_rank\n"
+        "NASDAQ:ONLY_SHORTLIST,0.72,0.8,10\n"
+        "NASDAQ:EXTRA,0.51,0.55,20\n",
+        encoding="utf-8",
+    )
+    upside_csv.write_text(
+        "symbol,upside_prediction_score,upside_prediction_rank\n"
+        "NASDAQ:ONLY_SHORTLIST,0.82,1\n"
+        "NASDAQ:EXTRA,0.41,2\n",
+        encoding="utf-8",
+    )
+    forward_csv.write_text(
+        "symbol,forward_upside_mode,forward_valuation_upside_pct,forward_upside_score,"
+        "forward_upside_rank\n"
+        "NASDAQ:ONLY_SHORTLIST,valuation,30.0,0.76,1\n"
+        "NASDAQ:EXTRA,fallback,8.0,0.33,2\n",
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "unified"
+    result = build_unified_edge_highlights_store(
+        output_dir=output_dir,
+        highlights_result={
+            "shortlist_csv": shortlist,
+            "universe_csv": universe,
+            "lane_leaders_csv": lane_leaders,
+            "ranking_horizon": 5,
+        },
+        safety_result={"scored_csv": safety_csv},
+        scan_edge_result=None,
+        tradeable_safety_result=None,
+        upside_prediction_lens_result={"ranked_csv": upside_csv},
+        forward_upside_valuation_lens_result={"ranked_csv": forward_csv},
+    )
+
+    duckdb = __import__("duckdb")
+    conn = duckdb.connect(result["database_path"].as_posix())
+    try:
+        row_count = conn.execute(
+            "SELECT COUNT(*) FROM symbol_unified_highlights"
+        ).fetchone()[0]
+        extra_row = conn.execute(
+            "SELECT symbol FROM symbol_unified_highlights WHERE symbol = 'NASDAQ:EXTRA'"
+        ).fetchone()
+        assert int(row_count) == 2
+        assert extra_row is not None
+    finally:
+        conn.close()
+
+
 def test_build_unified_rows_merges_tradeable_historical_validation_fields() -> None:
     rows = build_unified_edge_highlight_rows(
         highlight_rows=[
@@ -314,8 +402,7 @@ def test_build_store_backfills_symbol_from_exchange_and_ticker(tmp_path: Path) -
         encoding="utf-8",
     )
     upside_csv.write_text(
-        "symbol,upside_prediction_score,upside_prediction_rank\n"
-        "NASDAQ:AGY,0.82,1\n",
+        "symbol,upside_prediction_score,upside_prediction_rank\n" "NASDAQ:AGY,0.82,1\n",
         encoding="utf-8",
     )
     forward_csv.write_text(

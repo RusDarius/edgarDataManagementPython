@@ -21,6 +21,8 @@ def _build_all_fields_db(db_path) -> None:
                 "Volatility.D" DOUBLE,
                 "Volatility.W" DOUBLE,
                 "Volatility.M" DOUBLE,
+                "ATR" DOUBLE,
+                "ATRP" DOUBLE,
                 "ADX" DOUBLE,
                 "RSI" DOUBLE,
                 "Perf.5D" DOUBLE,
@@ -34,7 +36,7 @@ def _build_all_fields_db(db_path) -> None:
         """)
         conn.execute("""
             INSERT INTO all_fields_rows VALUES
-            ('run_1', 0, 'NASDAQ:GOOD', 1.1, 2.0, 3.0, 4.0, 25.0, 60.0, 1.0, 6.0,
+            ('run_1', 0, 'NASDAQ:GOOD', 1.1, 2.0, 3.0, 4.0, 2.5, 3.0, 25.0, 60.0, 1.0, 6.0,
              9.0, 0.4, 96.0, 91.0, 101.0)
             """)
     finally:
@@ -99,6 +101,11 @@ def test_run_upside_opportunity_scan_method_resolves_prior_parent_run(tmp_path) 
     assert result["row_count"] == 1
     assert result["output_dir"] == parent_run_dir / "upside_opportunity_scan"
     assert result["candidates_csv"].exists()
+    move_result = result["move_potential_scan_result"]
+    assert move_result is not None
+    assert move_result["database_path"].name == "upside_move_potential_scan.duckdb"
+    assert move_result["database_path"].exists()
+    assert move_result["candidates_csv"].exists()
 
     conn = duckdb.connect(result["database_path"].as_posix(), read_only=True)
     try:
@@ -113,6 +120,19 @@ def test_run_upside_opportunity_scan_method_resolves_prior_parent_run(tmp_path) 
     assert rows[0][1] == 1.1
     assert rows[0][2] == 60.0
     assert rows[0][3] == 15
+
+    move_conn = duckdb.connect(move_result["database_path"].as_posix(), read_only=True)
+    try:
+        move_rows = move_conn.execute(
+            "SELECT symbol, move_upside_rank, atrp, upside_opportunity_rank "
+            "FROM upside_move_potential_candidates"
+        ).fetchall()
+    finally:
+        move_conn.close()
+
+    assert move_rows[0][0] == "NASDAQ:GOOD"
+    assert move_rows[0][1] == 1
+    assert move_rows[0][2] == 3.0
 
 
 def test_run_upside_opportunity_scan_method_raises_without_earnings_priority_manifest(

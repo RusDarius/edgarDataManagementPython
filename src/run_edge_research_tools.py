@@ -217,6 +217,17 @@ def _write_parent_manifest(
     return manifest_path
 
 
+def _resolve_highlights_lens_input_csv(highlights_result: Mapping[str, Any]) -> Path:
+    csv_path = highlights_result.get("universe_csv") or highlights_result.get(
+        "shortlist_csv"
+    )
+    if not csv_path:
+        raise KeyError(
+            "highlights_result did not include universe_csv or shortlist_csv"
+        )
+    return Path(csv_path)
+
+
 def _detect_snapshot_min_market_cap(snapshot_db: str | Path) -> float | None:
     snapshot_path = Path(snapshot_db)
     manifest_path = snapshot_path.parent / "symbol_day_feature_snapshot_manifest.json"
@@ -617,7 +628,7 @@ def _classify_tradeability_safety_bucket(
 def _write_tradeability_safety_lens_report(
     path: Path,
     *,
-    highlights_shortlist_csv: Path,
+    lens_input_csv: Path,
     safety_scored_csv: Path,
     overlay_csv: Path,
     top_csv: Path,
@@ -630,7 +641,7 @@ def _write_tradeability_safety_lens_report(
         "",
         "## What This Output Does",
         "",
-        "This overlay keeps the highlights shortlist intact and adds safety / quality / value context without excluding names.",
+        "This overlay keeps the selected lens universe intact and adds safety / quality / value context without excluding names.",
         "Use it when you want upside-oriented tradeable candidates ranked by both current setup quality and safety support.",
         "",
         "## Score Construction",
@@ -647,13 +658,13 @@ def _write_tradeability_safety_lens_report(
         "## How To Use It",
         "",
         "- Start with the blend rank when you want upside names with some quality control.",
-        "- Sort by `safety_rank_within_tradeables` when you want the safest names inside the highlights shortlist.",
-        "- Sort by `risk_rank_within_tradeables` when you want the riskiest/high-beta candidates inside the same shortlist.",
+        "- Sort by `safety_rank_within_tradeables` when you want the safest names inside the scored lens universe.",
+        "- Sort by `risk_rank_within_tradeables` when you want the riskiest/high-beta candidates inside the same scored universe.",
         "- Keep `tradeable_core_score` visible so safety does not hide weak current-state names.",
         "",
         "## Inputs",
         "",
-        f"- highlights shortlist: `{highlights_shortlist_csv.as_posix()}`",
+        f"- lens input CSV: `{lens_input_csv.as_posix()}`",
         f"- safety scored universe: `{safety_scored_csv.as_posix()}`",
         "",
         "## Output Files",
@@ -672,12 +683,13 @@ def _build_tradeability_safety_lens(
     top_count: int,
     forward_upside_by_symbol: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    lens_input_csv = _resolve_highlights_lens_input_csv(highlights_result)
     highlights_shortlist_csv = Path(highlights_result["shortlist_csv"])
     safety_scored_csv = Path(safety_result["scored_csv"])
     safety_shortlist_csv = Path(safety_result["shortlist_csv"])
     safety_focus_csv = Path(safety_result["top10_csv"])
 
-    highlight_rows = _read_csv_rows(highlights_shortlist_csv)
+    highlight_rows = _read_csv_rows(lens_input_csv)
     safety_scored_rows = _read_csv_rows(safety_scored_csv)
     safety_shortlist_rows = _read_csv_rows(safety_shortlist_csv)
     safety_focus_rows = _read_csv_rows(safety_focus_csv)
@@ -825,7 +837,7 @@ def _build_tradeability_safety_lens(
     _write_csv_rows(top_csv, top_rows)
     _write_tradeability_safety_lens_report(
         report_md,
-        highlights_shortlist_csv=highlights_shortlist_csv,
+        lens_input_csv=lens_input_csv,
         safety_scored_csv=safety_scored_csv,
         overlay_csv=overlay_csv,
         top_csv=top_csv,
@@ -836,6 +848,7 @@ def _build_tradeability_safety_lens(
 
     manifest = {
         "command": "tradeable-safety-lens",
+        "lens_input_csv": lens_input_csv.as_posix(),
         "highlights_shortlist_csv": highlights_shortlist_csv.as_posix(),
         "safety_scored_csv": safety_scored_csv.as_posix(),
         "safety_shortlist_csv": safety_shortlist_csv.as_posix(),
@@ -871,7 +884,7 @@ def _build_tradeability_safety_lens(
 def _write_upside_prediction_lens_report(
     path: Path,
     *,
-    highlights_shortlist_csv: Path,
+    lens_input_csv: Path,
     safety_scored_csv: Path,
     ranked_csv: Path,
     top_csv: Path,
@@ -885,7 +898,7 @@ def _write_upside_prediction_lens_report(
         "",
         "## What This Output Does",
         "",
-        "This lens ranks highlights shortlist names for upward move prediction.",
+        "This lens ranks the selected lens universe for upward move prediction.",
         "Upside metrics lead the file; balance-sheet and cash-generation safety scores are appended at the end without excluding names.",
         "",
         "## Score Construction",
@@ -906,7 +919,7 @@ def _write_upside_prediction_lens_report(
         "",
         "## Inputs",
         "",
-        f"- highlights shortlist: `{highlights_shortlist_csv.as_posix()}`",
+        f"- lens input CSV: `{lens_input_csv.as_posix()}`",
         f"- safety scored universe: `{safety_scored_csv.as_posix()}`",
         "",
         "## Output Files",
@@ -924,13 +937,14 @@ def _build_upside_prediction_lens(
     safety_result: dict[str, Any],
     top_count: int,
 ) -> dict[str, Any]:
+    lens_input_csv = _resolve_highlights_lens_input_csv(highlights_result)
     highlights_shortlist_csv = Path(highlights_result["shortlist_csv"])
     safety_scored_csv = Path(safety_result["scored_csv"])
     safety_shortlist_csv = Path(safety_result["shortlist_csv"])
     safety_focus_csv = Path(safety_result["top10_csv"])
     ranking_horizon = int(highlights_result.get("ranking_horizon") or 5)
 
-    highlight_rows = _read_csv_rows(highlights_shortlist_csv)
+    highlight_rows = _read_csv_rows(lens_input_csv)
     safety_scored_rows = _read_csv_rows(safety_scored_csv)
     safety_shortlist_rows = _read_csv_rows(safety_shortlist_csv)
     safety_focus_rows = _read_csv_rows(safety_focus_csv)
@@ -1027,7 +1041,7 @@ def _build_upside_prediction_lens(
     _write_csv_rows(top_csv, projected_top_rows)
     _write_upside_prediction_lens_report(
         report_md,
-        highlights_shortlist_csv=highlights_shortlist_csv,
+        lens_input_csv=lens_input_csv,
         safety_scored_csv=safety_scored_csv,
         ranked_csv=ranked_csv,
         top_csv=top_csv,
@@ -1040,6 +1054,7 @@ def _build_upside_prediction_lens(
     manifest = {
         "command": "upside-prediction-lens",
         "ranking_horizon": ranking_horizon,
+        "lens_input_csv": lens_input_csv.as_posix(),
         "highlights_shortlist_csv": highlights_shortlist_csv.as_posix(),
         "safety_scored_csv": safety_scored_csv.as_posix(),
         "safety_shortlist_csv": safety_shortlist_csv.as_posix(),
@@ -1079,7 +1094,7 @@ def _build_upside_prediction_lens(
 def _write_forward_upside_valuation_lens_report(
     path: Path,
     *,
-    highlights_shortlist_csv: Path,
+    lens_input_csv: Path,
     safety_scored_csv: Path,
     source_database_path: Path,
     peer_universe_row_count: int,
@@ -1132,7 +1147,7 @@ def _write_forward_upside_valuation_lens_report(
         "",
         "## Inputs",
         "",
-        f"- highlights shortlist: `{highlights_shortlist_csv.as_posix()}`",
+        f"- lens input CSV: `{lens_input_csv.as_posix()}`",
         f"- safety scored universe: `{safety_scored_csv.as_posix()}`",
         f"- peer valuation universe rows: {peer_universe_row_count}",
         f"- source daily database: `{source_database_path.as_posix()}`",
@@ -1159,6 +1174,7 @@ def _build_forward_upside_valuation_lens(
     max_active_lenses: int = MAX_ACTIVE_VALUATION_LENSES,
     min_valuation_lenses: int = MIN_USABLE_VALUATION_LENSES,
 ) -> dict[str, Any]:
+    lens_input_csv = _resolve_highlights_lens_input_csv(highlights_result)
     highlights_shortlist_csv = Path(highlights_result["shortlist_csv"])
     safety_scored_csv = Path(safety_result["scored_csv"])
     safety_shortlist_csv = Path(safety_result["shortlist_csv"])
@@ -1166,7 +1182,7 @@ def _build_forward_upside_valuation_lens(
     source_database_path = Path(safety_result["source_database_path"])
     ranking_horizon = int(highlights_result.get("ranking_horizon") or 5)
 
-    highlight_rows = _read_csv_rows(highlights_shortlist_csv)
+    highlight_rows = _read_csv_rows(lens_input_csv)
     safety_scored_rows = _read_csv_rows(safety_scored_csv)
     safety_shortlist_rows = _read_csv_rows(safety_shortlist_csv)
     safety_focus_rows = _read_csv_rows(safety_focus_csv)
@@ -1298,7 +1314,7 @@ def _build_forward_upside_valuation_lens(
     fallback_row_count = len(ranked_rows) - valuation_row_count
     _write_forward_upside_valuation_lens_report(
         report_md,
-        highlights_shortlist_csv=highlights_shortlist_csv,
+        lens_input_csv=lens_input_csv,
         safety_scored_csv=safety_scored_csv,
         source_database_path=source_database_path,
         peer_universe_row_count=peer_universe_row_count,
@@ -1317,6 +1333,7 @@ def _build_forward_upside_valuation_lens(
     manifest = {
         "command": "forward-upside-valuation-lens",
         "ranking_horizon": ranking_horizon,
+        "lens_input_csv": lens_input_csv.as_posix(),
         "highlights_shortlist_csv": highlights_shortlist_csv.as_posix(),
         "safety_scored_csv": safety_scored_csv.as_posix(),
         "safety_shortlist_csv": safety_shortlist_csv.as_posix(),
@@ -2738,7 +2755,8 @@ def run_latest_500m_full_edge_research_suite(
 
     - ``False`` (default): reuse an existing snapshot and run aggregate scans only.
     - ``True``: full rebuild into the ongoing foundation base directory.
-    - ``"extend"``: append new all-fields days to the ongoing base (chunked), then aggregate.
+    - ``"extend"``: append missing all-fields days and refresh the current end day
+      when a newer same-day all-fields scan exists (chunked), then aggregate.
     """
     foundation_mode = normalize_foundation_snapshot_mode(rebuild_foundation_snapshot)
     resolved_run_context: dict[str, Any] | None = None
@@ -3283,7 +3301,8 @@ def run_edge_research_local_main() -> dict[str, Any]:
     # rebuild_foundation_snapshot controls the foundation layer:
     #   False          — reuse existing snapshot, aggregate-only (fast daily scan)
     #   True           — full rebuild into foundations/edge_ongoing_base_min{cap}/
-    #   "extend"       — append new all-fields days to ongoing base, then aggregate
+    #   "extend"       — append missing days + refresh current day if a newer
+    #                    same-day all-fields scan exists, then aggregate
     existing_run_ref: str | Path | None = None
     auto_discover_latest_snapshot = True
     rebuild_foundation_snapshot: bool | Literal["extend"] | None = "extend"
@@ -3377,6 +3396,13 @@ def _print_local_workflow_result(result: dict[str, Any]) -> None:
             print(f"Foundation mode: {foundation_mode}")
         if foundation.get("days_appended") is not None:
             print(f"Foundation days appended: {foundation['days_appended']}")
+        if foundation.get("days_refreshed") is not None:
+            print(f"Foundation days refreshed: {foundation['days_refreshed']}")
+        if foundation.get("refreshed_day_labels"):
+            print(
+                "Foundation refreshed day labels: "
+                + ", ".join(str(label) for label in foundation["refreshed_day_labels"])
+            )
         print(f"Foundation suite output: {foundation.get('output_dir')}")
         snapshot_result = foundation.get("snapshot_result")
         if isinstance(snapshot_result, dict):
@@ -3455,6 +3481,12 @@ def _print_local_workflow_result(result: dict[str, Any]) -> None:
         print(f"Edge summary child output: {result['scan_edge']['output_dir']}")
     if "highlights" in result:
         print(f"Highlights child output: {result['highlights']['output_dir']}")
+        if result["highlights"].get("universe_csv") is not None:
+            print(
+                "Highlights full universe CSV: "
+                f"{result['highlights']['universe_csv']} "
+                f"({result['highlights'].get('universe_row_count')} rows)"
+            )
     if "safety_highlights" in result:
         print(
             f"Safety highlights child output: {result['safety_highlights']['output_dir']}"
@@ -4567,6 +4599,7 @@ def _handle_highlights(args: argparse.Namespace) -> int:
     print(f"Highlights output: {result['output_dir']}")
     print(f"Highlights report: {result['report_md']}")
     print(f"Lane leaders CSV: {result['lane_leaders_csv']}")
+    print(f"Full universe CSV: {result['universe_csv']}")
     print(f"Shortlist CSV: {result['shortlist_csv']}")
     print(f"Top 30 CSV: {result['top30_csv']}")
     print(f"Top 10 confidence CSV: {result['top10_csv']}")
@@ -4574,6 +4607,7 @@ def _handle_highlights(args: argparse.Namespace) -> int:
     print(f"Upside prediction top focus CSV: {result['upside_top_csv']}")
     print(f"Highlights date: {result['target_date']}")
     print(f"Lane rows: {result['lane_row_count']}")
+    print(f"Full universe rows: {result['universe_row_count']}")
     print(f"Shortlist rows: {result['shortlist_row_count']}")
     print(f"Top 30 rows: {result['top30_row_count']}")
     print(f"Top 10 rows: {result['top10_row_count']}")

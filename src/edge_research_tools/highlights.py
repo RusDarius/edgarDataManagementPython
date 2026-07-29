@@ -344,12 +344,14 @@ def _write_highlights_report(
     bootstrap_iterations: int,
     bootstrap_confidence_level: float,
     lane_leaders_path: Path,
+    universe_path: Path,
     shortlist_path: Path,
     top30_path: Path,
     top10_path: Path,
     upside_ranked_path: Path,
     upside_top_path: Path,
     lane_row_count: int,
+    universe_row_count: int,
     shortlist_row_count: int,
     strict_shortlist_row_count: int,
     expanded_shortlist_row_count: int,
@@ -379,6 +381,7 @@ def _write_highlights_report(
         "## Interpretation",
         "",
         "- `edge_lane_leaders.csv`: the strongest historical edge lanes in the selected scope.",
+        "- `edge_name_universe.csv`: full current-date universe in the selected scope with no shortlist cutoff, used by downstream integrated lenses so every eligible ticker can be scored.",
         "- `edge_name_shortlist.csv`: ranked universe for this run (strict lane+durability pass names first, then expanded momentum candidates when needed for breadth).",
         "- `edge_name_top30.csv`: daily big-mover focus list ranked primarily by current setup state.",
         "- `edge_name_top10_confidence.csv`: quick screen ranked by confirmation, durability, and stability.",
@@ -473,6 +476,7 @@ def _write_highlights_report(
         "## Output Files",
         "",
         f"- lane leaders: `{lane_leaders_path.as_posix()}` ({lane_row_count} rows)",
+        f"- full lens universe: `{universe_path.as_posix()}` ({universe_row_count} rows)",
         f"- shortlist: `{shortlist_path.as_posix()}` ({shortlist_row_count} rows)",
         f"- shortlist strict-pass rows: {strict_shortlist_row_count}",
         f"- shortlist expanded-candidate rows considered: {expanded_shortlist_row_count}",
@@ -569,6 +573,7 @@ def run_edge_highlights(
         output_root=output_paths.output_root,
     )
     lane_leaders_path = context.output_dir / "edge_lane_leaders.csv"
+    universe_path = context.output_dir / "edge_name_universe.csv"
     shortlist_path = context.output_dir / "edge_name_shortlist.csv"
     top30_path = context.output_dir / "edge_name_top30.csv"
     top10_path = (
@@ -895,7 +900,7 @@ def run_edge_highlights(
 
         resolved_min_shortlist_count = int(max(1, min_shortlist_count))
 
-        current_rows = _fetch_dict_rows(
+        all_target_rows = _fetch_dict_rows(
             conn,
             (
                 "SELECT state.*, hist.*, persistence.* EXCLUDE (symbol), stability.* EXCLUDE (symbol) "
@@ -903,37 +908,16 @@ def run_edge_highlights(
                 "LEFT JOIN hist_by_symbol AS hist ON hist.symbol = state.symbol "
                 "LEFT JOIN persistence_by_symbol AS persistence ON persistence.symbol = state.symbol "
                 "LEFT JOIN stability_by_symbol AS stability ON stability.symbol = state.symbol "
-                f"WHERE state.source_date = {_q(resolved_target_date)}::DATE "
-                f"AND (state.composite_score_day >= {float(screen_min_composite)} OR state.in_any_setup = 1)"
+                f"WHERE state.source_date = {_q(resolved_target_date)}::DATE"
             ),
         )
 
-        if len(current_rows) < resolved_min_shortlist_count:
-            broader_rows = _fetch_dict_rows(
-                conn,
-                (
-                    "SELECT state.*, hist.*, persistence.* EXCLUDE (symbol), stability.* EXCLUDE (symbol) "
-                    "FROM daily_state_enriched AS state "
-                    "LEFT JOIN hist_by_symbol AS hist ON hist.symbol = state.symbol "
-                    "LEFT JOIN persistence_by_symbol AS persistence ON persistence.symbol = state.symbol "
-                    "LEFT JOIN stability_by_symbol AS stability ON stability.symbol = state.symbol "
-                    f"WHERE state.source_date = {_q(resolved_target_date)}::DATE "
-                ),
-            )
-            indexed_rows: dict[str, dict[str, Any]] = {}
-            for candidate_row in current_rows:
-                symbol_key = str(candidate_row.get("symbol") or "").strip()
-                if symbol_key:
-                    indexed_rows[symbol_key] = candidate_row
-            for candidate_row in broader_rows:
-                symbol_key = str(candidate_row.get("symbol") or "").strip()
-                if symbol_key and symbol_key not in indexed_rows:
-                    indexed_rows[symbol_key] = candidate_row
-            current_rows = list(indexed_rows.values())
-
-        strict_rows: list[dict[str, Any]] = []
-        expanded_candidate_rows: list[dict[str, Any]] = []
-        for row in current_rows:
+        all_candidate_rows: list[dict[str, Any]] = []
+        all_strict_rows: list[dict[str, Any]] = []
+        all_expanded_candidate_rows: list[dict[str, Any]] = []
+        screen_scope_strict_rows: list[dict[str, Any]] = []
+        screen_scope_expanded_candidate_rows: list[dict[str, Any]] = []
+        for row in all_target_rows:
             group_value = str(row.get(normalized_group_by) or "Unknown")
             lane_row = lane_by_group.get(group_value)
             if lane_row is None:
@@ -1013,6 +997,10 @@ def run_edge_highlights(
             hist_median_norm = _clamp(hist_median / 8.0)
             hist_sample_depth_norm = _clamp(hist_occurrences / 10.0)
             current_lane_flag = _safe_int(row.get(chosen_setup_flag))
+            screen_scope_pass = (
+                composite_score >= float(screen_min_composite)
+                or _safe_int(row.get("in_any_setup")) == 1
+            )
 
             big_mover_score = _clamp(
                 (0.35 * composite_score)
@@ -1056,6 +1044,7 @@ def run_edge_highlights(
                 "lane_group_by": normalized_group_by,
                 "lane_group_value": group_value,
                 "current_lane_flag": current_lane_flag,
+                "screen_scope_pass": int(screen_scope_pass),
                 "strict_filter_pass": int(strict_filter_pass),
                 "strict_filter_pass_count": int(strict_filter_pass_count),
                 "strict_filter_fail_count": int(strict_filter_fail_count),
@@ -1132,11 +1121,26 @@ def run_edge_highlights(
                 "lane_context_score": lane_context_score,
             }
             candidate_row = _normalize_symbol_field(candidate_row)
+            all_candidate_rows.append(candidate_row)
 
             if strict_filter_pass:
-                strict_rows.append(candidate_row)
+                all_strict_rows.append(candidate_row)
+                if screen_scope_pass:
+                    screen_scope_strict_rows.append(candidate_row)
             else:
-                expanded_candidate_rows.append(candidate_row)
+                all_expanded_candidate_rows.append(candidate_row)
+                if screen_scope_pass:
+                    screen_scope_expanded_candidate_rows.append(candidate_row)
+
+        screen_scope_row_count = len(screen_scope_strict_rows) + len(
+            screen_scope_expanded_candidate_rows
+        )
+        if screen_scope_row_count >= resolved_min_shortlist_count:
+            strict_rows = list(screen_scope_strict_rows)
+            expanded_candidate_rows = list(screen_scope_expanded_candidate_rows)
+        else:
+            strict_rows = list(all_strict_rows)
+            expanded_candidate_rows = list(all_expanded_candidate_rows)
 
         expanded_added_rows: list[dict[str, Any]] = []
         if len(strict_rows) >= resolved_min_shortlist_count:
@@ -1207,6 +1211,18 @@ def run_edge_highlights(
         top30_rows = big_sorted[: int(max(1, shortlist_top_n))]
         top10_rows = confidence_sorted[: int(max(1, top10_count))]
 
+        universe_rows = sorted(
+            all_candidate_rows,
+            key=lambda row: (
+                _safe_int(row.get("strict_filter_pass")),
+                _safe_float(row.get("big_mover_score")),
+                _safe_float(row.get("expanded_capture_score")),
+                _safe_float(row.get("confidence_score")),
+                _safe_float(row.get("composite_score")),
+            ),
+            reverse=True,
+        )
+
         for row in shortlist_rows:
             row.update(
                 compute_upside_prediction_fields(
@@ -1233,6 +1249,7 @@ def run_edge_highlights(
         ]
 
         _write_csv(lane_leaders_path, lane_rows)
+        _write_csv(universe_path, universe_rows)
         _write_csv(shortlist_path, big_sorted)
         _write_csv(top30_path, top30_rows)
         _write_csv(top10_path, top10_rows)
@@ -1263,12 +1280,14 @@ def run_edge_highlights(
             bootstrap_iterations=int(max(50, bootstrap_iterations)),
             bootstrap_confidence_level=float(bootstrap_confidence_level),
             lane_leaders_path=lane_leaders_path,
+            universe_path=universe_path,
             shortlist_path=shortlist_path,
             top30_path=top30_path,
             top10_path=top10_path,
             upside_ranked_path=upside_ranked_path,
             upside_top_path=upside_top_path,
             lane_row_count=len(lane_rows),
+            universe_row_count=len(universe_rows),
             shortlist_row_count=len(big_sorted),
             strict_shortlist_row_count=len(strict_rows),
             expanded_shortlist_row_count=len(expanded_candidate_rows),
@@ -1319,6 +1338,7 @@ def run_edge_highlights(
             "bootstrap_confidence_level": float(bootstrap_confidence_level),
             "bootstrap_seed": int(bootstrap_seed),
             "lane_row_count": len(lane_rows),
+            "universe_row_count": len(universe_rows),
             "shortlist_row_count": len(big_sorted),
             "strict_shortlist_row_count": len(strict_rows),
             "expanded_shortlist_row_count": len(expanded_candidate_rows),
@@ -1329,6 +1349,7 @@ def run_edge_highlights(
             "upside_top_row_count": len(upside_top_rows),
             "output_dir": context.output_dir.as_posix(),
             "lane_leaders_csv": lane_leaders_path.as_posix(),
+            "universe_csv": universe_path.as_posix(),
             "shortlist_csv": shortlist_path.as_posix(),
             "top30_csv": top30_path.as_posix(),
             "top10_csv": top10_path.as_posix(),
@@ -1341,6 +1362,7 @@ def run_edge_highlights(
         return {
             "output_dir": context.output_dir,
             "lane_leaders_csv": lane_leaders_path,
+            "universe_csv": universe_path,
             "shortlist_csv": shortlist_path,
             "top30_csv": top30_path,
             "top10_csv": top10_path,
@@ -1351,6 +1373,7 @@ def run_edge_highlights(
             "target_date": resolved_target_date,
             "ranking_horizon": resolved_ranking_horizon,
             "lane_row_count": len(lane_rows),
+            "universe_row_count": len(universe_rows),
             "shortlist_row_count": len(big_sorted),
             "strict_shortlist_row_count": len(strict_rows),
             "expanded_shortlist_row_count": len(expanded_candidate_rows),

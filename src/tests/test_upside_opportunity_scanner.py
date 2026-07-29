@@ -30,6 +30,8 @@ def _build_all_fields_db(db_path, *, rows: list[dict]) -> None:
                 "Volatility.D" DOUBLE,
                 "Volatility.W" DOUBLE,
                 "Volatility.M" DOUBLE,
+                "ATR" DOUBLE,
+                "ATRP" DOUBLE,
                 "ADX" DOUBLE,
                 "RSI" DOUBLE,
                 "Perf.5D" DOUBLE,
@@ -45,7 +47,7 @@ def _build_all_fields_db(db_path, *, rows: list[dict]) -> None:
             conn.execute(
                 """
                 INSERT INTO all_fields_rows VALUES
-                ('run_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ('run_1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     index,
@@ -54,6 +56,8 @@ def _build_all_fields_db(db_path, *, rows: list[dict]) -> None:
                     row.get("volatility_d", 2.0),
                     row.get("volatility_w", 3.0),
                     row.get("volatility_m", 4.0),
+                    row.get("atr", 2.0),
+                    row.get("atrp", 3.0),
                     row.get("adx", 20.0),
                     row.get("rsi", 55.0),
                     row.get("perf_5d", 1.5),

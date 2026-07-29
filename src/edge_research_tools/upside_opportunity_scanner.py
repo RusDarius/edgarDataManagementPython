@@ -55,6 +55,8 @@ SUPPLEMENTARY_FIELD_SPECS: tuple[tuple[str, str, str], ...] = (
     ("Volatility.D", "volatility_d", "DOUBLE"),
     ("Volatility.W", "volatility_w", "DOUBLE"),
     ("Volatility.M", "volatility_m", "DOUBLE"),
+    ("ATR", "atr", "DOUBLE"),
+    ("ATRP", "atrp", "DOUBLE"),
     ("ADX", "adx", "DOUBLE"),
     ("RSI", "rsi", "DOUBLE"),
     ("Perf.5D", "perf_5d", "DOUBLE"),
