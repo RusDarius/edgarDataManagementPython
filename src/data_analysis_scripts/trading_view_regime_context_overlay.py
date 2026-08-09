@@ -679,6 +679,14 @@ def _display_symbol_label(row_or_symbol: Mapping[str, Any] | str) -> str:
     return symbol.upper()
 
 
+def _log_symbol_list_line(path: Path, symbols: Sequence[str]) -> None:
+    from data_analysis_scripts.trading_view_move_prediction_analysis import (
+        _format_exchange_ticker_list,
+    )
+
+    log_to_file(path, f"symbols: {_format_exchange_ticker_list(symbols)}")
+
+
 def _prediction_row_symbol(row: Mapping[str, Any]) -> str:
     return str(row.get("symbol") or row.get("ticker") or "")
 
@@ -775,10 +783,13 @@ def _write_per_profile_regime_conviction_section(
     else:
         header += f"{'Warn':>5}{'Aligned':<8}"
     log_to_file(path, header)
+    section_symbols: list[str] = []
     for index, (combined, prediction, record) in enumerate(ranked[:top_n], start=1):
         row = prediction.get("row") or {}
         symbol = _prediction_row_symbol(row)
         ticker = _display_symbol_label(row) if row else "N/A"
+        if ticker and ticker != "N/A":
+            section_symbols.append(ticker)
         weeks = (prediction.get("horizons") or {}).get("weeks") or {}
         weeks_ras = float(weeks.get("risk_adjusted_score") or 0.0)
         weeks_score = weeks.get("score")
@@ -820,6 +831,7 @@ def _write_per_profile_regime_conviction_section(
         log_to_file(path, row_text)
     if not ranked:
         log_to_file(path, "  (no regime-scored rows for this profile)")
+    _log_symbol_list_line(path, section_symbols)
     log_to_file(path, "")
 
 
@@ -942,9 +954,12 @@ def write_regime_context_focus_log(
             f"{'RegFit':>8}{'Tier':<12}{'ATRP':>8}{'RelVol':>8}"
             f"{'WeeksRAS':>10}{'Warn':>5}{'Aligned':<8}",
         )
+        conviction_symbols: list[str] = []
         for record in conviction_leaders:
             symbol = str(record.get("symbol") or "")
             ticker = _display_symbol_label(symbol) if symbol else "N/A"
+            if ticker and ticker != "N/A":
+                conviction_symbols.append(ticker)
             regime_record = get_regime_record_for_row(
                 {"symbol": symbol},
                 overlay.by_symbol,
@@ -998,6 +1013,7 @@ def write_regime_context_focus_log(
                 f"{warn_count:>5}"
                 f"{'YES' if aligned_flag else 'no':<8}",
             )
+        _log_symbol_list_line(path, conviction_symbols)
         log_to_file(path, "")
 
     consensus_by_symbol = {
@@ -1044,6 +1060,7 @@ def write_regime_context_focus_log(
         f"{'#':<4}{'Ticker':<{SYMBOL_LOG_WIDTH}}{'RegFit':>8}{'WeeksRAS':>10}{'Tier':<14}"
         f"{'ATRP1W':>8}{'RelVol':>8}{'Warn':>5}{'Aligned':<8}",
     )
+    aligned_symbols: list[str] = []
     for index, (symbol, record) in enumerate(aligned_rows, start=1):
         consensus_row = consensus_by_symbol.get(symbol)
         if consensus_row is None:
@@ -1059,9 +1076,11 @@ def write_regime_context_focus_log(
             weeks_ras,
             min_relative_volume=config.playbook_a_min_relative_volume,
         )
+        ticker = _display_symbol_label(symbol)
+        aligned_symbols.append(ticker)
         log_to_file(
             path,
-            f"{index:<4}{_display_symbol_label(symbol):<{SYMBOL_LOG_WIDTH}}"
+            f"{index:<4}{ticker:<{SYMBOL_LOG_WIDTH}}"
             f"{record.regime_fit_score:>8.1f}"
             f"{weeks_ras:>10.2f}"
             f"{_format_regime_tier_short(record.active_mgmt_tier):<14}"
@@ -1070,6 +1089,7 @@ def write_regime_context_focus_log(
             f"{record.warning_flag_count:>5}"
             f"{'YES' if aligned_flag else 'no':<8}",
         )
+    _log_symbol_list_line(path, aligned_symbols)
     log_to_file(path, "")
 
     playbook_a_rows = [
@@ -1080,17 +1100,21 @@ def write_regime_context_focus_log(
     playbook_a_rows.sort(key=lambda item: item[1].regime_fit_score, reverse=True)
     log_to_file(path, f"PLAYBOOK A TACTICAL ({len(playbook_a_rows)} names)")
     log_to_file(path, "-" * 160)
+    playbook_a_symbols: list[str] = []
     if not playbook_a_rows:
         log_to_file(path, "  (none — strict ATRP|1W + relvol filter)")
     else:
         for symbol, record in playbook_a_rows[:top_n]:
+            ticker = _display_symbol_label(symbol)
+            playbook_a_symbols.append(ticker)
             log_to_file(
                 path,
-                f"  {_display_symbol_label(symbol):<{SYMBOL_LOG_WIDTH}} "
+                f"  {ticker:<{SYMBOL_LOG_WIDTH}} "
                 f"RegFit={record.regime_fit_score:.1f} "
                 f"ATRP|1W={record.atrp_1w or 0:.1f} "
                 f"relvol={record.relative_volume or 0:.2f}",
             )
+    _log_symbol_list_line(path, playbook_a_symbols)
     log_to_file(path, "")
 
     consensus_sorted = sorted(
@@ -1119,16 +1143,20 @@ def write_regime_context_focus_log(
 
     log_to_file(path, "WARNING OVERLAY ON CONSENSUS LEADERS")
     log_to_file(path, "-" * 160)
+    warning_symbols: list[str] = []
     if not warning_hits:
         log_to_file(path, "  (none in consensus top 50)")
     else:
         for ticker, record, _ in warning_hits[:top_n]:
+            label = _display_symbol_label(ticker)
+            warning_symbols.append(label)
             log_to_file(
                 path,
-                f"  {_display_symbol_label(ticker):<{SYMBOL_LOG_WIDTH}} "
+                f"  {label:<{SYMBOL_LOG_WIDTH}} "
                 f"warn_flags={record.warning_flag_count} "
                 f"RegFit={record.regime_fit_score:.1f}",
             )
+    _log_symbol_list_line(path, warning_symbols)
     log_to_file(path, "")
 
     if profile_log_paths:

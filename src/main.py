@@ -109,6 +109,11 @@ from data_analysis_scripts.trading_view_all_fields_upside_edge_research import (
     run_mar_jun_trade_ladder_entry_profile_capture,
     run_mar_jun_upside_edge_research,
 )
+from run_financial_projection import (
+    run_financial_projection_from_all_fields_day,
+    run_financial_projection_from_latest_all_fields,
+    run_financial_projection_from_latest_prediction_analysis,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CURRENT_HOLDINGS_CONFIG = (
@@ -589,6 +594,22 @@ def main():
         regime_context_config_path=REGIME_CONTEXT_CONFIG,
         write_industry_packs=True,
     )
+    # Financial projection on prediction names (fundamentals from latest all-fields):
+    # All symbols from that prediction run (omit prediction_top_n / pass None):
+    # run_financial_projection_from_latest_prediction_analysis(
+    #     prediction_database=base_duckdb_result["_duckdb_database"],
+    #     min_market_cap_usd=500_000_000,
+    # )
+    # Or trim to top-N by score:
+    # run_financial_projection_from_latest_prediction_analysis(
+    #     prediction_database=base_duckdb_result["_duckdb_database"],
+    #     min_market_cap_usd=500_000_000,
+    #     prediction_top_n=40,
+    # )
+    # Or auto-discover latest prediction week DB (no base_duckdb_result needed):
+    # run_financial_projection_from_latest_prediction_analysis(
+    #     min_market_cap_usd=500_000_000,
+    # )
 
     # FOR INDUSTRY RUN SPLIT Or post-process an existing run:
     # write_industry_packs_from_duckdb_run(base_duckdb_result)
@@ -631,7 +652,21 @@ def main():
     # )
 
     # ALL FIELDS DUCKDB EXPORT
+    # Snapshot used as financial-projection input (market_cap_basic filterable).
     # export_all_tradingview_fields_duckdb()
+    # export_all_tradingview_fields_duckdb(chunk_size=300, timeout=90)
+    # Then project the latest (or just-exported) all-fields universe:
+    # run_financial_projection_from_latest_all_fields(min_market_cap_usd=500_000_000)
+    # Or project a specific day folder (latest run inside that day's DuckDB):
+    # run_financial_projection_from_all_fields_day(
+    #     "01_07_2026",
+    #     min_market_cap_usd=500_000_000,
+    # )
+    # Or: run_financial_projection_from_latest_all_fields(
+    #     all_fields_db=<export_result["_duckdb_database"]>,
+    #     min_market_cap_usd=500_000_000,
+    # )
+    # See documentation/financial_projection_usage.md
 
     # Market flow screening (paired daily DuckDB snapshots)
     # Output: logs/tradingview_analysis/market_flow_screening/runs/flow_<base>_<compare>_<id>/

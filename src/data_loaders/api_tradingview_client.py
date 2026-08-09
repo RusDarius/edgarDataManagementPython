@@ -1231,6 +1231,15 @@ GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD = {
 }
 
 
+# Keep these premarket context fields explicitly enforced for every
+# move-prediction scan variant. Even if payload variants drift, the runtime
+# request builder will append them so downstream suites can rely on them.
+MOVE_PREDICTION_REQUIRED_CONTEXT_COLUMNS = [
+    "premarket_change",
+    "premarket_gap",
+]
+
+
 # Additional earnings calendar columns layered on top of the move-prediction
 # payload. The base payload already includes ``earnings_release_date`` and
 # ``earnings_release_next_date``; the fields below provide the rest of the
@@ -1299,6 +1308,18 @@ class ApiTradingViewClient:
     ) -> None:
         if markets is not None:
             request_payload["markets"] = list(markets)
+
+    @staticmethod
+    def _ensure_request_columns(
+        request_payload: dict[str, Any], required_columns: list[str]
+    ) -> None:
+        columns = request_payload.get("columns")
+        if not isinstance(columns, list):
+            request_payload["columns"] = list(required_columns)
+            return
+        for column in required_columns:
+            if column not in columns:
+                columns.append(column)
 
     @staticmethod
     def _attach_request_metadata(
@@ -1634,6 +1655,9 @@ class ApiTradingViewClient:
         """
         request_payload = deepcopy(base_payload)
         self._apply_markets_override(request_payload, markets)
+        self._ensure_request_columns(
+            request_payload, MOVE_PREDICTION_REQUIRED_CONTEXT_COLUMNS
+        )
 
         if min_market_cap_usd is not None:
             request_payload["filter"].append(

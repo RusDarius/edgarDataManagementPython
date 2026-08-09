@@ -4,7 +4,7 @@
   "portfolio_currency": "USD",
   "description": "Current book — set invested_sum/average_price in their currencies; portfolio aggregates in USD. Use optional symbol (EXCHANGE:TICKER) when ticker alone is ambiguous.",
   "cash_position": {
-    "value": 8800,
+    "value": 9000,
     "currency": "USD"
   },
   "holdings": [
@@ -17,26 +17,18 @@
       "price_currency": "USD"
     },
     {
-      "ticker": "GOOG",
-      "sleeve": "core",
-      "invested_sum": 1999.72,
-      "invested_currency": "USD",
-      "average_price": 154.85,
-      "price_currency": "USD"
-    },
-    {
       "ticker": "TEAM",
       "sleeve": "core",
-      "invested_sum": 9672.42,
+      "invested_sum": 11672.42,
       "invested_currency": "USD",
-      "average_price": 87.96,
+      "average_price": 89.44,
       "price_currency": "USD",
       "notes": "Atlassian"
     },
     {
       "ticker": "PATH",
       "sleeve": "core",
-      "invested_sum": 10995.1,
+      "invested_sum": 11995.1,
       "invested_currency": "USD",
       "average_price": 11.29,
       "price_currency": "USD",
@@ -45,18 +37,18 @@
     {
       "ticker": "FNV",
       "sleeve": "core",
-      "invested_sum": 1998.23,
+      "invested_sum": 1033.23,
       "invested_currency": "USD",
-      "average_price": 262.23,
+      "average_price": 266.23,
       "price_currency": "USD",
       "notes": "Franco-Nevada"
     },
     {
       "ticker": "VEEV",
       "sleeve": "core",
-      "invested_sum": 8495.77,
+      "invested_sum": 11058.77,
       "invested_currency": "USD",
-      "average_price": 182.75,
+      "average_price": 187.35,
       "price_currency": "USD",
       "notes": "Veeva Systems"
     },
@@ -82,9 +74,9 @@
     {
       "ticker": "ZS",
       "sleeve": "core",
-      "invested_sum": 9477,
+      "invested_sum": 10077,
       "invested_currency": "USD",
-      "average_price": 149.20,
+      "average_price": 149.37,
       "price_currency": "USD",
       "notes": "Zscaler"
     },
@@ -101,9 +93,9 @@
     {
       "ticker": "ADBE",
       "sleeve": "core",
-      "invested_sum": 6001,
+      "invested_sum": 7001,
       "invested_currency": "USD",
-      "average_price": 298.26,
+      "average_price": 290.26,
       "price_currency": "USD",
       "notes": "Adobe"
     },
@@ -117,24 +109,22 @@
       "notes": "Baidu"
     },
     {
-      "ticker": "SOP",
+      "ticker": "AAPL",
       "sleeve": "core",
-      "symbol": "EURONEXT:SOP",
-      "invested_sum": 3000,
-      "invested_currency": "EUR",
-      "average_price": 169.5,
-      "price_currency": "EUR",
-      "notes": "Sopra Steria"
+      "invested_sum": 3900,
+      "invested_currency": "USD",
+      "average_price": 333.9,
+      "price_currency": "USD",
+      "notes": "Apple"
     },
     {
-      "ticker": "LOGN",
+      "ticker": "RDDT",
       "sleeve": "core",
-      "symbol": "SIX:LOGN",
-      "invested_sum": 4996,
+      "invested_sum": 6982,
       "invested_currency": "USD",
-      "average_price": 108.22,
+      "average_price": 160,
       "price_currency": "USD",
-      "notes": "Logitech"
+      "notes": "Reddit"
     }
   ]
 }

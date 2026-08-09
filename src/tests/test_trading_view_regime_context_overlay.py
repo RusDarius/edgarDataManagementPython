@@ -309,7 +309,7 @@ class TestRegimeContextOverlay(unittest.TestCase):
             }
             conviction_records = [
                 {
-                    "symbol": "AAA",
+                    "symbol": "NASDAQ:AAA",
                     "conviction_score": 0.91,
                     "rank_overall": 1,
                     "sleeve": "weeks",
@@ -340,7 +340,10 @@ class TestRegimeContextOverlay(unittest.TestCase):
             self.assertIn("22.0", content)
             self.assertIn("2.00", content)
             self.assertIn("CONVICTION LEADERS TOP 3", content)
+            self.assertIn("symbols: ['NASDAQ:AAA', 'NASDAQ:BBB']", content)
+            self.assertIn("symbols: ['NASDAQ:AAA']", content)
             lookup = build_conviction_lookup(conviction_records)
+            self.assertIn("NASDAQ:AAA", lookup)
             self.assertIn("AAA", lookup)
 
 

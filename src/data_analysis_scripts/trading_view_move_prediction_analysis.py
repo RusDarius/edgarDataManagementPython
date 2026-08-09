@@ -2902,6 +2902,43 @@ def _get_symbol_name(row: dict[str, Any]) -> str:
     return _get_exchange_ticker_symbol(row)
 
 
+def _format_exchange_ticker_list(symbols: Sequence[str]) -> str:
+    """Return a Python-list literal of EXCHANGE:TICKER labels for copy-paste."""
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in symbols:
+        symbol = str(raw or "").strip()
+        if not symbol or symbol == "N/A" or symbol in seen:
+            continue
+        seen.add(symbol)
+        cleaned.append(symbol)
+    return repr(cleaned)
+
+
+def _log_exchange_ticker_list(
+    log_file: Path,
+    symbols: Sequence[str],
+    *,
+    label: str = "symbols",
+) -> None:
+    log_to_file(log_file, f"{label}: {_format_exchange_ticker_list(symbols)}")
+
+
+def _prediction_exchange_tickers(
+    predictions: Sequence[Mapping[str, Any]],
+) -> list[str]:
+    symbols: list[str] = []
+    for prediction in predictions:
+        row = prediction.get("row") if isinstance(prediction, Mapping) else None
+        if isinstance(row, Mapping):
+            symbols.append(_get_symbol_name(dict(row)))
+        elif isinstance(prediction, Mapping):
+            raw = prediction.get("symbol") or prediction.get("ticker")
+            if raw:
+                symbols.append(str(raw))
+    return symbols
+
+
 def _get_company_name(row: dict[str, Any]) -> str:
     ticker_view = row.get("ticker-view")
     if isinstance(ticker_view, dict):
@@ -5916,6 +5953,7 @@ def _log_regime_aligned_section(
         ranked.append((combined, prediction))
 
     ranked.sort(key=lambda item: item[0], reverse=True)
+    top_ranked = ranked[:top_n]
     log_to_file(log_file, f"REGIME-ALIGNED TOP {top_n} (weeks RAS x regime fit)")
     log_to_file(log_file, "-" * 160)
     log_to_file(
@@ -5924,12 +5962,14 @@ def _log_regime_aligned_section(
         f"{'ATRP':>8} {'RelVol':>8} {'Warn':>5} {'Combined':>10}",
     )
     log_to_file(log_file, "-" * 160)
-    for combined, prediction in ranked[:top_n]:
+    listed_predictions: list[dict[str, Any]] = []
+    for combined, prediction in top_ranked:
         row = prediction["row"]
         weeks = prediction["horizons"].get("weeks") or {}
         record = get_regime_record_for_row(prediction["row"], regime_context_by_symbol)
         if record is None:
             continue
+        listed_predictions.append(prediction)
         log_to_file(
             log_file,
             f"{_get_symbol_name(row):<{SYMBOL_LOG_WIDTH}} "
@@ -5942,6 +5982,11 @@ def _log_regime_aligned_section(
             f"{record.warning_flag_count:>5} "
             f"{combined:>10.3f}",
         )
+    _log_exchange_ticker_list(
+        log_file,
+        _prediction_exchange_tickers(listed_predictions),
+        label="symbols",
+    )
     log_to_file(log_file, "")
 
 
@@ -6000,6 +6045,11 @@ def _log_horizon_section(
                 f"{_format_regime_context_log_suffix(prediction, regime_context_by_symbol)}"
             ),
         )
+    _log_exchange_ticker_list(
+        log_file,
+        _prediction_exchange_tickers(top_upside),
+        label="symbols",
+    )
 
     log_to_file(log_file, "")
     log_to_file(log_file, f"{horizon_title} downside candidates")
@@ -6040,6 +6090,11 @@ def _log_horizon_section(
                 f"{_format_regime_context_log_suffix(prediction, regime_context_by_symbol)}"
             ),
         )
+    _log_exchange_ticker_list(
+        log_file,
+        _prediction_exchange_tickers(top_downside),
+        label="symbols",
+    )
 
     log_to_file(log_file, "")
 
@@ -6089,6 +6144,7 @@ def _log_consensus_section(
         log_to_file(log_file, title)
         if not items:
             log_to_file(log_file, "  none")
+            _log_exchange_ticker_list(log_file, [], label="symbols")
             log_to_file(log_file, "")
             return
         ranked_items = sorted(
@@ -6112,6 +6168,11 @@ def _log_consensus_section(
                     f"scale={_format_score(prediction['components'].get('scale'))}"
                 ),
             )
+        _log_exchange_ticker_list(
+            log_file,
+            _prediction_exchange_tickers(ranked_items),
+            label="symbols",
+        )
         log_to_file(log_file, "")
 
     _log_bucket(
@@ -6238,6 +6299,7 @@ def _log_blind_spot_sections(
         log_to_file(log_file, description)
         if not rows:
             log_to_file(log_file, "  none")
+            _log_exchange_ticker_list(log_file, [], label="symbols")
             log_to_file(log_file, "")
             continue
         for prediction in rows:
@@ -6257,6 +6319,11 @@ def _log_blind_spot_sections(
                     f"scale={_format_score(prediction['components'].get('scale'))}"
                 ),
             )
+        _log_exchange_ticker_list(
+            log_file,
+            _prediction_exchange_tickers(rows),
+            label="symbols",
+        )
         log_to_file(log_file, "")
 
 
@@ -7561,6 +7628,11 @@ def _log_breakout_narrative_sections(
             # Thesis bullets
             for bullet in story.get("thesis_bullets", [])[:2]:
                 log_to_file(log_file, f"      • {bullet}")
+        _log_exchange_ticker_list(
+            log_file,
+            _prediction_exchange_tickers([pred for pred, _ in validated[:top_n]]),
+            label="symbols",
+        )
 
     # Rejected near-misses: high RAS but failed one gate
     near_misses = [
@@ -7616,6 +7688,11 @@ def _log_breakout_narrative_sections(
                 f"{reason_str:<25} "
                 f"{story.get('entry_readiness', 'unknown'):<12}"
             )
+        _log_exchange_ticker_list(
+            log_file,
+            _prediction_exchange_tickers([pred for pred, _ in near_misses[:20]]),
+            label="symbols",
+        )
 
     log_to_file(log_file, "=" * 120)
 
