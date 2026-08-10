@@ -99,6 +99,33 @@ def test_four_lanes_on_projection_summary() -> None:
             "ev_rev_relative_scale": 1.25,
             "rev_growth_relative_scale": 1.1,
             "rev_cagr_relative_scale": 1.11,
+            "peer_dispersion_iqr_over_median": 0.8,
+            "peer_views": {
+                "industry": {
+                    "peer_n": 80,
+                    "ev_rev_peer_median": 4.2,
+                    "ev_rev_relative_scale": 1.19,
+                    "rev_cagr_peer_median": 9.0,
+                    "dispersion_iqr_over_median": 1.1,
+                },
+                "industry_mcap": {
+                    "peer_n": 40,
+                    "ev_rev_peer_median": 4.0,
+                    "ev_rev_relative_scale": 1.25,
+                    "rev_cagr_peer_median": 9.0,
+                    "dispersion_iqr_over_median": 0.8,
+                },
+                "industry_growth": {
+                    "peer_n": 25,
+                    "ev_rev_peer_median": 5.0,
+                    "ev_rev_relative_scale": 1.0,
+                    "rev_cagr_peer_median": 11.0,
+                    "dispersion_iqr_over_median": 0.6,
+                },
+            },
+            "peer_view_names": ["industry", "industry_mcap", "industry_growth"],
+            "peer_view_suggested": "industry_growth",
+            "peer_view_agreement": 1.0,
         },
         horizon_years=5,
     )
@@ -109,8 +136,13 @@ def test_four_lanes_on_projection_summary() -> None:
     assert summary["lane_hist_trust"] > 0
     assert summary["lane_peer_trust"] > 0
     assert summary["lane_peer_scope"] == "industry_mcap"
+    assert summary["lane_peer_industry_ev_rev_rel"] is not None
+    assert summary["lane_peer_growth_ev_rev_rel"] == 1.0
+    assert summary["lane_peer_view_suggested"] == "industry_growth"
+    assert summary["lane_peer_source"] == "multi_view_industry_default"
     assert summary["lane_hist_adjusted_upside_pct"] is not None
     assert "lane_hist_vs_core_gap_pp" in summary
+    assert "industry" in summary["lane_peer_views_json"]
 
 
 def test_build_decision_lanes_standalone() -> None:
@@ -133,15 +165,38 @@ def test_build_decision_lanes_standalone() -> None:
             "ev_rev_relative_scale": 1.5,
             "rev_cagr_relative_scale": 1.5,
             "valuation_lens": "ev_revenue",
+            "peer_dispersion_iqr_over_median": 0.5,
         },
         scenario=_scenario(),
     )
     assert lanes["lane_core_source"] == "global_scenario_coeffs"
     assert lanes["lane_street_source"] == "price_target_and_forecasts"
     assert lanes["lane_hist_source"] == "cagr_yoy_persistence"
-    assert lanes["lane_peer_source"] == "industry_mcap_sector_global"
+    assert lanes["lane_peer_source"] == "multi_view_industry_default"
     assert history_lane_trust(
         peer_trust=1.0, cagr_fraction=0.15, yoy_fraction=0.40
     ) < history_lane_trust(
         peer_trust=1.0, cagr_fraction=0.15, yoy_fraction=0.16
     )
+
+
+def test_peer_trust_drops_on_high_dispersion() -> None:
+    low = peer_lane_trust(
+        peer_n=40,
+        min_peer_n_trust=15,
+        valuation_lens="ev_revenue",
+        ev_rev_relative_scale=1.2,
+        relative_scale_clip_high=3.0,
+        dispersion_iqr_over_median=0.5,
+    )
+    high = peer_lane_trust(
+        peer_n=40,
+        min_peer_n_trust=15,
+        valuation_lens="ev_revenue",
+        ev_rev_relative_scale=1.2,
+        relative_scale_clip_high=3.0,
+        dispersion_iqr_over_median=2.5,
+    )
+    assert high < low
+    assert high < 0.5
+

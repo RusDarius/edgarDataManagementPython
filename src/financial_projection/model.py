@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -337,9 +338,29 @@ def _attach_lanes(
         scenario=scenario,
         min_peer_n_trust=min_peer_n_trust,
         relative_scale_clip_high=relative_scale_clip_high,
+        dispersion_soft_threshold=(
+            config.peer_dispersion_soft_threshold if config is not None else 1.25
+        ),
+        dispersion_hard_threshold=(
+            config.peer_dispersion_hard_threshold if config is not None else 2.0
+        ),
     )
     hist_scenario = lanes.pop("_hist_adjusted_scenario", None)
     summary.update(lanes)
+
+    # Nested peer-view maps are consumed by lanes; keep JSON-friendly scalars only.
+    if isinstance(summary.get("peer_views"), dict):
+        summary.pop("peer_views", None)
+    if isinstance(summary.get("peer_view_trust"), dict):
+        summary.pop("peer_view_trust", None)
+    if isinstance(summary.get("peer_metric_medians"), dict):
+        summary["peer_metric_medians_json"] = json.dumps(
+            summary.pop("peer_metric_medians"), separators=(",", ":")
+        )
+    if isinstance(summary.get("peer_view_names"), list):
+        summary["peer_view_names"] = "|".join(
+            str(name) for name in summary["peer_view_names"]
+        )
 
     summary["lane_hist_adjusted_terminal_price"] = None
     summary["lane_hist_adjusted_upside_pct"] = None
@@ -519,6 +540,15 @@ def project_symbol_scenario(
         "ev_rev_relative_scale": peer.get("ev_rev_relative_scale"),
         "rev_growth_relative_scale": peer.get("rev_growth_relative_scale"),
         "rev_cagr_relative_scale": peer.get("rev_cagr_relative_scale"),
+        "peer_dispersion_iqr_over_median": peer.get(
+            "peer_dispersion_iqr_over_median"
+        ),
+        "peer_views": peer.get("peer_views") or {},
+        "peer_view_trust": peer.get("peer_view_trust") or {},
+        "peer_view_suggested": peer.get("peer_view_suggested") or "",
+        "peer_view_agreement": peer.get("peer_view_agreement"),
+        "peer_view_names": peer.get("peer_view_names") or [],
+        "peer_metric_medians": peer.get("peer_metric_medians") or {},
         "valid": False,
         "invalid_reason": invalid_reason,
         "terminal_price": None,

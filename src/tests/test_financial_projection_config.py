@@ -16,7 +16,7 @@ def test_load_default_scenario_config() -> None:
     assert config.scenarios["bear"].revenue_growth_scale == 0.55
     assert config.scenarios["base"].revenue_growth_scale == 1.0
     assert config.scenarios["bull"].revenue_growth_scale == 1.25
-    assert config.peer_mcap_refine_min_industry_n == 40
+    assert config.peer_mcap_refine_min_industry_n == 0
     assert "Finance" in config.valuation_lens_rules.ev_rev_unsuitable_sectors
     assert "Managed Health Care" in config.valuation_lens_rules.earnings_preferred_industries
     assert config.rich_growth_fy_rev_pct == 15.0

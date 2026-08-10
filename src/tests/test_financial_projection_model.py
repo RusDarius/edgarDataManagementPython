@@ -264,11 +264,13 @@ def test_peer_mcap_refinement_for_large_industry() -> None:
     ctx = build_peer_scale_context(
         rows,
         min_peer_group_size=8,
-        peer_mcap_refine_min_industry_n=40,
+        peer_mcap_refine_min_industry_n=0,
         peer_mcap_band_low=0.25,
         peer_mcap_band_high=4.0,
     )
-    assert ctx["NASDAQ:MEGA"]["peer_scope"] == "industry_mcap"
-    assert ctx["NASDAQ:MEGA"]["peer_n"] < ctx["NASDAQ:S0"]["peer_n"] or ctx[
-        "NASDAQ:S0"
-    ]["peer_scope"] in {"industry", "industry_mcap"}
+    assert ctx["NASDAQ:MEGA"]["peer_scope"] == "industry"
+    assert "industry_mcap" in ctx["NASDAQ:MEGA"]["peer_views"]
+    assert ctx["NASDAQ:MEGA"]["peer_views"]["industry_mcap"]["peer_n"] < ctx[
+        "NASDAQ:MEGA"
+    ]["peer_n"] or ctx["NASDAQ:S0"]["peer_scope"] == "industry"
+

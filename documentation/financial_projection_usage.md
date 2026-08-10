@@ -26,11 +26,14 @@ from run_financial_projection import (
     run_financial_projection_from_latest_all_fields,
     run_financial_projection_from_latest_prediction_analysis,
     run_financial_projection_from_all_fields_day,
+    run_financial_projection_for_custom_peer_group,
 )
 
 run_financial_projection_from_latest_all_fields(min_market_cap_usd=500_000_000)
 run_financial_projection_from_all_fields_day("01_07_2026", min_market_cap_usd=500_000_000)
 run_financial_projection_from_latest_prediction_analysis(min_market_cap_usd=500_000_000)
+# Optional: hand-picked comps (separate run, not main-suite params)
+# run_financial_projection_for_custom_peer_group([...], group_label="saas_mature")
 ```
 
 Symbols must be **`EXCHANGE:TICKER`** (e.g. `NASDAQ:ADBE`, `NYSE:ORCL`).
@@ -56,16 +59,18 @@ score. Rank screens still use the **core** lane (`primary_upside_pct` /
 | **1. Core** | Comparable baseline from **global** bear/base/bull coeffs | `lane_core_upside_pct` (= `terminal_upside_pct`), `lane_core_y1_upside_pct` | Clean across names; does not silently rewrite coeffs from history |
 | **2. Street** | Near-term forecast / target anchor | `lane_street_upside_pct`, `lane_street_fy_rev_growth_pct`, `lane_street_outlook` | Consensus can be wrong; still the best near-term tape |
 | **3. History** | CAGR / YoY persistence overlay | `total_revenue_cagr_5y`, `total_revenue_yoy_growth_ttm`, `lane_hist_vs_street_gap_pp`, `lane_hist_*_adj`, `lane_hist_adjusted_upside_pct`, `lane_hist_trust` | Own-company history; peer-relative blend damped when peers look polluted |
-| **4. Peer** | Multiple / industry relative anchor | `lane_peer_ev_rev_median`, `lane_peer_rev_cagr_median`, `lane_peer_ev_rev_rel`, `lane_peer_scope`, `lane_peer_n`, `lane_peer_trust` | Industry tags and peer sets can be wrong — use `lane_peer_trust` |
+| **4. Peer** | Multi-view industry / mcap / maturity / profitable | `lane_peer_*`, `lane_peer_industry_*`, `lane_peer_mcap_*`, `lane_peer_growth_*`, `lane_peer_view_suggested`, `lane_peer_trust` | Industry is default; other angles are optional — use trust + agreement |
 
 **History does not replace core.** It suggests coeff tweaks
 (`lane_hist_growth_scale_adj`, `lane_hist_fade_adj`, `lane_hist_terminal_mult_adj`,
 clipped ~0.70–1.30) and runs a **parallel** path →
 `lane_hist_adjusted_upside_pct` and `lane_hist_vs_core_gap_pp`.
 
-**Peer trust** falls when: lens is `unsuitable`, `peer_n` is thin, or relative
-EV/S is pinned at the high clip (often incomparable names). Low peer trust
-limits how much history uses peer-relative CAGR in those tweaks.
+**Peer trust** falls when: lens is `unsuitable`, `peer_n` is thin, relative
+EV/S is pinned at the high clip, or peer-set EV/S dispersion is high. Low peer
+trust limits how much history uses peer-relative CAGR in those tweaks.
+Compare `lane_peer_industry_ev_rev_rel` vs `lane_peer_growth_ev_rev_rel` (ADBE
+vs DDOG maturity) and `lane_peer_mcap_ev_rev_rel` when size matters.
 
 ---
 
@@ -158,22 +163,57 @@ Still exact field names — no new aliases:
 3. If `enterprise_value_current` missing → EV/Rev × revenue.
 4. If `net_debt` missing → `total_debt − cash_n_equivalents_fq` (else 0).
 
-### 2.2 Peer grouping
+### 2.2 Peer grouping (multi-view)
 
-Peer medians drive terminal EV/Rev (and EV/EBITDA cross-check).
+Peer medians drive terminal EV/Rev (and EV/EBITDA cross-check). The **core
+path** defaults to the **industry** median when the industry set is large
+enough (then sector → global). That keeps industry comparison as the primary
+anchor.
 
-1. **Industry** if ≥ `min_peer_group_size` (8)
-2. **`industry_mcap`** if industry n ≥ 40 and enough peers in
-   `[0.25×, 4×]` own `market_cap_basic`
-3. **Sector** if industry too thin
-4. **Global** last resort
+In parallel, the peer lane builds **optional angles** so you can decide which
+view is relevant:
+
+| View | Meaning |
+|------|---------|
+| `industry` | Full industry (default core anchor) |
+| `industry_mcap` | Expandable mcap band inside industry (starts `[0.25×, 4×]`) |
+| `industry_rev` | Revenue band inside industry (`[0.4×, 2.5×]`, ISS-style) |
+| `industry_growth` | Growth / maturity band (±15pp YoY/CAGR, or relative when extreme) |
+| `industry_profitable` | Positive-EBITDA peers (when the name itself is profitable) |
+| `sector` / `global` | Fallbacks when industry is thin |
+
+Each view carries `peer_n`, EV/Rev median + relative scale, dispersion
+(`iqr_over_median`), and a trust score. High dispersion / thin n / clip-pin
+lowers trust. `lane_peer_view_suggested` is the highest-trust view (hint only
+— does not overwrite core). `lane_peer_view_agreement` says whether other
+angles agree with industry on rich/mid/cheap.
 
 Medians are trimmed 5% each tail when n ≥ 20. Relative scales
 (own ÷ peer) are clipped to `[0.25, 3.0]`.
 
-Derived peer fields on each row: `peer_scope`, `peer_n`,
-`ev_rev_peer_median`, `rev_growth_peer_median`,
-`ev_rev_relative_scale`, `rev_growth_relative_scale`.
+Default-path fields: `peer_scope`, `peer_n`, `ev_rev_peer_median`,
+`ev_rev_relative_scale`, `peer_dispersion_iqr_over_median`.
+
+Per-angle lane fields: `lane_peer_industry_*`, `lane_peer_mcap_*`,
+`lane_peer_rev_*`, `lane_peer_growth_*`, `lane_peer_profitable_*`,
+plus `lane_peer_views_json`.
+
+#### Custom peer-group run (separate method)
+
+For hand-picked comps (e.g. mature SaaS vs hypergrowth), use a **separate
+run method** — not extra params on the main suite:
+
+```python
+from run_financial_projection import run_financial_projection_for_custom_peer_group
+
+run_financial_projection_for_custom_peer_group(
+    ["NASDAQ:ADBE", "NASDAQ:CRM", "NYSE:ORCL", "NASDAQ:INTU", "NASDAQ:ADSK"],
+    group_label="saas_mature",
+)
+```
+
+Peers (and size/growth/profitable angles) are built only from that list.
+`project_symbols=` can project a subset.
 
 ### 2.3 Starting growth resolution
 
@@ -258,8 +298,8 @@ rev−EPS divergence (≥ 25pp = margin risk), bull−bear width (≥ 100pp = wi
 3. **History** — reads `total_revenue_cagr_5y` / YoY; compares to street and peer
    CAGR; emits trust + suggested coeff multipliers; optionally re-runs path with
    adjusted coeffs → `lane_hist_adjusted_upside_pct` (does **not** overwrite core).
-4. **Peer** — surfaces peer EV/Rev + CAGR medians, relative scales, scope/n, and
-   `lane_peer_trust` (thin peers / clip / unsuitable → low trust).
+4. **Peer** — multi-view industry default + mcap / rev / growth / profitable
+   angles with per-view trust, dispersion, suggested view, and agreement.
 
 ---
 
@@ -353,11 +393,16 @@ EPS forecast fields, etc.
 | `lane_hist_coeff_notes` | History | e.g. `street_above_history` |
 | `lane_hist_adjusted_upside_pct` | History | Parallel path with adjusted coeffs |
 | `lane_hist_vs_core_gap_pp` | History | Hist-adjusted − core upside (pp) |
-| `lane_peer_ev_rev_median` / `lane_peer_rev_cagr_median` | Peer | Peer medians |
-| `lane_peer_ev_rev_rel` | Peer | Own EV/Rev ÷ peer (clipped) |
-| `lane_peer_scope` / `lane_peer_n` | Peer | Which peer set |
-| `lane_peer_trust` | Peer | 0..1; low if polluted / thin / unsuitable |
-| `lane_peer_source` | Peer | `industry_mcap_sector_global` |
+| `lane_peer_ev_rev_median` / `lane_peer_rev_cagr_median` | Peer | Default (industry) medians |
+| `lane_peer_ev_rev_rel` | Peer | Own EV/Rev ÷ default peer (clipped) |
+| `lane_peer_dispersion` | Peer | Default peer EV/S IQR ÷ median |
+| `lane_peer_scope` / `lane_peer_n` | Peer | Default view name + size |
+| `lane_peer_trust` | Peer | 0..1; low if polluted / thin / unsuitable / high dispersion |
+| `lane_peer_industry_*` / `lane_peer_mcap_*` / `lane_peer_rev_*` / `lane_peer_growth_*` / `lane_peer_profitable_*` | Peer | Parallel angles (n, median, rel, dispersion, trust) |
+| `lane_peer_view_suggested` | Peer | Highest-trust view (hint only) |
+| `lane_peer_view_agreement` | Peer | Share of other views agreeing rich/mid/cheap |
+| `lane_peer_views_json` | Peer | Compact JSON of all views |
+| `lane_peer_source` | Peer | `multi_view_industry_default` |
 
 ### 3.7 Year grid (`projection_year_grid`)
 

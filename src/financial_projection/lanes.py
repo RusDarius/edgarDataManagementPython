@@ -1,10 +1,19 @@
-"""Four parallel decision lanes: core, street, history, peer."""
+"""Four parallel decision lanes: core, street, history, peer (multi-view)."""
 
 from __future__ import annotations
 
+import json
 from typing import Any, Mapping
 
 from .config import ScenarioParams
+from .peer_scales import (
+    PEER_VIEW_GROWTH,
+    PEER_VIEW_INDUSTRY,
+    PEER_VIEW_MCAP,
+    PEER_VIEW_PROFITABLE,
+    PEER_VIEW_REV,
+    view_trust_score,
+)
 
 
 def _safe_float(value: Any) -> float | None:
@@ -35,25 +44,26 @@ def peer_lane_trust(
     valuation_lens: str,
     ev_rev_relative_scale: float | None,
     relative_scale_clip_high: float,
+    dispersion_iqr_over_median: float | None = None,
+    dispersion_soft_threshold: float = 1.25,
+    dispersion_hard_threshold: float = 2.0,
 ) -> float:
     """
-    0..1 trust in peer-relative signals.
+    0..1 trust in the default peer-relative signal.
 
-    Low when peers are thin, lens unsuitable, or relative scale is pinned at the
-    clip (often a polluted / incomparable peer set).
+    Low when peers are thin, lens unsuitable, relative scale is pinned at the
+    clip, or the peer-set EV/Rev dispersion is high.
     """
-    if valuation_lens == "unsuitable":
-        return 0.0
-    trust = 1.0
-    if peer_n < max(1, int(min_peer_n_trust)):
-        trust *= 0.45 if peer_n >= 8 else 0.2
-    if (
-        ev_rev_relative_scale is not None
-        and relative_scale_clip_high > 0
-        and ev_rev_relative_scale >= relative_scale_clip_high * 0.999
-    ):
-        trust *= 0.55
-    return _clip(trust, 0.0, 1.0)
+    return view_trust_score(
+        peer_n=peer_n,
+        min_peer_n_trust=min_peer_n_trust,
+        valuation_lens=valuation_lens,
+        ev_rev_relative_scale=ev_rev_relative_scale,
+        relative_scale_clip_high=relative_scale_clip_high,
+        dispersion_iqr_over_median=dispersion_iqr_over_median,
+        dispersion_soft_threshold=dispersion_soft_threshold,
+        dispersion_hard_threshold=dispersion_hard_threshold,
+    )
 
 
 def history_lane_trust(
@@ -66,14 +76,12 @@ def history_lane_trust(
     if cagr_fraction is None and yoy_fraction is None:
         return 0.0
     trust = 0.85
-    # Extreme YoY vs CAGR gap ⇒ regime break / noisy history.
     if cagr_fraction is not None and yoy_fraction is not None:
         gap = abs(yoy_fraction - cagr_fraction)
         if gap >= 0.35:
             trust *= 0.6
         elif gap >= 0.20:
             trust *= 0.8
-    # Peer pollution should not erase company history, only damp peer-relative blend.
     trust = 0.65 * trust + 0.35 * trust * max(peer_trust, 0.35)
     return _clip(trust, 0.0, 1.0)
 
@@ -103,9 +111,7 @@ def suggest_history_coeff_adjustments(
     notes: list[str] = []
 
     if hist_anchor is not None and street_fy_fraction is not None and hist_trust > 0:
-        # Street much hotter than history → pull growth scale down toward persistence.
         gap = street_fy_fraction - hist_anchor
-        # Soft response: 20pp gap → ~0.10 scale move, damped by trust.
         growth_scale_adj -= _clip(gap, -0.50, 0.80) * 0.50 * hist_trust
         if gap > 0.15:
             notes.append("street_above_history")
@@ -118,7 +124,6 @@ def suggest_history_coeff_adjustments(
         and abs(peer_cagr_fraction) > 1e-9
         and peer_trust > 0
     ):
-        # Faster history than peers → slightly slower fade (keep growth longer).
         rel = cagr_fraction / peer_cagr_fraction
         if rel > 1.25:
             fade_adj += 0.03 * peer_trust * hist_trust
@@ -155,6 +160,67 @@ def suggest_history_coeff_adjustments(
     }
 
 
+def _recompute_view_trusts(
+    peer_views: Mapping[str, Mapping[str, Any]],
+    *,
+    valuation_lens: str,
+    min_peer_n_trust: int,
+    relative_scale_clip_high: float,
+    dispersion_soft_threshold: float,
+    dispersion_hard_threshold: float,
+) -> dict[str, float]:
+    trusts: dict[str, float] = {}
+    for name, payload in peer_views.items():
+        trusts[name] = view_trust_score(
+            peer_n=int(payload.get("peer_n") or 0),
+            min_peer_n_trust=min_peer_n_trust,
+            valuation_lens=valuation_lens,
+            ev_rev_relative_scale=_safe_float(payload.get("ev_rev_relative_scale")),
+            relative_scale_clip_high=relative_scale_clip_high,
+            dispersion_iqr_over_median=_safe_float(
+                payload.get("dispersion_iqr_over_median")
+            ),
+            dispersion_soft_threshold=dispersion_soft_threshold,
+            dispersion_hard_threshold=dispersion_hard_threshold,
+        )
+    return trusts
+
+
+def _flatten_view_fields(
+    peer_views: Mapping[str, Mapping[str, Any]],
+    view_trust: Mapping[str, float],
+) -> dict[str, Any]:
+    """Emit stable columns for the main peer angles."""
+    out: dict[str, Any] = {}
+    for key, prefix in (
+        (PEER_VIEW_INDUSTRY, "industry"),
+        (PEER_VIEW_MCAP, "mcap"),
+        (PEER_VIEW_REV, "rev"),
+        (PEER_VIEW_GROWTH, "growth"),
+        (PEER_VIEW_PROFITABLE, "profitable"),
+    ):
+        payload = peer_views.get(key) or {}
+        out[f"lane_peer_{prefix}_n"] = (
+            int(payload["peer_n"]) if payload.get("peer_n") is not None else None
+        )
+        out[f"lane_peer_{prefix}_ev_rev_median"] = _safe_float(
+            payload.get("ev_rev_peer_median")
+        )
+        out[f"lane_peer_{prefix}_ev_rev_rel"] = _safe_float(
+            payload.get("ev_rev_relative_scale")
+        )
+        out[f"lane_peer_{prefix}_rev_cagr_median"] = _safe_float(
+            payload.get("rev_cagr_peer_median")
+        )
+        out[f"lane_peer_{prefix}_dispersion"] = _safe_float(
+            payload.get("dispersion_iqr_over_median")
+        )
+        out[f"lane_peer_{prefix}_trust"] = (
+            float(view_trust[key]) if key in view_trust else None
+        )
+    return out
+
+
 def build_decision_lanes(
     *,
     row: Mapping[str, Any],
@@ -162,11 +228,14 @@ def build_decision_lanes(
     scenario: ScenarioParams,
     min_peer_n_trust: int = 15,
     relative_scale_clip_high: float = 3.0,
+    dispersion_soft_threshold: float = 1.25,
+    dispersion_hard_threshold: float = 2.0,
 ) -> dict[str, Any]:
     """
     Emit four parallel lanes (core / street / history / peer).
 
-    Core remains the ranking baseline. Other lanes are explicit cross-checks.
+    Peer lane carries multi-angle views (industry / mcap / rev / growth /
+    profitable). Core ranking still uses the default industry-anchored path.
     """
     cagr_pct = _safe_float(row.get("total_revenue_cagr_5y"))
     yoy_pct = _safe_float(row.get("total_revenue_yoy_growth_ttm"))
@@ -182,6 +251,7 @@ def build_decision_lanes(
     peer_n = int(summary.get("peer_n") or 0)
     valuation_lens = str(summary.get("valuation_lens") or "ev_revenue")
     ev_rev_rel = _safe_float(summary.get("ev_rev_relative_scale"))
+    dispersion = _safe_float(summary.get("peer_dispersion_iqr_over_median"))
     peer_cagr_pct = _safe_float(summary.get("rev_cagr_peer_median"))
     if peer_cagr_pct is None:
         peer_cagr_pct = _safe_float(
@@ -192,12 +262,28 @@ def build_decision_lanes(
     peer_cagr_fraction = _pct_to_fraction(peer_cagr_pct)
     cagr_rel = _safe_float(summary.get("rev_cagr_relative_scale"))
 
+    raw_views = summary.get("peer_views") or {}
+    if not isinstance(raw_views, dict):
+        raw_views = {}
+
+    view_trust = _recompute_view_trusts(
+        raw_views,
+        valuation_lens=valuation_lens,
+        min_peer_n_trust=min_peer_n_trust,
+        relative_scale_clip_high=relative_scale_clip_high,
+        dispersion_soft_threshold=dispersion_soft_threshold,
+        dispersion_hard_threshold=dispersion_hard_threshold,
+    )
+
     peer_trust = peer_lane_trust(
         peer_n=peer_n,
         min_peer_n_trust=min_peer_n_trust,
         valuation_lens=valuation_lens,
         ev_rev_relative_scale=ev_rev_rel,
         relative_scale_clip_high=relative_scale_clip_high,
+        dispersion_iqr_over_median=dispersion,
+        dispersion_soft_threshold=dispersion_soft_threshold,
+        dispersion_hard_threshold=dispersion_hard_threshold,
     )
     hist_trust = history_lane_trust(
         peer_trust=peer_trust,
@@ -228,6 +314,19 @@ def build_decision_lanes(
     core_upside = _safe_float(summary.get("terminal_upside_pct"))
     street_upside = _safe_float(summary.get("st_street_price_upside_pct"))
 
+    view_names = summary.get("peer_view_names") or list(raw_views.keys())
+    compact_views = {
+        name: {
+            "n": (raw_views.get(name) or {}).get("peer_n"),
+            "ev_rev_med": (raw_views.get(name) or {}).get("ev_rev_peer_median"),
+            "ev_rev_rel": (raw_views.get(name) or {}).get("ev_rev_relative_scale"),
+            "disp": (raw_views.get(name) or {}).get("dispersion_iqr_over_median"),
+            "trust": view_trust.get(name),
+        }
+        for name in view_names
+        if name in raw_views
+    }
+
     return {
         # Lane 1 — core (global scenario coeffs)
         "lane_core_upside_pct": core_upside,
@@ -254,14 +353,19 @@ def build_decision_lanes(
         "lane_hist_terminal_mult_adj": coeff["lane_hist_terminal_mult_adj"],
         "lane_hist_coeff_notes": coeff["lane_hist_coeff_notes"],
         "lane_hist_source": "cagr_yoy_persistence",
-        # Lane 4 — peer medians (multiple anchor; may be polluted)
+        # Lane 4 — peer multi-view (default = industry when available)
         "lane_peer_scope": summary.get("peer_scope") or "",
         "lane_peer_n": peer_n,
         "lane_peer_ev_rev_median": _safe_float(summary.get("ev_rev_peer_median")),
         "lane_peer_rev_cagr_median": peer_cagr_pct,
         "lane_peer_ev_rev_rel": ev_rev_rel,
+        "lane_peer_dispersion": dispersion,
         "lane_peer_trust": peer_trust,
-        "lane_peer_source": "industry_mcap_sector_global",
-        # Helper for optional hist-adjusted re-run
+        "lane_peer_view_suggested": summary.get("peer_view_suggested") or "",
+        "lane_peer_view_agreement": _safe_float(summary.get("peer_view_agreement")),
+        "lane_peer_view_names": "|".join(str(n) for n in view_names),
+        "lane_peer_views_json": json.dumps(compact_views, separators=(",", ":")),
+        "lane_peer_source": "multi_view_industry_default",
+        **_flatten_view_fields(raw_views, view_trust),
         "_hist_adjusted_scenario": coeff["adjusted_scenario"],
     }

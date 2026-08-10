@@ -63,6 +63,13 @@ class FinancialProjectionConfig:
     peer_mcap_band_low: float
     peer_mcap_band_high: float
     peer_mcap_refine_min_industry_n: int
+    peer_revenue_band_low: float
+    peer_revenue_band_high: float
+    peer_growth_abs_pp: float
+    peer_growth_rel_low: float
+    peer_growth_rel_high: float
+    peer_dispersion_soft_threshold: float
+    peer_dispersion_hard_threshold: float
     max_starting_growth_fraction: float
     forecast_growth_max_fraction: float
     max_ev_to_revenue: float
@@ -262,8 +269,36 @@ def load_projection_config(
             field_name="peer_mcap_band_high",
         ),
         peer_mcap_refine_min_industry_n=_as_int(
-            payload.get("peer_mcap_refine_min_industry_n", 40),
+            payload.get("peer_mcap_refine_min_industry_n", 0),
             field_name="peer_mcap_refine_min_industry_n",
+        ),
+        peer_revenue_band_low=_as_float(
+            payload.get("peer_revenue_band_low", 0.40),
+            field_name="peer_revenue_band_low",
+        ),
+        peer_revenue_band_high=_as_float(
+            payload.get("peer_revenue_band_high", 2.50),
+            field_name="peer_revenue_band_high",
+        ),
+        peer_growth_abs_pp=_as_float(
+            payload.get("peer_growth_abs_pp", 0.15),
+            field_name="peer_growth_abs_pp",
+        ),
+        peer_growth_rel_low=_as_float(
+            payload.get("peer_growth_rel_low", 0.50),
+            field_name="peer_growth_rel_low",
+        ),
+        peer_growth_rel_high=_as_float(
+            payload.get("peer_growth_rel_high", 2.00),
+            field_name="peer_growth_rel_high",
+        ),
+        peer_dispersion_soft_threshold=_as_float(
+            payload.get("peer_dispersion_soft_threshold", 1.25),
+            field_name="peer_dispersion_soft_threshold",
+        ),
+        peer_dispersion_hard_threshold=_as_float(
+            payload.get("peer_dispersion_hard_threshold", 2.0),
+            field_name="peer_dispersion_hard_threshold",
         ),
         max_starting_growth_fraction=_as_float(
             payload.get("max_starting_growth_fraction", 1.0),

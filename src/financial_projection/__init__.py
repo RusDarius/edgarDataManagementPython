@@ -12,7 +12,10 @@ from .load_all_fields import (
     discover_latest_prediction_db,
     resolve_all_fields_day_database,
 )
-from .run_suite import run_financial_projection_suite
+from .run_suite import (
+    run_financial_projection_suite,
+    run_financial_projection_suite_custom_peer_group,
+)
 from .sources import (
     load_symbols_from_move_prediction_duckdb,
     resolve_symbols_argument,
@@ -30,4 +33,5 @@ __all__ = [
     "resolve_all_fields_day_database",
     "resolve_symbols_argument",
     "run_financial_projection_suite",
+    "run_financial_projection_suite_custom_peer_group",
 ]
