@@ -1,8 +1,15 @@
 # Financial Projection — Usage & Field Guide
 
-5-year EV/Revenue forward projections (bear / base / bull) from a TradingView
-**all-fields** DuckDB snapshot, plus short-term street outlook and decision
-diagnostics.
+5-year forward projections from a TradingView **all-fields** DuckDB snapshot.
+
+Three suites share the same entrypoint:
+
+1. **Growth lanes (default / this iteration)** — revenue / EBIT / EBITDA / margins
+   on three parallel paths: `universe`, `own`, `peer`.
+2. **Price suite** — EV/Revenue → terminal price, plus street outlook and decision
+   diagnostics (`--mode price`).
+3. **Ticker overview** — single-name ~100-field all-fields pull, bucketed for
+   projection scans (`--mode overview --ticker NASDAQ:PENG`).
 
 **Entrypoint:** [`src/run_financial_projection.py`](../src/run_financial_projection.py)  
 **Config:** [`config/financial_projection/scenarios_v1.json`](../config/financial_projection/scenarios_v1.json)  
@@ -19,21 +26,32 @@ Do **not** wire run examples into `src/main.py`. Use the entrypoint /
 ```powershell
 cd src
 python run_financial_projection.py --top-n 25
+# EV/Rev price suite instead:
+python run_financial_projection.py --mode price --top-n 25
+# Single-ticker overview scan (~100 curated fields):
+python run_financial_projection.py --mode overview --ticker NASDAQ:PENG
+python run_financial_projection.py --mode overview --ticker NASDAQ:TTD --day-label 11_08_2026
 ```
 
 ```python
 from run_financial_projection import (
-    run_financial_projection_from_latest_all_fields,
-    run_financial_projection_from_latest_prediction_analysis,
-    run_financial_projection_from_all_fields_day,
-    run_financial_projection_for_custom_peer_group,
+    run_growth_projection_from_latest_all_fields,
+    run_growth_projection_from_latest_prediction_analysis,
+    run_growth_projection_from_all_fields_day,
+    run_growth_projection_for_custom_peer_group,
+    example_ticker_overview,
 )
+from financial_projection import run_ticker_projection_overview
 
-run_financial_projection_from_latest_all_fields(min_market_cap_usd=500_000_000)
-run_financial_projection_from_all_fields_day("01_07_2026", min_market_cap_usd=500_000_000)
-run_financial_projection_from_latest_prediction_analysis(min_market_cap_usd=500_000_000)
+run_growth_projection_from_latest_all_fields(min_market_cap_usd=500_000_000)
+run_growth_projection_from_all_fields_day("01_07_2026", min_market_cap_usd=500_000_000)
+run_growth_projection_from_latest_prediction_analysis(min_market_cap_usd=500_000_000)
 # Optional: hand-picked comps (separate run, not main-suite params)
-# run_financial_projection_for_custom_peer_group([...], group_label="saas_mature")
+# run_growth_projection_for_custom_peer_group([...], group_label="saas_mature")
+
+# Overview scan (like a TTD-style single-name metric dump, top ~100 only):
+example_ticker_overview("NASDAQ:PENG")
+run_ticker_projection_overview(ticker="NASDAQ:TTD", day_label="11_08_2026")
 ```
 
 Symbols must be **`EXCHANGE:TICKER`** (e.g. `NASDAQ:ADBE`, `NYSE:ORCL`).
@@ -42,15 +60,48 @@ Symbols must be **`EXCHANGE:TICKER`** (e.g. `NASDAQ:ADBE`, `NYSE:ORCL`).
 come from the all-fields snapshot. Peers are built on the full eligible
 universe even when you project a shortlist.
 
-Outputs land under
-`logs/tradingview_analysis/financial_projection/<dd_mm_yyyy>/finproj_*/`
-(`projection_summary`, `projection_year_grid`, DuckDB, parquet, `run_metadata.json`).
+Growth outputs land under
+`logs/tradingview_analysis/financial_projection/<dd_mm_yyyy>/fingrowth_*/`
+(`growth_summary`, `growth_year_grid`, DuckDB, parquet, `run_metadata.json`).
+
+Price outputs use `finproj_*` / `projection_summary` / `projection_year_grid`.
+
+Overview outputs use `tickoverview_*` with `_ticker_overview.log`,
+`metrics_by_bucket.csv`, `ticker_overview.json`, and `run_metadata.json`.
+Buckets: `identity`, `price_performance`, `valuation`, `levels_margins`,
+`growth_history`, `forward_street`, `quality_balance`, `cash_flow`,
+`technical_risk`, plus a small `computed` helper set. Field list lives in
+[`src/financial_projection/overview_fields.py`](../src/financial_projection/overview_fields.py).
 
 ---
 
-## Four decision lanes (practical rule)
+## Three growth lanes (practical rule)
 
-Every summary row carries **four parallel lanes**. They are not merged into one
+Every growth summary row is one of **three parallel lanes** × bear/base/bull.
+They are not merged into one score.
+
+| Lane | Role | Starting growth | Margins |
+|------|------|-----------------|---------|
+| **universe** | Absolute path from universe priors (median of peer medians, fallback 8%) | universe prior × scenario scale/fade | fade toward universe median margins |
+| **own** | Company forecast / YoY / 5y CAGR persistence | `revenue_forecast_next_fy` → `total_revenue_yoy_growth_ttm` → `total_revenue_cagr_5y` | soft persist of own `ebitda_margin_ttm` / `operating_margin_ttm` / `net_margin_ttm` |
+| **peer** | Peer-relative growth + margin convergence | 50/50 blend of own growth and peer median growth | fade toward peer median margins |
+
+Key summary fields: `growth_lane`, `starting_growth_fraction`, `growth_lane_source`,
+`y1_revenue_growth_pct`, `revenue_cagr_implied_pct`, `ebitda_cagr_implied_pct`,
+`ebit_cagr_implied_pct`, `net_income_cagr_implied_pct`,
+`terminal_total_revenue_ttm`, `terminal_ebitda`, `terminal_ebit_ttm`,
+`terminal_net_income_ttm`, `terminal_*_margin_ttm`.
+
+Year grid: one row per (`growth_lane`, `scenario`, `year`) with levels,
+margins, and `*_growth_vs_y0_pct`.
+
+TV input names stay exact (`total_revenue_ttm`, `ebit_ttm`, `ebitda_margin_ttm`, …).
+
+---
+
+## Four decision lanes (price suite)
+
+Every **price** summary row carries **four parallel lanes**. They are not merged into one
 score. Rank screens still use the **core** lane (`primary_upside_pct` /
 `lane_core_upside_pct`); the others are explicit cross-checks.
 
@@ -204,12 +255,17 @@ For hand-picked comps (e.g. mature SaaS vs hypergrowth), use a **separate
 run method** — not extra params on the main suite:
 
 ```python
-from run_financial_projection import run_financial_projection_for_custom_peer_group
+from run_financial_projection import (
+    run_growth_projection_for_custom_peer_group,
+    run_financial_projection_for_custom_peer_group,
+)
 
-run_financial_projection_for_custom_peer_group(
+run_growth_projection_for_custom_peer_group(
     ["NASDAQ:ADBE", "NASDAQ:CRM", "NYSE:ORCL", "NASDAQ:INTU", "NASDAQ:ADSK"],
     group_label="saas_mature",
 )
+# Price suite equivalent:
+# run_financial_projection_for_custom_peer_group([...], group_label="saas_mature")
 ```
 
 Peers (and size/growth/profitable angles) are built only from that list.

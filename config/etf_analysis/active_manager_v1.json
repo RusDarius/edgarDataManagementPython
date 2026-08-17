@@ -1,0 +1,118 @@
+{
+  "schema_version": "etf_active_book_v1",
+  "suite_id": "etf_active_manager_v1",
+  "suite_version": "1.0.0",
+  "description": "Daily active-management ETF book: peer-relative lenses, regime tape, catch-up vs extended, vehicle quality. Does not clone stock fundamentals.",
+  "min_peer_group_size": 8,
+  "min_sleeve_size": 3,
+  "catch_up_per_sleeve": 8,
+  "extended_per_sleeve": 5,
+  "top_sleeves_by_tape": 15,
+  "vehicle_quality_per_sleeve": 3,
+  "lens_leaders_per_lens": 15,
+  "lens_weights": {
+    "sleeve_continuation": 0.18,
+    "flow_confirmed": 0.18,
+    "early_rotation": 0.14,
+    "catch_up": 0.12,
+    "vehicle_quality": 0.12,
+    "macro_hedge": 0.08,
+    "crowded": 0.10,
+    "dead_product": 0.08
+  },
+  "inverted_lenses": ["crowded", "dead_product"],
+  "hedge_asset_classes": [
+    "Fixed Income",
+    "Commodities",
+    "Currency",
+    "Alternative",
+    "Alternatives"
+  ],
+  "canonical_baskets": [
+    {
+      "sleeve": "US beta ladder",
+      "question": "Risk-on breadth",
+      "aliases": ["VOO", "SPY", "IVV", "QQQ", "IWM", "IJR"]
+    },
+    {
+      "sleeve": "World / EM",
+      "question": "USD + growth vs rest of world",
+      "aliases": ["IEFA", "EFA", "VEA", "EEM", "IEMG", "MCHI", "FXI"]
+    },
+    {
+      "sleeve": "US sectors",
+      "question": "Where the tape is paying",
+      "aliases": ["XLK", "XLF", "XLE", "XLV", "XLI", "XLY", "XLP", "XLU", "XLB", "XLRE", "XLC"]
+    },
+    {
+      "sleeve": "Factors",
+      "question": "Style regime",
+      "aliases": ["VUG", "IWF", "VTV", "IWD", "MTUM", "QUAL", "USMV", "VLUE", "RSP"]
+    },
+    {
+      "sleeve": "Rates / credit",
+      "question": "Duration and credit risk appetite",
+      "aliases": ["SHY", "IEF", "TLT", "TIP", "LQD", "HYG", "EMB"]
+    },
+    {
+      "sleeve": "USD / commodities",
+      "question": "Inflation / FX / real assets",
+      "aliases": ["UUP", "GLD", "SLV", "USO", "DBC", "CPER"]
+    },
+    {
+      "sleeve": "Crowded themes",
+      "question": "Spec pulse (research, not auto-buy)",
+      "aliases": ["SMH", "SOXX", "IBB", "ITA", "URNM", "TAN", "ARKK"]
+    }
+  ],
+  "holdings_sleeve_map": [
+    {
+      "id": "software_platform",
+      "note": "Software / platform names in the book",
+      "holding_tickers": ["PATH", "VEEV", "ZS", "ADBE", "INTU", "CSCO", "DUOL", "RDDT"],
+      "aliases": ["XLK", "IGV", "QQQ"]
+    },
+    {
+      "id": "mega_cap_concentration",
+      "note": "AAPL-type mega vs equal-weight check",
+      "holding_tickers": ["AAPL"],
+      "aliases": ["QQQ", "RSP", "SPY", "VOO"]
+    },
+    {
+      "id": "semiconductors",
+      "note": "Semiconductor exposure",
+      "holding_tickers": ["AMD"],
+      "aliases": ["SMH", "SOXX", "XLK"]
+    },
+    {
+      "id": "clean_energy",
+      "note": "Solar / clean energy",
+      "holding_tickers": ["FSLR"],
+      "aliases": ["TAN", "ICLN"]
+    },
+    {
+      "id": "healthcare",
+      "note": "Healthcare / managed care / pharma",
+      "holding_tickers": ["UNH", "NOVO_B"],
+      "aliases": ["XLV", "IBB"]
+    },
+    {
+      "id": "gold_royalty",
+      "note": "Gold / miners overlay for FNV",
+      "holding_tickers": ["FNV"],
+      "aliases": ["GLD", "GDX"]
+    },
+    {
+      "id": "ag_fertilizer",
+      "note": "Ag / materials overlay for CF",
+      "holding_tickers": ["CF"],
+      "aliases": ["MOO", "DBA", "XLB"]
+    },
+    {
+      "id": "china",
+      "note": "China ADRs in the book",
+      "holding_tickers": ["JD", "BIDU"],
+      "aliases": ["MCHI", "FXI", "KWEB"]
+    }
+  ]
+}

@@ -19,6 +19,13 @@ LEVEL_FIELDS: tuple[str, ...] = (
     "total_revenue",
     "total_revenue_ttm",
     "ebitda",
+    "ebitda_ttm",
+    "ebit_ttm",
+    "oper_income_ttm",
+    "net_income_ttm",
+    "ebitda_margin_ttm",
+    "operating_margin_ttm",
+    "net_margin_ttm",
     "enterprise_value_current",
     "total_debt",
     "net_debt",
@@ -44,6 +51,8 @@ GROWTH_FIELDS: tuple[str, ...] = (
     "total_revenue_cagr_5y",
     "total_revenue_5y_growth_fy",
     "ebitda_yoy_growth_ttm",
+    "net_income_yoy_growth_ttm",
+    "net_income_cagr_5y",
     "free_cash_flow_cagr_5y",
     "sustainable_growth_rate_ttm",
 )
@@ -91,6 +100,12 @@ PEER_METRIC_FIELDS: tuple[str, ...] = (
     "total_revenue_yoy_growth_ttm",
     "total_revenue_cagr_5y",
     "free_cash_flow_cagr_5y",
+    "ebitda_yoy_growth_ttm",
+    "ebitda_margin_ttm",
+    "operating_margin_ttm",
+    "net_margin_ttm",
+    "net_income_yoy_growth_ttm",
+    "net_income_cagr_5y",
 )
 
 REQUIRED_SCENARIO_KEYS: tuple[str, ...] = ("bear", "base", "bull")

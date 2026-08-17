@@ -109,11 +109,6 @@ from data_analysis_scripts.trading_view_all_fields_upside_edge_research import (
     run_mar_jun_trade_ladder_entry_profile_capture,
     run_mar_jun_upside_edge_research,
 )
-from run_financial_projection import (
-    run_financial_projection_from_all_fields_day,
-    run_financial_projection_from_latest_all_fields,
-    run_financial_projection_from_latest_prediction_analysis,
-)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CURRENT_HOLDINGS_CONFIG = (
@@ -194,6 +189,9 @@ from data_analysis_scripts.trading_view_valuation_analysis import (
     analyze_ev_ebitda_deviation,
 )
 from data_loaders.api_bvbdata import ApiBvbClient
+from data_analysis_scripts.trading_view_etf_analysis import (
+    run_etf_scan_and_analysis_suite,
+)
 from data_loaders.api_tradingview_client import ApiTradingViewClient
 from database_scripts.insert_trading_view_company_data import (
     load_tradingview_company_data,
@@ -559,7 +557,9 @@ def main():
     #     },
     # )
 
-    # # Holdings scoring: merge configured current holdings with latest move-prediction run.
+    # # Holdings scoring: merge current holdings with latest stock + ETF scans.
+    # # Stocks (instrument_type omitted or "stock") join move-prediction DuckDB.
+    # # Entries with "instrument_type": "etf" join the latest ETF analysis DuckDB.
     # # Output: logs/tradingview_analysis/holdings_scoring_analysis/runs/<run_id>/
     # #   holdings_scoring__shortlist.log  — human-readable portfolio shortlist
     # # Optional cash_position in config (value + currency) is passed through to manifest/logs.
@@ -570,77 +570,90 @@ def main():
     #     / "current_holdings.json",
     # )
 
-    # Model Analysis scan with duckdb storage solution
-    move_prediction_scan_response = (
-        TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-            min_market_cap_usd=500_000_000,
-            markets=PREFERRED_MARKETS,
-        )
-    )
-    # Default (omit profile_suite_path): built-in 10-profile baseline — see DEFAULT_MOVE_PREDICTION_PROFILE_SUITE.
-    # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3
-    # Legacy 17-profile suite: MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
-    # Realigned baseline (11 lenses): MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
-    # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
-    # Move-prediction suite outputs (.log / .csv / DuckDB / regime_context_focus.log)
-    # use EXCHANGE:TICKER labels via _get_symbol_name to avoid bare-ticker collisions.
-    base_duckdb_result = run_full_analysis_suite_duckdb(
-        scan_data=move_prediction_scan_response,
-        min_market_cap_usd=500_000_000,
-        include_blind_spot_sections=True,
-        profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
-        conviction_mode_config_path=CONVICTION_MODE_CONFIG,
-        defer_conviction_to_earnings=True,
-        regime_context_config_path=REGIME_CONTEXT_CONFIG,
-        write_industry_packs=True,
-    )
-    # Financial projection on prediction names (fundamentals from latest all-fields):
-    # All symbols from that prediction run (omit prediction_top_n / pass None):
-    # run_financial_projection_from_latest_prediction_analysis(
-    #     prediction_database=base_duckdb_result["_duckdb_database"],
-    #     min_market_cap_usd=500_000_000,
-    # )
-    # Or trim to top-N by score:
-    # run_financial_projection_from_latest_prediction_analysis(
-    #     prediction_database=base_duckdb_result["_duckdb_database"],
-    #     min_market_cap_usd=500_000_000,
-    #     prediction_top_n=40,
-    # )
-    # Or auto-discover latest prediction week DB (no base_duckdb_result needed):
-    # run_financial_projection_from_latest_prediction_analysis(
-    #     min_market_cap_usd=500_000_000,
+    # ── ETF analysis (world primary listings) ─────────────────────────────
+    # Fetch + v1 composite + active-management book + persist. Output:
+    #   logs/tradingview_analysis/etf_analysis/duckdb_runs/iso_year=YYYY/week=WW/
+    #     etf_analysis_overview.log
+    #     etf_regime_tape.log / etf_sleeve_heat.log / etf_divergences.log
+    #     etf_catch_up_vs_extended.log / etf_vehicle_quality.log
+    #     etf_holdings_overlay.log / etf_dod_changes.log / etf_book_ranked.csv
+    # etf_result = run_etf_scan_and_analysis_suite(
+    #     TRADINGVIEW_API_CLIENT,
+    #     min_aum_usd=1_000_000_000,
     # )
 
-    # FOR INDUSTRY RUN SPLIT Or post-process an existing run:
-    # write_industry_packs_from_duckdb_run(base_duckdb_result)
-
-    # Top-10 industries by price action + better-scored peer alternatives (bang-for-buck).
-    # Output: <run_output_dir>/industry_price_mover_relative_scan/
-    #   industry_price_mover_relative_scan__overview.log
-    #   industry_relative_opportunities.csv
-    #   <industry>/industry_relative_scan.log
-    # industry_mover_scan = run_industry_price_mover_relative_scan(
-    #     base_duckdb_result,
-    #     perf_field="Perf.1M",
-    #     top_industries=10,
-    #     price_movers_per_industry=5,
-    #     catch_up_per_industry=10,
-    #     alternatives_per_mover=3,
+    # ── Stock move-prediction ─────────────────────────────────────────────
+    # # Model Analysis scan with duckdb storage solution
+    # move_prediction_scan_response = (
+    #     TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+    #         min_market_cap_usd=500_000_000,
+    #         markets=PREFERRED_MARKETS,
+    #     )
     # )
-    # print(industry_mover_scan["overview_log"])
-    # print(industry_mover_scan["opportunities_csv"])
+    # # Default (omit profile_suite_path): built-in 10-profile baseline — see DEFAULT_MOVE_PREDICTION_PROFILE_SUITE.
+    # # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3
+    # # Legacy 17-profile suite: MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
+    # # Realigned baseline (11 lenses): MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
+    # # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
+    # # Move-prediction suite outputs (.log / .csv / DuckDB / regime_context_focus.log)
+    # # use EXCHANGE:TICKER labels via _get_symbol_name to avoid bare-ticker collisions.
+    # base_duckdb_result = run_full_analysis_suite_duckdb(
+    #     scan_data=move_prediction_scan_response,
+    #     min_market_cap_usd=500_000_000,
+    #     include_blind_spot_sections=True,
+    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+    #     conviction_mode_config_path=CONVICTION_MODE_CONFIG,
+    #     defer_conviction_to_earnings=True,
+    #     regime_context_config_path=REGIME_CONTEXT_CONFIG,
+    #     write_industry_packs=True,
+    # )
+    # # Financial projection on prediction names (fundamentals from latest all-fields):
+    # # All symbols from that prediction run (omit prediction_top_n / pass None):
+    # # run_financial_projection_from_latest_prediction_analysis(
+    # #     prediction_database=base_duckdb_result["_duckdb_database"],
+    # #     min_market_cap_usd=500_000_000,
+    # # )
+    # # Or trim to top-N by score:
+    # # run_financial_projection_from_latest_prediction_analysis(
+    # #     prediction_database=base_duckdb_result["_duckdb_database"],
+    # #     min_market_cap_usd=500_000_000,
+    # #     prediction_top_n=40,
+    # # )
+    # # Or auto-discover latest prediction week DB (no base_duckdb_result needed):
+    # # run_financial_projection_from_latest_prediction_analysis(
+    # #     min_market_cap_usd=500_000_000,
+    # # )
 
-    # # Reuses base_duckdb_result; earnings-priority and regime_context_focus logs
-    # # share the same EXCHANGE:TICKER labels.
-    run_full_analysis_suite_with_earnings_priority_duckdb(
-        scan_data=move_prediction_scan_response,
-        min_market_cap_usd=500_000_000,
-        include_blind_spot_sections=True,
-        base_result=base_duckdb_result,
-        profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
-        conviction_mode_config_path=CONVICTION_MODE_CONFIG,
-        regime_context_config_path=REGIME_CONTEXT_CONFIG,
-    )
+    # # FOR INDUSTRY RUN SPLIT Or post-process an existing run:
+    # # write_industry_packs_from_duckdb_run(base_duckdb_result)
+
+    # # Top-10 industries by price action + better-scored peer alternatives (bang-for-buck).
+    # # Output: <run_output_dir>/industry_price_mover_relative_scan/
+    # #   industry_price_mover_relative_scan__overview.log
+    # #   industry_relative_opportunities.csv
+    # #   <industry>/industry_relative_scan.log
+    # # industry_mover_scan = run_industry_price_mover_relative_scan(
+    # #     base_duckdb_result,
+    # #     perf_field="Perf.1M",
+    # #     top_industries=10,
+    # #     price_movers_per_industry=5,
+    # #     catch_up_per_industry=10,
+    # #     alternatives_per_mover=3,
+    # # )
+    # # print(industry_mover_scan["overview_log"])
+    # # print(industry_mover_scan["opportunities_csv"])
+
+    # # # Reuses base_duckdb_result; earnings-priority and regime_context_focus logs
+    # # # share the same EXCHANGE:TICKER labels.
+    # run_full_analysis_suite_with_earnings_priority_duckdb(
+    #     scan_data=move_prediction_scan_response,
+    #     min_market_cap_usd=500_000_000,
+    #     include_blind_spot_sections=True,
+    #     base_result=base_duckdb_result,
+    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+    #     conviction_mode_config_path=CONVICTION_MODE_CONFIG,
+    #     regime_context_config_path=REGIME_CONTEXT_CONFIG,
+    # )
 
     # Price-driven decile analysis: bucket by change / Perf.5D / Perf.1M, score profiles,
     # surface upward-move opportunities in worst performers. Output:
@@ -655,18 +668,6 @@ def main():
     # Snapshot used as financial-projection input (market_cap_basic filterable).
     # export_all_tradingview_fields_duckdb()
     # export_all_tradingview_fields_duckdb(chunk_size=300, timeout=90)
-    # Then project the latest (or just-exported) all-fields universe:
-    # run_financial_projection_from_latest_all_fields(min_market_cap_usd=500_000_000)
-    # Or project a specific day folder (latest run inside that day's DuckDB):
-    # run_financial_projection_from_all_fields_day(
-    #     "01_07_2026",
-    #     min_market_cap_usd=500_000_000,
-    # )
-    # Or: run_financial_projection_from_latest_all_fields(
-    #     all_fields_db=<export_result["_duckdb_database"]>,
-    #     min_market_cap_usd=500_000_000,
-    # )
-    # See documentation/financial_projection_usage.md
 
     # Market flow screening (paired daily DuckDB snapshots)
     # Output: logs/tradingview_analysis/market_flow_screening/runs/flow_<base>_<compare>_<id>/

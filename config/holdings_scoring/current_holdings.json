@@ -2,35 +2,26 @@
   "schema_version": "holdings_scoring_v1",
   "holdings_id": "default",
   "portfolio_currency": "USD",
-  "description": "Current book — set invested_sum/average_price in their currencies; portfolio aggregates in USD. Use optional symbol (EXCHANGE:TICKER) when ticker alone is ambiguous.",
+  "description": "Current book — set invested_sum/average_price in their currencies; portfolio aggregates in USD. Use optional symbol (EXCHANGE:TICKER) when ticker alone is ambiguous. Optional instrument_type is stock (default) or etf; ETFs join the latest ETF analysis scan.",
   "cash_position": {
-    "value": 9000,
+    "value": 14980,
     "currency": "USD"
   },
   "holdings": [
     {
       "ticker": "UNH",
       "sleeve": "core",
-      "invested_sum": 7950.13,
+      "invested_sum": 5425.13,
       "invested_currency": "USD",
-      "average_price": 271.30,
+      "average_price": 263.30,
       "price_currency": "USD"
-    },
-    {
-      "ticker": "TEAM",
-      "sleeve": "core",
-      "invested_sum": 11672.42,
-      "invested_currency": "USD",
-      "average_price": 89.44,
-      "price_currency": "USD",
-      "notes": "Atlassian"
     },
     {
       "ticker": "PATH",
       "sleeve": "core",
-      "invested_sum": 11995.1,
+      "invested_sum": 10278,
       "invested_currency": "USD",
-      "average_price": 11.29,
+      "average_price": 11.93,
       "price_currency": "USD",
       "notes": "UiPath"
     },
@@ -56,9 +47,9 @@
       "ticker": "CF",
       "symbol": "NYSE:CF",
       "sleeve": "core",
-      "invested_sum": 2626.63,
+      "invested_sum": 1476.63,
       "invested_currency": "USD",
-      "average_price": 131.46,
+      "average_price": 129.46,
       "price_currency": "USD",
       "notes": "CF Industries"
     },
@@ -93,9 +84,9 @@
     {
       "ticker": "ADBE",
       "sleeve": "core",
-      "invested_sum": 7001,
+      "invested_sum": 10101,
       "invested_currency": "USD",
-      "average_price": 290.26,
+      "average_price": 281.26,
       "price_currency": "USD",
       "notes": "Adobe"
     },
@@ -111,18 +102,63 @@
     {
       "ticker": "AAPL",
       "sleeve": "core",
-      "invested_sum": 3900,
+      "invested_sum": 2800,
       "invested_currency": "USD",
-      "average_price": 333.9,
+      "average_price": 333.6,
       "price_currency": "USD",
       "notes": "Apple"
     },
     {
+      "ticker": "INTU",
+      "sleeve": "core",
+      "invested_sum": 5000,
+      "invested_currency": "USD",
+      "average_price": 352,
+      "price_currency": "USD",
+      "notes": "Intuit"
+    },
+    {
+      "ticker": "AMD",
+      "sleeve": "core",
+      "invested_sum": 1561,
+      "invested_currency": "USD",
+      "average_price": 524,
+      "price_currency": "USD",
+      "notes": "AMD"
+    },
+    {
+      "ticker": "FSLR",
+      "sleeve": "core",
+      "invested_sum": 5000,
+      "invested_currency": "USD",
+      "average_price": 232,
+      "price_currency": "USD",
+      "notes": "First Solar"
+    },
+    {
+      "ticker": "CSCO",
+      "sleeve": "core",
+      "invested_sum": 2000,
+      "invested_currency": "USD",
+      "average_price": 123.44,
+      "price_currency": "USD",
+      "notes": "Cisco"
+    },
+    {
+      "ticker": "DUOL",
+      "sleeve": "core",
+      "invested_sum": 5900,
+      "invested_currency": "USD",
+      "average_price": 131.6,
+      "price_currency": "USD",
+      "notes": "Duolingo"
+    },
+    {
       "ticker": "RDDT",
       "sleeve": "core",
-      "invested_sum": 6982,
+      "invested_sum": 9000,
       "invested_currency": "USD",
-      "average_price": 160,
+      "average_price": 162,
       "price_currency": "USD",
       "notes": "Reddit"
     }

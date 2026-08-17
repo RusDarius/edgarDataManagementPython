@@ -10,8 +10,11 @@ from data_analysis_scripts.trading_view_holdings_scoring_analysis import (
     HoldingConfig,
     MarkToMarketContext,
     RawScanSymbolEntry,
+    SCAN_KEY_ETF_BOOK,
+    SCAN_KEY_MOVE_PREDICTION,
     _build_mark_to_market_fields,
     _resolve_close_quote_currency,
+    default_enabled_scans,
     enrich_holdings_positions,
     holding_config_label,
     holding_matches_db_symbol,
@@ -21,8 +24,13 @@ from data_analysis_scripts.trading_view_holdings_scoring_analysis import (
     load_holdings_config,
     match_holdings_to_db_symbols,
     normalize_holding_ticker,
+    normalize_instrument_type,
+    resolve_latest_etf_scan_source,
     resolve_latest_move_prediction_source,
     run_holdings_scoring_analysis,
+)
+from data_analysis_scripts.trading_view_etf_analysis import (
+    run_etf_analysis_suite_duckdb,
 )
 from data_analysis_scripts.trading_view_move_prediction_analysis import (
     run_full_analysis_suite_duckdb,
@@ -79,6 +87,57 @@ def _sample_scan_row(symbol: str, **overrides) -> dict:
     }
     row.update(overrides)
     return row
+
+
+def _etf_scan_row(symbol: str, name: str, **overrides) -> dict:
+    payload = {
+        "symbol": symbol,
+        "name": name,
+        "description": f"{name} Fund",
+        "category": "Equity",
+        "focus": "Large Cap",
+        "asset_class": "Equity",
+        "brand": "Test",
+        "sector": "Miscellaneous",
+        "industry": "Investment Trusts/Mutual Funds",
+        "market": "america",
+        "aum": 10_000_000_000,
+        "nav": 100.0,
+        "expense_ratio": 0.03,
+        "nav_discount_premium": 0.1,
+        "close": 100.0,
+        "SMA20": 99.0,
+        "SMA50": 98.0,
+        "SMA200": 95.0,
+        "RSI": 55.0,
+        "ADX": 22.0,
+        "Recommend.All": 0.2,
+        "Recommend.All|1W": 0.15,
+        "relative_volume_10d_calc": 1.1,
+        "fund_flows.1M": 100_000_000,
+        "fund_flows.3M": 250_000_000,
+        "ChaikinMoneyFlow": 0.1,
+        "Perf.5D": 1.0,
+        "Perf.W": 1.2,
+        "Perf.1M": 3.0,
+        "Perf.3M": 6.0,
+        "Perf.6M": 8.0,
+        "Perf.YTD": 10.0,
+        "Perf.Y": 12.0,
+        "Perf.3Y": 30.0,
+        "Perf.5Y": 50.0,
+        "nav_total_return.1M": 2.8,
+        "nav_total_return.3M": 5.5,
+        "aum_perf.1M": 3.5,
+        "aum_perf.3M": 7.0,
+        "Value.Traded": 50_000_000,
+        "price_52_week_high": 110.0,
+        "High.1M": 102.0,
+        "MACD.macd": 0.4,
+        "MACD.signal": 0.2,
+    }
+    payload.update(overrides)
+    return payload
 
 
 class TestHoldingTickerMatching(unittest.TestCase):
@@ -276,6 +335,50 @@ class TestHoldingsConfigLoader(unittest.TestCase):
             self.assertEqual(holdings[0].price_currency, "USD")
             self.assertEqual(holdings[0].currency, "USD")
             self.assertEqual(holdings[0].notes, "memory")
+            self.assertEqual(holdings[0].instrument_type, "stock")
+
+    def test_load_holdings_config_parses_instrument_type(self):
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "holdings.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "holdings_scoring_v1",
+                        "holdings": [
+                            {
+                                "ticker": "MU",
+                                "invested_sum": 100.0,
+                                "average_price": 10.0,
+                                "currency": "USD",
+                            },
+                            {
+                                "ticker": "VOO",
+                                "symbol": "AMEX:VOO",
+                                "instrument_type": "ETF",
+                                "invested_sum": 1000.0,
+                                "average_price": 500.0,
+                                "currency": "USD",
+                            },
+                            {
+                                "ticker": "SPY",
+                                "instrument_type": "fund",
+                                "invested_sum": 500.0,
+                                "average_price": 400.0,
+                                "currency": "USD",
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            _, holdings, _ = load_holdings_config(config_path)
+            self.assertEqual(holdings[0].instrument_type, "stock")
+            self.assertEqual(holdings[1].instrument_type, "etf")
+            self.assertEqual(holdings[2].instrument_type, "etf")
+            self.assertEqual(
+                default_enabled_scans(holdings),
+                (SCAN_KEY_MOVE_PREDICTION, SCAN_KEY_ETF_BOOK),
+            )
 
     def test_load_holdings_config_resolves_split_currency_fields(self):
         with TemporaryDirectory() as temp_dir:
@@ -431,6 +534,27 @@ class TestHoldingsConfigLoader(unittest.TestCase):
         self.assertAlmostEqual(enriched[1].portfolio_weight_pct, 2000.0 / 3080.0 * 100.0)
 
 
+class TestInstrumentTypeNormalization(unittest.TestCase):
+    def test_normalize_instrument_type_aliases(self):
+        self.assertEqual(normalize_instrument_type(None), "stock")
+        self.assertEqual(normalize_instrument_type(""), "stock")
+        self.assertEqual(normalize_instrument_type("Equity"), "stock")
+        self.assertEqual(normalize_instrument_type("ETF"), "etf")
+        self.assertEqual(normalize_instrument_type("exchange-traded-fund"), "etf")
+        self.assertEqual(normalize_instrument_type("etp"), "etf")
+        self.assertEqual(normalize_instrument_type("bond"), "bond")
+
+    def test_default_enabled_scans_follow_book_composition(self):
+        stocks = [HoldingConfig(ticker="MU")]
+        etfs = [HoldingConfig(ticker="VOO", instrument_type="etf")]
+        self.assertEqual(default_enabled_scans(stocks), (SCAN_KEY_MOVE_PREDICTION,))
+        self.assertEqual(default_enabled_scans(etfs), (SCAN_KEY_ETF_BOOK,))
+        self.assertEqual(
+            default_enabled_scans(stocks + etfs),
+            (SCAN_KEY_MOVE_PREDICTION, SCAN_KEY_ETF_BOOK),
+        )
+
+
 @unittest.skipUnless(_duckdb_available(), "duckdb is not installed")
 class TestHoldingsScoringAnalysisIntegration(unittest.TestCase):
     def setUp(self):
@@ -536,6 +660,7 @@ class TestHoldingsScoringAnalysisIntegration(unittest.TestCase):
         self.assertIn("current_value_usd", summary_rows[0])
         self.assertIn("close_usd", summary_rows[0])
         self.assertIn("close_quote", summary_rows[0])
+        self.assertEqual(summary_rows[0]["instrument_type"], "stock")
         self.assertIsNotNone(summary_rows[0]["close"])
         self.assertGreater(float(summary_rows[0]["current_value_usd"]), 0.0)
 
@@ -589,3 +714,151 @@ class TestHoldingsScoringAnalysisIntegration(unittest.TestCase):
         self.assertEqual(len(unmatched_rows), 1)
         self.assertEqual(unmatched_rows[0]["config_ticker"], "MISSING")
         self.assertEqual(run_result["unmatched_tickers"], ["MISSING"])
+
+    def _build_etf_database(self):
+        scan_payload = {
+            "data": [
+                _etf_scan_row("AMEX:VOO", "VOO", **{"aum": 1_200_000_000_000, "close": 500.0}),
+                _etf_scan_row("AMEX:QQQ", "QQQ", **{"aum": 250_000_000_000, "Perf.1M": 4.0}),
+                _etf_scan_row("AMEX:XLK", "XLK", **{"aum": 70_000_000_000, "Perf.1M": 8.0}),
+                _etf_scan_row(
+                    "AMEX:TLT",
+                    "TLT",
+                    **{
+                        "aum": 50_000_000_000,
+                        "category": "Bond",
+                        "focus": "Treasury",
+                        "asset_class": "Fixed Income",
+                        "Perf.1M": -1.0,
+                    },
+                ),
+                _etf_scan_row("AMEX:IWM", "IWM", **{"aum": 60_000_000_000, "focus": "Small Cap"}),
+            ],
+            "request_metadata": {
+                "url": "https://scanner.tradingview.com/global/scan?label-product=screener-etf",
+                "columns": ["name", "aum", "close"],
+            },
+        }
+        return run_etf_analysis_suite_duckdb(
+            scan_data=scan_payload,
+            min_aum_usd=1_000_000_000,
+            output_dir=self.output_root / "etf_suite",
+            run_label="etf_holdings_test",
+            reference_time=datetime(2026, 6, 16, 16, 0, tzinfo=timezone.utc),
+            export_parquet=False,
+        )
+
+    def test_etf_holding_joins_etf_scan_without_stock_database(self):
+        etf_result = self._build_etf_database()
+        config_path = self._write_holdings_config(
+            [
+                {
+                    "ticker": "VOO",
+                    "symbol": "AMEX:VOO",
+                    "instrument_type": "etf",
+                    "sleeve": "core",
+                    "invested_sum": 10000.0,
+                    "average_price": 480.0,
+                    "currency": "USD",
+                }
+            ]
+        )
+        run_result = run_holdings_scoring_analysis(
+            holdings_config_path=config_path,
+            output_dir=self.output_root / "holdings_etf_only",
+            etf_database_path=etf_result["_duckdb_database"],
+            etf_run_id=etf_result["run_id"],
+            reference_time=datetime(2026, 6, 17, 11, 0, tzinfo=timezone.utc),
+            resolve_fx_rates=False,
+        )
+
+        output_dir = Path(run_result["output_dir"])
+        scan_dir = output_dir / "scans" / SCAN_KEY_ETF_BOOK
+        self.assertTrue((scan_dir / "holdings__summary.csv").exists())
+        self.assertFalse((output_dir / "scans" / SCAN_KEY_MOVE_PREDICTION).exists())
+        self.assertEqual(run_result["matched_count"], 1)
+        self.assertEqual(run_result["unmatched_tickers"], [])
+        self.assertIsNone(run_result["source"])
+        self.assertEqual(run_result["etf_source"]["run_id"], etf_result["run_id"])
+
+        with (scan_dir / "holdings__summary.csv").open(encoding="utf-8", newline="") as handle:
+            summary_rows = list(csv.DictReader(handle))
+        self.assertEqual(len(summary_rows), 1)
+        self.assertEqual(summary_rows[0]["instrument_type"], "etf")
+        self.assertEqual(summary_rows[0]["matched_symbol"], "AMEX:VOO")
+        self.assertNotEqual(summary_rows[0].get("book_consensus"), "")
+        self.assertGreater(float(summary_rows[0]["current_value_usd"]), 0.0)
+
+        manifest = json.loads(
+            (output_dir / "holdings_scoring__manifest.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(manifest["enabled_scans"], [SCAN_KEY_ETF_BOOK])
+        self.assertEqual(manifest["etf_holdings_count"], 1)
+        self.assertEqual(manifest["stock_holdings_count"], 0)
+
+        overview_text = (output_dir / "holdings_scoring__overview.log").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("ETF analysis source", overview_text)
+        shortlist_text = (output_dir / "holdings_scoring__shortlist.log").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("VOO", shortlist_text)
+        self.assertIn("ETF book tracking:", shortlist_text)
+
+    def test_mixed_stock_and_etf_holdings_export_both_scans(self):
+        stock_result = self._build_database()
+        etf_result = self._build_etf_database()
+        config_path = self._write_holdings_config(
+            [
+                {
+                    "ticker": "NASDAQ:MU",
+                    "instrument_type": "stock",
+                    "sleeve": "tactical",
+                    "invested_sum": 5000.0,
+                    "average_price": 95.0,
+                    "currency": "USD",
+                },
+                {
+                    "ticker": "VOO",
+                    "symbol": "AMEX:VOO",
+                    "instrument_type": "etf",
+                    "sleeve": "core",
+                    "invested_sum": 8000.0,
+                    "average_price": 480.0,
+                    "currency": "USD",
+                },
+            ]
+        )
+        run_result = run_holdings_scoring_analysis(
+            holdings_config_path=config_path,
+            output_dir=self.output_root / "holdings_mixed",
+            database_path=stock_result["_duckdb_database"],
+            run_id=stock_result["_duckdb_run_id"],
+            etf_database_path=etf_result["_duckdb_database"],
+            etf_run_id=etf_result["run_id"],
+            reference_time=datetime(2026, 6, 17, 12, 0, tzinfo=timezone.utc),
+            resolve_fx_rates=False,
+        )
+
+        output_dir = Path(run_result["output_dir"])
+        self.assertEqual(run_result["matched_count"], 2)
+        self.assertEqual(run_result["unmatched_tickers"], [])
+        self.assertTrue(
+            (output_dir / "scans" / SCAN_KEY_MOVE_PREDICTION / "holdings__summary.csv").exists()
+        )
+        self.assertTrue(
+            (output_dir / "scans" / SCAN_KEY_ETF_BOOK / "holdings__summary.csv").exists()
+        )
+        shortlist_text = (output_dir / "holdings_scoring__shortlist.log").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("MU", shortlist_text)
+        self.assertIn("VOO", shortlist_text)
+        self.assertIn("ETF book tracking:", shortlist_text)
+
+        source = resolve_latest_etf_scan_source(
+            database_path=etf_result["_duckdb_database"],
+            run_id=etf_result["run_id"],
+        )
+        self.assertEqual(source.run_id, etf_result["run_id"])

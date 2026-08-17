@@ -1,10 +1,11 @@
-"""Merge move-prediction scoring with configured current holdings.
+"""Merge scan scoring with configured current holdings.
 
-Reads tickers from a holdings config, joins against the latest (or specified)
-move-prediction DuckDB run, and writes per-run CSV exports under
+Stocks join the latest move-prediction DuckDB. Holdings with
+``instrument_type: "etf"`` join the latest ETF analysis DuckDB. Mixed books
+are supported in one run. Writes per-run CSV exports under
 ``logs/tradingview_analysis/holdings_scoring_analysis/``.
 
-Future scans (module2, price-driven, etc.) plug in via ``SCAN_EXPORTERS``.
+Future scans plug in via ``SCAN_EXPORTERS``.
 """
 
 from __future__ import annotations
@@ -38,6 +39,11 @@ from db.trading_view_move_prediction_duckdb import (
 
 HOLDINGS_SCORING_LOG_DIR = LOG_DIR.parent / "holdings_scoring_analysis"
 DEFAULT_DUCKDB_RUNS_ROOT = LOG_DIR / "duckdb_runs"
+DEFAULT_ETF_DUCKDB_RUNS_ROOT = LOG_DIR.parent / "etf_analysis" / "duckdb_runs"
+SCAN_KEY_MOVE_PREDICTION = "move_prediction_v1"
+SCAN_KEY_ETF_BOOK = "etf_active_book_v1"
+ETF_INSTRUMENT_TYPES = frozenset({"etf", "fund", "exchange traded fund", "etp"})
+STOCK_INSTRUMENT_TYPES = frozenset({"stock", "equity", "share", "shares"})
 HORIZON_NAMES = ("days", "weeks", "months", "years")
 MARK_TO_MARKET_FIELDS = (
     "close_quote",
@@ -157,6 +163,7 @@ class HoldingConfig:
     quote_currency: str | None = None
     currency: str = "USD"
     notes: str | None = None
+    instrument_type: str = "stock"
     invested_sum_usd: float | None = None
     invested_sum_in_price_currency: float | None = None
     fx_rate_to_usd: float | None = None
@@ -240,6 +247,39 @@ def _build_holdings_run_id(
     if run_label and _slugify(run_label):
         return base_run_id
     return base_run_id.replace("move_prediction_", "holdings_scoring_", 1)
+
+
+def normalize_instrument_type(value: Any) -> str:
+    """Normalize optional holdings ``instrument_type`` (default stock)."""
+    raw = str(value or "stock").strip().lower().replace("_", " ").replace("-", " ")
+    raw = " ".join(raw.split())
+    if not raw or raw in STOCK_INSTRUMENT_TYPES:
+        return "stock"
+    if raw in ETF_INSTRUMENT_TYPES or raw.endswith(" etf"):
+        return "etf"
+    return raw
+
+
+def is_etf_holding(holding: HoldingConfig) -> bool:
+    return holding.instrument_type == "etf"
+
+
+def partition_holdings_by_instrument(
+    holdings: Sequence[HoldingConfig],
+) -> tuple[list[HoldingConfig], list[HoldingConfig]]:
+    stocks = [holding for holding in holdings if not is_etf_holding(holding)]
+    etfs = [holding for holding in holdings if is_etf_holding(holding)]
+    return stocks, etfs
+
+
+def default_enabled_scans(holdings: Sequence[HoldingConfig]) -> tuple[str, ...]:
+    stocks, etfs = partition_holdings_by_instrument(holdings)
+    scans: list[str] = []
+    if stocks:
+        scans.append(SCAN_KEY_MOVE_PREDICTION)
+    if etfs:
+        scans.append(SCAN_KEY_ETF_BOOK)
+    return tuple(scans) or (SCAN_KEY_MOVE_PREDICTION,)
 
 
 def normalize_holding_ticker(ticker: str) -> str:
@@ -362,17 +402,25 @@ def _resolve_row_to_match(
     row: Mapping[str, Any],
     matched: Sequence[MatchedHolding],
 ) -> MatchedHolding | None:
-    symbol = str(row.get("symbol") or "")
+    symbol = normalize_holding_ticker(str(row.get("symbol") or ""))
     company = _row_company(row)
     for match in matched:
-        if match.db_symbol != symbol:
+        candidates = set(_holding_symbol_candidates(match))
+        if symbol not in candidates:
             continue
         if match.company and company and match.company != company:
             continue
         if match.company and not company:
             continue
         return match
-    return next((match for match in matched if match.db_symbol == symbol), None)
+    return next(
+        (
+            match
+            for match in matched
+            if symbol in set(_holding_symbol_candidates(match))
+        ),
+        None,
+    )
 
 
 def _resolve_holding_currency_fields(
@@ -475,6 +523,7 @@ def load_holdings_config(
                 quote_currency=quote_currency,
                 currency=price_currency,
                 notes=str(item["notes"]).strip() if item.get("notes") else None,
+                instrument_type=normalize_instrument_type(item.get("instrument_type")),
             )
         )
     cash_position = _parse_cash_position(
@@ -631,6 +680,7 @@ def enrich_holdings_positions(
                 quote_currency=holding.quote_currency,
                 currency=holding.price_currency,
                 notes=holding.notes,
+                instrument_type=holding.instrument_type,
                 invested_sum_usd=invested_sum_usd,
                 invested_sum_in_price_currency=invested_sum_in_price_currency,
                 fx_rate_to_usd=fx_rate_to_usd,
@@ -662,6 +712,7 @@ def enrich_holdings_positions(
                 quote_currency=holding.quote_currency,
                 currency=holding.price_currency,
                 notes=holding.notes,
+                instrument_type=holding.instrument_type,
                 invested_sum_usd=holding.invested_sum_usd,
                 invested_sum_in_price_currency=holding.invested_sum_in_price_currency,
                 fx_rate_to_usd=holding.fx_rate_to_usd,
@@ -735,6 +786,12 @@ def _iter_weekly_prediction_databases(duckdb_runs_root: Path) -> list[Path]:
     if not duckdb_runs_root.exists():
         return []
     return sorted(duckdb_runs_root.rglob("move_prediction_*.duckdb"))
+
+
+def _iter_weekly_etf_databases(duckdb_runs_root: Path) -> list[Path]:
+    if not duckdb_runs_root.exists():
+        return []
+    return sorted(duckdb_runs_root.rglob("etf_analysis_*.duckdb"))
 
 
 def _resolve_run_metadata_row(
@@ -826,6 +883,70 @@ def resolve_latest_move_prediction_source(
     )
 
 
+def resolve_latest_etf_scan_source(
+    *,
+    duckdb_runs_root: str | Path | None = None,
+    database_path: str | Path | None = None,
+    run_id: str | None = None,
+) -> MovePredictionSource:
+    """Resolve the newest ETF analysis run across weekly DuckDB stores."""
+    if database_path is not None:
+        resolved_db = Path(database_path)
+        if not resolved_db.exists():
+            raise FileNotFoundError(f"ETF DuckDB database not found: {resolved_db}")
+        row = _resolve_run_metadata_row(resolved_db, run_id=run_id)
+        if row is None:
+            raise ValueError(
+                f"No matching ETF run found in DuckDB database: {resolved_db} "
+                f"(run_id={run_id!r})"
+            )
+        return MovePredictionSource(
+            database_path=resolved_db,
+            run_id=str(row["run_id"]),
+            created_at_utc=row.get("created_at_utc"),
+            suite_name=str(row["suite_name"]) if row.get("suite_name") else None,
+            profile_names=_parse_profile_names(row.get("profile_names_json")),
+        )
+
+    root = (
+        Path(duckdb_runs_root)
+        if duckdb_runs_root is not None
+        else DEFAULT_ETF_DUCKDB_RUNS_ROOT
+    )
+    best_row: dict[str, Any] | None = None
+    best_db: Path | None = None
+
+    for candidate_db in _iter_weekly_etf_databases(root):
+        row = _resolve_run_metadata_row(candidate_db, run_id=run_id)
+        if row is None:
+            continue
+        created_at = row.get("created_at_utc")
+        if best_row is None:
+            best_row = row
+            best_db = candidate_db
+            continue
+        if created_at is not None and (
+            best_row.get("created_at_utc") is None
+            or created_at > best_row.get("created_at_utc")
+        ):
+            best_row = row
+            best_db = candidate_db
+
+    if best_row is None or best_db is None:
+        raise ValueError(
+            f"No ETF analysis runs found under DuckDB root: {root} "
+            f"(run_id={run_id!r})"
+        )
+
+    return MovePredictionSource(
+        database_path=best_db,
+        run_id=str(best_row["run_id"]),
+        created_at_utc=best_row.get("created_at_utc"),
+        suite_name=str(best_row["suite_name"]) if best_row.get("suite_name") else None,
+        profile_names=_parse_profile_names(best_row.get("profile_names_json")),
+    )
+
+
 def _table_exists(database_path: Path, table_name: str) -> bool:
     tables = describe_move_prediction_duckdb(database_path)
     return any(str(row.get("table_name")) == table_name for row in tables)
@@ -855,15 +976,25 @@ def _fetch_raw_scan_symbol_catalog(
 ) -> list[RawScanSymbolEntry]:
     if not _table_exists(database_path, "raw_scan_rows"):
         return []
+    available_columns = _available_raw_scan_columns(database_path)
+    name_column = next(
+        (
+            column
+            for column in ("company", "Company", "Fund", "description", "name")
+            if column in available_columns
+        ),
+        None,
+    )
+    name_select = f'r."{name_column}" AS company' if name_column else "'' AS company"
     rows = query_move_prediction_duckdb(
         database_path,
-        """
-        SELECT DISTINCT symbol, company
-        FROM raw_scan_rows
-        WHERE run_id = ?
-          AND symbol IS NOT NULL
-          AND symbol != ''
-        ORDER BY symbol
+        f"""
+        SELECT DISTINCT r.symbol, {name_select}
+        FROM raw_scan_rows r
+        WHERE r.run_id = ?
+          AND r.symbol IS NOT NULL
+          AND r.symbol != ''
+        ORDER BY r.symbol
         """,
         parameters=[run_id],
     )
@@ -952,6 +1083,27 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> Path:
     return path
 
 
+def _holding_symbol_candidates(match: MatchedHolding) -> list[str]:
+    """Full listing symbols and bare tickers that can identify this holding."""
+    candidates: list[str] = []
+    for value in (
+        match.scan_symbol,
+        match.db_symbol,
+        match.lookup_key,
+        match.holding.symbol,
+        match.holding.ticker,
+    ):
+        normalized = normalize_holding_ticker(value or "")
+        if not normalized:
+            continue
+        if normalized not in candidates:
+            candidates.append(normalized)
+        _, bare = _split_exchange_symbol(normalized)
+        if bare and bare not in candidates:
+            candidates.append(bare)
+    return candidates
+
+
 def _build_symbol_values_clause(matched: Sequence[MatchedHolding]) -> tuple[str, list[Any]]:
     placeholders = ", ".join("?" for _ in matched)
     parameters = [match.db_symbol for match in matched]
@@ -962,12 +1114,14 @@ def _build_symbol_match_clause(matched: Sequence[MatchedHolding]) -> tuple[str, 
     clauses: list[str] = []
     parameters: list[Any] = []
     for match in matched:
-        if match.company:
-            clauses.append("(symbol = ? AND company = ?)")
-            parameters.extend([match.db_symbol, match.company])
-        else:
-            clauses.append("symbol = ?")
-            parameters.append(match.db_symbol)
+        symbols = _holding_symbol_candidates(match)
+        if not symbols:
+            continue
+        placeholders = ", ".join("?" for _ in symbols)
+        clauses.append(f"symbol IN ({placeholders})")
+        parameters.extend(symbols)
+    if not clauses:
+        return "1 = 0", []
     return " OR ".join(clauses), parameters
 
 
@@ -989,6 +1143,7 @@ def _holding_position_fields(holding: HoldingConfig) -> dict[str, Any]:
         "portfolio_weight_pct": holding.portfolio_weight_pct,
         "notes": holding.notes or "",
         "config_symbol": holding.symbol or "",
+        "instrument_type": holding.instrument_type or "stock",
     }
 
 
@@ -1293,6 +1448,7 @@ def _order_summary_row(
     leading_keys = [
         "config_ticker",
         "config_symbol",
+        "instrument_type",
         "matched_symbol",
         "company",
         "sector",
@@ -1693,6 +1849,7 @@ def _build_unmatched_rows(unmatched_tickers: Sequence[str], holdings: Sequence[H
                 "portfolio_weight_pct": None,
                 "notes": "",
                 "config_symbol": "",
+                "instrument_type": "",
             }
         )
         rows.append(
@@ -1883,8 +2040,294 @@ def export_move_prediction_v1_scan(
     )
 
 
+ETF_SUMMARY_SCORE_FIELDS = (
+    "product_class",
+    "category",
+    "focus",
+    "niche",
+    "peer_group",
+    "sleeve_key",
+    "aum",
+    "expense_ratio",
+    "nav_discount_premium",
+    "flow_to_aum_1m",
+    "organic_demand_1m",
+    "tracking_gap_1m",
+    "composite_score",
+    "book_consensus",
+    "book_direction",
+    "sleeve_continuation",
+    "flow_confirmed",
+    "early_rotation",
+    "catch_up",
+    "vehicle_quality",
+    "macro_hedge",
+    "crowded",
+    "dead_product",
+)
+
+
+def _etf_score_table_name(database_path: Path) -> str:
+    if _table_exists(database_path, "etf_book_rows"):
+        return "etf_book_rows"
+    if _table_exists(database_path, "etf_ranked_scores"):
+        return "etf_ranked_scores"
+    raise ValueError(
+        f"ETF DuckDB has neither etf_book_rows nor etf_ranked_scores: {database_path}"
+    )
+
+
+def _etf_table_columns(database_path: Path, table_name: str) -> set[str]:
+    rows = query_move_prediction_duckdb(
+        database_path,
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'main'
+          AND table_name = ?
+        """,
+        parameters=[table_name],
+    )
+    return {str(row["column_name"]) for row in rows}
+
+
+def _book_direction_to_signal(direction: Any) -> str:
+    text = str(direction or "").strip()
+    mapping = {
+        "Up": "hold_overweight",
+        "Mild Up": "hold",
+        "Neutral": "neutral_watch",
+        "Mild Down": "trim_watch",
+        "Down": "reduce",
+    }
+    return mapping.get(text, text or "neutral_watch")
+
+
+def _fetch_etf_book_rows(
+    source: MovePredictionSource,
+    matched: Sequence[MatchedHolding],
+) -> dict[str, dict[str, Any]]:
+    if not matched:
+        return {}
+    table_name = _etf_score_table_name(source.database_path)
+    columns = _etf_table_columns(source.database_path, table_name)
+    select_columns = ["symbol"]
+    for field_name in ("description", "name", *ETF_SUMMARY_SCORE_FIELDS, "perf_5d", "perf_1m", "perf_3m", "perf_ytd", "perf_1y"):
+        if field_name in columns and field_name not in select_columns:
+            select_columns.append(field_name)
+    quoted = ", ".join(f'b."{column}"' for column in select_columns)
+    symbol_rows = [
+        {
+            "symbol": match.scan_symbol or match.db_symbol,
+            "bare": _split_exchange_symbol(match.scan_symbol or match.db_symbol)[1]
+            or match.holding.ticker,
+            "lookup_key": match.lookup_key,
+        }
+        for match in matched
+    ]
+    values_sql = ", ".join("(?, ?, ?)" for _ in symbol_rows)
+    flat_params: list[Any] = []
+    for row in symbol_rows:
+        flat_params.extend([row["symbol"], row["bare"], row["lookup_key"]])
+    rows = query_move_prediction_duckdb(
+        source.database_path,
+        f"""
+        WITH target(symbol, bare, lookup_key) AS (
+            VALUES {values_sql}
+        )
+        SELECT target.lookup_key, {quoted}
+        FROM target
+        LEFT JOIN {table_name} b
+            ON b.run_id = ?
+            AND (
+                b.symbol = target.symbol
+                OR b.symbol = target.bare
+                OR b.symbol LIKE ('%:' || target.bare)
+            )
+        """,
+        parameters=[*flat_params, source.run_id],
+    )
+    by_key: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        lookup_key = str(row.get("lookup_key") or "")
+        if lookup_key and lookup_key not in by_key:
+            by_key[lookup_key] = row
+    return by_key
+
+
+def _fetch_etf_raw_close_rows(
+    source: MovePredictionSource,
+    matched: Sequence[MatchedHolding],
+) -> dict[str, dict[str, Any]]:
+    if not matched or not _table_exists(source.database_path, "raw_scan_rows"):
+        return {}
+    available_columns = _available_raw_scan_columns(source.database_path)
+    name_column = next(
+        (
+            column
+            for column in ("Fund", "company", "Company", "description", "name")
+            if column in available_columns
+        ),
+        None,
+    )
+    select_parts = ["r.symbol AS raw_symbol"]
+    if name_column:
+        select_parts.append(f'r."{name_column}" AS company')
+    else:
+        select_parts.append("NULL AS company")
+    for column_name in ("close", "exchange", "country", "currency", "sector", "industry", *RAW_PERF_FIELDS):
+        if column_name in available_columns and column_name != "close":
+            select_parts.append(f'r."{column_name}"')
+        elif column_name == "close" and "close" in available_columns:
+            select_parts.append('r."close"')
+    symbol_rows = [
+        {
+            "symbol": match.scan_symbol or match.db_symbol,
+            "bare": _split_exchange_symbol(match.scan_symbol or match.db_symbol)[1]
+            or match.holding.ticker,
+            "lookup_key": match.lookup_key,
+        }
+        for match in matched
+    ]
+    values_sql = ", ".join("(?, ?, ?)" for _ in symbol_rows)
+    flat_params: list[Any] = []
+    for row in symbol_rows:
+        flat_params.extend([row["symbol"], row["bare"], row["lookup_key"]])
+    rows = query_move_prediction_duckdb(
+        source.database_path,
+        f"""
+        WITH target(symbol, bare, lookup_key) AS (
+            VALUES {values_sql}
+        )
+        SELECT target.lookup_key, {", ".join(select_parts)}
+        FROM target
+        LEFT JOIN raw_scan_rows r
+            ON r.run_id = ?
+            AND (
+                r.symbol = target.symbol
+                OR r.symbol = target.bare
+                OR r.symbol LIKE ('%:' || target.bare)
+            )
+        """,
+        parameters=[*flat_params, source.run_id],
+    )
+    return {str(row["lookup_key"]): row for row in rows if row.get("lookup_key")}
+
+
+def _build_etf_summary_rows(
+    source: MovePredictionSource,
+    matched: Sequence[MatchedHolding],
+    book_by_symbol: Mapping[str, dict[str, Any]],
+    raw_by_symbol: Mapping[str, dict[str, Any]],
+    mtm_context: MarkToMarketContext | None = None,
+) -> list[dict[str, Any]]:
+    perf_fields = _resolve_raw_perf_fields(source.database_path)
+    summary_rows: list[dict[str, Any]] = []
+    for match in matched:
+        book = book_by_symbol.get(match.lookup_key) or {}
+        raw_perf = raw_by_symbol.get(match.lookup_key) or {}
+        row = _holding_metadata_row(match)
+        row["source_run_id"] = source.run_id
+        row["suite_name"] = source.suite_name or ""
+        row["company"] = (
+            raw_perf.get("company")
+            or book.get("description")
+            or book.get("name")
+            or match.company
+        )
+        row["sector"] = raw_perf.get("sector") or book.get("category")
+        row["industry"] = raw_perf.get("industry") or book.get("focus")
+        row["market_cap_basic"] = book.get("aum")
+        close_price = _coerce_positive_float(raw_perf.get("close"))
+        holding = match.holding
+        row.update(
+            _build_mark_to_market_fields(
+                holding,
+                close_price,
+                close_quote_currency=_resolve_close_quote_currency(
+                    currency=raw_perf.get("currency"),
+                    exchange=raw_perf.get("exchange")
+                    or _split_exchange_symbol(match.scan_symbol or match.db_symbol)[0],
+                    country=raw_perf.get("country"),
+                    quote_currency_override=holding.quote_currency,
+                ),
+                close_source="etf_raw_scan_rows.close" if close_price is not None else "",
+                mtm_context=mtm_context,
+            )
+        )
+        for perf_field in perf_fields or RAW_PERF_FIELDS:
+            if perf_field != "close":
+                row[perf_field] = raw_perf.get(perf_field)
+        if row.get("Perf.1M") is None:
+            row["Perf.1M"] = book.get("perf_1m")
+        if row.get("Perf.5D") is None:
+            row["Perf.5D"] = book.get("perf_5d")
+        if row.get("Perf.YTD") is None:
+            row["Perf.YTD"] = book.get("perf_ytd")
+        book_consensus = book.get("book_consensus")
+        if book_consensus is None:
+            book_consensus = book.get("composite_score")
+        book_direction = book.get("book_direction") or book.get("direction")
+        row["book_consensus"] = book_consensus
+        row["book_direction"] = book_direction
+        row["consensus_weeks_score"] = book_consensus
+        row["consensus_weeks_direction"] = book_direction
+        row["consensus_weeks_ras"] = book_consensus
+        row["consensus_weeks_manager_action"] = _book_direction_to_signal(book_direction)
+        row["manager_action_signal"] = _book_direction_to_signal(book_direction)
+        for field_name in ETF_SUMMARY_SCORE_FIELDS:
+            if field_name in {"book_consensus", "book_direction"}:
+                continue
+            if field_name in book:
+                row[field_name] = book.get(field_name)
+        summary_rows.append(_order_summary_row(row, perf_fields or RAW_PERF_FIELDS))
+    return summary_rows
+
+
+def export_etf_active_book_scan(
+    source: MovePredictionSource,
+    holdings: Sequence[HoldingConfig],
+    matched: Sequence[MatchedHolding],
+    unmatched_tickers: Sequence[str],
+    output_scan_dir: Path,
+    scan_data: list[dict[str, Any]] | None = None,
+    mtm_context: MarkToMarketContext | None = None,
+) -> ScanExportResult:
+    output_scan_dir.mkdir(parents=True, exist_ok=True)
+    book_by_symbol = _fetch_etf_book_rows(source, matched)
+    raw_by_symbol = _fetch_etf_raw_close_rows(source, matched)
+    summary_rows = _build_etf_summary_rows(
+        source, matched, book_by_symbol, raw_by_symbol, mtm_context=mtm_context
+    )
+    unmatched_rows = _build_unmatched_rows(unmatched_tickers, holdings)
+    file_map = {
+        "summary": output_scan_dir / "holdings__summary.csv",
+        "unmatched": output_scan_dir / "holdings__unmatched.csv",
+    }
+    row_map = {
+        "summary": summary_rows,
+        "unmatched": unmatched_rows,
+    }
+    exported_files: dict[str, str] = {}
+    counts: dict[str, int] = {}
+    for key, path in file_map.items():
+        rows = row_map[key]
+        exported_files[key] = str(_write_csv(path, rows))
+        counts[key] = len(rows)
+    return ScanExportResult(
+        scan_key=SCAN_KEY_ETF_BOOK,
+        source_run_id=source.run_id,
+        source_database_path=str(source.database_path),
+        exported_files=exported_files,
+        matched_count=len(matched),
+        unmatched_tickers=list(unmatched_tickers),
+        counts=counts,
+    )
+
+
 SCAN_EXPORTERS: dict[str, ScanExporter] = {
-    "move_prediction_v1": export_move_prediction_v1_scan,
+    SCAN_KEY_MOVE_PREDICTION: export_move_prediction_v1_scan,
+    SCAN_KEY_ETF_BOOK: export_etf_active_book_scan,
 }
 
 
@@ -2069,6 +2512,15 @@ def _merge_shortlist_scoring_fields(
                 merged[key] = conviction_row.get(key)
         if merged.get("conviction_sleeve") in (None, "") and conviction_row.get("sleeve"):
             merged["conviction_sleeve"] = conviction_row.get("sleeve")
+    if str(merged.get("instrument_type") or "").lower() == "etf":
+        merged["model_sleeve"] = str(merged.get("product_class") or "etf")
+        merged["manager_action_signal"] = (
+            merged.get("manager_action_signal")
+            or merged.get("consensus_weeks_manager_action")
+            or _book_direction_to_signal(merged.get("book_direction"))
+            or "neutral_watch"
+        )
+        return merged
     merged["model_sleeve"] = (
         merged.get("conviction_sleeve")
         or (conviction_row or {}).get("sleeve")
@@ -2179,6 +2631,7 @@ def _build_shortlist_lines(
     summary_rows: Sequence[dict[str, Any]],
     conviction_by_ticker: Mapping[str, dict[str, Any]] | None = None,
     source: MovePredictionSource | None = None,
+    etf_source: MovePredictionSource | None = None,
     generated_at: datetime | None = None,
 ) -> list[str]:
     portfolio_currency = str(
@@ -2208,6 +2661,8 @@ def _build_shortlist_lines(
         lines.append(f"Cash       : {cash_summary}")
     if source is not None:
         lines.append(f"Scan       : {source.run_id}")
+    if etf_source is not None:
+        lines.append(f"ETF scan   : {etf_source.run_id}")
     lines.append("")
 
     lines.extend(
@@ -2244,8 +2699,15 @@ def _build_shortlist_lines(
     for rank, row in enumerate(position_rows, 1):
         ticker = str(row.get("config_ticker") or row.get("matched_symbol") or "")
         company = _truncate_label(row.get("company"), 22)
-        conviction = _coerce_optional_float(row.get("conviction_score"))
-        conviction_text = f"{conviction:.2f}" if conviction is not None else "—"
+        instrument_type = str(row.get("instrument_type") or "stock").lower()
+        if instrument_type == "etf":
+            book_score = _coerce_optional_float(
+                row.get("book_consensus") or row.get("consensus_weeks_score")
+            )
+            conviction_text = f"{book_score:.0f}" if book_score is not None else "—"
+        else:
+            conviction = _coerce_optional_float(row.get("conviction_score"))
+            conviction_text = f"{conviction:.2f}" if conviction is not None else "—"
         signal = _truncate_label(
             str(row.get("manager_action_signal") or "neutral_watch"),
             18,
@@ -2310,6 +2772,24 @@ def _build_shortlist_lines(
             )
     else:
         lines.append("  Highest conviction: none above zero")
+
+    etf_rows = [
+        row
+        for row in position_rows
+        if str(row.get("instrument_type") or "").lower() == "etf"
+    ]
+    if etf_rows:
+        lines.append("  ETF book tracking:")
+        for row in etf_rows:
+            ticker = row.get("config_ticker") or row.get("matched_symbol")
+            lines.append(
+                f"    {ticker}: book {_format_shortlist_score(_coerce_optional_float(row.get('book_consensus') or row.get('consensus_weeks_score')))} "
+                f"| {row.get('book_direction') or row.get('consensus_weeks_direction') or 'n/a'} "
+                f"| 1M {_format_shortlist_pct(_coerce_optional_float(row.get('Perf.1M')))} "
+                f"| flow/AUM {_format_shortlist_score(_coerce_optional_float(row.get('flow_to_aum_1m')))} "
+                f"| vehicle {_format_shortlist_score(_coerce_optional_float(row.get('vehicle_quality')))} "
+                f"| {row.get('sleeve_key') or row.get('focus') or 'n/a'}"
+            )
 
     lines.append("")
 
@@ -2406,9 +2886,9 @@ def _build_shortlist_lines(
             "  Inv% / Val%  : share of total invested / current portfolio value",
             "  vsCost       : unrealized return on your average price",
             "  YTD / 1M     : TradingView scan performance fields",
-            "  Conv         : move-prediction conviction score (0 = filtered out)",
-            "  Signal       : manager action from conviction engine",
-            "  Mdl          : model-assigned sleeve (long/short), independent of config sleeve",
+            "  Conv         : stocks = move-prediction conviction; ETFs = book consensus",
+            "  Signal       : stocks = conviction engine; ETFs = book direction",
+            "  Mdl          : stocks = model sleeve; ETFs = product class (1x/levered/...)",
             "=" * 96,
         ]
     )
@@ -2423,6 +2903,7 @@ def _write_shortlist_log(
     summary_rows: Sequence[dict[str, Any]],
     conviction_by_ticker: Mapping[str, dict[str, Any]] | None = None,
     source: MovePredictionSource | None = None,
+    etf_source: MovePredictionSource | None = None,
     generated_at: datetime | None = None,
 ) -> None:
     lines = _build_shortlist_lines(
@@ -2431,6 +2912,7 @@ def _write_shortlist_log(
         summary_rows=summary_rows,
         conviction_by_ticker=conviction_by_ticker,
         source=source,
+        etf_source=etf_source,
         generated_at=generated_at,
     )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -2496,6 +2978,9 @@ def _write_overview_log(
     summary_rows: Sequence[dict[str, Any]],
     exported_manifest_path: str,
     fx_warnings: Sequence[str] | None = None,
+    etf_source: MovePredictionSource | None = None,
+    stock_holdings_count: int | None = None,
+    etf_holdings_count: int | None = None,
 ) -> None:
     portfolio_currency = holdings_payload.get(
         "_resolved_portfolio_currency",
@@ -2516,6 +3001,8 @@ def _write_overview_log(
         f"  description: {holdings_payload.get('description', '')}",
         f"  portfolio_currency: {portfolio_currency}",
         f"  holdings_count: {holdings_count}",
+        f"  stock_holdings: {stock_holdings_count if stock_holdings_count is not None else 'n/a'}",
+        f"  etf_holdings: {etf_holdings_count if etf_holdings_count is not None else 'n/a'}",
         f"  total_invested_usd: {total_invested_usd:,.2f}"
         if total_invested_usd > 0
         else "  total_invested_usd: N/A",
@@ -2549,6 +3036,17 @@ def _write_overview_log(
                 f"  created_at_utc: {source.created_at_utc}",
                 f"  suite_name: {source.suite_name or ''}",
                 f"  profile_count: {len(source.profile_names)}",
+                "",
+            ]
+        )
+    if etf_source is not None:
+        lines.extend(
+            [
+                "ETF analysis source",
+                f"  database_path: {etf_source.database_path}",
+                f"  run_id: {etf_source.run_id}",
+                f"  created_at_utc: {etf_source.created_at_utc}",
+                f"  suite_name: {etf_source.suite_name or ''}",
                 "",
             ]
         )
@@ -2602,14 +3100,21 @@ def run_holdings_scoring_analysis(
     database_path: str | Path | None = None,
     run_id: str | None = None,
     duckdb_runs_root: str | Path | None = None,
-    enabled_scans: Sequence[str] = ("move_prediction_v1",),
+    enabled_scans: Sequence[str] | None = None,
     scan_data: list[dict[str, Any]] | None = None,
     run_label: str | None = None,
     reference_time: datetime | None = None,
     fx_as_of_date: date | None = None,
     resolve_fx_rates: bool = True,
+    etf_database_path: str | Path | None = None,
+    etf_run_id: str | None = None,
+    etf_duckdb_runs_root: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Run holdings scoring exports for the configured current holdings."""
+    """Run holdings scoring exports for the configured current holdings.
+
+    Stocks join the latest move-prediction DuckDB. Holdings with
+    ``instrument_type: "etf"`` join the latest ETF analysis DuckDB.
+    """
     resolved_config_path = Path(holdings_config_path)
     holdings_payload, holdings, cash_position = load_holdings_config(resolved_config_path)
     portfolio_currency = str(
@@ -2642,11 +3147,18 @@ def run_holdings_scoring_analysis(
         fx_warnings=fx_warnings,
     )
 
-    unknown_scans = [scan for scan in enabled_scans if scan not in SCAN_EXPORTERS]
+    resolved_scans = (
+        tuple(enabled_scans)
+        if enabled_scans is not None
+        else default_enabled_scans(holdings)
+    )
+    unknown_scans = [scan for scan in resolved_scans if scan not in SCAN_EXPORTERS]
     if unknown_scans:
         raise ValueError(
             f"Unknown enabled_scans: {unknown_scans}. Available: {sorted(SCAN_EXPORTERS)}"
         )
+
+    stock_holdings, etf_holdings = partition_holdings_by_instrument(holdings)
 
     holdings_run_id = _build_holdings_run_id(run_label, created_at)
     resolved_output = Path(output_dir) if output_dir is not None else (
@@ -2656,10 +3168,13 @@ def run_holdings_scoring_analysis(
     scans_root = resolved_output / "scans"
 
     source: MovePredictionSource | None = None
+    etf_source: MovePredictionSource | None = None
     matched: list[MatchedHolding] = []
-    unmatched: list[str] = [holding.ticker for holding in holdings]
+    unmatched: list[str] = []
+    etf_matched: list[MatchedHolding] = []
+    etf_unmatched: list[str] = []
 
-    if "move_prediction_v1" in enabled_scans:
+    if SCAN_KEY_MOVE_PREDICTION in resolved_scans:
         source = resolve_latest_move_prediction_source(
             duckdb_runs_root=duckdb_runs_root,
             database_path=database_path,
@@ -2675,24 +3190,58 @@ def run_holdings_scoring_analysis(
             source.run_id,
         )
         matched, unmatched = match_holdings_to_db_symbols(
-            holdings,
+            stock_holdings,
             db_symbols,
             raw_catalog=raw_catalog,
         )
 
+    if SCAN_KEY_ETF_BOOK in resolved_scans:
+        etf_source = resolve_latest_etf_scan_source(
+            duckdb_runs_root=etf_duckdb_runs_root,
+            database_path=etf_database_path,
+            run_id=etf_run_id,
+        )
+        etf_score_table = _etf_score_table_name(etf_source.database_path)
+        etf_db_symbols = _fetch_distinct_symbols(
+            etf_source.database_path,
+            etf_source.run_id,
+            etf_score_table,
+        )
+        etf_catalog = _fetch_raw_scan_symbol_catalog(
+            etf_source.database_path,
+            etf_source.run_id,
+        )
+        etf_matched, etf_unmatched = match_holdings_to_db_symbols(
+            etf_holdings,
+            etf_db_symbols,
+            raw_catalog=etf_catalog,
+        )
+
     scan_results: list[ScanExportResult] = []
-    for scan_key in enabled_scans:
+    for scan_key in resolved_scans:
         exporter = SCAN_EXPORTERS[scan_key]
-        if scan_key == "move_prediction_v1":
+        if scan_key == SCAN_KEY_MOVE_PREDICTION:
             if source is None:
                 raise RuntimeError("move_prediction_v1 source was not resolved")
             result = exporter(
                 source,
-                holdings,
+                stock_holdings,
                 matched,
                 unmatched,
                 scans_root / scan_key,
                 scan_data,
+                mtm_context,
+            )
+        elif scan_key == SCAN_KEY_ETF_BOOK:
+            if etf_source is None:
+                raise RuntimeError("etf_active_book_v1 source was not resolved")
+            result = exporter(
+                etf_source,
+                etf_holdings,
+                etf_matched,
+                etf_unmatched,
+                scans_root / scan_key,
+                None,
                 mtm_context,
             )
         else:
@@ -2701,18 +3250,14 @@ def run_holdings_scoring_analysis(
 
     summary_rows: list[dict[str, Any]] = []
     conviction_rows: list[dict[str, Any]] = []
-    move_prediction_result = next(
-        (result for result in scan_results if result.scan_key == "move_prediction_v1"),
-        None,
-    )
-    if move_prediction_result:
-        if "summary" in move_prediction_result.exported_files:
-            summary_rows = _load_export_csv_rows(
-                Path(move_prediction_result.exported_files["summary"])
+    for scan_result in scan_results:
+        if "summary" in scan_result.exported_files:
+            summary_rows.extend(
+                _load_export_csv_rows(Path(scan_result.exported_files["summary"]))
             )
-        if "conviction" in move_prediction_result.exported_files:
-            conviction_rows = _load_export_csv_rows(
-                Path(move_prediction_result.exported_files["conviction"])
+        if "conviction" in scan_result.exported_files:
+            conviction_rows.extend(
+                _load_export_csv_rows(Path(scan_result.exported_files["conviction"]))
             )
     conviction_by_ticker = {
         str(row.get("config_ticker") or ""): row
@@ -2720,12 +3265,25 @@ def run_holdings_scoring_analysis(
         if row.get("config_ticker")
     }
 
+    skipped_unmatched: list[str] = []
+    if etf_holdings and SCAN_KEY_ETF_BOOK not in resolved_scans:
+        skipped_unmatched.extend(holding_config_label(holding) for holding in etf_holdings)
+    if stock_holdings and SCAN_KEY_MOVE_PREDICTION not in resolved_scans:
+        skipped_unmatched.extend(holding_config_label(holding) for holding in stock_holdings)
+    all_unmatched = sorted(
+        {ticker for result in scan_results for ticker in result.unmatched_tickers}
+        | set(skipped_unmatched)
+    )
+    all_matched_count = sum(result.matched_count for result in scan_results)
+
     manifest = {
         "run_id": holdings_run_id,
         "created_at_utc": created_at.astimezone(timezone.utc).isoformat(),
         "holdings_config_path": str(resolved_config_path),
         "holdings_id": holdings_payload.get("holdings_id"),
         "holdings_count": len(holdings),
+        "stock_holdings_count": len(stock_holdings),
+        "etf_holdings_count": len(etf_holdings),
         "portfolio_currency": portfolio_currency,
         "cash_position": (
             cash_position.to_dict() if cash_position is not None else None
@@ -2734,7 +3292,7 @@ def run_holdings_scoring_analysis(
         "fx_provider": "frankfurter.app",
         "resolve_fx_rates": resolve_fx_rates,
         "fx_warnings": fx_warnings,
-        "enabled_scans": list(enabled_scans),
+        "enabled_scans": list(resolved_scans),
         "performance_tracking_periods": DEFAULT_PERFORMANCE_TRACKING_PERIODS,
         "performance_tracking_field_order": PERFORMANCE_TRACKING_FIELD_ORDER,
         "code_version": _collect_code_version_metadata(),
@@ -2764,10 +3322,13 @@ def run_holdings_scoring_analysis(
         holdings_payload=holdings_payload,
         holdings_count=len(holdings),
         source=source,
+        etf_source=etf_source,
         scan_results=scan_results,
         summary_rows=summary_rows,
         exported_manifest_path=str(manifest_path),
         fx_warnings=fx_warnings,
+        stock_holdings_count=len(stock_holdings),
+        etf_holdings_count=len(etf_holdings),
     )
 
     shortlist_path = resolved_output / "holdings_scoring__shortlist.log"
@@ -2778,6 +3339,7 @@ def run_holdings_scoring_analysis(
         summary_rows=summary_rows,
         conviction_by_ticker=conviction_by_ticker,
         source=source,
+        etf_source=etf_source,
         generated_at=created_at,
     )
 
@@ -2803,7 +3365,16 @@ def run_holdings_scoring_analysis(
         }
         if source
         else None,
-        "matched_count": len(matched),
-        "unmatched_tickers": unmatched,
+        "etf_source": {
+            "database_path": str(etf_source.database_path),
+            "run_id": etf_source.run_id,
+            "created_at_utc": etf_source.created_at_utc,
+            "suite_name": etf_source.suite_name,
+            "profile_names": etf_source.profile_names,
+        }
+        if etf_source
+        else None,
+        "matched_count": all_matched_count,
+        "unmatched_tickers": all_unmatched,
         "scan_results": [asdict(result) for result in scan_results],
     }

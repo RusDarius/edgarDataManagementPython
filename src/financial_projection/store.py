@@ -78,6 +78,8 @@ def persist_projection_run(
     export_parquet: bool = True,
     created_at_utc: datetime | None = None,
     run_id: str | None = None,
+    summary_table: str = "projection_summary",
+    year_grid_table: str = "projection_year_grid",
 ) -> dict[str, Any]:
     duckdb = _import_duckdb()
     layout = build_output_layout(
@@ -103,10 +105,12 @@ def persist_projection_run(
         .isoformat(),
         "summary_row_count": len(summaries),
         "year_grid_row_count": len(year_grids),
+        "summary_table": summary_table,
+        "year_grid_table": year_grid_table,
     }
 
-    summary_csv = run_dir / "projection_summary.csv"
-    year_csv = run_dir / "projection_year_grid.csv"
+    summary_csv = run_dir / f"{summary_table}.csv"
+    year_csv = run_dir / f"{year_grid_table}.csv"
     _write_csv(summary_csv, summaries, _union_fieldnames(summaries))
     _write_csv(year_csv, year_grids, _union_fieldnames(year_grids))
 
@@ -138,35 +142,35 @@ def persist_projection_run(
 
         if summary_csv.exists() and summary_csv.stat().st_size > 0:
             conn.execute(
-                "CREATE TABLE projection_summary AS "
+                f"CREATE TABLE {summary_table} AS "
                 f"SELECT * FROM read_csv_auto({_q(summary_csv.as_posix())}, HEADER=TRUE)"
             )
         else:
-            conn.execute("CREATE TABLE projection_summary(symbol VARCHAR)")
+            conn.execute(f"CREATE TABLE {summary_table}(symbol VARCHAR)")
 
         if year_csv.exists() and year_csv.stat().st_size > 0:
             conn.execute(
-                "CREATE TABLE projection_year_grid AS "
+                f"CREATE TABLE {year_grid_table} AS "
                 f"SELECT * FROM read_csv_auto({_q(year_csv.as_posix())}, HEADER=TRUE)"
             )
         else:
-            conn.execute("CREATE TABLE projection_year_grid(symbol VARCHAR)")
+            conn.execute(f"CREATE TABLE {year_grid_table}(symbol VARCHAR)")
 
         if export_parquet:
-            summary_parquet = parquet_dir / "projection_summary.parquet"
-            year_parquet = parquet_dir / "projection_year_grid.parquet"
+            summary_parquet = parquet_dir / f"{summary_table}.parquet"
+            year_parquet = parquet_dir / f"{year_grid_table}.parquet"
             if summaries:
                 conn.execute(
-                    f"COPY projection_summary TO {_q(summary_parquet.as_posix())} "
+                    f"COPY {summary_table} TO {_q(summary_parquet.as_posix())} "
                     "(FORMAT PARQUET)"
                 )
-                parquet_paths["projection_summary"] = summary_parquet.as_posix()
+                parquet_paths[summary_table] = summary_parquet.as_posix()
             if year_grids:
                 conn.execute(
-                    f"COPY projection_year_grid TO {_q(year_parquet.as_posix())} "
+                    f"COPY {year_grid_table} TO {_q(year_parquet.as_posix())} "
                     "(FORMAT PARQUET)"
                 )
-                parquet_paths["projection_year_grid"] = year_parquet.as_posix()
+                parquet_paths[year_grid_table] = year_parquet.as_posix()
     finally:
         conn.close()
 
@@ -188,3 +192,31 @@ def persist_projection_run(
         "summary_row_count": len(summaries),
         "year_grid_row_count": len(year_grids),
     }
+
+
+def persist_growth_run(
+    *,
+    output_root: str | Path,
+    summaries: Sequence[Mapping[str, Any]],
+    year_grids: Sequence[Mapping[str, Any]],
+    run_metadata: Mapping[str, Any],
+    export_parquet: bool = True,
+    created_at_utc: datetime | None = None,
+    run_id: str | None = None,
+) -> dict[str, Any]:
+    """Persist growth-lane outputs under ``fingrowth_*`` run ids."""
+    stamp = created_at_utc or datetime.now(tz=timezone.utc)
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    resolved_run_id = run_id or f"fingrowth_{stamp.strftime('%Y%m%dT%H%M%SZ')}"
+    return persist_projection_run(
+        output_root=output_root,
+        summaries=summaries,
+        year_grids=year_grids,
+        run_metadata=run_metadata,
+        export_parquet=export_parquet,
+        created_at_utc=stamp,
+        run_id=resolved_run_id,
+        summary_table="growth_summary",
+        year_grid_table="growth_year_grid",
+    )
