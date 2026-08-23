@@ -24,7 +24,8 @@ Price-projection callables (EV/Rev suite):
 Ticker overview:
   - run_ticker_projection_overview / example_ticker_overview
 
-Usage doc: documentation/financial_projection_usage.md
+How to READ outputs (lanes, coeffs, every field, SQL):
+  documentation/financial_projection_usage.md
 """
 
 from __future__ import annotations
@@ -773,6 +774,8 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
 
 if __name__ == "__main__":
     # Default CLI: growth lanes on latest all-fields universe.
+    # How to READ outputs (lanes, coeffs, every field, SQL): 
+    #   documentation/financial_projection_usage.md
     # Examples:
     #   python run_financial_projection.py --top-n 25
     #   python run_financial_projection.py --mode price --example latest-all-fields

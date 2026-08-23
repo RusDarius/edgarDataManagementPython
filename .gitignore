@@ -4,6 +4,7 @@ documentation/data_analysis_screens/
 sql_connections_space/query_saved_results/
 savedData
 logs
+dev_logs_iterations
 plots/
 latest_plot.html
 venv39

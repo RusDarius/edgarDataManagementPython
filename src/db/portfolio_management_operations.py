@@ -6,7 +6,6 @@ from typing import Any
 from db.connection_credentials import BASE_DB_CONFIG
 from db.connection_provider import get_mysql_connection
 
-
 PORTFOLIO_SCHEMA_STATEMENTS = [
     """
     CREATE TABLE IF NOT EXISTS portfolio_registry (
@@ -251,6 +250,57 @@ def get_portfolio_by_name(portfolio_name: str) -> dict[str, Any] | None:
         conn.close()
 
 
+def delete_portfolio_by_name(portfolio_name: str) -> bool:
+    """Delete one portfolio and all holdings/performance records by exact name.
+
+    Child rows are deleted explicitly because the existing foreign keys do not
+    use ``ON DELETE CASCADE``. The performance schema is ensured first so this
+    operation also works after upgrading an older database installation.
+    """
+    normalized_name = portfolio_name.strip()
+    if not normalized_name:
+        raise ValueError("portfolio_name must be non-empty")
+
+    ensure_portfolio_management_schema()
+    from db.portfolio_performance_tracking_operations import (
+        ensure_portfolio_performance_schema,
+    )
+
+    ensure_portfolio_performance_schema()
+
+    conn = get_mysql_connection(**BASE_DB_CONFIG)
+    try:
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute(
+                "SELECT portfolio_id FROM portfolio_registry WHERE portfolio_name = %s",
+                (normalized_name,),
+            )
+            portfolio_row = cursor.fetchone()
+            if portfolio_row is None:
+                return False
+
+            portfolio_id = int(portfolio_row["portfolio_id"])
+            for table_name in (
+                "portfolio_transactions",
+                "portfolio_cash_flows",
+                "portfolio_nav_snapshots",
+                "portfolio_managements_data_v1",
+            ):
+                cursor.execute(
+                    f"DELETE FROM {table_name} WHERE portfolio_id = %s",
+                    (portfolio_id,),
+                )
+            cursor.execute(
+                "DELETE FROM portfolio_registry WHERE portfolio_id = %s",
+                (portfolio_id,),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return True
+
+
 def get_portfolio_by_id(portfolio_id: int) -> dict[str, Any] | None:
     conn = get_mysql_connection(**BASE_DB_CONFIG)
     try:
@@ -274,8 +324,7 @@ def list_portfolios() -> list[dict[str, Any]]:
     conn = get_mysql_connection(**BASE_DB_CONFIG)
     try:
         with conn.cursor(dictionary=True) as cursor:
-            cursor.execute(
-                """
+            cursor.execute("""
                 SELECT
                     portfolio_registry.*,
                     COUNT(portfolio_managements_data_v1.portfolio_item_id) AS positions_count,
@@ -285,8 +334,7 @@ def list_portfolios() -> list[dict[str, Any]]:
                     ON portfolio_managements_data_v1.portfolio_id = portfolio_registry.portfolio_id
                 GROUP BY portfolio_registry.portfolio_id
                 ORDER BY portfolio_registry.updated_at DESC, portfolio_registry.portfolio_name ASC
-                """
-            )
+                """)
             return cursor.fetchall()
     finally:
         conn.close()

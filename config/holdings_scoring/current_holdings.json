@@ -4,7 +4,7 @@
   "portfolio_currency": "USD",
   "description": "Current book — set invested_sum/average_price in their currencies; portfolio aggregates in USD. Use optional symbol (EXCHANGE:TICKER) when ticker alone is ambiguous. Optional instrument_type is stock (default) or etf; ETFs join the latest ETF analysis scan.",
   "cash_position": {
-    "value": 14980,
+    "value": 5600,
     "currency": "USD"
   },
   "holdings": [
@@ -19,39 +19,20 @@
     {
       "ticker": "PATH",
       "sleeve": "core",
-      "invested_sum": 10278,
+      "invested_sum": 7626,
       "invested_currency": "USD",
-      "average_price": 11.93,
+      "average_price": 12.85,
       "price_currency": "USD",
       "notes": "UiPath"
     },
     {
-      "ticker": "FNV",
-      "sleeve": "core",
-      "invested_sum": 1033.23,
-      "invested_currency": "USD",
-      "average_price": 266.23,
-      "price_currency": "USD",
-      "notes": "Franco-Nevada"
-    },
-    {
       "ticker": "VEEV",
       "sleeve": "core",
-      "invested_sum": 11058.77,
+      "invested_sum": 14063.77,
       "invested_currency": "USD",
-      "average_price": 187.35,
+      "average_price": 197.23,
       "price_currency": "USD",
       "notes": "Veeva Systems"
-    },
-    {
-      "ticker": "CF",
-      "symbol": "NYSE:CF",
-      "sleeve": "core",
-      "invested_sum": 1476.63,
-      "invested_currency": "USD",
-      "average_price": 129.46,
-      "price_currency": "USD",
-      "notes": "CF Industries"
     },
     {
       "ticker": "JD",
@@ -65,18 +46,18 @@
     {
       "ticker": "ZS",
       "sleeve": "core",
-      "invested_sum": 10077,
+      "invested_sum": 15079,
       "invested_currency": "USD",
-      "average_price": 149.37,
+      "average_price": 158,
       "price_currency": "USD",
       "notes": "Zscaler"
     },
     {
       "ticker": "NOVO_B",
       "sleeve": "core",
-      "invested_sum": 79329,
+      "invested_sum": 74132,
       "invested_currency": "DKK",
-      "average_price": 353.28,
+      "average_price": 330.28,
       "price_currency": "DKK",
       "quote_currency": "DKK",
       "notes": "Novo Nordisk — Copenhagen B-share"
@@ -111,27 +92,18 @@
     {
       "ticker": "INTU",
       "sleeve": "core",
-      "invested_sum": 5000,
+      "invested_sum": 9000,
       "invested_currency": "USD",
-      "average_price": 352,
+      "average_price": 349.35,
       "price_currency": "USD",
       "notes": "Intuit"
     },
     {
-      "ticker": "AMD",
-      "sleeve": "core",
-      "invested_sum": 1561,
-      "invested_currency": "USD",
-      "average_price": 524,
-      "price_currency": "USD",
-      "notes": "AMD"
-    },
-    {
       "ticker": "FSLR",
       "sleeve": "core",
-      "invested_sum": 5000,
+      "invested_sum": 6000,
       "invested_currency": "USD",
-      "average_price": 232,
+      "average_price": 229.78,
       "price_currency": "USD",
       "notes": "First Solar"
     },
@@ -147,11 +119,32 @@
     {
       "ticker": "DUOL",
       "sleeve": "core",
-      "invested_sum": 5900,
+      "invested_sum": 6900,
       "invested_currency": "USD",
-      "average_price": 131.6,
+      "average_price": 131.38,
       "price_currency": "USD",
       "notes": "Duolingo"
+    },
+    {
+      "ticker": "VUAA",
+      "symbol": "XETR:VUAA",
+      "sleeve": "core",
+      "invested_sum": 19269,
+      "invested_currency": "EUR",
+      "average_price": 91.7592,
+      "price_currency": "EUR",
+      "instrument_type": "etf",
+      "notes": "Vanguard S&P 500 UCITS ETF"
+    },
+    {
+      "ticker": "EXEL",
+      "symbol": "NASDAQ:EXEL",
+      "sleeve": "core",
+      "invested_sum": 3003,
+      "invested_currency": "USD",
+      "average_price": 54.4,
+      "price_currency": "USD",
+      "notes": "Exelixis"
     },
     {
       "ticker": "RDDT",

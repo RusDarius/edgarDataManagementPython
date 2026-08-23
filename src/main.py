@@ -208,6 +208,12 @@ from portofolio_integration_analysis.portfolio_tracker import PortfolioTracker
 from portofolio_integration_analysis.portfolio_analysis_output import (
     export_portfolio_analysis,
 )
+from portfolio_performance_tracking.portfolio_performance_tracker import (
+    PortfolioPerformanceTracker,
+)
+from portfolio_performance_tracking.performance_report_output import (
+    export_performance_history,
+)
 
 USER_AGENT = "Barnnabass daniOO7XbX@gmail.com"
 TRADINGVIEW_API_CLIENT = ApiTradingViewClient(user_agent=USER_AGENT)
@@ -306,6 +312,138 @@ def run_portfolio_bootstrap_example() -> dict[str, object]:
         "metrics": metrics,
         "export_paths": export_paths,
     }
+
+
+def run_portfolio_performance_tracking_example() -> dict[str, object]:
+    """Example flow for flow-aware historical performance tracking + benchmarking.
+
+    See src/portfolio_performance_tracking/README.md for the full concept guide
+    (Modified Dietz linking, shadow-benchmark simulation, and important caveats).
+    This reuses the same portfolio_id as ``run_portfolio_bootstrap_example`` via
+    portfolio_name, so holdings and performance history stay linked.
+    """
+
+    tracker = PortfolioPerformanceTracker(portfolio_name="TV Date Aware Demo")
+
+    spy_row = get_trading_view_company_by_symbol("SPY")
+    benchmark_price_initial = 592.10  # placeholder: replace with a real SPY close
+    benchmark_price_latest = 615.20  # placeholder: replace with a real SPY close
+
+    tracker.record_contribution(
+        amount=25_350.00,
+        benchmark_symbol="SPY",
+        benchmark_price=benchmark_price_initial,
+        note="Initial funding matching run_portfolio_bootstrap_example positions",
+        executed_at=datetime(2025, 10, 2, 14, 30),
+    )
+    tracker.take_nav_snapshot_from_holdings(
+        cash_balance=0.0,
+        benchmark_symbol="SPY",
+        benchmark_price=benchmark_price_initial,
+        snapshot_at=datetime(2025, 10, 2, 14, 30),
+        note="Snapshot right after bootstrap positions were opened",
+    )
+
+    tracker.take_nav_snapshot_from_holdings(
+        cash_balance=0.0,
+        benchmark_symbol="SPY",
+        benchmark_price=benchmark_price_latest,
+        note="Latest snapshot from current holdings market value",
+    )
+
+    summary = tracker.get_latest_performance_summary()
+    print(f"Cumulative return: {summary.get('cumulative_return_pct')}")
+    print(f"Annualized return: {summary.get('annualized_return_pct')}")
+
+    export_paths = export_performance_history(tracker, benchmark_symbol="SPY")
+    print(f"Performance history report: {export_paths['log']}")
+    print(f"Performance CSV: {export_paths['performance_csv']}")
+    print(f"Benchmark comparison CSV: {export_paths['benchmark_csv']}")
+
+    return {
+        "summary": summary,
+        "export_paths": export_paths,
+        "spy_company_row": spy_row,
+    }
+
+
+def run_simple_fund_performance_tracking_example() -> dict[str, object]:
+    """Simple mode: simulate six fund-value moves across the last two years.
+
+    No per-symbol holdings are recorded. The example uses one initial
+    contribution, a later top-up, a withdrawal, and six whole-fund value
+    snapshots so the flow-adjusted historical return curve is visible.
+
+    See src/portfolio_performance_tracking/README.md ("Two modes" section) for
+    the full comparison against the holdings-integrated mode above.
+    """
+
+    tracker = PortfolioPerformanceTracker.create_simple_fund(
+        fund_name="Simple Fund Six Move Demo", benchmark_symbol="SPY"
+    )
+
+    benchmark_price_initial = 560.00  # placeholder: replace with a real SPY close
+
+    tracker.record_contribution(
+        amount=25_000.00,
+        benchmark_symbol="SPY",
+        benchmark_price=benchmark_price_initial,
+        note="Initial funding",
+        executed_at=datetime(2024, 8, 23, 14, 30),
+    )
+    tracker.record_fund_value(
+        total_value=25_000.00,
+        benchmark_symbol="SPY",
+        benchmark_price=benchmark_price_initial,
+        as_of=datetime(2024, 8, 23, 14, 30),
+    )
+
+    six_moves = [
+        (datetime(2024, 12, 23, 14, 30), 25_800.00, 590.00),
+        (datetime(2025, 4, 23, 14, 30), 24_900.00, 610.00),
+        (datetime(2025, 8, 23, 14, 30), 30_800.00, 630.00),
+        (datetime(2025, 12, 23, 14, 30), 33_100.00, 650.00),
+        (datetime(2026, 4, 23, 14, 30), 32_400.00, 680.00),
+        (datetime(2026, 8, 23, 14, 30), 36_200.00, 710.00),
+    ]
+
+    for move_number, (as_of, fund_value, benchmark_price) in enumerate(
+        six_moves, start=1
+    ):
+        if move_number == 3:
+            tracker.record_contribution(
+                amount=5_000.00,
+                benchmark_symbol="SPY",
+                benchmark_price=benchmark_price,
+                note="Mid-period top-up",
+                executed_at=as_of,
+            )
+        elif move_number == 5:
+            tracker.record_withdrawal(
+                amount=2_000.00,
+                benchmark_symbol="SPY",
+                benchmark_price=benchmark_price,
+                note="Mid-period withdrawal",
+                executed_at=as_of,
+            )
+
+        tracker.record_fund_value(
+            total_value=fund_value,
+            benchmark_symbol="SPY",
+            benchmark_price=benchmark_price,
+            as_of=as_of,
+            note=f"Simulated simple-mode move {move_number}/6",
+        )
+
+    summary = tracker.get_latest_performance_summary()
+    print(f"Cumulative return: {summary.get('cumulative_return_pct')}")
+    for row in tracker.get_active_capital_breakdown():
+        print(row["executed_at"], row["flow_type"], row["amount"], row["days_active"])
+
+    export_paths = export_performance_history(tracker, benchmark_symbol="SPY")
+    print(f"Performance history report: {export_paths['log']}")
+
+    return {"summary": summary, "export_paths": export_paths}
 
 
 def run_move_prediction_history_aggregation_example() -> dict[str, object]:
@@ -536,6 +674,80 @@ def run_dense_backwards_every_2_days_example() -> dict[str, object]:
     return result
 
 
+def daily_prediction_move_analysis_suite() -> dict[str, object]:
+    # Model Analysis scan with duckdb storage solution
+    move_prediction_scan_response = (
+        TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
+            min_market_cap_usd=500_000_000,
+            markets=PREFERRED_MARKETS,
+        )
+    )
+    # Default (omit profile_suite_path): built-in 10-profile baseline — see DEFAULT_MOVE_PREDICTION_PROFILE_SUITE.
+    # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3
+    # Legacy 17-profile suite: MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
+    # Realigned baseline (11 lenses): MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
+    # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
+    # Move-prediction suite outputs (.log / .csv / DuckDB / regime_context_focus.log)
+    # use EXCHANGE:TICKER labels via _get_symbol_name to avoid bare-ticker collisions.
+    base_duckdb_result = run_full_analysis_suite_duckdb(
+        scan_data=move_prediction_scan_response,
+        min_market_cap_usd=500_000_000,
+        include_blind_spot_sections=True,
+        profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+        conviction_mode_config_path=CONVICTION_MODE_CONFIG,
+        defer_conviction_to_earnings=True,
+        regime_context_config_path=REGIME_CONTEXT_CONFIG,
+        write_industry_packs=True,
+    )
+    # Financial projection on prediction names (fundamentals from latest all-fields):
+    # All symbols from that prediction run (omit prediction_top_n / pass None):
+    # run_financial_projection_from_latest_prediction_analysis(
+    #     prediction_database=base_duckdb_result["_duckdb_database"],
+    #     min_market_cap_usd=500_000_000,
+    # )
+    # Or trim to top-N by score:
+    # run_financial_projection_from_latest_prediction_analysis(
+    #     prediction_database=base_duckdb_result["_duckdb_database"],
+    #     min_market_cap_usd=500_000_000,
+    #     prediction_top_n=40,
+    # )
+    # Or auto-discover latest prediction week DB (no base_duckdb_result needed):
+    # run_financial_projection_from_latest_prediction_analysis(
+    #     min_market_cap_usd=500_000_000,
+    # )
+
+    # FOR INDUSTRY RUN SPLIT Or post-process an existing run:
+    # write_industry_packs_from_duckdb_run(base_duckdb_result)
+
+    # Top-10 industries by price action + better-scored peer alternatives (bang-for-buck).
+    # Output: <run_output_dir>/industry_price_mover_relative_scan/
+    #   industry_price_mover_relative_scan__overview.log
+    #   industry_relative_opportunities.csv
+    #   <industry>/industry_relative_scan.log
+    # industry_mover_scan = run_industry_price_mover_relative_scan(
+    #     base_duckdb_result,
+    #     perf_field="Perf.1M",
+    #     top_industries=10,
+    #     price_movers_per_industry=5,
+    #     catch_up_per_industry=10,
+    #     alternatives_per_mover=3,
+    # )
+    # print(industry_mover_scan["overview_log"])
+    # print(industry_mover_scan["opportunities_csv"])
+
+    # # Reuses base_duckdb_result; earnings-priority and regime_context_focus logs
+    # # share the same EXCHANGE:TICKER labels.
+    run_full_analysis_suite_with_earnings_priority_duckdb(
+        scan_data=move_prediction_scan_response,
+        min_market_cap_usd=500_000_000,
+        include_blind_spot_sections=True,
+        base_result=base_duckdb_result,
+        profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
+        conviction_mode_config_path=CONVICTION_MODE_CONFIG,
+        regime_context_config_path=REGIME_CONTEXT_CONFIG,
+    )
+
+
 # Main entry point for running workflows and data loaders.
 def main():
     # analyze_global_price_performance(
@@ -583,77 +795,7 @@ def main():
     # )
 
     # ── Stock move-prediction ─────────────────────────────────────────────
-    # # Model Analysis scan with duckdb storage solution
-    # move_prediction_scan_response = (
-    #     TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-    #         min_market_cap_usd=500_000_000,
-    #         markets=PREFERRED_MARKETS,
-    #     )
-    # )
-    # # Default (omit profile_suite_path): built-in 10-profile baseline — see DEFAULT_MOVE_PREDICTION_PROFILE_SUITE.
-    # # Extended lenses: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3
-    # # Legacy 17-profile suite: MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V2
-    # # Realigned baseline (11 lenses): MOVE_PREDICTION_PROFILE_SUITE_BASELINE_V2
-    # # Swing-reversal calibration only: profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_SWING_REVERSAL_V1
-    # # Move-prediction suite outputs (.log / .csv / DuckDB / regime_context_focus.log)
-    # # use EXCHANGE:TICKER labels via _get_symbol_name to avoid bare-ticker collisions.
-    # base_duckdb_result = run_full_analysis_suite_duckdb(
-    #     scan_data=move_prediction_scan_response,
-    #     min_market_cap_usd=500_000_000,
-    #     include_blind_spot_sections=True,
-    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
-    #     conviction_mode_config_path=CONVICTION_MODE_CONFIG,
-    #     defer_conviction_to_earnings=True,
-    #     regime_context_config_path=REGIME_CONTEXT_CONFIG,
-    #     write_industry_packs=True,
-    # )
-    # # Financial projection on prediction names (fundamentals from latest all-fields):
-    # # All symbols from that prediction run (omit prediction_top_n / pass None):
-    # # run_financial_projection_from_latest_prediction_analysis(
-    # #     prediction_database=base_duckdb_result["_duckdb_database"],
-    # #     min_market_cap_usd=500_000_000,
-    # # )
-    # # Or trim to top-N by score:
-    # # run_financial_projection_from_latest_prediction_analysis(
-    # #     prediction_database=base_duckdb_result["_duckdb_database"],
-    # #     min_market_cap_usd=500_000_000,
-    # #     prediction_top_n=40,
-    # # )
-    # # Or auto-discover latest prediction week DB (no base_duckdb_result needed):
-    # # run_financial_projection_from_latest_prediction_analysis(
-    # #     min_market_cap_usd=500_000_000,
-    # # )
-
-    # # FOR INDUSTRY RUN SPLIT Or post-process an existing run:
-    # # write_industry_packs_from_duckdb_run(base_duckdb_result)
-
-    # # Top-10 industries by price action + better-scored peer alternatives (bang-for-buck).
-    # # Output: <run_output_dir>/industry_price_mover_relative_scan/
-    # #   industry_price_mover_relative_scan__overview.log
-    # #   industry_relative_opportunities.csv
-    # #   <industry>/industry_relative_scan.log
-    # # industry_mover_scan = run_industry_price_mover_relative_scan(
-    # #     base_duckdb_result,
-    # #     perf_field="Perf.1M",
-    # #     top_industries=10,
-    # #     price_movers_per_industry=5,
-    # #     catch_up_per_industry=10,
-    # #     alternatives_per_mover=3,
-    # # )
-    # # print(industry_mover_scan["overview_log"])
-    # # print(industry_mover_scan["opportunities_csv"])
-
-    # # # Reuses base_duckdb_result; earnings-priority and regime_context_focus logs
-    # # # share the same EXCHANGE:TICKER labels.
-    # run_full_analysis_suite_with_earnings_priority_duckdb(
-    #     scan_data=move_prediction_scan_response,
-    #     min_market_cap_usd=500_000_000,
-    #     include_blind_spot_sections=True,
-    #     base_result=base_duckdb_result,
-    #     profile_suite_path=MOVE_PREDICTION_PROFILE_SUITE_ACTIVE_MANAGER_V3,
-    #     conviction_mode_config_path=CONVICTION_MODE_CONFIG,
-    #     regime_context_config_path=REGIME_CONTEXT_CONFIG,
-    # )
+    # daily_prediction_move_analysis_suite()
 
     # Price-driven decile analysis: bucket by change / Perf.5D / Perf.1M, score profiles,
     # surface upward-move opportunities in worst performers. Output:
@@ -929,6 +1071,16 @@ def main():
 
     # End-to-end example flow:
     # run_portfolio_bootstrap_example()
+
+    # Flow-aware historical performance tracking + benchmark comparison
+    # (contributions/withdrawals at different dates, dividends/realized gains,
+    # Modified Dietz cumulative return, shadow-benchmark simulation vs SPY).
+    # See src/portfolio_performance_tracking/README.md for usage + caveats.
+    # run_portfolio_performance_tracking_example()
+
+    # Simple mode (no symbols, just contributions + a value number per update) --
+    # for when logging every buy/sell/price move is too tedious.
+    run_simple_fund_performance_tracking_example()
 
     # !!!!!!!!!!!!!!!!!!!!!!!!!!!!! might need to deprecate it since it does not give meaningful results
     # run batch prediction pattern analysis
