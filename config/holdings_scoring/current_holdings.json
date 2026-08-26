@@ -4,7 +4,7 @@
   "portfolio_currency": "USD",
   "description": "Current book — set invested_sum/average_price in their currencies; portfolio aggregates in USD. Use optional symbol (EXCHANGE:TICKER) when ticker alone is ambiguous. Optional instrument_type is stock (default) or etf; ETFs join the latest ETF analysis scan.",
   "cash_position": {
-    "value": 5600,
+    "value": 21800,
     "currency": "USD"
   },
   "holdings": [
@@ -19,18 +19,18 @@
     {
       "ticker": "PATH",
       "sleeve": "core",
-      "invested_sum": 7626,
+      "invested_sum": 5485,
       "invested_currency": "USD",
-      "average_price": 12.85,
+      "average_price": 13.69,
       "price_currency": "USD",
       "notes": "UiPath"
     },
     {
       "ticker": "VEEV",
       "sleeve": "core",
-      "invested_sum": 14063.77,
+      "invested_sum": 10370.17,
       "invested_currency": "USD",
-      "average_price": 197.23,
+      "average_price": 206.14,
       "price_currency": "USD",
       "notes": "Veeva Systems"
     },
@@ -46,9 +46,9 @@
     {
       "ticker": "ZS",
       "sleeve": "core",
-      "invested_sum": 15079,
+      "invested_sum": 9541,
       "invested_currency": "USD",
-      "average_price": 158,
+      "average_price": 168,
       "price_currency": "USD",
       "notes": "Zscaler"
     },
@@ -83,7 +83,7 @@
     {
       "ticker": "AAPL",
       "sleeve": "core",
-      "invested_sum": 2800,
+      "invested_sum": 1725,
       "invested_currency": "USD",
       "average_price": 333.6,
       "price_currency": "USD",
@@ -92,11 +92,20 @@
     {
       "ticker": "INTU",
       "sleeve": "core",
-      "invested_sum": 9000,
+      "invested_sum": 4416,
       "invested_currency": "USD",
-      "average_price": 349.35,
+      "average_price": 345.68,
       "price_currency": "USD",
       "notes": "Intuit"
+    },
+    {
+      "ticker": "PGY",
+      "sleeve": "core",
+      "invested_sum": 3003,
+      "invested_currency": "USD",
+      "average_price": 22,
+      "price_currency": "USD",
+      "notes": "PGY"
     },
     {
       "ticker": "FSLR",
@@ -149,9 +158,9 @@
     {
       "ticker": "RDDT",
       "sleeve": "core",
-      "invested_sum": 9000,
+      "invested_sum": 10000,
       "invested_currency": "USD",
-      "average_price": 162,
+      "average_price": 161.65,
       "price_currency": "USD",
       "notes": "Reddit"
     }

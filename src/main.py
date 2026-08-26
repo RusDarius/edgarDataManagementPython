@@ -204,10 +204,6 @@ from db.bvb_tickers_operations import (
 from db.trading_view_company_data_map_operations import (
     get_trading_view_company_by_symbol,
 )
-from portofolio_integration_analysis.portfolio_tracker import PortfolioTracker
-from portofolio_integration_analysis.portfolio_analysis_output import (
-    export_portfolio_analysis,
-)
 from portfolio_performance_tracking.portfolio_performance_tracker import (
     PortfolioPerformanceTracker,
 )
@@ -229,142 +225,6 @@ def _build_non_overriding_duckdb_run_label(prefix: str = "market_snapshot") -> s
     """
     timestamp_utc = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M")
     return f"{prefix}_{timestamp_utc}_utc_{uuid.uuid4().hex[:6]}"
-
-
-def run_portfolio_bootstrap_example() -> dict[str, object]:
-    """Example flow for loading TradingView companies, opening dated positions,
-    syncing market snapshots, and exporting portfolio metrics.
-
-    The price and amount inputs in the sample entries are assumed to be in the
-    same currency unit. When that unit differs from the portfolio currency, pass
-    an FX rate into ``add_holding_by_amount``. A future FX API can replace the
-    manual rate.
-    """
-
-    tracker = PortfolioTracker(
-        portfolio_name="TV Date Aware Demo",
-        description="Example portfolio using money-sized dated entries.",
-        currency="USD",
-        benchmark_symbol="SPY",
-    )
-
-    sample_entries = [
-        {
-            "symbol": "NVDA",
-            "avg_price": 875.00,
-            "date_open": datetime(2025, 12, 18, 14, 30),
-            "amount_money": 8750.00,
-            "unit": "USD",
-        },
-        {
-            "symbol": "MSFT",
-            "avg_price": 420.00,
-            "date_open": datetime(2025, 11, 5, 14, 30),
-            "amount_money": 8400.00,
-            "unit": "USD",
-        },
-        {
-            "symbol": "ASML",
-            "avg_price": 820.00,
-            "date_open": datetime(2025, 10, 2, 14, 30),
-            "amount_money": 8200.00,
-            "unit": "USD",
-        },
-    ]
-
-    opened_positions: list[dict[str, object]] = []
-    for entry in sample_entries:
-        company_row = get_trading_view_company_by_symbol(entry["symbol"])
-        if company_row is None:
-            print(
-                f"Skipping {entry['symbol']}: no internal_id found after company load."
-            )
-            continue
-        position_row = tracker.add_holding_by_amount(
-            internal_id=int(company_row["internal_id"]),
-            avg_price=float(entry["avg_price"]),
-            date_open=entry["date_open"],
-            amount_money=float(entry["amount_money"]),
-            unit=str(entry["unit"]),
-            notes=f"Bootstrapped from main.py example for {entry['symbol']}",
-        )
-        opened_positions.append(position_row)
-
-    scan_data = TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
-        min_market_cap_usd=1_000_000_000,
-        markets=PREFERRED_MARKETS,
-    ).get("data", [])
-    snapshot_result = tracker.sync_market_snapshots(
-        scan_data=scan_data,
-        symbol_key="ticker-view",
-    )
-    print(f"Snapshot sync result: {snapshot_result}")
-
-    summary, metrics = tracker.get_summary()
-    tracker.print_summary()
-    export_paths = export_portfolio_analysis(tracker)
-    print(f"Portfolio analysis exported to: {export_paths}")
-
-    return {
-        "opened_positions": opened_positions,
-        "snapshot_result": snapshot_result,
-        "summary": summary,
-        "metrics": metrics,
-        "export_paths": export_paths,
-    }
-
-
-def run_portfolio_performance_tracking_example() -> dict[str, object]:
-    """Example flow for flow-aware historical performance tracking + benchmarking.
-
-    See src/portfolio_performance_tracking/README.md for the full concept guide
-    (Modified Dietz linking, shadow-benchmark simulation, and important caveats).
-    This reuses the same portfolio_id as ``run_portfolio_bootstrap_example`` via
-    portfolio_name, so holdings and performance history stay linked.
-    """
-
-    tracker = PortfolioPerformanceTracker(portfolio_name="TV Date Aware Demo")
-
-    spy_row = get_trading_view_company_by_symbol("SPY")
-    benchmark_price_initial = 592.10  # placeholder: replace with a real SPY close
-    benchmark_price_latest = 615.20  # placeholder: replace with a real SPY close
-
-    tracker.record_contribution(
-        amount=25_350.00,
-        benchmark_symbol="SPY",
-        benchmark_price=benchmark_price_initial,
-        note="Initial funding matching run_portfolio_bootstrap_example positions",
-        executed_at=datetime(2025, 10, 2, 14, 30),
-    )
-    tracker.take_nav_snapshot_from_holdings(
-        cash_balance=0.0,
-        benchmark_symbol="SPY",
-        benchmark_price=benchmark_price_initial,
-        snapshot_at=datetime(2025, 10, 2, 14, 30),
-        note="Snapshot right after bootstrap positions were opened",
-    )
-
-    tracker.take_nav_snapshot_from_holdings(
-        cash_balance=0.0,
-        benchmark_symbol="SPY",
-        benchmark_price=benchmark_price_latest,
-        note="Latest snapshot from current holdings market value",
-    )
-
-    summary = tracker.get_latest_performance_summary()
-    print(f"Cumulative return: {summary.get('cumulative_return_pct')}")
-    print(f"Annualized return: {summary.get('annualized_return_pct')}")
-
-    export_paths = export_performance_history(tracker, benchmark_symbol="SPY")
-    print(f"Performance history report: {export_paths['log']}")
-    print(f"Performance CSV: {export_paths['performance_csv']}")
-    print(f"Benchmark comparison CSV: {export_paths['benchmark_csv']}")
-
-    return {
-        "summary": summary,
-        "export_paths": export_paths,
-        "spy_company_row": spy_row,
-    }
 
 
 def run_simple_fund_performance_tracking_example() -> dict[str, object]:
@@ -795,7 +655,7 @@ def main():
     # )
 
     # ── Stock move-prediction ─────────────────────────────────────────────
-    # daily_prediction_move_analysis_suite()
+    daily_prediction_move_analysis_suite()
 
     # Price-driven decile analysis: bucket by change / Perf.5D / Perf.1M, score profiles,
     # surface upward-move opportunities in worst performers. Output:
@@ -1042,58 +902,9 @@ def main():
 
     # print(len(get_bvb_tickers_filtered()))
 
-    # ── Portfolio management ────────────────────────────────────────
-    # Step 1: Load / refresh the TradingView company universe from
-    # scan_world_market_all_priceperf_metrics into trading_view_company_data_map.
-    # load_result = load_tradingview_company_data(
-    #     api_client=TRADINGVIEW_API_CLIENT,
-    #     markets=PREFERRED_MARKETS,
-    # )
-    # print(load_result)
-
-    # # Step 2: Open dated positions sized by money input.
-    # tracker = PortfolioTracker("Demo1", currency="USD")
-    # tracker.add_holding_by_amount(
-    #     internal_id=1,
-    #     avg_price=120.00,
-    #     date_open=datetime(2025, 12, 1, 14, 30),
-    #     amount_money=6_000.00,
-    #     unit="USD",
-    # )
-
-    # Step 3: Refresh market snapshots from the move-prediction scan and measure
-    # holding-period metrics such as days held, total return, and annualized return.
-    # snapshot_scan = TRADINGVIEW_API_CLIENT.scan_world_market_all_priceperf_metrics(
-    # ).get("data", [])
-    # tracker.sync_market_snapshots(snapshot_scan, symbol_key="ticker-view")
-    # tracker.print_summary()
-    # export_portfolio_analysis(tracker)
-
-    # End-to-end example flow:
-    # run_portfolio_bootstrap_example()
-
-    # Flow-aware historical performance tracking + benchmark comparison
-    # (contributions/withdrawals at different dates, dividends/realized gains,
-    # Modified Dietz cumulative return, shadow-benchmark simulation vs SPY).
-    # See src/portfolio_performance_tracking/README.md for usage + caveats.
-    # run_portfolio_performance_tracking_example()
-
     # Simple mode (no symbols, just contributions + a value number per update) --
     # for when logging every buy/sell/price move is too tedious.
-    run_simple_fund_performance_tracking_example()
-
-    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!! might need to deprecate it since it does not give meaningful results
-    # run batch prediction pattern analysis
-    # result = run_batch_prediction_pattern_analysis(
-    #     iso_year=2026,
-    #     start_week=21,
-    #     end_week=24,  # omit to use current ISO week
-    #     primary_profile_name="breakout_long",  # starting lens
-    #     horizon_name="weeks",
-    #     min_scan_data_count=3000,  # use 8000+ to prefer backfill universe only
-    #     show_progress=True,  # live stderr progress in Git Bash (week bar, ETA, timings)
-    # )
-    # print(result["overview_log"])
+    # run_simple_fund_performance_tracking_example()
 
     # # Discover weeks 13–24 of 2026 and pool them
     # result = run_move_prediction_run_pool_aggregation(

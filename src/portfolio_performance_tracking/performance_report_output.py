@@ -2,7 +2,7 @@
 # Generated on: 2026-08-22
 # Purpose: Write a human-readable historical performance log plus CSVs (return
 #   curve + benchmark comparison) mirroring the existing
-#   portofolio_integration_analysis.portfolio_analysis_output style/output layout.
+#   existing report-output style and layout.
 from __future__ import annotations
 
 from datetime import datetime
@@ -186,8 +186,8 @@ def export_performance_history(
     if not history:
         log_to_file(
             log_file,
-            "No NAV snapshots recorded yet. Call take_nav_snapshot()/"
-            "take_nav_snapshot_from_holdings() at least twice to build a history.",
+            "No NAV snapshots recorded yet. Call take_nav_snapshot() or "
+            "record_fund_value() at least twice to build a history.",
         )
         _write_csv_reports(
             paths,

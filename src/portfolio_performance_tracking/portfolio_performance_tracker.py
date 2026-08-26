@@ -2,16 +2,17 @@
 # Generated on: 2026-08-22
 # Purpose: High-level orchestrator tying cash-flow ledger, NAV history, the
 #   Modified Dietz calculator, and the shadow-benchmark comparator together.
-#   Wraps an existing portfolio (by name/id, shared portfolio_registry row with
-#   portofolio_integration_analysis.PortfolioTracker) so holdings snapshots and
-#   flow-aware historical performance stay linked to the same portfolio.
+#   Uses the shared portfolio registry so flow-aware historical performance is
+#   self-contained.
 from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
 
-from db.portfolio_management_operations import delete_portfolio_by_name
-from portofolio_integration_analysis.portfolio_tracker import PortfolioTracker
+from db.portfolio_performance_tracking_operations import (
+    create_or_get_performance_portfolio,
+    delete_performance_portfolio_by_name,
+)
 from portfolio_performance_tracking.benchmark_comparator import (
     BenchmarkComparisonPoint,
     build_shadow_benchmark_series,
@@ -39,10 +40,9 @@ from portfolio_performance_tracking.performance_calculator import (
 
 
 class PortfolioPerformanceTracker:
-    """Flow-aware historical performance tracker layered on top of PortfolioTracker.
+    """Flow-aware historical fund performance tracker.
 
-    ``PortfolioTracker`` (portofolio_integration_analysis) already answers "what
-    do I hold right now and what is it worth" as a snapshot. This class answers
+    This class answers
     "how has my money actually performed over time, given that it was added in
     chunks at different dates, some of it came back as realized gains/dividends,
     and I want to know if I'd have done better just buying an index instead".
@@ -52,20 +52,27 @@ class PortfolioPerformanceTracker:
         self,
         portfolio_name: str | None = None,
         portfolio_id: int | None = None,
-        holdings_tracker: PortfolioTracker | None = None,
         currency: str = "USD",
         benchmark_symbol: str | None = None,
     ) -> None:
-        if holdings_tracker is not None:
-            self._holdings_tracker = holdings_tracker
-        else:
-            self._holdings_tracker = PortfolioTracker(
+        if portfolio_id is not None:
+            from db.portfolio_performance_tracking_operations import (
+                get_performance_portfolio_by_id,
+            )
+
+            portfolio_row = get_performance_portfolio_by_id(portfolio_id)
+        elif portfolio_name is not None:
+            portfolio_row = create_or_get_performance_portfolio(
                 portfolio_name=portfolio_name,
-                portfolio_id=portfolio_id,
-                create_if_missing=True,
                 currency=currency,
                 benchmark_symbol=benchmark_symbol,
             )
+        else:
+            raise ValueError("portfolio_name or portfolio_id must be provided")
+
+        if portfolio_row is None:
+            raise ValueError("portfolio could not be resolved")
+        self._portfolio_row = portfolio_row
 
     @classmethod
     def create_simple_fund(
@@ -93,7 +100,7 @@ class PortfolioPerformanceTracker:
         Returns ``True`` when a matching fund was deleted and ``False`` when no
         fund with that exact name exists. This is permanent database deletion.
         """
-        return delete_portfolio_by_name(fund_name)
+        return delete_performance_portfolio_by_name(fund_name)
 
     @staticmethod
     def delete_simple_fund(fund_name: str) -> bool:
@@ -102,15 +109,11 @@ class PortfolioPerformanceTracker:
 
     @property
     def portfolio_id(self) -> int:
-        return self._holdings_tracker.portfolio_id
+        return int(self._portfolio_row["portfolio_id"])
 
     @property
     def portfolio_name(self) -> str:
-        return self._holdings_tracker.portfolio_name
-
-    @property
-    def holdings_tracker(self) -> PortfolioTracker:
-        return self._holdings_tracker
+        return str(self._portfolio_row["portfolio_name"])
 
     # -- Cash flow recording -------------------------------------------------
 
@@ -195,37 +198,6 @@ class PortfolioPerformanceTracker:
 
     # -- NAV snapshots --------------------------------------------------------
 
-    def take_nav_snapshot_from_holdings(
-        self,
-        cash_balance: float = 0.0,
-        benchmark_symbol: str | None = None,
-        benchmark_price: float | None = None,
-        note: str | None = None,
-        snapshot_at: datetime | None = None,
-        include_closed: bool = False,
-    ) -> dict[str, Any]:
-        """Compute total_market_value from current live holdings, then snapshot it.
-
-        Positions without a synced ``last_price`` are excluded from the market
-        value total (matches ``PortfolioSummaryMetrics.total_market_value``
-        semantics: unpriced positions do not silently count as zero).
-        """
-        summary, _ = self._holdings_tracker.get_summary(include_closed=include_closed)
-        total_market_value = (
-            summary.total_market_value
-            if summary and summary.total_market_value
-            else 0.0
-        )
-        return record_nav_snapshot(
-            portfolio_id=self.portfolio_id,
-            total_market_value=total_market_value,
-            cash_balance=cash_balance,
-            benchmark_symbol=benchmark_symbol,
-            benchmark_price=benchmark_price,
-            note=note,
-            snapshot_at=snapshot_at,
-        )
-
     def take_nav_snapshot(
         self,
         total_market_value: float,
@@ -259,8 +231,8 @@ class PortfolioPerformanceTracker:
         """Simple mode: log "the whole fund is worth X today" as one number.
 
         No market-value/cash split needed -- pass the full current fund value.
-        Use this instead of ``take_nav_snapshot``/``take_nav_snapshot_from_holdings``
-        when you are not tracking individual positions.
+        Use this instead of ``take_nav_snapshot`` when you are not tracking a
+        market-value/cash split.
         """
         return record_nav_snapshot(
             portfolio_id=self.portfolio_id,

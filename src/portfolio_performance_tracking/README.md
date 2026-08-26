@@ -3,25 +3,19 @@
 Flow-aware historical performance tracking for a portfolio: handles money added
 at different times (initial funding + later top-ups), realized gains and
 dividends, and benchmarks your percentage performance against an index/ETF
-using a matched cash-flow simulation. This is a companion to
-[`portofolio_integration_analysis`](../portofolio_integration_analysis/), not a
-replacement for it:
+using a matched cash-flow simulation. It is a fund-level tracker independent of
+the deprecated per-symbol holdings flow:
 
-| | `portofolio_integration_analysis` (existing) | `portfolio_performance_tracking` (this folder) |
+| | Deprecated per-symbol holdings flow | `portfolio_performance_tracking` (this folder) |
 |---|---|---|
 | Question answered | "What do I hold right now and what's it worth?" | "How has my money actually performed over time?" |
 | Shape | Live position snapshot (shares, cost basis, unrealized PnL) | Time series (NAV snapshots + cash flows -> % return curve) |
 | Handles irregular funding dates | No | Yes (Modified Dietz) |
 | Benchmark comparison | No | Yes (shadow benchmark portfolio) |
 
-Both share the same `portfolio_registry` row (same `portfolio_id`/`portfolio_name`),
-so you use `PortfolioTracker` for day-to-day holdings management and
-`PortfolioPerformanceTracker` to log the history that builds the performance curve.
-
-Same relationship applies to `run_holdings_scoring_analysis`: keep using it
-as-is for point-in-time scoring/shortlisting of current holdings. This module
-is for the orthogonal concern of running, historical, flow-adjusted return
-tracking.
+`PortfolioPerformanceTracker` uses the shared `portfolio_registry` only as the
+fund identity. Existing `run_holdings_scoring_analysis` remains a separate
+snapshot/scoring workflow.
 
 ## Where data lives
 
@@ -48,17 +42,15 @@ difference is where NAV comes from.
 | | Holdings-integrated mode | Simple mode |
 |---|---|---|
 | Setup | `PortfolioPerformanceTracker(portfolio_name=...)` | `PortfolioPerformanceTracker.create_simple_fund(fund_name=...)` |
-| Track individual symbols? | Yes, via `tracker.holdings_tracker` (`PortfolioTracker`) | No |
-| NAV snapshot method | `take_nav_snapshot_from_holdings()` (auto-sums live position market value) or `take_nav_snapshot(total_market_value, cash_balance)` | `record_fund_value(total_value)` -- one number, no market/cash split |
-| Effort per update | Update price on every held symbol, then snapshot | Just write down what the whole fund is worth today |
-| Best for | You actively manage individual positions and want per-symbol PnL too | You just want "money in vs. what it's worth now" without bookkeeping every trade |
+| Track individual symbols? | No; enter the complete fund value | No |
+| NAV snapshot method | `take_nav_snapshot(total_market_value, cash_balance)` | `record_fund_value(total_value)` -- one number, no market/cash split |
+| Effort per update | Record the fund's current value | Record the fund's current value |
+| Best for | A fund-level history where cash and invested value are available separately | "Money in vs. what it is worth now" without trade bookkeeping |
 
 Contributions, withdrawals, dividends, realized gains, benchmark comparison,
 and the active-capital breakdown work identically in both modes -- they only
 depend on `portfolio_cash_flows` + `portfolio_nav_snapshots`, never on
-per-symbol data. Switching modes later (e.g. starting simple, then adopting
-holdings-integrated tracking) is safe -- both just keep appending snapshots
-to the same portfolio.
+per-symbol data.
 
 ## Core concepts
 
@@ -75,11 +67,8 @@ to the same portfolio.
 - You control the cadence -- daily, weekly, or whenever you refresh holdings.
   More snapshots = a smoother return curve; two snapshots is the minimum to
   get any return number at all.
-- `take_nav_snapshot_from_holdings()` auto-fills `total_market_value` from the
-  linked `PortfolioTracker`'s current priced positions (unpriced positions are
-  excluded, same semantics as `PortfolioSummaryMetrics.total_market_value`).
-  You still supply `cash_balance` yourself since uninvested cash isn't tracked
-  by the holdings tracker.
+- `take_nav_snapshot()` accepts an explicit market-value/cash split. In simple
+  mode, use `record_fund_value()` and pass the complete fund value instead.
 
 **Performance calculation** (`performance_calculator.py`):
 - Uses the **Modified Dietz method** for each sub-period between two
@@ -123,10 +112,8 @@ to the same portfolio.
 ## DB schema
 
 Two new MySQL tables (`src/db/portfolio_performance_tracking_operations.py`),
-both keyed to `portfolio_registry.portfolio_id` (the same registry row used by
-`portofolio_integration_analysis.PortfolioTracker`). Neither table is touched
-by the existing holdings code (`portfolio_managements_data_v1` /
-`portfolio_transactions`), so adopting this module cannot corrupt existing data.
+both keyed to `portfolio_registry.portfolio_id`. The performance tracker does
+not write to the deprecated holdings tables.
 
 **`portfolio_cash_flows`** -- one row per money-in/money-out/income event:
 
@@ -170,8 +157,7 @@ by the existing holdings code (`portfolio_managements_data_v1` /
 
 | Method | Effect |
 |---|---|
-| `take_nav_snapshot(total_market_value, cash_balance=0.0, ...)` | Holdings-integrated mode: log an explicit market-value/cash split. |
-| `take_nav_snapshot_from_holdings(cash_balance=0.0, ...)` | Holdings-integrated mode: auto-computes `total_market_value` from live priced positions on `tracker.holdings_tracker`. |
+| `take_nav_snapshot(total_market_value, cash_balance=0.0, ...)` | Log an explicit market-value/cash split for a fund-level NAV reading. |
 | `record_fund_value(total_value, ...)` | Simple mode: log "the whole fund is worth X today" as one number (no split). |
 
 **Deletion** (permanent):
@@ -193,16 +179,6 @@ and call it only when all associated history may be removed.
 | `get_active_capital_breakdown()` | Per-flow age (`days_active`) + running net active capital |
 | `get_latest_performance_summary()` | One dict with the latest cumulative/annualized return + lifetime cash-flow totals |
 | `cash_flow_summary()` | Lifetime totals: contributions, withdrawals, dividends, realized gains |
-
-**Holdings-integrated mode only** (delegates to `tracker.holdings_tracker`, the
-existing `portofolio_integration_analysis.PortfolioTracker` -- see that
-module's own docs for full details):
-
-| Method | Effect |
-|---|---|
-| `tracker.holdings_tracker.add_holding_by_amount(...)` / `add_holding(...)` | Buy a symbol; updates cost basis/shares on that position. Does NOT itself log a `CONTRIBUTION` -- call `record_contribution` separately for the cash that funded the buy. |
-| `tracker.holdings_tracker.sell_holding(...)` | Sell shares; realized PnL is computed automatically on the position. Does NOT itself log a `REALIZED_GAIN`/`WITHDRAWAL` -- call those separately if you want them reflected in this module's ledger/return calc. |
-| `tracker.holdings_tracker.update_market_snapshot(internal_id, last_price=...)` | Refresh a position's current price before taking an NAV snapshot. |
 
 ## IMPORTANT — things to know before using this
 
@@ -226,7 +202,7 @@ module's own docs for full details):
    flows -- try to price every external flow if you want the comparison to be
    trustworthy.
 5. **Currency is assumed portfolio-native unless FX is supplied**, same
-   convention as `PortfolioTracker.add_holding_by_amount` (`fx_rate_to_portfolio`
+  convention as the previous holdings flow (`fx_rate_to_portfolio`
    required when `currency` differs from the portfolio's own currency).
 6. **This module never touches `portfolio_managements_data_v1` or
    `portfolio_transactions`** (the existing per-position holdings tables). It
@@ -239,12 +215,8 @@ module's own docs for full details):
    sub-period return. For serious accuracy, snapshot at least around each time
    you add/remove funds (right before and right after), not just on a fixed
    weekly cadence.
-8. **Buying/selling a symbol does not auto-log a cash flow.** In
-   holdings-integrated mode, `tracker.holdings_tracker.add_holding_by_amount(...)`
-   only changes that position's shares/cost-basis -- it does not call
-   `record_contribution` for you. Always pair "money entered the fund" with an
-   explicit `record_contribution`/`record_withdrawal` call, otherwise the
-   Modified Dietz calculation won't know about it.
+8. **This is fund-level tracking.** `record_fund_value()` records the complete
+  fund value, including any cash you choose to keep inside the fund.
 
 ## Usage
 
@@ -279,7 +251,7 @@ tracker.take_nav_snapshot(
     snapshot_at=datetime(2025, 10, 1),
 )
 
-# ... buy positions via tracker.holdings_tracker (the existing PortfolioTracker) ...
+# ... manage the fund outside this ledger; record the complete fund value below ...
 
 # 3. A later top-up.
 tracker.record_contribution(
@@ -293,11 +265,11 @@ tracker.record_contribution(
 # 4. A dividend that stays invested (informational only, does not skew return).
 tracker.record_dividend(amount=42.10, related_symbol="MSFT", note="Q4 dividend")
 
-# 5. Periodic NAV snapshot, auto-derived from current holdings market value.
-tracker.take_nav_snapshot_from_holdings(
-    cash_balance=120.35,
-    benchmark_symbol="SPY",
-    benchmark_price=615.20,
+# 5. Periodic whole-fund value update.
+tracker.record_fund_value(
+  total_value=27_900.00,
+  benchmark_symbol="SPY",
+  benchmark_price=615.20,
 )
 
 # 6. Read the results / export a report.
@@ -358,14 +330,14 @@ scan_data = TRADINGVIEW_API_CLIENT.scan_global_market_move_prediction(
 ).get("data", [])
 
 spy_price = PortfolioPerformanceTracker.resolve_benchmark_price(scan_data, "SPY")
-tracker.take_nav_snapshot_from_holdings(cash_balance=0.0, benchmark_symbol="SPY", benchmark_price=spy_price)
+tracker.record_fund_value(total_value=27_900.00, benchmark_symbol="SPY", benchmark_price=spy_price)
 ```
 
 ## Files
 
 - `db/portfolio_performance_tracking_operations.py` -- MySQL schema + CRUD for
   `portfolio_cash_flows` and `portfolio_nav_snapshots` (in `src/db/`, alongside
-  the existing `portfolio_management_operations.py`).
+  the database connection module).
 - `cash_flow_ledger.py` -- record/query contributions, withdrawals, dividends,
   realized gains.
 - `nav_history.py` -- record/query NAV snapshots.
@@ -374,18 +346,17 @@ tracker.take_nav_snapshot_from_holdings(cash_balance=0.0, benchmark_symbol="SPY"
 - `benchmark_comparator.py` -- shadow benchmark portfolio simulation + helper
   to pull a benchmark price out of an existing TradingView scan payload.
 - `portfolio_performance_tracker.py` -- `PortfolioPerformanceTracker`, the
-  main entry point wiring everything above to a `PortfolioTracker`-backed
-  portfolio.
+  main entry point wiring the fund registry, ledger, NAV history, and return
+  calculations together.
 - `performance_report_output.py` -- writes the log + CSV report under
   `logs/portfolio_performance_tracking/<portfolio>/<DD_MM_YYYY>/`.
 
 ## Verified end-to-end
 
-`scripts_adhoc/portfolio_performance_two_year_simulation.py` runs both modes
-against the real DB over a simulated 2-year window (contributions, a top-up,
-a dividend, a partial sale + realized gain, a withdrawal, and a benchmark
-comparison vs. SPY), then exports the full report. Re-running it is safe -- it
-resets its own two demo portfolios first. Regression tests for the pure return
-math (Modified Dietz chaining, shadow-benchmark consistency, active-capital
-timeline) live in `src/tests/test_portfolio_performance_tracking.py`.
+`run_simple_fund_performance_tracking_example()` in `src/main.py` runs the
+current fund-level example over a two-year window with six value moves,
+contributions, a withdrawal, and a benchmark comparison vs. SPY. Regression
+tests for the pure return math (Modified Dietz chaining, shadow-benchmark
+consistency, active-capital timeline) live in
+`src/tests/test_portfolio_performance_tracking.py`.
 

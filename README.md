@@ -54,7 +54,7 @@ SEC EDGAR / Arelle          TradingView screener API
 | `src/data_analysis_scripts/` | Screening, prediction suites, pattern / upside / execution analysis |
 | `src/edge_research_tools/` | Vol–liquidity edge engine and related runners |
 | `src/financial_projection/` | Forward EV/Revenue model + suite entrypoints |
-| `src/portofolio_integration_analysis/` | Portfolio positions, snapshots, exports |
+| `src/portfolio_performance_tracking/` | Flow-aware fund performance, NAV history, and benchmark reports |
 | `config/` | Profile suites, conviction / regime, holdings, projection scenarios |
 | `documentation/` | Usage guides and research playbooks |
 | `logs/` | Run outputs (DuckDB, CSV, markdown reports) |

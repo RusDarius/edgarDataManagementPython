@@ -2,8 +2,7 @@
 # Generated on: 2026-08-22
 # Purpose: Storage layer for portfolio-level cash flows (contributions/withdrawals/
 #   income) and NAV history snapshots, used for flow-aware historical performance
-#   tracking. Sits alongside portfolio_management_operations.py and reuses the same
-#   portfolio_registry table so it integrates with the existing holdings system.
+#   tracking. It uses the shared portfolio_registry table for fund identity.
 from __future__ import annotations
 
 from datetime import datetime
@@ -76,6 +75,114 @@ PERFORMANCE_SCHEMA_INDEXES = [
         "snapshot_at",
     ),
 ]
+
+
+def create_or_get_performance_portfolio(
+    portfolio_name: str,
+    description: str | None = None,
+    currency: str = "USD",
+    benchmark_symbol: str | None = None,
+    notes: str | None = None,
+) -> dict[str, Any]:
+    """Create or resolve the registry row used by performance tracking."""
+    normalized_name = portfolio_name.strip()
+    if not normalized_name:
+        raise ValueError("portfolio_name must be non-empty")
+
+    conn = get_mysql_connection(**BASE_DB_CONFIG)
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO portfolio_registry (
+                    portfolio_name,
+                    description,
+                    currency,
+                    benchmark_symbol,
+                    notes
+                ) VALUES (%s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    description = COALESCE(VALUES(description), description),
+                    currency = COALESCE(VALUES(currency), currency),
+                    benchmark_symbol = COALESCE(VALUES(benchmark_symbol), benchmark_symbol),
+                    notes = COALESCE(VALUES(notes), notes)
+                """,
+                (normalized_name, description, currency, benchmark_symbol, notes),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return get_performance_portfolio_by_name(normalized_name)
+
+
+def get_performance_portfolio_by_name(
+    portfolio_name: str,
+) -> dict[str, Any] | None:
+    conn = get_mysql_connection(**BASE_DB_CONFIG)
+    try:
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute(
+                "SELECT * FROM portfolio_registry WHERE portfolio_name = %s",
+                (portfolio_name,),
+            )
+            return cursor.fetchone()
+    finally:
+        conn.close()
+
+
+def get_performance_portfolio_by_id(portfolio_id: int) -> dict[str, Any] | None:
+    conn = get_mysql_connection(**BASE_DB_CONFIG)
+    try:
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute(
+                "SELECT * FROM portfolio_registry WHERE portfolio_id = %s",
+                (portfolio_id,),
+            )
+            return cursor.fetchone()
+    finally:
+        conn.close()
+
+
+def delete_performance_portfolio_by_name(portfolio_name: str) -> bool:
+    """Delete one performance fund and its performance rows by exact name."""
+    normalized_name = portfolio_name.strip()
+    if not normalized_name:
+        raise ValueError("portfolio_name must be non-empty")
+
+    ensure_portfolio_performance_schema()
+
+    conn = get_mysql_connection(**BASE_DB_CONFIG)
+    try:
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute(
+                "SELECT portfolio_id FROM portfolio_registry WHERE portfolio_name = %s",
+                (normalized_name,),
+            )
+            portfolio_row = cursor.fetchone()
+            if portfolio_row is None:
+                return False
+
+            portfolio_id = int(portfolio_row["portfolio_id"])
+            for table_name in (
+                "portfolio_transactions",
+                "portfolio_cash_flows",
+                "portfolio_nav_snapshots",
+                "portfolio_managements_data_v1",
+            ):
+                cursor.execute(
+                    f"DELETE FROM {table_name} WHERE portfolio_id = %s",
+                    (portfolio_id,),
+                )
+            cursor.execute(
+                "DELETE FROM portfolio_registry WHERE portfolio_id = %s",
+                (portfolio_id,),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return True
 
 
 def _index_exists(cursor, table_name: str, index_name: str) -> bool:
