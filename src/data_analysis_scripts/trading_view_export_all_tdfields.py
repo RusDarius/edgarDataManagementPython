@@ -19,7 +19,12 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 import uuid
 
 import requests
-from requests.exceptions import ChunkedEncodingError, ConnectionError, HTTPError, Timeout
+from requests.exceptions import (
+    ChunkedEncodingError,
+    ConnectionError,
+    HTTPError,
+    Timeout,
+)
 
 SRC_DIR = Path(__file__).resolve().parents[1]
 if str(SRC_DIR) not in sys.path:
@@ -38,15 +43,37 @@ USER_AGENT = "Barnnabass daniOO7XbX@gmail.com"
 FIELD_CATALOG_CSV = Path(
     r"d:\FinanceProjects\edgarDataManagementPython\savedData\trading_view_stock_fields.csv"
 )
+# Curated subset (243 fields) of FIELD_CATALOG_CSV: the union of the move-prediction
+# scoring universe (_required_raw_backscan_fields in trading_view_move_prediction_analysis.py),
+# the financial-projection whitelist (financial_projection/fields.py), the edge-research
+# dataset-builder base/sleeve fields (resolve_sleeve_field_specs), and the explicit column
+# lists read by earnings_priority_lens/edge_trade_plan/upside_opportunity_scanner/
+# safety_highlights/run_market_timing_policy -- verified Aug 2026 to fully cover the fields
+# needed by ``run_upside_opportunity_scan.py --full-flow`` and ``run_market_timing_policy.py``.
+# Used by export_focused_tradingview_fields_duckdb for fast intraday refreshes; regenerate by
+# re-unioning those field sets if any of them changes. The catalog may list ``symbol`` as a
+# row-key; exports strip it before calling the scanner.
+FOCUSED_FIELD_CATALOG_CSV = Path(
+    r"d:\FinanceProjects\edgarDataManagementPython\savedData\trading_view_stock_fields_focused.csv"
+)
 OUTPUT_DIR = Path(
     r"d:\FinanceProjects\edgarDataManagementPython\logs\tradingview_analysis"
 )
 DUCKDB_OUTPUT_DIR = OUTPUT_DIR / "trading_view_all_fields_data"
 CHUNK_SIZE = 600
+# Focused catalog is ~243 columns; a single request is the point of the intraday
+# export (vs ~6 chunks at the full-catalog CHUNK_SIZE). Larger than the catalog
+# so it stays one request unless the focused set grows past this.
+FOCUSED_CHUNK_SIZE = 300
+MIN_EXPECTED_ALL_FIELDS_ROWS = 5_000
+# Retry a successful HTTP scan that still came back near-empty (transient stub).
+MIN_EXPECTED_CHUNK_ROWS = 100
 REQUEST_TIMEOUT_SECONDS = 60
 REQUEST_MAX_RETRIES = 6
 REQUEST_RETRY_BACKOFF_SECONDS = 2.0
 _RETRYABLE_HTTP_STATUS_CODES = frozenset({429, 502, 503, 504})
+# CSV catalogs may list "symbol" as the row key; it is not a TradingView column.
+_RESERVED_SCAN_COLUMN_NAMES = frozenset({"symbol"})
 SCAN_RANGE_END = 100_000
 DB_MERGE_BATCH_SIZE = 500
 ALL_FIELDS_API_REQUEST_PROVENANCE_SCHEMA_VERSION = (
@@ -97,6 +124,24 @@ def _load_field_names(field_catalog_csv: Path) -> list[str]:
             field_names.append(field_name)
 
     return field_names
+
+
+def _scan_request_columns(field_names: list[str]) -> list[str]:
+    return [
+        field_name
+        for field_name in field_names
+        if field_name not in _RESERVED_SCAN_COLUMN_NAMES
+    ]
+
+
+def _normalize_row_symbol(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+class ThinScanResponseError(RuntimeError):
+    """TradingView returned HTTP 200 with too few rows for an all-market scan."""
 
 
 def _canonical_json_dump(value: Any) -> str:
@@ -274,6 +319,11 @@ def _scan_error_is_dns_failure(exc: BaseException) -> bool:
 
 
 def _scan_connectivity_hint(exc: BaseException) -> str:
+    if isinstance(exc, ThinScanResponseError):
+        return (
+            "TradingView returned a near-empty scan body (often transient). "
+            "The export retries automatically."
+        )
     if _scan_error_is_dns_failure(exc):
         return (
             "Could not resolve scanner.tradingview.com (DNS/network). "
@@ -320,6 +370,8 @@ def _verify_tradingview_scan_connectivity(
 
 
 def _is_retryable_scan_error(exc: BaseException) -> bool:
+    if isinstance(exc, ThinScanResponseError):
+        return True
     if isinstance(exc, (ChunkedEncodingError, ConnectionError, Timeout)):
         return True
     if isinstance(exc, HTTPError) and exc.response is not None:
@@ -335,6 +387,7 @@ def _fetch_scan_chunk(
     max_retries: int = REQUEST_MAX_RETRIES,
     retry_backoff_seconds: float = REQUEST_RETRY_BACKOFF_SECONDS,
     session: requests.Session | None = None,
+    min_chunk_rows: int = 0,
 ) -> list[dict[str, Any]]:
     payload = _build_scan_payload(columns)
     request_session = session or requests.Session()
@@ -352,6 +405,12 @@ def _fetch_scan_chunk(
                 )
                 response.raise_for_status()
                 response_payload = response.json()
+                raw_rows = response_payload.get("data") or []
+                if min_chunk_rows > 0 and len(raw_rows) < min_chunk_rows:
+                    raise ThinScanResponseError(
+                        f"TradingView scan returned only {len(raw_rows)} row(s) "
+                        f"for {len(columns)} columns (minimum {min_chunk_rows})."
+                    )
                 mapped_payload = ApiTradingViewClient._attach_mapped_rows(
                     response_payload, columns
                 )
@@ -417,7 +476,7 @@ def _merge_rows_by_symbol(
     merged_rows: dict[str, dict[str, Any]], chunk_rows: list[dict[str, Any]]
 ) -> None:
     for row in chunk_rows:
-        symbol = str(row.get("symbol", "")).strip()
+        symbol = _normalize_row_symbol(row.get("symbol"))
         if not symbol:
             continue
         existing_row = merged_rows.setdefault(symbol, {"symbol": symbol})
@@ -455,7 +514,7 @@ def _merge_chunk_to_db(
     batch: dict[str, dict[str, Any]] = {}
 
     for row in chunk_rows:
-        symbol = str(row.get("symbol", "")).strip()
+        symbol = _normalize_row_symbol(row.get("symbol"))
         if not symbol:
             continue
         batch[symbol] = {k: v for k, v in row.items() if k != "symbol"}
@@ -1843,6 +1902,12 @@ def export_all_tradingview_fields(
     field_names = _load_field_names(field_catalog_csv)
     if not field_names:
         raise ValueError(f"No TradingView field names found in {field_catalog_csv}")
+    scan_columns = _scan_request_columns(field_names)
+    if not scan_columns:
+        raise ValueError(
+            f"No TradingView scan columns found in {field_catalog_csv} "
+            "(catalog listed only reserved names such as 'symbol')."
+        )
 
     client = ApiTradingViewClient(user_agent=USER_AGENT)
     print("Checking TradingView scan API connectivity...", flush=True)
@@ -1861,17 +1926,26 @@ def export_all_tradingview_fields(
         )
 
         with requests.Session() as session:
-            for field_chunk in _chunked(field_names, chunk_size):
+            field_chunks = _chunked(scan_columns, chunk_size)
+            for chunk_index, field_chunk in enumerate(field_chunks, start=1):
+                print(
+                    f"Fetching TradingView all-fields chunk "
+                    f"{chunk_index}/{len(field_chunks)} "
+                    f"({len(field_chunk)} columns)...",
+                    flush=True,
+                )
                 chunk_rows = _fetch_scan_chunk(
                     client=client,
                     columns=field_chunk,
                     timeout=timeout,
                     session=session,
+                    min_chunk_rows=MIN_EXPECTED_CHUNK_ROWS,
                 )
+                print(f"  received {len(chunk_rows)} rows", flush=True)
                 _merge_chunk_to_db(conn, chunk_rows)
 
         output_file = _build_output_file_name(output_dir)
-        _stream_csv_from_db(conn, field_names, output_file)
+        _stream_csv_from_db(conn, scan_columns, output_file)
         conn.close()
 
     return output_file
@@ -1888,15 +1962,19 @@ def export_all_tradingview_fields_duckdb(
     reference_time: datetime | None = None,
     export_parquet: bool = True,
     create_indexes: bool = False,
+    min_expected_rows: int = MIN_EXPECTED_ALL_FIELDS_ROWS,
 ) -> dict[str, Any]:
     field_names = _load_field_names(field_catalog_csv)
     if not field_names:
         raise ValueError(f"No TradingView field names found in {field_catalog_csv}")
 
-    data_field_names = [
-        field_name for field_name in field_names if field_name != "symbol"
-    ]
-    field_chunks = _chunked(field_names, chunk_size)
+    data_field_names = _scan_request_columns(field_names)
+    if not data_field_names:
+        raise ValueError(
+            f"No TradingView scan columns found in {field_catalog_csv} "
+            "(catalog listed only reserved names such as 'symbol')."
+        )
+    field_chunks = _chunked(data_field_names, chunk_size)
     created_at_utc = reference_time or datetime.now(tz=timezone.utc)
     if created_at_utc.tzinfo is None:
         created_at_utc = created_at_utc.replace(tzinfo=timezone.utc)
@@ -1916,7 +1994,7 @@ def export_all_tradingview_fields_duckdb(
         storage_layout.parquet_dir.mkdir(parents=True, exist_ok=True)
 
     api_request_metadata = _build_all_fields_api_request_metadata(
-        field_names=field_names,
+        field_names=data_field_names,
         field_chunks=field_chunks,
         field_catalog_csv=field_catalog_csv,
         timeout=timeout,
@@ -1955,10 +2033,21 @@ def export_all_tradingview_fields_duckdb(
                         columns=field_chunk,
                         timeout=timeout,
                         session=session,
+                        min_chunk_rows=min(MIN_EXPECTED_CHUNK_ROWS, min_expected_rows),
                     )
+                    print(f"  received {len(chunk_rows)} rows", flush=True)
                     _merge_chunk_to_db(conn, chunk_rows)
 
             row_count = _count_merged_rows(conn)
+            if row_count < min_expected_rows:
+                raise RuntimeError(
+                    f"TradingView scan returned only {row_count} row(s), below the "
+                    f"minimum expected {min_expected_rows}. Not writing this run to "
+                    "the daily database -- a near-empty response (transient API/network "
+                    'issue) would otherwise silently become "the latest run" for every '
+                    "downstream consumer. Retry the export; pass a lower min_expected_rows "
+                    "if this is an intentionally narrow/test scan."
+                )
 
             with _duckdb_daily_writer_lock(storage_layout.database_path):
                 with TradingViewAllFieldsDuckDBStore(
@@ -2068,6 +2157,53 @@ def export_all_tradingview_fields_duckdb(
         "field_count": len(data_field_names),
         "table_name": "all_fields_rows",
     }
+
+
+def export_focused_tradingview_fields_duckdb(
+    field_catalog_csv: Path = FOCUSED_FIELD_CATALOG_CSV,
+    output_dir: Path = DUCKDB_OUTPUT_DIR,
+    chunk_size: int = FOCUSED_CHUNK_SIZE,
+    timeout: int = REQUEST_TIMEOUT_SECONDS,
+    database_path: str | Path | None = None,
+    parquet_dir: str | Path | None = None,
+    run_label: str | None = "focused_intraday",
+    reference_time: datetime | None = None,
+    export_parquet: bool = True,
+    create_indexes: bool = False,
+    min_expected_rows: int = MIN_EXPECTED_ALL_FIELDS_ROWS,
+) -> dict[str, Any]:
+    """Fast, focused-field variant of ``export_all_tradingview_fields_duckdb``.
+
+    Fetches only ``FOCUSED_FIELD_CATALOG_CSV`` (~243 curated finance/scoring-relevant
+    fields) instead of the full ~3.5k TradingView field catalog, typically in a single
+    scan request (see ``FOCUSED_CHUNK_SIZE``). The catalog's ``symbol`` row-key is never
+    sent as a scanner column: TradingView treats it as unknown (null), and mapping that
+    null over the ticker used to collapse every row into one merged symbol. It writes
+    into the exact same day-level storage location and ``all_fields_rows`` table as the
+    full export (same ``TradingViewAllFieldsDuckDBStore`` schema-evolution path), so
+    downstream readers (financial projection, symbol intelligence, pattern analysis)
+    do not need to change.
+
+    Columns outside the focused set are simply left NULL for this run's rows: the store
+    only ever adds columns via ``ALTER TABLE ... ADD COLUMN`` and inserts rows through an
+    explicit column list, so a narrower field set never drops or corrupts existing columns.
+
+    Suggested usage: run ``export_all_tradingview_fields_duckdb`` once per day for full
+    catalog coverage, and this focused export for the remaining intraday refreshes.
+    """
+    return export_all_tradingview_fields_duckdb(
+        field_catalog_csv=field_catalog_csv,
+        output_dir=output_dir,
+        chunk_size=chunk_size,
+        timeout=timeout,
+        database_path=database_path,
+        parquet_dir=parquet_dir,
+        run_label=run_label,
+        reference_time=reference_time,
+        export_parquet=export_parquet,
+        create_indexes=create_indexes,
+        min_expected_rows=min_expected_rows,
+    )
 
 
 if __name__ == "__main__":

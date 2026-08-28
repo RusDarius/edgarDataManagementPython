@@ -3734,9 +3734,7 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
     momentum_horizon_alignment = _mean_signal_values(ladder_steps)
     if momentum_horizon_alignment is not None:
         ordered_perfs = [
-            value
-            for value in (perf_5d, perf_w, perf_1m, perf_3m)
-            if value is not None
+            value for value in (perf_5d, perf_w, perf_1m, perf_3m) if value is not None
         ]
         monotonic_penalty = 0.0
         for index in range(1, len(ordered_perfs)):
@@ -3774,9 +3772,7 @@ def _build_derived_metrics(row: dict[str, Any]) -> dict[str, float | None]:
         and regime_extended_tape is not None
         and regime_extended_tape > 0
     ):
-        move_sustainability_score *= _clamp(
-            1.0 - regime_extended_tape / 3.0, 0.0, 1.0
-        )
+        move_sustainability_score *= _clamp(1.0 - regime_extended_tape / 3.0, 0.0, 1.0)
     relative_volume = _coerce_numeric(row.get("relative_volume_10d_calc"))
     repair_inputs: list[float] = []
     if perf_5d is not None and perf_5d > 0:
@@ -4022,9 +4018,7 @@ def _enrich_with_peer_metrics(scan_data: list[dict[str, Any]]) -> None:
         lambda: {"market_cap": 0.0, "revenue": 0.0}
     )
     industry_perf_values: dict[tuple[str, str], dict[str, list[float]]] = (
-        collections.defaultdict(
-            lambda: {"Perf.W": [], "Perf.1M": [], "Perf.3M": []}
-        )
+        collections.defaultdict(lambda: {"Perf.W": [], "Perf.1M": [], "Perf.3M": []})
     )
     for row in scan_data:
         industry_key = _industry_key(row)
@@ -4903,8 +4897,14 @@ def _breakout_composite_risk_score(
         # Extended if high trailing perf + high RSI + volume falling
         perf_factor = _clamp((perf_1m - 30.0) / 30.0, 0.0, 1.0) if perf_1m > 30 else 0.0
         rsi_factor = _clamp((rsi - 70.0) / 20.0, 0.0, 1.0) if rsi > 70 else 0.0
-        volume_factor = _clamp((1.0 - volume_trend) / 0.5, 0.0, 1.0) if volume_trend is not None and volume_trend < 1.0 else 0.0
-        extended_tape = (perf_factor * 0.4 + rsi_factor * 0.4 + volume_factor * 0.2) * 25.0
+        volume_factor = (
+            _clamp((1.0 - volume_trend) / 0.5, 0.0, 1.0)
+            if volume_trend is not None and volume_trend < 1.0
+            else 0.0
+        )
+        extended_tape = (
+            perf_factor * 0.4 + rsi_factor * 0.4 + volume_factor * 0.2
+        ) * 25.0
 
     # Component 3: Event/catalyst risk (20% weight)
     event_risk = 0.0
@@ -4914,7 +4914,9 @@ def _breakout_composite_risk_score(
     gap_severity = derived_row.get("gap_severity")
     if gap_severity is not None and gap_severity > 2.0:
         # Large gap adds event risk
-        event_risk = max(event_risk, _clamp((gap_severity - 2.0) / 3.0 * 10.0, 0.0, 10.0))
+        event_risk = max(
+            event_risk, _clamp((gap_severity - 2.0) / 3.0 * 10.0, 0.0, 10.0)
+        )
 
     # Component 4: False breakout pattern (20% weight)
     false_breakout = 0.0
@@ -4932,13 +4934,17 @@ def _breakout_composite_risk_score(
     # Component 5: Cross-profile conflict (10% weight)
     fragility_conflict = 0.0
     if profile_scores:
-        fragility = profile_scores.get("fragility_short", {}).get("weeks", {}).get("score")
+        fragility = (
+            profile_scores.get("fragility_short", {}).get("weeks", {}).get("score")
+        )
         if fragility is not None and fragility >= 0.50:
             # Structural fragility disagrees with breakout thesis
             fragility_conflict = 5.0 + _clamp((fragility - 0.50) / 0.50 * 5.0, 0.0, 5.0)
 
     # Total composite score
-    total_risk = safety_risk + extended_tape + event_risk + false_breakout + fragility_conflict
+    total_risk = (
+        safety_risk + extended_tape + event_risk + false_breakout + fragility_conflict
+    )
     total_risk = _clamp(total_risk, 0.0, 100.0)
 
     # Risk label buckets
@@ -5086,7 +5092,9 @@ def _build_breakout_investment_story(
 
     # Entry readiness from days + raw confirms
     tape_pass, tape_details = _breakout_tape_confirms(derived, min_confirms=3)
-    days_strong = days_score is not None and days_score >= BREAKOUT_DAYS_STRONG_ENTRY_THRESHOLD
+    days_strong = (
+        days_score is not None and days_score >= BREAKOUT_DAYS_STRONG_ENTRY_THRESHOLD
+    )
     days_pass = days_score is not None and days_score >= BREAKOUT_DAYS_ENTRY_THRESHOLD
 
     if conviction_tier == "none":
@@ -5166,8 +5174,13 @@ def _build_breakout_investment_story(
         "fragility_conflict": False,
         "earnings_within_7d": False,
         "extended_tape": extended_tape,
-        "low_coverage": (weeks_coverage is not None and weeks_coverage < BREAKOUT_COVERAGE_FLOOR),
-        "low_confidence": (weeks_confidence is not None and weeks_confidence < BREAKOUT_CONFIDENCE_FLOOR),
+        "low_coverage": (
+            weeks_coverage is not None and weeks_coverage < BREAKOUT_COVERAGE_FLOOR
+        ),
+        "low_confidence": (
+            weeks_confidence is not None
+            and weeks_confidence < BREAKOUT_CONFIDENCE_FLOOR
+        ),
     }
 
     # False breakout: high days score but weak weeks/safety
@@ -5183,7 +5196,9 @@ def _build_breakout_investment_story(
 
     # Fragility conflict (check cross-profile if available)
     if profile_scores:
-        fragility = profile_scores.get("fragility_short", {}).get("weeks", {}).get("score")
+        fragility = (
+            profile_scores.get("fragility_short", {}).get("weeks", {}).get("score")
+        )
         if fragility is not None and fragility >= 0.50:
             risk_flags["fragility_conflict"] = True
             bullets.append("Structural fragility flagged — consider size reduction")
@@ -5207,13 +5222,22 @@ def _build_breakout_investment_story(
         size_tier = "reject"
     elif risk_label == "elevated":
         size_tier = "watchlist"
-    elif risk_label == "moderate" and conviction_tier in ("actionable", "high_conviction"):
+    elif risk_label == "moderate" and conviction_tier in (
+        "actionable",
+        "high_conviction",
+    ):
         size_tier = "half"
     elif risk_label == "low":
         # Low risk: full size if actionable and ready
-        if conviction_tier == "high_conviction" and entry_readiness in ("ready", "ready_now"):
+        if conviction_tier == "high_conviction" and entry_readiness in (
+            "ready",
+            "ready_now",
+        ):
             size_tier = "full"
-        elif conviction_tier == "actionable" and entry_readiness in ("ready", "ready_now"):
+        elif conviction_tier == "actionable" and entry_readiness in (
+            "ready",
+            "ready_now",
+        ):
             size_tier = "full"
         elif conviction_tier in ("actionable", "high_conviction"):
             size_tier = "watchlist"
@@ -5271,8 +5295,8 @@ def _manager_action_signal(
         if profile_scores:
             for breakout_name in ("breakout_long_v1", "breakout_long"):
                 if breakout_name in profile_scores:
-                    breakout_weeks = profile_scores[breakout_name].get("weeks", {}).get(
-                        "score"
+                    breakout_weeks = (
+                        profile_scores[breakout_name].get("weeks", {}).get("score")
                     )
                     if breakout_weeks is not None:
                         break
@@ -5306,9 +5330,9 @@ def _manager_action_signal(
                 "mean_reversion_exhaustion",
             ):
                 if exhaustion_name in profile_scores:
-                    exhaustion_weeks = profile_scores[exhaustion_name].get(
-                        "weeks", {}
-                    ).get("score")
+                    exhaustion_weeks = (
+                        profile_scores[exhaustion_name].get("weeks", {}).get("score")
+                    )
                     if exhaustion_weeks is not None:
                         break
 
@@ -5397,7 +5421,9 @@ def _manager_action_signal(
         # Weeks conviction gate + days entry gate + component floors
         weeks_pass = weeks is not None and weeks >= BREAKOUT_WEEKS_CONVICT_THRESHOLD
         days_pass = days is not None and days >= BREAKOUT_DAYS_ENTRY_THRESHOLD
-        weeks_high = weeks is not None and weeks >= BREAKOUT_WEEKS_HIGH_CONVICT_THRESHOLD
+        weeks_high = (
+            weeks is not None and weeks >= BREAKOUT_WEEKS_HIGH_CONVICT_THRESHOLD
+        )
         days_strong = days is not None and days >= BREAKOUT_DAYS_STRONG_ENTRY_THRESHOLD
 
         # Check for extended tape (trim signal) - exhaustion screen
@@ -5416,11 +5442,7 @@ def _manager_action_signal(
         # Dual gate with tape confirmation
         if weeks_pass and days_pass:
             # Component floors for breakout momentum/trend
-            component_ok = (
-                momentum >= 0.45
-                and trend >= 0.35
-                and safety >= -0.35
-            )
+            component_ok = momentum >= 0.45 and trend >= 0.35 and safety >= -0.35
 
             if component_ok:
                 # Check tape confirms (3/5 minimum)
@@ -5473,8 +5495,8 @@ def _manager_action_signal(
         )
         fragility_weeks = None
         if profile_scores and "fragility_short" in profile_scores:
-            fragility_weeks = profile_scores["fragility_short"].get("weeks", {}).get(
-                "score"
+            fragility_weeks = (
+                profile_scores["fragility_short"].get("weeks", {}).get("score")
             )
         if (
             profile_family == "fragility_short"
@@ -6772,6 +6794,7 @@ def _build_consensus_scores(
     consensus_profile_weights: Mapping[str, float] | None = None,
     inverted_consensus_profiles: frozenset[str] | None = None,
     long_consensus_profiles: frozenset[str] | None = None,
+    precomputed_profile_predictions: Mapping[str, list[dict[str, Any]]] | None = None,
 ) -> list[dict[str, Any]]:
     if profile_names is None:
         profile_names = list(CONSENSUS_PROFILE_WEIGHTS.keys())
@@ -6783,6 +6806,17 @@ def _build_consensus_scores(
     shared_derived: list[dict[str, float | None]] | None = None
 
     for profile_name in profile_names:
+        # Prediction rows depend only on (scan_data, metric profiles, derived metrics,
+        # scoring profile config) -- never on the aggregation weights below -- so a
+        # caller that already scored this profile (e.g. the per-profile suite loop) can
+        # pass its rows through here unchanged instead of rebuilding them.
+        if (
+            precomputed_profile_predictions is not None
+            and profile_name in precomputed_profile_predictions
+        ):
+            profiles_data[profile_name] = precomputed_profile_predictions[profile_name]
+            continue
+
         resolved_profile = resolve_move_prediction_scoring_profile(
             profile_name,
             profile_registry=profile_registry,
@@ -7106,7 +7140,10 @@ def _log_consensus_aggregator_report(
     log_to_file(log_file, "=" * 160)
     action_labels = [
         ("add_long_breakout", "Momentum longs with risk filter"),
-        ("accumulate_reversal_long", "Upside reversal entries with repair confirmation"),
+        (
+            "accumulate_reversal_long",
+            "Upside reversal entries with repair confirmation",
+        ),
         ("watch_reversal_entry", "Reversal setups awaiting confirmation"),
         ("accumulate_value_catalyst", "Value plus catalyst longs"),
         ("watch_value_reversal", "Cheap names waiting for reversal"),
@@ -7550,8 +7587,16 @@ def _build_breakout_story_records(
                 "weeks_ras": story.get("weeks_ras"),
                 "size_tier": story.get("size_tier"),
                 "manager_action": story.get("manager_action"),
-                "thesis_1": story.get("thesis_bullets", [""])[0] if story.get("thesis_bullets") else "",
-                "thesis_2": story.get("thesis_bullets", ["", ""])[1] if len(story.get("thesis_bullets", [])) > 1 else "",
+                "thesis_1": (
+                    story.get("thesis_bullets", [""])[0]
+                    if story.get("thesis_bullets")
+                    else ""
+                ),
+                "thesis_2": (
+                    story.get("thesis_bullets", ["", ""])[1]
+                    if len(story.get("thesis_bullets", [])) > 1
+                    else ""
+                ),
             }
         )
     return records
@@ -7564,13 +7609,18 @@ def _log_breakout_narrative_sections(
 ) -> None:
     """Log validated leaders and rejected near-misses for breakout profiles."""
     # Collect rows with investment stories
-    stories = [(pred, pred.get("investment_story", {})) for pred in prediction_rows if pred.get("investment_story")]
+    stories = [
+        (pred, pred.get("investment_story", {}))
+        for pred in prediction_rows
+        if pred.get("investment_story")
+    ]
     if not stories:
         return
 
     # Validated leaders: actionable/high_conviction + ready/ready_now + no critical risk
     validated = [
-        (pred, story) for pred, story in stories
+        (pred, story)
+        for pred, story in stories
         if story.get("conviction_tier") in ("actionable", "high_conviction")
         and story.get("entry_readiness") in ("ready", "ready_now")
         and story.get("size_tier") in ("full", "half")
@@ -7584,16 +7634,24 @@ def _log_breakout_narrative_sections(
     log_to_file(log_file, "")
     log_to_file(log_file, "=" * 120)
     log_to_file(log_file, "BREAKOUT ACTIVE MANAGEMENT — VALIDATED LEADERS")
-    log_to_file(log_file, f"Dual-gate: weeks>={BREAKOUT_WEEKS_CONVICT_THRESHOLD}, days>={BREAKOUT_DAYS_ENTRY_THRESHOLD}")
-    log_to_file(log_file, f"Tape confirms (3/5): volume_trend>1.05, rel_vol>1.3, ADX>0, Aroon>20, not_coiled")
+    log_to_file(
+        log_file,
+        f"Dual-gate: weeks>={BREAKOUT_WEEKS_CONVICT_THRESHOLD}, days>={BREAKOUT_DAYS_ENTRY_THRESHOLD}",
+    )
+    log_to_file(
+        log_file,
+        f"Tape confirms (3/5): volume_trend>1.05, rel_vol>1.3, ADX>0, Aroon>20, not_coiled",
+    )
     log_to_file(log_file, "-" * 120)
 
     if not validated:
-        log_to_file(log_file, "No validated leaders meet dual-gate + tape criteria this run.")
+        log_to_file(
+            log_file, "No validated leaders meet dual-gate + tape criteria this run."
+        )
     else:
         log_to_file(
             log_file,
-            f"{'Rank':<5} {'Symbol':<{SYMBOL_LOG_WIDTH}} {'Company':<25} {'Weeks':>6} {'Days':>6} {'RAS':>6} {'Risk':>5} {'Entry':<12} {'Size':<8} {'Composite Risk':<15}"
+            f"{'Rank':<5} {'Symbol':<{SYMBOL_LOG_WIDTH}} {'Company':<25} {'Weeks':>6} {'Days':>6} {'RAS':>6} {'Risk':>5} {'Entry':<12} {'Size':<8} {'Composite Risk':<15}",
         )
         log_to_file(log_file, "-" * 120)
         for i, (pred, story) in enumerate(validated[:top_n], 1):
@@ -7612,7 +7670,11 @@ def _log_breakout_narrative_sections(
 
             comp_risk_score = story.get("composite_risk_score")
             comp_risk_label = story.get("composite_risk_label", "unknown")
-            risk_display = f"{comp_risk_score}/{comp_risk_label}" if comp_risk_score is not None else comp_risk_label
+            risk_display = (
+                f"{comp_risk_score}/{comp_risk_label}"
+                if comp_risk_score is not None
+                else comp_risk_label
+            )
 
             log_to_file(
                 log_file,
@@ -7623,7 +7685,7 @@ def _log_breakout_narrative_sections(
                 f"{risk_str:>5} "
                 f"{story.get('entry_readiness', 'unknown'):<12} "
                 f"{story.get('size_tier', 'reject'):<8} "
-                f"{risk_display:<15}"
+                f"{risk_display:<15}",
             )
             # Thesis bullets
             for bullet in story.get("thesis_bullets", [])[:2]:
@@ -7636,7 +7698,8 @@ def _log_breakout_narrative_sections(
 
     # Rejected near-misses: high RAS but failed one gate
     near_misses = [
-        (pred, story) for pred, story in stories
+        (pred, story)
+        for pred, story in stories
         if (story.get("weeks_ras") or 0) >= 0.75  # Strong RAS but rejected
         and story.get("size_tier") not in ("full", "half")
         and story.get("conviction_tier") != "none"
@@ -7645,16 +7708,24 @@ def _log_breakout_narrative_sections(
 
     log_to_file(log_file, "")
     log_to_file(log_file, "-" * 120)
-    log_to_file(log_file, "BREAKOUT ACTIVE MANAGEMENT — REJECTED NEAR-MISSES (Why not actionable)")
-    log_to_file(log_file, f"Top {min(20, len(near_misses))} by RAS that failed validation gates")
+    log_to_file(
+        log_file,
+        "BREAKOUT ACTIVE MANAGEMENT — REJECTED NEAR-MISSES (Why not actionable)",
+    )
+    log_to_file(
+        log_file, f"Top {min(20, len(near_misses))} by RAS that failed validation gates"
+    )
     log_to_file(log_file, "-" * 120)
 
     if not near_misses:
-        log_to_file(log_file, "No near-misses — all high-RAS names passed validation or were low conviction.")
+        log_to_file(
+            log_file,
+            "No near-misses — all high-RAS names passed validation or were low conviction.",
+        )
     else:
         log_to_file(
             log_file,
-            f"{'Rank':<5} {'Symbol':<{SYMBOL_LOG_WIDTH}} {'Company':<25} {'Weeks':>6} {'Days':>6} {'RAS':>6} {'Risk':>6} {'Reject Reason':<25} {'Entry':<12}"
+            f"{'Rank':<5} {'Symbol':<{SYMBOL_LOG_WIDTH}} {'Company':<25} {'Weeks':>6} {'Days':>6} {'RAS':>6} {'Risk':>6} {'Reject Reason':<25} {'Entry':<12}",
         )
         log_to_file(log_file, "-" * 120)
         for i, (pred, story) in enumerate(near_misses[:20], 1):
@@ -7672,11 +7743,17 @@ def _log_breakout_narrative_sections(
                 reasons.append("await_tape")
             if story.get("entry_readiness") == "await_entry":
                 reasons.append("await_entry")
-            reason_str = ", ".join(reasons) if reasons else story.get("size_tier", "reject")
+            reason_str = (
+                ", ".join(reasons) if reasons else story.get("size_tier", "reject")
+            )
 
             comp_risk_score = story.get("composite_risk_score")
             comp_risk_label = story.get("composite_risk_label", "unknown")
-            risk_display = f"{comp_risk_score}" if comp_risk_score is not None else comp_risk_label[:6]
+            risk_display = (
+                f"{comp_risk_score}"
+                if comp_risk_score is not None
+                else comp_risk_label[:6]
+            )
 
             log_to_file(
                 log_file,
@@ -7686,7 +7763,7 @@ def _log_breakout_narrative_sections(
                 f"{story.get('weeks_ras', 0):>6.2f} "
                 f"{risk_display:>6} "
                 f"{reason_str:<25} "
-                f"{story.get('entry_readiness', 'unknown'):<12}"
+                f"{story.get('entry_readiness', 'unknown'):<12}",
             )
         _log_exchange_ticker_list(
             log_file,
@@ -7797,6 +7874,8 @@ def _analyze_move_prediction_scan_duckdb(
     include_blind_spot_sections: bool = True,
     output_dir: str | Path | None = None,
     regime_context_by_symbol: Mapping[str, Any] | None = None,
+    derived_metrics: list[dict[str, float | None]] | None = None,
+    profiles: dict[str, dict[str, float | int | None]] | None = None,
 ) -> tuple[Path, list[dict[str, Any]]]:
     industries = _normalize_industries(industries)
     resolved_profile = resolve_move_prediction_scoring_profile(scoring_profile)
@@ -7836,9 +7915,14 @@ def _analyze_move_prediction_scan_duckdb(
         log_to_file(log_file, "No rows returned for this scan.")
         return log_file, []
 
-    _enrich_with_peer_metrics(scan_data)
-    derived_metrics = [_build_derived_metrics(row) for row in scan_data]
-    profiles = _build_metric_profiles(scan_data, derived_metrics)
+    # Derived metrics/metric profiles are pure functions of scan_data (independent of
+    # scoring_profile); a caller scoring multiple profiles over the same scan_data can
+    # pass them in once instead of rebuilding the same universe-wide indicator math for
+    # every profile.
+    if derived_metrics is None or profiles is None:
+        _enrich_with_peer_metrics(scan_data)
+        derived_metrics = [_build_derived_metrics(row) for row in scan_data]
+        profiles = _build_metric_profiles(scan_data, derived_metrics)
     prediction_rows = _build_prediction_rows(
         scan_data,
         profiles,
@@ -7994,6 +8078,7 @@ def _run_consensus_aggregator_duckdb(
     consensus_profile_weights: Mapping[str, float] | None = None,
     inverted_consensus_profiles: frozenset[str] | None = None,
     long_consensus_profiles: frozenset[str] | None = None,
+    precomputed_profile_predictions: Mapping[str, list[dict[str, Any]]] | None = None,
 ) -> tuple[Path, list[dict[str, Any]]]:
     industries = _normalize_industries(industries)
     resolved_output_dir = Path(output_dir) if output_dir is not None else None
@@ -8013,6 +8098,7 @@ def _run_consensus_aggregator_duckdb(
         consensus_profile_weights=consensus_profile_weights,
         inverted_consensus_profiles=inverted_consensus_profiles,
         long_consensus_profiles=long_consensus_profiles,
+        precomputed_profile_predictions=precomputed_profile_predictions,
     )
 
     _log_consensus_aggregator_report(
@@ -8246,7 +8332,28 @@ def run_full_analysis_suite_duckdb(
 
                 if regime_overlay_result is not None:
                     duckdb_store.append_regime_context_scores(
-                        build_regime_context_duckdb_records(run_id, regime_overlay_result)
+                        build_regime_context_duckdb_records(
+                            run_id, regime_overlay_result
+                        )
+                    )
+
+                # Shared universe-wide computation reused across every profile below.
+                # _build_derived_metrics/_build_metric_profiles/_enrich_with_peer_metrics
+                # depend only on scan_rows (never on the scoring profile itself), so
+                # computing them once here instead of once per profile leaves every
+                # profile's scores, logs, and CSV/DuckDB rows unchanged while skipping
+                # N-1 redundant passes over the full scan universe.
+                shared_derived_metrics: list[dict[str, float | None]] | None = None
+                shared_metric_profiles: (
+                    dict[str, dict[str, float | int | None]] | None
+                ) = None
+                if scan_rows:
+                    _enrich_with_peer_metrics(scan_rows)
+                    shared_derived_metrics = [
+                        _build_derived_metrics(row) for row in scan_rows
+                    ]
+                    shared_metric_profiles = _build_metric_profiles(
+                        scan_rows, shared_derived_metrics
                     )
 
                 profile_predictions_by_name = {}
@@ -8262,6 +8369,8 @@ def run_full_analysis_suite_duckdb(
                         include_blind_spot_sections=include_blind_spot_sections,
                         output_dir=storage_layout.run_output_dir,
                         regime_context_by_symbol=regime_context_by_symbol,
+                        derived_metrics=shared_derived_metrics,
+                        profiles=shared_metric_profiles,
                     )
                     generated_logs[profile_name] = profile_log
                     profile_predictions_by_name[profile_name] = prediction_rows
@@ -8276,11 +8385,14 @@ def run_full_analysis_suite_duckdb(
                     max_market_cap_usd=max_market_cap_usd,
                     output_dir=storage_layout.run_output_dir,
                     profile_registry=profile_suite["registry"],
-                    consensus_profile_weights=profile_suite["consensus_profile_weights"],
+                    consensus_profile_weights=profile_suite[
+                        "consensus_profile_weights"
+                    ],
                     inverted_consensus_profiles=profile_suite[
                         "inverted_consensus_profiles"
                     ],
                     long_consensus_profiles=profile_suite["long_consensus_profiles"],
+                    precomputed_profile_predictions=profile_predictions_by_name,
                 )
                 generated_logs["_consensus_aggregator"] = consensus_log
 
@@ -8320,7 +8432,9 @@ def run_full_analysis_suite_duckdb(
                     regime_context_by_symbol=regime_context_by_symbol,
                 )
                 generated_logs["_conviction_rankings"] = conviction_result["csv_path"]
-                generated_logs["_conviction_daily_focus"] = conviction_result["log_path"]
+                generated_logs["_conviction_daily_focus"] = conviction_result[
+                    "log_path"
+                ]
                 if regime_overlay_result is not None:
                     _write_regime_context_focus_log_for_run(
                         run_output_dir=storage_layout.run_output_dir,
@@ -9331,6 +9445,7 @@ def _run_earnings_priority_aggregator_duckdb(
     max_market_cap_usd: float | None = None,
     output_dir: str | Path | None = None,
     reference_time: datetime | None = None,
+    precomputed_profile_predictions: Mapping[str, list[dict[str, Any]]] | None = None,
 ) -> dict[str, Path]:
     industries_normalized = _normalize_industries(industries)
     dedicated_output_dir = Path(output_dir) if output_dir is not None else None
@@ -9351,9 +9466,13 @@ def _run_earnings_priority_aggregator_duckdb(
             output_dir=dedicated_output_dir,
         )
 
+    # Reuses prediction rows already computed for the base suite run when available.
+    # This keeps this aggregator's own (default) consensus weights/inversion behavior
+    # completely unchanged -- only the redundant per-profile scoring pass is skipped.
     consensus_rows = _build_consensus_scores(
         scan_data=scan_data,
         profile_names=profile_names,
+        precomputed_profile_predictions=precomputed_profile_predictions,
     )
     reference = reference_time or datetime.now(tz=timezone.utc)
     entries = _build_earnings_priority_entries(
@@ -9777,6 +9896,9 @@ def run_full_analysis_suite_with_earnings_priority_duckdb(
                     max_market_cap_usd=max_market_cap_usd,
                     output_dir=earnings_priority_dir,
                     reference_time=reference_time,
+                    precomputed_profile_predictions=base_result.get(
+                        "_profile_predictions_by_name"
+                    ),
                 )
             except Exception:
                 duckdb_store.rollback()
@@ -9861,7 +9983,9 @@ def run_full_analysis_suite_with_earnings_priority_duckdb(
 
     if conviction_result:
         overview_generated_logs["_conviction_rankings"] = conviction_result["csv_path"]
-        overview_generated_logs["_conviction_daily_focus"] = conviction_result["log_path"]
+        overview_generated_logs["_conviction_daily_focus"] = conviction_result[
+            "log_path"
+        ]
         if base_result.get("_regime_context_overlay") is not None:
             overview_generated_logs["_regime_context_focus"] = (
                 run_output_dir / "move_prediction__regime_context_focus.log"

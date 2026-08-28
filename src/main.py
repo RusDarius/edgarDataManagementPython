@@ -31,6 +31,7 @@ from data_analysis_scripts.trading_view_cross_scanner_aggregator import (
 from data_analysis_scripts.trading_view_export_all_tdfields import (
     export_all_tradingview_fields,
     export_all_tradingview_fields_duckdb,
+    export_focused_tradingview_fields_duckdb,
 )
 from data_analysis_scripts.trading_view_market_flow_screening import (
     run_market_flow_screening_suite,
@@ -108,6 +109,9 @@ from data_analysis_scripts.trading_view_all_fields_upside_edge_research import (
     run_mar_jun_trade_ladder_entry_field_diagnostics,
     run_mar_jun_trade_ladder_entry_profile_capture,
     run_mar_jun_upside_edge_research,
+)
+from data_analysis_scripts.trading_view_symbol_intelligence_report import (
+    build_symbol_intelligence_report,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -608,6 +612,16 @@ def daily_prediction_move_analysis_suite() -> dict[str, object]:
     )
 
 
+def run_symbol_intelligence_report_example(
+    symbol: str = "NASDAQ:EXEL",
+) -> dict[str, object]:
+    result = build_symbol_intelligence_report(symbol)
+    print(f"Symbol intelligence matched symbol: {result['matched_symbol']}")
+    print(f"Symbol intelligence log : {result['log_path']}")
+    print(f"Symbol intelligence json: {result['json_path']}")
+    return result
+
+
 # Main entry point for running workflows and data loaders.
 def main():
     # analyze_global_price_performance(
@@ -654,8 +668,11 @@ def main():
     #     min_aum_usd=1_000_000_000,
     # )
 
+    # ── Single Stock report ─────────────────────────────────────────────
+    # run_symbol_intelligence_report_example("NASDAQ:CHKP")
+
     # ── Stock move-prediction ─────────────────────────────────────────────
-    daily_prediction_move_analysis_suite()
+    # daily_prediction_move_analysis_suite()
 
     # Price-driven decile analysis: bucket by change / Perf.5D / Perf.1M, score profiles,
     # surface upward-move opportunities in worst performers. Output:
@@ -668,8 +685,12 @@ def main():
 
     # ALL FIELDS DUCKDB EXPORT
     # Snapshot used as financial-projection input (market_cap_basic filterable).
+    # Run this full ~3.5k-field export once/day; for intraday refreshes use the ~230-field
+    # focused variant below instead (single scan request vs ~12 chunked requests, same
+    # storage location/table, non-fetched columns simply stay NULL for that run).
     # export_all_tradingview_fields_duckdb()
     # export_all_tradingview_fields_duckdb(chunk_size=300, timeout=90)
+    # export_focused_tradingview_fields_duckdb()
 
     # Market flow screening (paired daily DuckDB snapshots)
     # Output: logs/tradingview_analysis/market_flow_screening/runs/flow_<base>_<compare>_<id>/

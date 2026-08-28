@@ -1604,10 +1604,14 @@ class ApiTradingViewClient:
         mapped_data = {
             column: values[index] if index < len(values) else None
             for index, column in enumerate(columns)
+            if column != "symbol"
         }
+        # Always prefer the scanner's ticker (`s`). A requested column named
+        # "symbol" is not a TradingView field; mapping it by index would
+        # overwrite every ticker with null and collapse downstream merges.
         return {
-            "symbol": scan_row.get("s"),
             **mapped_data,
+            "symbol": scan_row.get("s"),
         }
 
     @staticmethod

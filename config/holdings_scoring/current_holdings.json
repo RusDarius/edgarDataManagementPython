@@ -4,7 +4,7 @@
   "portfolio_currency": "USD",
   "description": "Current book — set invested_sum/average_price in their currencies; portfolio aggregates in USD. Use optional symbol (EXCHANGE:TICKER) when ticker alone is ambiguous. Optional instrument_type is stock (default) or etf; ETFs join the latest ETF analysis scan.",
   "cash_position": {
-    "value": 21800,
+    "value": 22900,
     "currency": "USD"
   },
   "holdings": [
@@ -28,9 +28,9 @@
     {
       "ticker": "VEEV",
       "sleeve": "core",
-      "invested_sum": 10370.17,
+      "invested_sum": 3600.17,
       "invested_currency": "USD",
-      "average_price": 206.14,
+      "average_price": 235.6,
       "price_currency": "USD",
       "notes": "Veeva Systems"
     },
@@ -65,9 +65,9 @@
     {
       "ticker": "ADBE",
       "sleeve": "core",
-      "invested_sum": 10101,
+      "invested_sum": 12101,
       "invested_currency": "USD",
-      "average_price": 281.26,
+      "average_price": 281.8,
       "price_currency": "USD",
       "notes": "Adobe"
     },
@@ -101,9 +101,9 @@
     {
       "ticker": "PGY",
       "sleeve": "core",
-      "invested_sum": 3003,
+      "invested_sum": 7003,
       "invested_currency": "USD",
-      "average_price": 22,
+      "average_price": 22.3,
       "price_currency": "USD",
       "notes": "PGY"
     },
@@ -128,9 +128,9 @@
     {
       "ticker": "DUOL",
       "sleeve": "core",
-      "invested_sum": 6900,
+      "invested_sum": 9900,
       "invested_currency": "USD",
-      "average_price": 131.38,
+      "average_price": 133.97,
       "price_currency": "USD",
       "notes": "Duolingo"
     },
@@ -144,16 +144,6 @@
       "price_currency": "EUR",
       "instrument_type": "etf",
       "notes": "Vanguard S&P 500 UCITS ETF"
-    },
-    {
-      "ticker": "EXEL",
-      "symbol": "NASDAQ:EXEL",
-      "sleeve": "core",
-      "invested_sum": 3003,
-      "invested_currency": "USD",
-      "average_price": 54.4,
-      "price_currency": "USD",
-      "notes": "Exelixis"
     },
     {
       "ticker": "RDDT",

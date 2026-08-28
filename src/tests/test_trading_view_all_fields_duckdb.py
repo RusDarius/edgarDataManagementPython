@@ -1,4 +1,5 @@
 import csv
+import sqlite3
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -7,6 +8,10 @@ from unittest.mock import Mock, patch
 
 from data_analysis_scripts.trading_view_export_all_tdfields import (
     _build_all_fields_daily_storage_layout,
+    _fetch_scan_chunk,
+    _merge_chunk_to_db,
+    _normalize_row_symbol,
+    _scan_request_columns,
     export_all_tradingview_fields_duckdb,
     _discover_main_csv_in_dated_folder,
     _is_tdfields_chunk_csv,
@@ -55,12 +60,18 @@ class TestExportAllTradingViewFieldsDuckDB(unittest.TestCase):
         with path.open("w", encoding="utf-8-sig", newline="") as csv_file:
             writer = csv.DictWriter(csv_file, fieldnames=["Name"])
             writer.writeheader()
+            writer.writerow({"Name": "symbol"})
             writer.writerow({"Name": "close"})
             writer.writerow({"Name": "name"})
             writer.writerow({"Name": "volume"})
 
+    @patch(
+        "data_analysis_scripts.trading_view_export_all_tdfields._verify_tradingview_scan_connectivity"
+    )
     @patch("data_analysis_scripts.trading_view_export_all_tdfields._fetch_scan_chunk")
-    def test_same_day_runs_append_to_same_database(self, fetch_chunk_mock):
+    def test_same_day_runs_append_to_same_database(
+        self, fetch_chunk_mock, _connectivity_mock
+    ):
         fetch_chunk_mock.side_effect = [
             [
                 {"symbol": "NASDAQ:AAA", "close": 10.5, "name": "Alpha"},
@@ -92,6 +103,7 @@ class TestExportAllTradingViewFieldsDuckDB(unittest.TestCase):
                 timeout=30,
                 run_label="morning",
                 reference_time=datetime(2026, 6, 3, 9, 30, tzinfo=timezone.utc),
+                min_expected_rows=1,
             )
             afternoon_result = export_all_tradingview_fields_duckdb(
                 field_catalog_csv=field_catalog,
@@ -100,6 +112,7 @@ class TestExportAllTradingViewFieldsDuckDB(unittest.TestCase):
                 timeout=30,
                 run_label="afternoon",
                 reference_time=datetime(2026, 6, 3, 15, 45, tzinfo=timezone.utc),
+                min_expected_rows=1,
             )
 
             self.assertEqual(
@@ -149,6 +162,20 @@ class TestExportAllTradingViewFieldsDuckDB(unittest.TestCase):
             self.assertEqual(rows[0]["name"], "Alpha")
             self.assertEqual(rows[0]["volume"], "1000")
             self.assertEqual(rows[-1]["name"], "Beta")
+            requested_columns = [
+                call.kwargs["columns"] for call in fetch_chunk_mock.call_args_list
+            ]
+            for columns in requested_columns:
+                self.assertNotIn("symbol", columns)
+            self.assertEqual(
+                requested_columns,
+                [
+                    ["close", "name"],
+                    ["volume"],
+                    ["close", "name"],
+                    ["volume"],
+                ],
+            )
 
 
 class TestBackfillHelpers(unittest.TestCase):
@@ -577,6 +604,86 @@ class TestFetchScanChunkRetry(unittest.TestCase):
         self.assertEqual(session.post.call_count, 2)
         sleep_mock.assert_called_once()
         self.assertEqual(rows, [{"symbol": "NASDAQ:AAA", "close": 1.0}])
+
+    @patch(
+        "data_analysis_scripts.trading_view_export_all_tdfields.ApiTradingViewClient._attach_mapped_rows"
+    )
+    @patch("data_analysis_scripts.trading_view_export_all_tdfields.time.sleep")
+    @patch("data_analysis_scripts.trading_view_export_all_tdfields.requests.Session")
+    def test_retries_thin_scan_response(
+        self, session_cls_mock, sleep_mock, attach_mock
+    ):
+        from data_loaders.api_tradingview_client import ApiTradingViewClient
+
+        session = session_cls_mock.return_value
+        thin_response = Mock()
+        thin_response.json.return_value = {"data": [{"s": "NASDAQ:AAA", "d": [1.0]}]}
+        full_response = Mock()
+        full_rows = [{"s": f"NASDAQ:T{i}", "d": [float(i)]} for i in range(5)]
+        full_response.json.return_value = {"data": full_rows}
+        attach_mock.return_value = {
+            "data": [{"symbol": f"NASDAQ:T{i}", "close": float(i)} for i in range(5)]
+        }
+        session.post.side_effect = [thin_response, full_response]
+
+        rows = _fetch_scan_chunk(
+            client=ApiTradingViewClient(user_agent="test-agent"),
+            columns=["close"],
+            session=session,
+            max_retries=3,
+            retry_backoff_seconds=0.0,
+            min_chunk_rows=5,
+        )
+
+        self.assertEqual(session.post.call_count, 2)
+        sleep_mock.assert_called_once()
+        self.assertEqual(len(rows), 5)
+
+
+class TestScanSymbolColumnHandling(unittest.TestCase):
+    def test_scan_request_columns_drops_symbol(self):
+        self.assertEqual(
+            _scan_request_columns(["symbol", "close", "name", "symbol"]),
+            ["close", "name"],
+        )
+
+    def test_normalize_row_symbol_skips_none(self):
+        self.assertEqual(_normalize_row_symbol(None), "")
+        self.assertEqual(_normalize_row_symbol("NASDAQ:AAA"), "NASDAQ:AAA")
+        self.assertEqual(_normalize_row_symbol("  "), "")
+
+    def test_map_scan_row_keeps_ticker_when_symbol_column_is_null(self):
+        from data_loaders.api_tradingview_client import ApiTradingViewClient
+
+        mapped = ApiTradingViewClient._map_scan_row(
+            {"s": "NASDAQ:PPCB", "d": [None, 0.24, "Example"]},
+            ["symbol", "close", "name"],
+        )
+        self.assertEqual(mapped["symbol"], "NASDAQ:PPCB")
+        self.assertEqual(mapped["close"], 0.24)
+        self.assertEqual(mapped["name"], "Example")
+
+    def test_merge_skips_none_symbols_instead_of_collapsing(self):
+        conn = sqlite3.connect(":memory:")
+        conn.execute(
+            "CREATE TABLE symbol_data ("
+            "  symbol TEXT PRIMARY KEY,"
+            "  data TEXT NOT NULL DEFAULT '{}'"
+            ")"
+        )
+        _merge_chunk_to_db(
+            conn,
+            [
+                {"symbol": None, "close": 1.0},
+                {"symbol": "NASDAQ:AAA", "close": 10.5},
+                {"symbol": "NYSE:BBB", "close": 20.0},
+            ],
+        )
+        rows = conn.execute(
+            "SELECT symbol FROM symbol_data ORDER BY symbol"
+        ).fetchall()
+        self.assertEqual([row[0] for row in rows], ["NASDAQ:AAA", "NYSE:BBB"])
+        conn.close()
 
 
 if __name__ == "__main__":
