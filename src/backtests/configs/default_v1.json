@@ -1,0 +1,111 @@
+{
+  "schema_version": "backtests_v1",
+  "config_id": "default_v1",
+  "description": "Generic cross-pipeline signal evidence and overlay backtests.",
+  "paths": {
+    "all_fields_root": "logs/tradingview_analysis/trading_view_all_fields_data",
+    "prediction_root": "logs/tradingview_analysis/prediction_analysis/duckdb_runs",
+    "edge_runs_root": "logs/tradingview_analysis/edge_research_tools/runs",
+    "market_timing_root": "logs/tradingview_analysis/market_timing_policy/runs",
+    "financial_projection_root": "logs/tradingview_analysis/financial_projection",
+    "output_root": "logs/tradingview_analysis/backtests/runs"
+  },
+  "calendar": {
+    "start_day_label": null,
+    "end_day_label": null,
+    "max_days": null,
+    "align_prediction_on_or_before": true,
+    "align_edge_on_or_before": true,
+    "align_timing_on_or_before": true
+  },
+  "families": {
+    "move_prediction": {
+      "enabled": true,
+      "consensus_horizons": [
+        "days",
+        "weeks"
+      ],
+      "profile_names": [
+        "breakout_long_v1",
+        "forward_edge_active_v2"
+      ],
+      "include_regime_context": true
+    },
+    "all_fields": {
+      "enabled": true,
+      "fields": [
+        "ATRP",
+        "ADRP",
+        "Perf.5D",
+        "Perf.1M",
+        "Perf.3M",
+        "RSI",
+        "Recommend.All",
+        "change",
+        "close",
+        "price_target",
+        "total_revenue_yoy_growth_ttm",
+        "total_revenue_cagr_5y"
+      ]
+    },
+    "upside_opportunity": {
+      "enabled": true,
+      "allow_momentum_reconstruct": true
+    },
+    "market_timing": {
+      "enabled": true,
+      "checkpoint": "latest",
+      "reconstruct_top_n": 100,
+      "prefer_artifact": true
+    },
+    "financial_projection": {
+      "enabled": true,
+      "projection_upside_threshold_pct": 15.0,
+      "projection_growth_gap_threshold_pp": 0.0
+    }
+  },
+  "evaluation": {
+    "horizons": [
+      1,
+      5,
+      10,
+      20,
+      60
+    ],
+    "top_ns": [
+      20,
+      50
+    ],
+    "quintile_count": 5,
+    "min_pairs_for_metric": 8
+  },
+  "overlay": {
+    "variants": [
+      "picks_only",
+      "timing_filter",
+      "timing_weight",
+      "projection_filter",
+      "picks_timing_projection"
+    ],
+    "enter_actions": [
+      "ENTER_SMALL",
+      "ENTER_PROBE"
+    ],
+    "base_pick_signals": [
+      "conviction_score",
+      "upside_opportunity_score",
+      "move_upside_score"
+    ],
+    "timing_weight_mode": "risk_units",
+    "projection_upside_min_pct": 15.0,
+    "projection_growth_gap_min_pp": 0.0
+  },
+  "output": {
+    "root_dir": "logs/tradingview_analysis/backtests/runs",
+    "write_csv": true,
+    "max_report_signals": 20,
+    "persist_raw_row_tables": true,
+    "duckdb_memory_limit": "2GB",
+    "duckdb_materialize_max_bytes": 67108864
+  }
+}

@@ -1,0 +1,26 @@
+FOCUS / REGIME OPERATOR PROMPTS
+===============================
+Attach one version file per run. Do not attach this index.
+
+daily_generic.txt
+  Default daily prompt. No standing sector or theme list. Leadership and
+  clusters come from the attached scores. Includes a required earnings /
+  catalyst sleeve (build-to-sell, buy or short pre-print, hold-through,
+  derisk). Session continuity is mandatory: attach yesterday's canvas and/or
+  run logs/AI_ANALYSIS_UTILS/priors plus the briefing pack book.continuity
+  before any Book EXIT.
+  Mix avoid_value_trap is a no-add filter on a live leftover Book thesis, not
+  an automatic EXIT. Primary output is a Cursor canvas, with structured fallback.
+
+daily_themed_chips_software.txt
+  Same core flow, with a standing datacenter/chips and software/cyber
+  sleeve. Use only when that focus is intended.
+
+overrides_template.txt
+  Optional add-on. Append or attach after the chosen version to pin
+  scan day, forced names, style tilt, or earnings window.
+
+Launch: run python src/operator_briefing/example_entry.py, then attach the
+newest briefing_pack.md/.json plus the version file. The pack is the locked
+evidence layer (run ids, leftover, filtered sleeves, polar continuity).
+Raw DuckDB folders remain available for dossiers; do not start there.

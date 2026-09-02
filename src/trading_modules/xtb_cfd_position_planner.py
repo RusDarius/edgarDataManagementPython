@@ -270,7 +270,9 @@ class CfdPositionRequest:
     take_profit_pct: Optional[float] = None
 
     # --- costs beyond swap ---
-    commission_rate: float = 0.0  # fraction of notional per side (open+close both applied)
+    commission_rate: float = (
+        0.0  # fraction of notional per side (open+close both applied)
+    )
     commission_flat_per_side: float = 0.0
     fx_to_account: float = 1.0  # multiply instrument-currency cashflows → account ccy
 
@@ -393,7 +395,9 @@ def _resolve_quotes(req: CfdPositionRequest) -> tuple[float, float, float, float
     spread_price = req.spread_price
 
     if spread_price is None and req.spread_pips is not None:
-        spread_price = price_from_pips(_require_finite("spread_pips", req.spread_pips), pip_size)
+        spread_price = price_from_pips(
+            _require_finite("spread_pips", req.spread_pips), pip_size
+        )
 
     if bid is not None and ask is not None:
         bid = _require_finite("bid", bid)
@@ -453,9 +457,8 @@ def _estimate_overnight_nights(req: CfdPositionRequest) -> float:
     # one of which is charged at triple_swap_multiplier (weekend coverage).
     weeks, rem_days = divmod(duration, 7.0)
     nights_per_week_effective = (
-        (req.trading_nights_per_week - 1.0) * 1.0
-        + 1.0 * req.triple_swap_multiplier
-    )
+        req.trading_nights_per_week - 1.0
+    ) * 1.0 + 1.0 * req.triple_swap_multiplier
     # Remaining partial week: assume rem_days calendar days ≈ that many 1x nights,
     # without forcing an extra triple (user can override overnight_nights).
     return float(weeks * nights_per_week_effective + rem_days)
@@ -606,7 +609,9 @@ def _adverse_pnl_cash(
 
 
 # === AI GENERATED FUNCTION (Cursor Grok 4.5) - 2026-07-30 ===
-def plan_cfd_position(request: CfdPositionRequest | Mapping[str, Any]) -> CfdPositionPlan:
+def plan_cfd_position(
+    request: CfdPositionRequest | Mapping[str, Any],
+) -> CfdPositionPlan:
     """
     Plan an XTB-style CFD long/short deployment from risk and ticket parameters.
 
@@ -758,7 +763,9 @@ def plan_cfd_position(request: CfdPositionRequest | Mapping[str, Any]) -> CfdPos
                 side="take",
             )
 
-        stop_slip = max(_require_finite("stop_slippage_price", req.stop_slippage_price), 0.0)
+        stop_slip = max(
+            _require_finite("stop_slippage_price", req.stop_slippage_price), 0.0
+        )
         effective_stop_dist = None if stop_dist is None else stop_dist + stop_slip
 
         def costs_for_volume(vol: float) -> tuple[float, float, float, float, float]:
@@ -838,7 +845,9 @@ def plan_cfd_position(request: CfdPositionRequest | Mapping[str, Any]) -> CfdPos
             # Costs linear in volume ⇒ closed form.
             dist = effective_stop_dist
             unit_gross = dist * contract_size
-            unit_spread = spread_price * contract_size if req.include_spread_in_risk else 0.0
+            unit_spread = (
+                spread_price * contract_size if req.include_spread_in_risk else 0.0
+            )
             unit_comm = (
                 (2.0 * max(req.commission_rate, 0.0) * entry_price * contract_size)
                 if req.include_commission_in_risk
@@ -930,8 +939,8 @@ def plan_cfd_position(request: CfdPositionRequest | Mapping[str, Any]) -> CfdPos
                 side="take",
             )
 
-        notional, spread_cash, commission_rt, swap_night, entry_cost_risk = costs_for_volume(
-            volume
+        notional, spread_cash, commission_rt, swap_night, entry_cost_risk = (
+            costs_for_volume(volume)
         )
         required_margin = notional / leverage
         swap_total = swap_night * overnight_nights
@@ -994,7 +1003,9 @@ def plan_cfd_position(request: CfdPositionRequest | Mapping[str, Any]) -> CfdPos
                 side="take",
             )
 
-        risk_cash_planned = None if stop_level is None else abs(stop_level.cash_net_of_entry_costs)
+        risk_cash_planned = (
+            None if stop_level is None else abs(stop_level.cash_net_of_entry_costs)
+        )
         reward_cash_planned = (
             None if take_level is None else take_level.cash_net_of_entry_costs
         )
@@ -1032,9 +1043,7 @@ def plan_cfd_position(request: CfdPositionRequest | Mapping[str, Any]) -> CfdPos
                 # Equity after floating loss at SL (instrument PnL converted).
                 equity_at_stop = equity + stop_level.cash_net_of_entry_costs * fx
                 ml_stop = (
-                    None
-                    if used_after == 0
-                    else (equity_at_stop / used_after) * 100.0
+                    None if used_after == 0 else (equity_at_stop / used_after) * 100.0
                 )
                 if ml_stop is not None and ml_stop <= req.stop_out_level_pct:
                     warnings.append(
@@ -1048,7 +1057,10 @@ def plan_cfd_position(request: CfdPositionRequest | Mapping[str, Any]) -> CfdPos
                         f"margin-call threshold ({req.margin_call_level_pct}%)."
                     )
 
-            if free_after is not None and free_after < required_margin * fx * req.min_free_margin_multiple:
+            if (
+                free_after is not None
+                and free_after < required_margin * fx * req.min_free_margin_multiple
+            ):
                 warnings.append(
                     "Free margin after open is below min_free_margin_multiple * "
                     "required_margin — little buffer for adverse movement."
@@ -1109,22 +1121,26 @@ def plan_cfd_position(request: CfdPositionRequest | Mapping[str, Any]) -> CfdPos
             "daily_swap_position": acc(swap_night),
             "expected_swap_over_horizon": acc(swap_total),
             "currency": req.instrument_currency,
-            "stop_loss": None
-            if stop_level is None
-            else {
-                "price": stop_level.price,
-                "pips": stop_level.pips,
-                "cash": acc(stop_level.cash_net_of_entry_costs),
-                "pct_price": stop_level.pct_of_entry,
-            },
-            "take_profit": None
-            if take_level is None
-            else {
-                "price": take_level.price,
-                "pips": take_level.pips,
-                "cash": acc(take_level.cash_net_of_entry_costs),
-                "pct_price": take_level.pct_of_entry,
-            },
+            "stop_loss": (
+                None
+                if stop_level is None
+                else {
+                    "price": stop_level.price,
+                    "pips": stop_level.pips,
+                    "cash": acc(stop_level.cash_net_of_entry_costs),
+                    "pct_price": stop_level.pct_of_entry,
+                }
+            ),
+            "take_profit": (
+                None
+                if take_level is None
+                else {
+                    "price": take_level.price,
+                    "pips": take_level.pips,
+                    "cash": acc(take_level.cash_net_of_entry_costs),
+                    "pct_price": take_level.pct_of_entry,
+                }
+            ),
             "break_even_price": _round_money(break_even_price, 4),
             "notes": req.notes,
         }
@@ -1165,8 +1181,12 @@ def plan_cfd_position(request: CfdPositionRequest | Mapping[str, Any]) -> CfdPos
             margin_rate=_round_money(margin_rate, 6),
             required_margin=acc(required_margin),
             account_equity=None if equity is None else _round_money(equity),
-            used_margin_after_open=None if used_after is None else _round_money(used_after),
-            free_margin_after_open=None if free_after is None else _round_money(free_after),
+            used_margin_after_open=(
+                None if used_after is None else _round_money(used_after)
+            ),
+            free_margin_after_open=(
+                None if free_after is None else _round_money(free_after)
+            ),
             margin_level_after_open_pct=(
                 None if ml_open is None else _round_money(ml_open, 2)
             ),
@@ -1187,7 +1207,9 @@ def plan_cfd_position(request: CfdPositionRequest | Mapping[str, Any]) -> CfdPos
             ),
             stop_loss=stop_level,
             take_profit=take_level,
-            risk_cash_planned=None if risk_cash_planned is None else acc(risk_cash_planned),
+            risk_cash_planned=(
+                None if risk_cash_planned is None else acc(risk_cash_planned)
+            ),
             reward_cash_planned=(
                 None if reward_cash_planned is None else acc(reward_cash_planned)
             ),
@@ -1310,7 +1332,9 @@ def summarize_plan(plan: CfdPositionPlan) -> str:
 # ---------------------------------------------------------------------------
 
 
-def swap_avg_from_ticket(daily_swap_for_direction: float, ticket_volume: float) -> float:
+def swap_avg_from_ticket(
+    daily_swap_for_direction: float, ticket_volume: float
+) -> float:
     """
     Convert the xStation \"Daily Swap\" row into ``swap_avg`` (per 1.0 volume).
 
@@ -1320,7 +1344,10 @@ def swap_avg_from_ticket(daily_swap_for_direction: float, ticket_volume: float) 
     ticket_volume = _require_finite("ticket_volume", ticket_volume)
     if ticket_volume == 0:
         raise ValueError("ticket_volume must be != 0")
-    return _require_finite("daily_swap_for_direction", daily_swap_for_direction) / ticket_volume
+    return (
+        _require_finite("daily_swap_for_direction", daily_swap_for_direction)
+        / ticket_volume
+    )
 
 
 def leverage_from_ticket(contract_value: float, margin: float) -> float:
@@ -1335,19 +1362,19 @@ if __name__ == "__main__":
     # Worked example aligned with the NBIS.US Sell ticket screenshot.
     demo = plan_cfd_position(
         CfdPositionRequest(
-            symbol="NBIS.US",
+            symbol="GTLB",
             direction="short",
-            leverage=leverage_from_ticket(5616.30, 1404.08),
-            duration_days=5,
-            swap_avg=swap_avg_from_ticket(-0.14, 30),
-            bid=187.21,
-            ask=188.02,
+            leverage=leverage_from_ticket(5616.30, 1481.7),
+            duration_days=3,
+            swap_avg=swap_avg_from_ticket(-0.12, 110),
+            bid=44.93,
+            ask=45.09,
             sizing_mode="fixed_volume",
-            volume=30,
-            account_equity=8_000,
+            volume=110,
+            account_equity=19_000,
             used_margin_existing=0.0,
-            stop_loss_pct=4.0,
-            take_profit_pct=8.0,
+            stop_loss_pct=3.0,
+            take_profit_pct=6.0,
             pip_size=0.01,
             notes="Demo: reconcile against live xStation ticket before ordering.",
         )

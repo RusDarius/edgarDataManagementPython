@@ -1,0 +1,233 @@
+{
+  "schema_version": "focus_pool_screening_v1",
+  "config_id": "sleeve_wide_pool_v1",
+  "description": "Wide pool ranked on value/fundamental/technical/momentum + edge overlay. Move-prediction profiles are sleeve columns only (breakout, continuation, opportunity, strength, short) — consensus mix is not used in the composite.",
+  "min_field_fill": 0.05,
+  "sources": {
+    "move_prediction": {
+      "enabled": true,
+      "database_path": null,
+      "run_id": null,
+      "consensus_horizon": "weeks",
+      "profile_columns": [
+        "breakout_long_v1",
+        "quality_continuation_v1",
+        "sustained_momentum_safety_v1",
+        "early_momentum_inflection_v1",
+        "forward_edge_active_v2",
+        "asymmetric_value",
+        "value_recovery_v3",
+        "quality_value_compounder",
+        "durable_value_compounder_v1",
+        "defensive_fortress_v2",
+        "fragility_short",
+        "mean_reversion_exhaustion_v1"
+      ],
+      "include_conviction": true
+    },
+    "all_fields": {
+      "enabled": true,
+      "database_path": null,
+      "day_label": null,
+      "run_id": null
+    },
+    "edge_research": {
+      "enabled": true,
+      "parent_run_dir": null
+    }
+  },
+  "universe": {
+    "min_market_cap_usd": 500000000,
+    "max_market_cap_usd": null,
+    "markets": null,
+    "min_close": 2.0,
+    "min_avg_dollar_traded_10d": 500000,
+    "exclude_symbols": []
+  },
+  "families": {
+    "value": {
+      "weight": 0.24,
+      "fields": [
+        {"key": "pe_ttm", "column": "price_earnings_ttm", "direction": "lower_better", "weight": 1.0, "valid_range": [0.1, null], "clip": [0, 80]},
+        {"key": "pe_forward", "column": "price_earnings_forward_fy", "direction": "lower_better", "weight": 0.9, "valid_range": [0.1, null], "clip": [0, 80]},
+        {"key": "ev_ebitda", "column": "enterprise_value_ebitda_ttm", "direction": "lower_better", "weight": 1.0, "valid_range": [0.1, null], "clip": [0, 60]},
+        {"key": "p_fcf", "column": "price_free_cash_flow_ttm", "direction": "lower_better", "weight": 0.8, "valid_range": [0.1, null], "clip": [0, 100]},
+        {"key": "p_sales", "column": "price_sales_current", "direction": "lower_better", "weight": 0.6, "valid_range": [0, null], "clip": [0, 30]},
+        {"key": "p_book", "column": "price_book_fq", "direction": "lower_better", "weight": 0.5, "valid_range": [0.05, null], "clip": [0, 20]},
+        {"key": "earnings_yield", "column": "earnings_yield", "direction": "higher_better", "weight": 0.8, "clip": [-20, 40]},
+        {"key": "div_yield", "column": "dividend_yield_recent", "direction": "higher_better", "weight": 0.5, "clip": [0, 15]},
+        {"key": "buyback_yield", "column": "buyback_yield", "direction": "higher_better", "weight": 0.5, "clip": [-10, 20]},
+        {"key": "price_target_upside_pct", "derived": "price_target_upside_pct", "direction": "higher_better", "weight": 0.7, "clip": [-60, 150]}
+      ]
+    },
+    "fundamental": {
+      "weight": 0.22,
+      "fields": [
+        {"key": "rev_growth", "column": "total_revenue_yoy_growth_ttm", "direction": "higher_better", "weight": 0.8, "clip": [-50, 150]},
+        {"key": "eps_growth", "column": "earnings_per_share_diluted_yoy_growth_ttm", "direction": "higher_better", "weight": 0.8, "clip": [-100, 200]},
+        {"key": "gross_margin", "column": "gross_margin", "direction": "higher_better", "weight": 0.6, "clip": [-20, 100]},
+        {"key": "op_margin", "column": "operating_margin", "direction": "higher_better", "weight": 0.7, "clip": [-80, 60]},
+        {"key": "net_margin", "column": "net_margin_ttm", "direction": "higher_better", "weight": 0.6, "clip": [-100, 60]},
+        {"key": "roe", "column": "return_on_equity", "direction": "higher_better", "weight": 0.7, "clip": [-100, 80]},
+        {"key": "roic", "column": "return_on_invested_capital", "direction": "higher_better", "weight": 0.7, "clip": [-50, 60]},
+        {"key": "piotroski", "column": "piotroski_f_score_ttm", "direction": "higher_better", "weight": 0.8, "clip": [0, 9]},
+        {"key": "altman_z", "column": "altman_z_score_ttm", "direction": "higher_better", "weight": 0.6, "clip": [-5, 20]},
+        {"key": "debt_to_equity", "column": "debt_to_equity", "direction": "lower_better", "weight": 0.6, "clip": [0, 10]},
+        {"key": "current_ratio", "column": "current_ratio", "direction": "higher_better", "weight": 0.4, "clip": [0, 10]},
+        {"key": "fcf_margin", "column": "free_cash_flow_margin_ttm", "direction": "higher_better", "weight": 0.6, "clip": [-80, 60]}
+      ]
+    },
+    "technical": {
+      "weight": 0.18,
+      "fields": [
+        {"key": "rsi14", "column": "RSI", "direction": "band", "band": [45, 70], "weight": 0.8},
+        {"key": "macd_hist", "derived": "macd_hist", "direction": "higher_better", "weight": 0.5},
+        {"key": "above_sma50", "derived": "above_sma50", "direction": "higher_better", "weight": 0.5},
+        {"key": "above_sma200", "derived": "above_sma200", "direction": "higher_better", "weight": 0.5},
+        {"key": "pct_off_52w_high", "derived": "pct_off_52w_high", "direction": "higher_better", "weight": 0.6, "clip": [-100, 0]},
+        {"key": "adx", "column": "ADX", "direction": "higher_better", "weight": 0.4, "clip": [5, 60]},
+        {"key": "atrp", "column": "ATRP", "direction": "lower_better", "weight": 0.3, "clip": [0, 30]},
+        {"key": "rel_vol", "column": "relative_volume_10d_calc", "direction": "higher_better", "weight": 0.4, "clip": [0, 8]}
+      ]
+    },
+    "momentum": {
+      "weight": 0.18,
+      "fields": [
+        {"key": "change", "column": "change", "direction": "higher_better", "weight": 0.5, "clip": [-30, 40]},
+        {"key": "gap", "column": "gap", "direction": "higher_better", "weight": 0.2, "clip": [-20, 25]},
+        {"key": "perf_5d", "column": "Perf.5D", "direction": "higher_better", "weight": 0.6, "clip": [-40, 60]},
+        {"key": "perf_1m", "column": "Perf.1M", "direction": "higher_better", "weight": 1.0, "clip": [-60, 100]},
+        {"key": "perf_3m", "column": "Perf.3M", "direction": "higher_better", "weight": 0.8, "clip": [-70, 150]},
+        {"key": "perf_6m", "column": "Perf.6M", "direction": "higher_better", "weight": 0.6, "clip": [-80, 250]},
+        {"key": "perf_ytd", "column": "Perf.YTD", "direction": "higher_better", "weight": 0.7, "clip": [-80, 250]}
+      ]
+    }
+  },
+  "overlays": {
+    "prediction": {"weight": 0.0, "score_min": -2.0, "score_max": 2.0},
+    "edge": {"weight": 0.18}
+  },
+  "lanes": {
+    "breakout": {
+      "enabled": true,
+      "description": "Breakout sleeve: breakout_long_v1 score, not consensus mix.",
+      "conditions": {
+        "all": [
+          {"field": "pred_profile_breakout_long_v1_score", "op": ">=", "value": 0.55}
+        ]
+      },
+      "order_by": [
+        {"key": "pred_profile_breakout_long_v1_score", "dir": "desc"},
+        {"key": "edge_unified_score", "dir": "desc"}
+      ],
+      "top_n": 50
+    },
+    "continuation": {
+      "enabled": true,
+      "description": "Continuation sleeve: quality_continuation + sustained momentum safety.",
+      "conditions": {
+        "any": [
+          {"field": "pred_profile_quality_continuation_v1_score", "op": ">=", "value": 0.50},
+          {"field": "pred_profile_sustained_momentum_safety_v1_score", "op": ">=", "value": 0.50}
+        ]
+      },
+      "order_by": [
+        {"key": "pred_profile_quality_continuation_v1_score", "dir": "desc"},
+        {"key": "pred_profile_sustained_momentum_safety_v1_score", "dir": "desc"}
+      ],
+      "top_n": 50
+    },
+    "opportunity": {
+      "enabled": true,
+      "description": "Opportunity sleeve: early inflection, forward edge, value recovery, leftover.",
+      "conditions": {
+        "any": [
+          {"field": "pred_profile_early_momentum_inflection_v1_score", "op": ">=", "value": 0.45},
+          {"field": "pred_profile_forward_edge_active_v2_score", "op": ">=", "value": 0.45},
+          {"field": "pred_profile_asymmetric_value_score", "op": ">=", "value": 0.55},
+          {"field": "pred_profile_value_recovery_v3_score", "op": ">=", "value": 0.55},
+          {"field": "price_target_upside_pct", "op": ">=", "value": 18.0}
+        ]
+      },
+      "order_by": [
+        {"key": "price_target_upside_pct", "dir": "desc"},
+        {"key": "pred_profile_forward_edge_active_v2_score", "dir": "desc"}
+      ],
+      "top_n": 60
+    },
+    "strength": {
+      "enabled": true,
+      "description": "Strength sleeve: quality/durable compounders still paying without chase.",
+      "conditions": {
+        "any": [
+          {"field": "pred_profile_quality_value_compounder_score", "op": ">=", "value": 0.50},
+          {"field": "pred_profile_durable_value_compounder_v1_score", "op": ">=", "value": 0.50},
+          {"field": "pred_profile_defensive_fortress_v2_score", "op": ">=", "value": 0.50}
+        ]
+      },
+      "order_by": [
+        {"key": "pred_profile_quality_value_compounder_score", "dir": "desc"},
+        {"key": "fundamental_score", "dir": "desc"}
+      ],
+      "top_n": 50
+    },
+    "shorts": {
+      "enabled": true,
+      "description": "Short sleeve: fragility and mean-reversion exhaustion, not inverted consensus.",
+      "conditions": {
+        "any": [
+          {"field": "pred_profile_fragility_short_score", "op": ">=", "value": 0.55},
+          {"field": "pred_profile_mean_reversion_exhaustion_v1_score", "op": ">=", "value": 0.55}
+        ]
+      },
+      "order_by": [
+        {"key": "pred_profile_fragility_short_score", "dir": "desc"},
+        {"key": "pred_profile_mean_reversion_exhaustion_v1_score", "dir": "desc"}
+      ],
+      "top_n": 40
+    },
+    "top_movers": {
+      "enabled": true,
+      "description": "Top moving names with a fundamental+technical backdrop.",
+      "conditions": {
+        "all": [
+          {"any": [
+            {"field": "perf_1m", "op": ">=", "value": 8.0},
+            {"field": "change", "op": ">=", "value": 4.0}
+          ]},
+          {"field": "fundamental_score", "op": ">=", "value": 40.0},
+          {"field": "technical_score", "op": ">=", "value": 40.0}
+        ]
+      },
+      "order_by": [
+        {"key": "momentum_score", "dir": "desc"},
+        {"key": "edge_unified_score", "dir": "desc"}
+      ],
+      "top_n": 40
+    },
+    "value_drops": {
+      "enabled": true,
+      "description": "Dropping names with strong value (falling knives filtered by cheapness).",
+      "conditions": {
+        "all": [
+          {"any": [
+            {"field": "perf_1m", "op": "<=", "value": -6.0},
+            {"field": "change", "op": "<=", "value": -4.0}
+          ]},
+          {"field": "value_score", "op": ">=", "value": 60.0}
+        ]
+      },
+      "order_by": [
+        {"key": "value_score", "dir": "desc"},
+        {"key": "price_target_upside_pct", "dir": "desc"}
+      ],
+      "top_n": 40
+    }
+  },
+  "output": {
+    "root_dir": null,
+    "write_csv": true,
+    "top_n_focus_section": 50,
+    "min_composite_coverage": 0.5
+  }
+}

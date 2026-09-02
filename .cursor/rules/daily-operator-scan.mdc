@@ -1,0 +1,17 @@
+---
+description: Daily operator scan contract — compile briefing pack first; no mix composite; polar ADD→EXIT blocked. Use when briefing, daily-focus canvas, leftover radar, holdings scoring, move-prediction scan, or market-timing-policy review.
+alwaysApply: false
+---
+
+# Daily operator scan
+
+When the user wants a daily briefing, radar, or trade scan:
+
+1. Read `.cursor/skills/daily-operator-scan/SKILL.md`.
+2. Compile or reuse `python src/operator_briefing/example_entry.py` and read the newest `briefing_pack.md` + `.json`.
+3. Do not invent a 0–100 rank. Use pack sleeves independently.
+4. Polar rule: yesterday Book ADD/NEW cannot become EXIT unless the pack marks `thesis_kill`.
+5. MTP ENTER_SMALL is not a buy list. Catalyst PASS-all is not a filter.
+6. Output a `daily-focus-YYYYMMDD.canvas.tsx`; keep chat to a short snapshot.
+
+Coding-only tasks (refactors, tests, loaders) ignore this rule.

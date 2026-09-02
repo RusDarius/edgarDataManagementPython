@@ -1,0 +1,16 @@
+OPERATOR OVERRIDES — APPEND TO THE CHOSEN DAILY PROMPT
+======================================================
+Attach this only when something should differ from the version defaults.
+Leave a line blank if unused. Do not treat blank lines as instructions.
+
+Scan day:
+Specific names to force-include:
+Style tilt this run (core-only / tactical-only / shorts-on / shorts-off):
+Earnings window (default 0–30d; set 0–14d to tighten):
+Force earnings sleeve off:
+Historical check symbols:
+Forced clusters (only if named here):
+Ignore groups / themes:
+Max new names:
+Prior briefing / polar-flip check (default on; path to canvas or reconciliation run):
+Other:

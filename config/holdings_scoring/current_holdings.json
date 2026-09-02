@@ -4,7 +4,7 @@
   "portfolio_currency": "USD",
   "description": "Current book — set invested_sum/average_price in their currencies; portfolio aggregates in USD. Use optional symbol (EXCHANGE:TICKER) when ticker alone is ambiguous. Optional instrument_type is stock (default) or etf; ETFs join the latest ETF analysis scan.",
   "cash_position": {
-    "value": 22900,
+    "value": 11500,
     "currency": "USD"
   },
   "holdings": [
@@ -17,11 +17,35 @@
       "price_currency": "USD"
     },
     {
+      "ticker": "MU",
+      "sleeve": "core",
+      "invested_sum": 1965,
+      "invested_currency": "USD",
+      "average_price": 959.24,
+      "price_currency": "USD"
+    },
+    {
+      "ticker": "CHKP",
+      "sleeve": "core",
+      "invested_sum": 5005,
+      "invested_currency": "USD",
+      "average_price": 133.26,
+      "price_currency": "USD"
+    },
+    {
+      "ticker": "MRVL",
+      "sleeve": "core",
+      "invested_sum": 2068,
+      "invested_currency": "USD",
+      "average_price": 241.5,
+      "price_currency": "USD"
+    },
+    {
       "ticker": "PATH",
       "sleeve": "core",
-      "invested_sum": 5485,
+      "invested_sum": 3810,
       "invested_currency": "USD",
-      "average_price": 13.69,
+      "average_price": 15.2,
       "price_currency": "USD",
       "notes": "UiPath"
     },
@@ -46,9 +70,9 @@
     {
       "ticker": "ZS",
       "sleeve": "core",
-      "invested_sum": 9541,
+      "invested_sum": 9184,
       "invested_currency": "USD",
-      "average_price": 168,
+      "average_price": 178.48,
       "price_currency": "USD",
       "notes": "Zscaler"
     },
@@ -92,18 +116,18 @@
     {
       "ticker": "INTU",
       "sleeve": "core",
-      "invested_sum": 4416,
+      "invested_sum": 6017,
       "invested_currency": "USD",
-      "average_price": 345.68,
+      "average_price": 345.63,
       "price_currency": "USD",
       "notes": "Intuit"
     },
     {
       "ticker": "PGY",
       "sleeve": "core",
-      "invested_sum": 7003,
+      "invested_sum": 13011,
       "invested_currency": "USD",
-      "average_price": 22.3,
+      "average_price": 21.98,
       "price_currency": "USD",
       "notes": "PGY"
     },

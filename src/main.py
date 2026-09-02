@@ -208,6 +208,7 @@ from db.bvb_tickers_operations import (
 from db.trading_view_company_data_map_operations import (
     get_trading_view_company_by_symbol,
 )
+from focus_pool_screening import run_focus_pool_screening
 from portfolio_performance_tracking.portfolio_performance_tracker import (
     PortfolioPerformanceTracker,
 )
@@ -663,13 +664,13 @@ def main():
     #     etf_regime_tape.log / etf_sleeve_heat.log / etf_divergences.log
     #     etf_catch_up_vs_extended.log / etf_vehicle_quality.log
     #     etf_holdings_overlay.log / etf_dod_changes.log / etf_book_ranked.csv
-    # etf_result = run_etf_scan_and_analysis_suite(
+    # run_etf_scan_and_analysis_suite(
     #     TRADINGVIEW_API_CLIENT,
     #     min_aum_usd=1_000_000_000,
     # )
 
     # ── Single Stock report ─────────────────────────────────────────────
-    # run_symbol_intelligence_report_example("NASDAQ:CHKP")
+    # run_symbol_intelligence_report_example("NASDAQ:PGY")
 
     # ── Stock move-prediction ─────────────────────────────────────────────
     # daily_prediction_move_analysis_suite()
@@ -691,6 +692,26 @@ def main():
     # export_all_tradingview_fields_duckdb()
     # export_all_tradingview_fields_duckdb(chunk_size=300, timeout=90)
     # export_focused_tradingview_fields_duckdb()
+
+    # ── Focus pool screening (deterministic wide pool) ─────────────────────
+    # Reads latest move-prediction run (scores + raw scan) enriched with the
+    # latest all-fields snapshot and edge-research unified highlights.
+    # Value/fundamental/technical/momentum percentile pool + lanes
+    # (top_movers / value_drops / backdrop_value / momentum_leaders).
+    # Config: src/focus_pool_screening/configs/default_wide_pool.json
+    # CLI:    python src/focus_pool_screening/example_entry.py
+    # Output: logs/tradingview_analysis/focus_pool_screening/runs/<run_id>/
+    #   focus_pool_screening.duckdb (focus_pool_rows + v_focus_top/v_lane_* views)
+    #   focus_pool_rows.csv, focus_pool__overview.log
+    # focus_pool_result = run_focus_pool_screening()
+    # print(focus_pool_result["overview_log"])
+
+    # ── Generic cross-pipeline backtests (evidence + overlay lift) ─────────────
+    # Reads existing artifacts; does not rerun full-flow edge/upside/projection.
+    # CLI:
+    #   python src/run_backtests.py
+    #   python src/run_backtests.py --start-day 01_06_2026 --end-day 30_08_2026
+    #   python src/run_backtests.py --config src/backtests/configs/default_v1.json
 
     # Market flow screening (paired daily DuckDB snapshots)
     # Output: logs/tradingview_analysis/market_flow_screening/runs/flow_<base>_<compare>_<id>/
