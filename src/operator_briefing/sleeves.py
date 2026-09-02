@@ -26,8 +26,55 @@ SKIP_UNPAID_INDUSTRIES = frozenset(
     }
 )
 
+# Paid/crowd tape clusters. Not an automatic skip for Book names;
+# stance treats them as a conflict that cuts NEW/ADD support.
+CROWD_INDUSTRIES = frozenset(
+    {
+        "Precious Metals",
+        "Oil Refining/Marketing",
+        "Biotechnology",
+        "Agricultural Chemicals",
+        "Chemicals: Agricultural",
+        "Agricultural Commodities/Milling",
+        "Marine Shipping",
+        "Insurance Brokers/Services",
+        "Property/Casualty Insurance",
+        "Integrated Oil",
+        "Oil & Gas Production",
+        "Oil & Gas Pipelines",
+        "Contract Drilling",
+        "Oilfield Services/Equipment",
+        "Pharmaceuticals: Major",
+        "Pharmaceuticals: Other",
+        "Medical Specialties",
+    }
+)
+
 PREFERRED_US_EXCHANGES = frozenset(
     {"NASDAQ", "NYSE", "AMEX", "ARCA", "BATS", "CBOE"}
+)
+
+BLOCKED_LISTING_PREFIXES = frozenset(
+    {
+        "OTC",
+        "CSE",
+        "NEO",
+        "TSX",
+        "TSXV",
+        "HKEX",
+        "KRX",
+        "LSE",
+        "XETR",
+        "SWX",
+        "OMXCOP",
+        "OMXSTO",
+        "TASE",
+        "JPX",
+        "TSE",
+        "ASX",
+        "BSE",
+        "NSE",
+    }
 )
 
 PROFILE_LIVE_MIN = 0.35
@@ -83,6 +130,15 @@ def pct_vs(close: Any, ref: Any) -> float | None:
     return (close_f / ref_f - 1.0) * 100.0
 
 
+def unpaid_sort_key(row: Mapping[str, Any]) -> tuple:
+    """Live profile and edge rank first — not leftover-first dumps."""
+    live = 0 if profile_live(row) else 1
+    opp = _f(row.get("opp"))
+    opp_key = opp if opp is not None else 9999.0
+    leftover = -(_f(row.get("left")) or 0.0)
+    return (live, opp_key, leftover)
+
+
 def profile_live(row: Mapping[str, Any]) -> bool:
     for key in ("bo", "cont", "fwd"):
         value = _f(row.get(key))
@@ -92,11 +148,13 @@ def profile_live(row: Mapping[str, Any]) -> bool:
 
 
 def is_us_listed(row: Mapping[str, Any]) -> bool:
+    symbol = str(row.get("symbol") or "")
+    prefix = symbol.split(":", 1)[0].upper() if ":" in symbol else ""
+    if prefix in BLOCKED_LISTING_PREFIXES:
+        return False
     exchange = str(row.get("exchange") or "").upper()
     country = str(row.get("country") or "").strip().lower()
-    if not exchange and not country:
-        return True
-    if exchange in PREFERRED_US_EXCHANGES:
+    if prefix in PREFERRED_US_EXCHANGES or exchange in PREFERRED_US_EXCHANGES:
         return True
     return country in {"united states", "usa", "us"}
 

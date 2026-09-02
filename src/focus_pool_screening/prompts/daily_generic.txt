@@ -33,12 +33,17 @@ GOALS THIS RUN MUST COVER
 HOW TO LAUNCH (attach these, or the newest equivalents)
 -------------------------------------------------------
 0. Compile the briefing pack first (required reuse layer)
-     python src/operator_briefing/example_entry.py
+     python src/operator_briefing/example_entry.py compile
      Read the newest logs/tradingview_analysis/operator_briefing/runs/briefing_pack_*/briefing_pack.md
      and briefing_pack.json. That file already locks run_ids, leftover, sleeves
-     (filtered), book continuity, MTP climate, earnings 0–21d, and Fri–now
-     progression. Prefer it over ad-hoc DuckDB. If the user pinned run ids,
+     (filtered), book continuity, MTP climate, earnings 0–21d, Fri–now
+     progression, and per-name stances (suggested_conviction is support, not a
+     probability). Prefer it over ad-hoc DuckDB. If the user pinned run ids,
      pass --pred-run and --af-run.
+     Dossiers: python src/operator_briefing/example_entry.py lookup TICKER [TICKER ...]
+     Schema:   python src/operator_briefing/example_entry.py inspect
+     Progression vs prior pred run: python src/operator_briefing/example_entry.py compare
+     Do not write logs/_tmp_*.py for inspect/extract/print.
 
 Required
   1. Latest holdings-scoring run

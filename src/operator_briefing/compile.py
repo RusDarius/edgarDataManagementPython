@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .continuity import continuity_action, load_prior_actions, map_mix_to_naive_book_action, prior_action_for
-from .discovery import PROJECT_ROOT, LockedSources, lock_sources
+from .discovery import BRIEFING_RUNS, LockedSources, lock_sources
 from .extract import (
     extract_all_fields,
     extract_conviction,
@@ -26,14 +26,15 @@ from .sleeves import (
     MTP_BOUNCE_ACTIONS,
     continuation_paid,
     forming_eligible,
+    is_us_listed,
+    leftover_pct,
     short_limited_upside,
     unpaid_eligible,
-    leftover_pct,
+    unpaid_sort_key,
 )
+from .stance import rank_suggested_courses, suggest_stance, summarize_operator_course
 
-DEFAULT_OUTPUT_ROOT = (
-    PROJECT_ROOT / "logs" / "tradingview_analysis" / "operator_briefing" / "runs"
-)
+DEFAULT_OUTPUT_ROOT = BRIEFING_RUNS
 
 GOTCHAS = [
     "Do not flatten mix / conviction / leftover / MTP into one 0-100 rank.",
@@ -44,6 +45,8 @@ GOTCHAS = [
     "avoid_value_trap on a live leftover Book line is HOLD_NO_ADD, not EXIT, unless a thesis-kill fires.",
     "Auto leftover-first lists dump biotech/ADR junk. Use unpaid_eligible / forming / continuation_paid / short_limited_upside.",
     "DuckDB paths with '=' must be quoted. Prefer this pack over ad-hoc SQL.",
+    "suggested_conviction is support for a named course, not mix and not a probability. Keep conflicts visible.",
+    "Do not write _tmp_*.py under logs/. Use inspect / lookup / compare / stance.",
 ]
 
 
@@ -214,7 +217,7 @@ def _sleeve_lists(names: dict[str, dict[str, Any]], book_symbols: set[str]) -> d
             paid.append(compact)
         if short_limited_upside(rec) and rec.get("symbol") not in book_symbols:
             shorts.append(compact)
-    unpaid.sort(key=lambda r: (-(_f(r.get("left")) or 0), (_f(r.get("opp")) or 9999)))
+    unpaid.sort(key=unpaid_sort_key)
     forming.sort(key=lambda r: (_f(r.get("rng")) or 99, -(_f(r.get("left")) or 0)))
     paid.sort(key=lambda r: (-(_f(r.get("bo")) or 0), -(_f(r.get("rsi")) or 0)))
     shorts.sort(key=lambda r: ((_f(r.get("left")) or 0), _f(r.get("d5")) or 0))
@@ -285,12 +288,17 @@ def compile_briefing_pack(
 
     watch = set(book_symbols)
     for bucket in sleeves.values():
-        for row in bucket[:15]:
-            watch.add(str(row.get("symbol")))
+        for row in bucket:
+            symbol = str(row.get("symbol") or "")
+            if symbol:
+                watch.add(symbol)
     earnings = [
         _compact_name(rec)
         for rec in names.values()
-        if rec.get("dte") is not None and -1 <= rec["dte"] <= 21 and (_f(rec.get("mcap")) or 0) >= 2_000_000_000
+        if rec.get("dte") is not None
+        and -1 <= rec["dte"] <= 21
+        and (_f(rec.get("mcap")) or 0) >= 2_000_000_000
+        and is_us_listed(rec)
     ]
     earnings.sort(key=lambda r: r.get("dte") or 99)
     for row in earnings[:25]:
@@ -300,29 +308,54 @@ def compile_briefing_pack(
         progression = extract_progression(sources, sorted(watch))
     except Exception as exc:  # noqa: BLE001
         progression = {"_error": str(exc)}
+    book_by_symbol = {str(r["symbol"]): r for r in book}
+    stances: dict[str, dict[str, Any]] = {}
+    for symbol in sorted(watch):
+        rec = names.get(symbol)
+        if not rec:
+            continue
+        book_row = book_by_symbol.get(symbol)
+        prog = progression.get(symbol) if isinstance(progression, dict) else None
+        delta = (prog or {}).get("delta_vs_prior_run") if isinstance(prog, dict) else None
+        stances[symbol] = suggest_stance(
+            rec,
+            in_book=symbol in book_symbols,
+            continuity=(book_row or {}).get("continuity") if book_row else None,
+            delta=delta if isinstance(delta, dict) else None,
+        )
+    suggested_courses = rank_suggested_courses(stances)
     us2b = [r for r in af_rows if (_f(r.get("mcap")) or 0) >= 2_000_000_000]
     created = datetime.now(tz=timezone.utc)
     run_id = f"briefing_pack_{created.strftime('%Y%m%d_%H%M')}_utc_{uuid.uuid4().hex[:8]}"
+    regime = {
+        "us_2b": universe_stats(af_rows, min_mcap=2_000_000_000),
+        "us_500m": universe_stats(af_rows, min_mcap=500_000_000),
+        "industries_5d": industry_breadth(af_rows, min_mcap=2_000_000_000)[:12],
+        "industries_5d_laggards": list(
+            reversed(industry_breadth(af_rows, min_mcap=2_000_000_000)[-8:])
+        ),
+    }
+    mtp_climate = _mtp_climate(mtp)
     pack = {
         "schema_version": "operator_briefing_pack_v1",
         "run_id": run_id,
         "created_at_utc": created.isoformat(),
         "sources": sources.as_dict(),
         "gotchas": GOTCHAS,
-        "regime": {
-            "us_2b": universe_stats(af_rows, min_mcap=2_000_000_000),
-            "us_500m": universe_stats(af_rows, min_mcap=500_000_000),
-            "industries_5d": industry_breadth(af_rows, min_mcap=2_000_000_000)[:12],
-            "industries_5d_laggards": list(
-                reversed(industry_breadth(af_rows, min_mcap=2_000_000_000)[-8:])
-            ),
-        },
-        "mtp": _mtp_climate(mtp),
+        "regime": regime,
+        "mtp": mtp_climate,
         "book": book,
         "sleeves": sleeves,
         "earnings_0_21d": earnings[:40],
         "progression": progression,
         "names": {s: _compact_name(names[s]) for s in sorted(watch) if s in names},
+        "stances": stances,
+        "suggested_courses": suggested_courses,
+        "primary_course": summarize_operator_course(
+            stances,
+            regime=regime,
+            mtp=mtp_climate,
+        ),
         "counts": {
             "af_rows": len(af_rows),
             "us_2b": len(us2b),
@@ -417,6 +450,42 @@ def render_markdown(pack: dict[str, Any]) -> str:
     for row in pack.get("earnings_0_21d") or []:
         lines.append(
             f"- dte {row.get('dte')} {row.get('symbol')} left {row.get('left')} rsi {row.get('rsi')} 5D {row.get('d5')} mtp {row.get('mtp')}"
+        )
+    primary = pack.get("primary_course") or {}
+    lines += [
+        "",
+        "## Suggested course (support, not a probability)",
+        f"- bias: {primary.get('bias')}",
+        f"- {primary.get('note')}",
+        "",
+        "### Do",
+    ]
+    for item in primary.get("do") or []:
+        lines.append(f"- {item}")
+    lines += ["", "### Do not"]
+    for item in primary.get("do_not") or []:
+        lines.append(f"- {item}")
+    courses = pack.get("suggested_courses") or {}
+    lines += ["", "### Ranked NEW (pack watch, leftover+profile, not a 0-100 composite)"]
+    for row in (courses.get("new") or [])[:8]:
+        lines.append(
+            f"- {row.get('rank_in_bucket')} {row.get('symbol')} {row.get('stance')} "
+            f"support {row.get('suggested_conviction')} — {row.get('course')}"
+        )
+    lines += ["", "### Ranked ADD"]
+    for row in (courses.get("add") or [])[:8]:
+        lines.append(
+            f"- {row.get('rank_in_bucket')} {row.get('symbol')} support {row.get('suggested_conviction')} — {row.get('course')}"
+        )
+    lines += ["", "### Ranked TRIM/EXIT/DERISK"]
+    for row in (courses.get("trim_exit") or [])[:8]:
+        lines.append(
+            f"- {row.get('rank_in_bucket')} {row.get('symbol')} {row.get('stance')} support {row.get('suggested_conviction')}"
+        )
+    lines += ["", "### Ranked SHORT_WAIT"]
+    for row in (courses.get("short_wait") or [])[:6]:
+        lines.append(
+            f"- {row.get('rank_in_bucket')} {row.get('symbol')} support {row.get('suggested_conviction')} — {row.get('course')}"
         )
     lines += ["", "## Gotchas"]
     for item in pack.get("gotchas") or []:

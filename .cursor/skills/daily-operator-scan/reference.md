@@ -45,6 +45,22 @@ left = max( (price_target_average / close - 1) * 100,
 
 Do not rank leftover Book names by a conviction_score that `avoid_value_trap` zeroed.
 
+## CLI (replaces logs/_tmp_*.py)
+
+| Command | Use |
+|---|---|
+| `python src/operator_briefing/example_entry.py compile` | Lock sources, sleeves, continuity, stances |
+| `... inspect` | Tables, columns, latest run_ids, pack path |
+| `... lookup MU SNDK` | Raw + progression + stance dossier |
+| `... compare [--run-a A --run-b B]` | Weeks bo/cont/fwd deltas, top-40 churn, mix flips |
+| `... stance MU SNDK` | Course + suggested_conviction + conflicts only |
+
+## Stance / suggested_conviction
+
+Pack keys: `stances`, `suggested_courses` (ranked **per bucket**), `primary_course` (`bias` / `do` / `do_not`).
+
+`suggested_conviction` is support for that course, not mix, not leftover rank, not a probability. Conflicts stay on the row (polar block, MTP bounce vs NEW/short, leftover-91 EXIT is not a short, crowd industry).
+
 ## Sleeve filters (already in the pack)
 
 Implemented in `src/operator_briefing/sleeves.py`:

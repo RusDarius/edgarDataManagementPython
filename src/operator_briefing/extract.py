@@ -56,9 +56,12 @@ def _qident(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
-def _table_columns(database_path: Path, table: str) -> set[str]:
+def table_columns(database_path: Path, table: str) -> set[str]:
     rows = query_move_prediction_duckdb(database_path, f"PRAGMA table_info({_qident(table)})")
     return {str(r.get("name")) for r in rows}
+
+
+_table_columns = table_columns
 
 
 def _pick(available: set[str], candidates: Iterable[str]) -> str | None:

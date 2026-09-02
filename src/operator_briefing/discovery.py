@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,7 @@ PRIORS_DIR = PROJECT_ROOT / "logs" / "AI_ANALYSIS_UTILS" / "priors"
 MTP_RUNS = LOG_ROOT / "market_timing_policy" / "runs"
 HOLDINGS_RUNS = LOG_ROOT / "holdings_scoring_analysis" / "runs"
 FOCUS_RUNS = LOG_ROOT / "focus_pool_screening" / "runs"
+BRIEFING_RUNS = LOG_ROOT / "operator_briefing" / "runs"
 
 
 @dataclass(frozen=True)
@@ -212,3 +214,24 @@ def lock_sources(
         priors_path=priors,
         notes=tuple(notes),
     )
+
+
+def latest_briefing_pack_path() -> Path | None:
+    run_dir = _latest_dir(BRIEFING_RUNS, "briefing_pack_")
+    if run_dir is None:
+        return None
+    path = run_dir / "briefing_pack.json"
+    return path if path.exists() else None
+
+
+def load_briefing_pack(path: Path | str | None = None) -> dict[str, Any]:
+    resolved = Path(path) if path else latest_briefing_pack_path()
+    if resolved is None or not resolved.exists():
+        raise FileNotFoundError(
+            "No briefing_pack.json found. Run: python src/operator_briefing/example_entry.py compile"
+        )
+    payload = json.loads(resolved.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"briefing pack is not an object: {resolved}")
+    payload["_pack_path"] = resolved.as_posix()
+    return payload
