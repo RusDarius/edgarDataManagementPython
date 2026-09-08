@@ -7,12 +7,13 @@ from collections import defaultdict
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 from data_analysis_scripts.trading_view_all_fields_metric_pattern_analyzer import (
     _extract_day_label_from_database_path,
     discover_all_fields_daily_databases,
 )
+from db.trading_view_all_fields_duckdb import resolve_latest_and_full_all_fields_run_ids
 
 from .config import build_edge_research_run_context, resolve_edge_research_paths
 from .taxonomy import SleeveFieldSpec, resolve_sleeve_field_specs
@@ -72,18 +73,18 @@ def _optional_field_select(
     alias: str,
     sql_type: str,
     available_columns: set[str],
+    column_ref: Callable[[str], str] | None = None,
 ) -> str:
     if field_name not in available_columns:
         return f"CAST(NULL AS {sql_type}) AS {_quote_identifier(alias)}"
-    if sql_type == "DOUBLE":
-        return (
-            f"TRY_CAST(r.{_quote_identifier(field_name)} AS DOUBLE) "
-            f"AS {_quote_identifier(alias)}"
-        )
-    return (
-        f"CAST(r.{_quote_identifier(field_name)} AS VARCHAR) "
-        f"AS {_quote_identifier(alias)}"
+    ref = (
+        column_ref(field_name)
+        if column_ref is not None
+        else f"r.{_quote_identifier(field_name)}"
     )
+    if sql_type == "DOUBLE":
+        return f"TRY_CAST({ref} AS DOUBLE) AS {_quote_identifier(alias)}"
+    return f"CAST({ref} AS VARCHAR) AS {_quote_identifier(alias)}"
 
 
 def _write_day_count_csv(path: Path, rows: Sequence[dict[str, Any]]) -> None:
@@ -327,9 +328,7 @@ def _append_snapshot_days_to_connection(
     progress_offset: int = 0,
     progress_total: int | None = None,
 ) -> None:
-    stage_base_aliases = {
-        alias_name for _, alias_name, _ in DEFAULT_BASE_FIELD_SPECS
-    }
+    stage_base_aliases = {alias_name for _, alias_name, _ in DEFAULT_BASE_FIELD_SPECS}
     dynamic_stage_fields = [
         spec for spec in selected_fields if spec.field_name not in stage_base_aliases
     ]
@@ -360,12 +359,46 @@ def _append_snapshot_days_to_connection(
             ).fetchall()
         }
         try:
+            run_ids: dict[str, str | None] = {
+                "latest_run_id": None,
+                "full_run_id": None,
+            }
+            try:
+                run_ids = resolve_latest_and_full_all_fields_run_ids(
+                    output_conn,
+                    run_metadata_table=f"{_quote_identifier(alias)}.run_metadata",
+                )
+            except Exception:
+                pass
+            latest_run_id = run_ids.get("latest_run_id")
+            full_run_id = run_ids.get("full_run_id")
+            uses_fallback = (
+                latest_run_id is not None
+                and full_run_id is not None
+                and full_run_id != latest_run_id
+            )
+            # Prefer the freshest scan (may be a focused-catalog intraday
+            # refresh) and fall back per-column to the most recent
+            # full-catalog run in the same day's database for any field the
+            # freshest run left NULL.
+            if uses_fallback:
+
+                def _column_ref(field_name: str) -> str:
+                    quoted = _quote_identifier(field_name)
+                    return f"COALESCE(r_latest.{quoted}, r_full.{quoted})"
+
+            else:
+
+                def _column_ref(field_name: str) -> str:
+                    return f"r.{_quote_identifier(field_name)}"
+
             base_select_fields_sql = ",\n                            ".join(
                 _optional_field_select(
                     field_name=field_name,
                     alias=alias_name,
                     sql_type=sql_type,
                     available_columns=available_columns,
+                    column_ref=_column_ref,
                 )
                 for field_name, alias_name, sql_type in DEFAULT_BASE_FIELD_SPECS
             )
@@ -375,13 +408,14 @@ def _append_snapshot_days_to_connection(
                     alias=spec.field_name,
                     sql_type="DOUBLE",
                     available_columns=available_columns,
+                    column_ref=_column_ref,
                 )
                 for spec in dynamic_stage_fields
             )
             filters = ["1 = 1"]
             if primary_only and "is_primary" in available_columns:
                 filters.append(
-                    "COALESCE(LOWER(TRIM(CAST(r.is_primary AS VARCHAR))), '') "
+                    f"COALESCE(LOWER(TRIM(CAST({_column_ref('is_primary')} AS VARCHAR))), '') "
                     "IN ('true', '1', 'yes', 'y')"
                 )
             if (
@@ -389,7 +423,7 @@ def _append_snapshot_days_to_connection(
                 and "market_cap_basic" in available_columns
             ):
                 filters.append(
-                    "TRY_CAST(r.market_cap_basic AS DOUBLE) "
+                    f"TRY_CAST({_column_ref('market_cap_basic')} AS DOUBLE) "
                     f">= {float(min_market_cap_usd)}"
                 )
             filter_sql = " AND\n                        ".join(filters)
@@ -399,6 +433,27 @@ def _append_snapshot_days_to_connection(
             all_stage_fields_sql = ",\n                            ".join(
                 block for block in stage_select_blocks if block
             )
+            if uses_fallback:
+                from_and_join_sql = f"""
+                    FROM (
+                        SELECT * FROM {_quote_identifier(alias)}.all_fields_rows
+                        WHERE run_id = {_quote_sql_literal(latest_run_id)}
+                    ) AS r_latest
+                    FULL OUTER JOIN (
+                        SELECT * FROM {_quote_identifier(alias)}.all_fields_rows
+                        WHERE run_id = {_quote_sql_literal(full_run_id)}
+                    ) AS r_full
+                        ON r_latest.symbol = r_full.symbol
+                    LEFT JOIN {_quote_identifier(alias)}.run_metadata AS m
+                        ON m.run_id = COALESCE(r_latest.run_id, r_full.run_id)
+                """
+                run_id_sql = "CAST(COALESCE(r_latest.run_id, r_full.run_id) AS VARCHAR)"
+            else:
+                from_and_join_sql = f"""
+                    FROM {_quote_identifier(alias)}.all_fields_rows AS r
+                    LEFT JOIN {_quote_identifier(alias)}.run_metadata AS m USING (run_id)
+                """
+                run_id_sql = "CAST(r.run_id AS VARCHAR)"
             output_conn.execute(f"""
                 CREATE OR REPLACE TEMP TABLE day_symbol_stage AS
                 SELECT * EXCLUDE (row_num)
@@ -407,22 +462,21 @@ def _append_snapshot_days_to_connection(
                         {_quote_sql_literal(database_path.as_posix())} AS source_database_path,
                         {_quote_sql_literal(source_day_label)} AS source_day_label,
                         CAST({_quote_sql_literal(source_date)} AS DATE) AS source_date,
-                        CAST(r.run_id AS VARCHAR) AS run_id,
+                        {run_id_sql} AS run_id,
                         m.created_at_utc AS run_created_at_utc,
-                        CAST(r.symbol AS VARCHAR) AS symbol,
+                        CAST({_column_ref('symbol')} AS VARCHAR) AS symbol,
                         COALESCE(
-                            NULLIF(split_part(CAST(r.symbol AS VARCHAR), ':', 2), ''),
-                            CAST(r.symbol AS VARCHAR)
+                            NULLIF(split_part(CAST({_column_ref('symbol')} AS VARCHAR), ':', 2), ''),
+                            CAST({_column_ref('symbol')} AS VARCHAR)
                         ) AS bare_ticker,
                         {all_stage_fields_sql},
                         ROW_NUMBER() OVER (
-                            PARTITION BY r.symbol
+                            PARTITION BY {_column_ref('symbol')}
                             ORDER BY m.created_at_utc DESC NULLS LAST,
-                                r.run_id DESC,
-                                r.row_number DESC
+                                {run_id_sql} DESC,
+                                {_column_ref('row_number')} DESC
                         ) AS row_num
-                    FROM {_quote_identifier(alias)}.all_fields_rows AS r
-                    LEFT JOIN {_quote_identifier(alias)}.run_metadata AS m USING (run_id)
+                    {from_and_join_sql}
                     WHERE {filter_sql}
                 )
                 WHERE row_num = 1
@@ -792,7 +846,9 @@ def extend_symbol_day_feature_snapshot(
         taxonomy_root=taxonomy_root,
     )
     if database_paths is None:
-        raise ValueError("database_paths is required for extend_symbol_day_feature_snapshot.")
+        raise ValueError(
+            "database_paths is required for extend_symbol_day_feature_snapshot."
+        )
     resolved_databases = [Path(path) for path in database_paths]
     if not resolved_databases:
         return {

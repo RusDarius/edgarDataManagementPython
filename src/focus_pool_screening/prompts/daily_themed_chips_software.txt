@@ -7,8 +7,19 @@ Use this file as the standing instruction. Attach the latest datasets each run.
 Do not wait for extra instructions. Produce a positioned operator briefing, not a
 research essay.
 
+Same generic overlay as daily_generic / DAILY (full): week map, Top 100 unpaid
+∪ continuation with unused upside (cite rr), short book 15, earnings both ways
+including late-Sep rumour / sell-the-news, pack support then operator High/Med/Low.
+Theme sleeves are extra, not a replacement.
+
 HOW TO LAUNCH (attach these, or the newest equivalents)
 -------------------------------------------------------
+0. Compile the briefing pack first (same reuse layer as daily_generic)
+     python src/operator_briefing/example_entry.py compile
+     Read the newest briefing_pack.md. Do not fish DuckDB. Do not write
+     logs/_tmp_*.py. Polar continuity, Top 100 radar, short book 15, and
+     two-way earnings lanes already live in the pack.
+
 Required
   1. Latest holdings-scoring run
      logs/tradingview_analysis/holdings_scoring_analysis/runs/holdings_scoring_*
@@ -87,15 +98,21 @@ Step 1.5 Continuity / polar-flip lock
         Yesterday's leftover ADD is a live thesis. Mix trap is not an EXIT.
 Step 2  Regime and breadth
         Decide risk-on / mixed / fragile / risk-off BEFORE naming stocks.
+        Then write a WEEK MAP: today / rest of this week / 8–21d / 22–60d.
 Step 3  Book overlay
         Score every current holding with the continuity map. Flag any Book
         action that differs from yesterday and cite what actually changed.
+        DERISK/TRIM stick until the print window or tape repairs.
 Step 4  Opportunity funnel
-        Build a Top 30 radar from the scoring frameworks below.
+        Build a Top 100 radar from pack sleeves.radar_upside_100 (leftover ∪
+        continuation-unpaid). Cite leftover and pack `rr`. Curate 0–2 NEW.
+Step 4.5 Earnings both ways
+        Pack earnings_lanes.upside and .downside. 22–60d is BUY_THE_RUMOUR /
+        WATCH_SELL_NEWS on the same Book line — no second ticket.
 Step 5  Theme sleeves
         Datacenter/chips, software/cyber/applied-AI, then only the best outsiders.
 Step 6  Short overlay
-        Short, high-conviction list. Same analytical depth, fewer names.
+        Pack short_book_15. Bounce / ENTER_SMALL → overlay wait, 0–1 new short.
 Step 7  Decision framework A–G
         Convert radar into actions: buy now / wait / trim / confirm / next major.
 

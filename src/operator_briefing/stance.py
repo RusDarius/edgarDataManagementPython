@@ -13,6 +13,7 @@ from .sleeves import (
     CROWD_INDUSTRIES,
     MTP_BOUNCE_ACTIONS,
     continuation_paid,
+    continuation_unpaid,
     forming_eligible,
     profile_live,
     short_limited_upside,
@@ -64,11 +65,68 @@ def leftover_flags(row: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def classify_event_play(
+    row: Mapping[str, Any],
+    *,
+    in_book: bool = False,
+) -> dict[str, Any]:
+    """Map dte + leftover/tape into one catalyst play. Not a probability."""
+    dte = _f(row.get("dte"))
+    left = _f(row.get("left"))
+    flags = leftover_flags(row)
+    paid = continuation_paid(row) or flags["chase"]
+    shortish = short_limited_upside(row) and (left is None or left <= 25)
+    leftover_live = unpaid_eligible(row) or continuation_unpaid(row) or (
+        flags["unpaid"] and profile_live(row)
+    )
+    if dte is None:
+        return {"play": None, "window": None, "dte": None}
+    if dte <= 7:
+        window = "0-7d print week"
+        if in_book and paid:
+            play = "DERISK_INTO_PRINT"
+        elif in_book and leftover_live:
+            play = "HOLD_THROUGH"
+        elif shortish:
+            play = "SHORT_PRE"
+        elif paid:
+            play = "SELL_THE_NEWS"
+        else:
+            play = "WATCH_CATALYST"
+    elif dte <= 21:
+        window = "8-21d this/next week"
+        if paid and in_book:
+            play = "DERISK_INTO_PRINT"
+        elif paid:
+            play = "PASS"
+        elif shortish:
+            play = "SHORT_PRE"
+        elif leftover_live and in_book:
+            play = "BUILD_TO_SELL"
+        elif leftover_live:
+            play = "BUY_PRE"
+        else:
+            play = "WATCH_CATALYST"
+    else:
+        window = "22-60d late Sep / next month"
+        if paid:
+            play = "WATCH_SELL_NEWS"
+        elif shortish:
+            play = "WATCH_SHORT"
+        elif leftover_live:
+            play = "BUY_THE_RUMOUR"
+        else:
+            play = "WATCH_CATALYST"
+    return {"play": play, "window": window, "dte": int(dte)}
+
+
 def _sleeve_tags(row: Mapping[str, Any], *, in_book: bool) -> list[str]:
     tags: list[str] = []
     book_symbols = {str(row.get("symbol") or "")} if in_book else None
     if unpaid_eligible(row, book_symbols=book_symbols):
         tags.append("unpaid")
+    if continuation_unpaid(row):
+        tags.append("continuation_unpaid")
     if forming_eligible(row):
         tags.append("forming")
     if continuation_paid(row):
@@ -288,6 +346,13 @@ def suggest_stance(
 
     if mtp in MTP_BOUNCE_ACTIONS and stance in {"NEW", "ADD", "SHORT_WAIT"}:
         conflicts.append("MTP ENTER_SMALL/PROBE is timing climate, not a buy/short list")
+        if stance == "NEW" and bo < 1.0:
+            stance = "WAIT"
+            support = min(support, 0.48)
+            course = (
+                "Park auto NEW: MTP bounce climate. Stays on unpaid radar; "
+                "not the 0–2 NEW budget."
+            )
 
     return {
         "symbol": symbol,

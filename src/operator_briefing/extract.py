@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import csv
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
 from db.trading_view_move_prediction_duckdb import query_move_prediction_duckdb
+from generic_utils.aggregations import group_stats, numeric_summary
+from generic_utils.ranking import to_float as _f
 
 from .discovery import LockedSources
 from .sleeves import leftover_pct, pct_vs, range_position_pct
@@ -71,19 +73,22 @@ def _pick(available: set[str], candidates: Iterable[str]) -> str | None:
     return None
 
 
-def _f(value: Any) -> float | None:
-    if value is None or value == "":
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
 def _parse_date(value: Any) -> date | None:
     if value is None or value == "":
         return None
-    text = str(value)[:10]
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        num = float(value)
+        if num > 1e12:
+            num /= 1000.0
+        if 1e9 < num < 4e10:
+            return datetime.fromtimestamp(num, tz=timezone.utc).date()
+    except (TypeError, ValueError, OSError, OverflowError):
+        pass
+    text = str(value).strip()[:10]
     for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"):
         try:
             return datetime.strptime(text, fmt).date()
@@ -317,48 +322,45 @@ def extract_progression(
     return out
 
 
+def _mean_or_zero(value: float | None, digits: int) -> float:
+    return round(value, digits) if value is not None else 0.0
+
+
 def industry_breadth(rows: list[dict[str, Any]], *, min_mcap: float, min_n: int = 6) -> list[dict[str, Any]]:
-    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for row in rows:
-        mcap = _f(row.get("mcap")) or 0.0
-        if mcap < min_mcap:
-            continue
-        if not row.get("ind"):
-            continue
-        groups[str(row["ind"])].append(row)
-
+    """US-mcap filter, then generic group_stats. pct_up uses group size (missing day = not-up)."""
+    eligible = [
+        row
+        for row in rows
+        if (_f(row.get("mcap")) or 0.0) >= min_mcap and row.get("ind")
+    ]
+    grouped = group_stats(
+        eligible,
+        group_field="ind",
+        metrics=["d5", "day", "m1", "rsi"],
+        min_n=min_n,
+        pct_positive_field="day",
+        pct_positive_denom="n",
+        digits=None,
+    )
     out: list[dict[str, Any]] = []
-    for industry, members in groups.items():
-        if len(members) < min_n:
-            continue
-        days = [_f(m.get("day")) for m in members]
-        d5s = [_f(m.get("d5")) for m in members]
-        m1s = [_f(m.get("m1")) for m in members]
-        rsis = [_f(m.get("rsi")) for m in members]
-        def mean(vals: list[float | None]) -> float | None:
-            clean = [v for v in vals if v is not None]
-            if not clean:
-                return None
-            return sum(clean) / len(clean)
-
-        up = [v for v in days if v is not None and v > 0]
-        n = len(members)
+    for rec in grouped:
+        rsi = rec.get("rsi")
         out.append(
             {
-                "ind": industry,
-                "n": n,
-                "pct_up": round(100.0 * len(up) / n, 1) if n else None,
-                "day": round(mean(days) or 0.0, 2),
-                "d5": round(mean(d5s) or 0.0, 2),
-                "m1": round(mean(m1s) or 0.0, 2),
-                "rsi": round(mean(rsis) or 0.0, 1) if mean(rsis) is not None else None,
+                "ind": rec["ind"],
+                "n": rec["n"],
+                "pct_up": rec.get("pct_positive"),
+                "day": _mean_or_zero(rec.get("day"), 2),
+                "d5": _mean_or_zero(rec.get("d5"), 2),
+                "m1": _mean_or_zero(rec.get("m1"), 2),
+                "rsi": round(rsi, 1) if rsi is not None else None,
             }
         )
-    out.sort(key=lambda r: (r.get("d5") or -999), reverse=True)
     return out
 
 
 def universe_stats(rows: list[dict[str, Any]], *, min_mcap: float) -> dict[str, Any]:
+    """US $2B listing filter, then generic numeric_summary. pct_up over non-missing day."""
     members = []
     for r in rows:
         if (_f(r.get("mcap")) or 0) < min_mcap:
@@ -375,19 +377,13 @@ def universe_stats(rows: list[dict[str, Any]], *, min_mcap: float) -> dict[str, 
         }:
             continue
         members.append(r)
-    days = [_f(r.get("day")) for r in members]
-    clean = [v for v in days if v is not None]
-    n = len(members)
-    up = [v for v in clean if v > 0]
-    def mean(vals: list[float | None]) -> float | None:
-        xs = [v for v in vals if v is not None]
-        return sum(xs) / len(xs) if xs else None
-
+    summary = numeric_summary(members, ["day", "d5", "m1", "rsi"], digits=None)
+    rsi = summary["rsi"]["mean"]
     return {
-        "n": n,
-        "day": round(mean(days) or 0.0, 2),
-        "pct_up": round(100.0 * len(up) / len(clean), 1) if clean else None,
-        "d5": round(mean([_f(r.get("d5")) for r in members]) or 0.0, 2),
-        "m1": round(mean([_f(r.get("m1")) for r in members]) or 0.0, 2),
-        "rsi": round(mean([_f(r.get("rsi")) for r in members]) or 0.0, 1),
+        "n": len(members),
+        "day": _mean_or_zero(summary["day"]["mean"], 2),
+        "pct_up": summary["day"]["pct_positive"],
+        "d5": _mean_or_zero(summary["d5"]["mean"], 2),
+        "m1": _mean_or_zero(summary["m1"]["mean"], 2),
+        "rsi": round(rsi, 1) if rsi is not None else 0.0,
     }

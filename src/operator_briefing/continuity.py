@@ -88,6 +88,7 @@ def continuity_action(
     leftover: float | None,
     rsi: float | None,
     rng: float | None,
+    dte: float | None = None,
 ) -> dict[str, Any]:
     """Return published action + polar flag + reason. Does not invent thesis-kills
     beyond the numeric rules in daily_generic.
@@ -137,8 +138,19 @@ def continuity_action(
             published = "EXIT"
     if prior_action in ADD_LIKE and published == "ADD":
         published = "ADD"
-    if prior_action == "HOLD_NO_ADD" and published == "ADD":
+    if prior_action == "HOLD_NO_ADD" and published in {"HOLD", "ADD"}:
         published = "HOLD_NO_ADD"
+    if prior_action in {"DERISK_INTO_PRINT", "DERISK"} and published in {
+        "HOLD",
+        "HOLD_NO_ADD",
+        "ADD",
+    }:
+        if dte is None or dte <= 7:
+            published = "DERISK_INTO_PRINT"
+    if prior_action == "TRIM" and published in {"HOLD", "HOLD_NO_ADD", "ADD"}:
+        repaired = weeks_ras is not None and weeks_ras >= 0.25 and not lost_sma50
+        if not repaired:
+            published = "TRIM"
 
     return {
         "action": published,

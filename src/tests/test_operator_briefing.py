@@ -1,6 +1,10 @@
 import unittest
 
-from operator_briefing.continuity import continuity_action, is_polar_flip, map_mix_to_naive_book_action
+from operator_briefing.continuity import (
+    continuity_action,
+    is_polar_flip,
+    map_mix_to_naive_book_action,
+)
 from operator_briefing.sleeves import (
     continuation_paid,
     leftover_pct,
@@ -65,13 +69,103 @@ class TestUnpaidFilter(unittest.TestCase):
         }
         self.assertTrue(unpaid_eligible(row, book_symbols={"NYSE:UNH"}))
 
+    def test_continuation_unpaid_keeps_live_leftover(self):
+        from operator_briefing.sleeves import continuation_unpaid
+
+        row = {
+            "symbol": "NASDAQ:SNDK",
+            "exchange": "NASDAQ",
+            "close": 1500,
+            "mcap": 200_000_000_000,
+            "left": 64,
+            "rsi": 52,
+            "ind": "Computer Peripherals",
+            "bo": 1.05,
+            "cont": 1.19,
+        }
+        self.assertTrue(continuation_unpaid(row))
+
+    def test_paid_refiner_is_not_continuation_unpaid(self):
+        from operator_briefing.sleeves import continuation_unpaid
+
+        row = {
+            "symbol": "NYSE:MPC",
+            "left": -12,
+            "rsi": 78,
+            "rng": 100,
+            "bo": 1.56,
+            "mcap": 50_000_000_000,
+            "close": 180,
+        }
+        self.assertFalse(continuation_unpaid(row))
+
     def test_unpaid_sort_prefers_live_edge_over_leftover_dump(self):
-        sndk = {"symbol": "NASDAQ:SNDK", "bo": 1.05, "cont": 1.19, "fwd": 1.23, "opp": 8, "left": 64}
-        junk = {"symbol": "NASDAQ:ZIONP", "bo": 0.0, "cont": 0.0, "fwd": 0.0, "opp": None, "left": 180}
+        sndk = {
+            "symbol": "NASDAQ:SNDK",
+            "bo": 1.05,
+            "cont": 1.19,
+            "fwd": 1.23,
+            "opp": 8,
+            "left": 64,
+        }
+        junk = {
+            "symbol": "NASDAQ:ZIONP",
+            "bo": 0.0,
+            "cont": 0.0,
+            "fwd": 0.0,
+            "opp": None,
+            "left": 180,
+        }
         ranked = sorted([junk, sndk], key=unpaid_sort_key)
         self.assertEqual(ranked[0]["symbol"], "NASDAQ:SNDK")
 
-    def test_rejects_stretched_rsi(self):
+    def test_rejects_street_pt_leftover_dump(self):
+        row = {
+            "symbol": "NYSE:MBGL",
+            "exchange": "NYSE",
+            "close": 20,
+            "mcap": 8_000_000_000,
+            "left": 159,
+            "rsi": 51,
+            "ind": "Miscellaneous",
+            "bo": 0.67,
+            "opp": 35,
+        }
+        self.assertFalse(unpaid_eligible(row))
+
+    def test_forming_rejects_microcap_range_junk(self):
+        from operator_briefing.sleeves import forming_eligible
+
+        junk = {
+            "symbol": "NASDAQ:BGL",
+            "exchange": "NASDAQ",
+            "close": 2,
+            "mcap": 80_000_000,
+            "left": 5002,
+            "rng": 0.1,
+            "rsi": 42,
+        }
+        self.assertFalse(forming_eligible(junk))
+        keep = {
+            "symbol": "NASDAQ:TTD",
+            "exchange": "NASDAQ",
+            "close": 14,
+            "mcap": 8_000_000_000,
+            "left": 60,
+            "rng": 4,
+            "rsi": 46,
+            "bo": 0.63,
+        }
+        self.assertTrue(forming_eligible(keep))
+
+    def test_reward_risk_prefers_unused_range(self):
+        from operator_briefing.sleeves import reward_risk
+
+        unused = {"left": 60, "rng": 4}
+        paid_range = {"left": 60, "rng": 80}
+        dump = {"left": 159, "rng": 32}
+        self.assertGreater(reward_risk(unused), reward_risk(paid_range))
+        self.assertIsNone(reward_risk(dump))
         row = {
             "symbol": "NYSE:MPC",
             "close": 380,
@@ -96,7 +190,9 @@ class TestUnpaidFilter(unittest.TestCase):
             "bo": 0.8,
         }
         self.assertFalse(unpaid_eligible(row))
-        self.assertFalse(short_limited_upside({**row, "left": 11, "d5": -12, "cont": 0.1}))
+        self.assertFalse(
+            short_limited_upside({**row, "left": 11, "d5": -12, "cont": 0.1})
+        )
 
     def test_rejects_otc_even_if_country_is_us(self):
         row = {
@@ -118,11 +214,57 @@ class TestPaidAndShorts(unittest.TestCase):
         self.assertTrue(continuation_paid(row))
 
     def test_short_rejects_high_leftover(self):
-        row = {"symbol": "NASDAQ:JD", "left": 91, "d5": -2, "bo": 0, "cont": 0}
+        row = {
+            "symbol": "NASDAQ:JD",
+            "exchange": "NASDAQ",
+            "close": 28,
+            "mcap": 40_000_000_000,
+            "left": 91,
+            "d5": -2,
+            "bo": 0,
+            "cont": 0,
+        }
+        self.assertFalse(short_limited_upside(row))
+
+    def test_short_rejects_microcap(self):
+        row = {
+            "symbol": "NASDAQ:ADSE",
+            "exchange": "NASDAQ",
+            "close": 12,
+            "mcap": 400_000_000,
+            "left": 5,
+            "d5": -12,
+            "bo": 0.1,
+            "cont": 0.1,
+            "vs50": -5,
+        }
+        self.assertFalse(short_limited_upside(row))
+
+    def test_short_rejects_broken_pt_leftover(self):
+        row = {
+            "symbol": "NASDAQ:CHRN",
+            "exchange": "NASDAQ",
+            "close": 19,
+            "mcap": 8_000_000_000,
+            "left": -57,
+            "d5": -12,
+            "bo": 0.1,
+            "cont": 0.1,
+        }
         self.assertFalse(short_limited_upside(row))
 
     def test_short_accepts_failed_leader_limited_leftover(self):
-        row = {"symbol": "NYSE:WEAK", "left": 11, "d5": -12, "bo": 0.1, "cont": 0.2, "vs50": -3.6}
+        row = {
+            "symbol": "NYSE:WEAK",
+            "exchange": "NYSE",
+            "close": 20,
+            "mcap": 8_000_000_000,
+            "left": 11,
+            "d5": -12,
+            "bo": 0.1,
+            "cont": 0.2,
+            "vs50": -3.6,
+        }
         self.assertTrue(short_limited_upside(row))
 
 
@@ -178,6 +320,53 @@ class TestContinuity(unittest.TestCase):
             rng=27,
         )
         self.assertEqual(result["action"], "EXIT")
+
+    def test_prior_derisk_sticks_while_print_is_near(self):
+        result = continuity_action(
+            prior={"action": "DERISK_INTO_PRINT"},
+            naive="HOLD",
+            close=17.9,
+            vs_cost_pct=17.5,
+            weeks_ras=0.5,
+            months_ras=0.4,
+            lost_sma50=False,
+            leftover=-20,
+            rsi=68,
+            rng=81,
+            dte=1,
+        )
+        self.assertEqual(result["action"], "DERISK_INTO_PRINT")
+
+    def test_prior_trim_sticks_until_tape_repairs(self):
+        result = continuity_action(
+            prior={"action": "TRIM", "invalidation": 90},
+            naive="HOLD",
+            close=94.4,
+            vs_cost_pct=-9.2,
+            weeks_ras=0.05,
+            months_ras=0.07,
+            lost_sma50=True,
+            leftover=75,
+            rsi=37,
+            rng=40,
+        )
+        self.assertEqual(result["action"], "TRIM")
+
+    def test_prior_hold_no_add_does_not_silent_hold(self):
+        result = continuity_action(
+            prior={"action": "HOLD_NO_ADD"},
+            naive="HOLD",
+            close=282,
+            vs_cost_pct=0.1,
+            weeks_ras=0.4,
+            months_ras=0.4,
+            lost_sma50=False,
+            leftover=9,
+            rsi=60,
+            rng=50,
+            dte=8,
+        )
+        self.assertEqual(result["action"], "HOLD_NO_ADD")
 
 
 class TestLeftoverFlagsAndStance(unittest.TestCase):
@@ -241,10 +430,16 @@ class TestLeftoverFlagsAndStance(unittest.TestCase):
         result = suggest_stance(
             row,
             in_book=True,
-            continuity={"action": "EXIT", "thesis_kill": True, "reason": "vs-cost and lost SMA50"},
+            continuity={
+                "action": "EXIT",
+                "thesis_kill": True,
+                "reason": "vs-cost and lost SMA50",
+            },
         )
         self.assertEqual(result["stance"], "EXIT")
-        self.assertTrue(any("not permission to overlay a short" in c for c in result["conflicts"]))
+        self.assertTrue(
+            any("not permission to overlay a short" in c for c in result["conflicts"])
+        )
 
     def test_polar_hold_no_add_keeps_conflict(self):
         from operator_briefing.stance import suggest_stance
@@ -253,7 +448,11 @@ class TestLeftoverFlagsAndStance(unittest.TestCase):
         result = suggest_stance(
             row,
             in_book=True,
-            continuity={"action": "HOLD_NO_ADD", "polar_blocked": True, "prior_action": "ADD"},
+            continuity={
+                "action": "HOLD_NO_ADD",
+                "polar_blocked": True,
+                "prior_action": "ADD",
+            },
         )
         self.assertEqual(result["stance"], "HOLD_NO_ADD")
         self.assertTrue(any("Polar" in c for c in result["conflicts"]))
@@ -285,6 +484,8 @@ class TestLeftoverFlagsAndStance(unittest.TestCase):
         row = {
             "symbol": "NYSE:WEAK",
             "exchange": "NYSE",
+            "close": 20,
+            "mcap": 8_000_000_000,
             "left": 11,
             "d5": -12,
             "bo": 0.1,
@@ -302,6 +503,8 @@ class TestLeftoverFlagsAndStance(unittest.TestCase):
         row = {
             "symbol": "NYSE:WEAK",
             "exchange": "NYSE",
+            "close": 20,
+            "mcap": 8_000_000_000,
             "left": 11,
             "d5": -12,
             "bo": 0.1,
@@ -356,9 +559,33 @@ class TestCompareSummary(unittest.TestCase):
         from operator_briefing.compare import summarize_run_compare
 
         rows = [
-            {"symbol": "NASDAQ:A", "ticker": "A", "bo_a": 1.0, "bo_b": 1.4, "d_bo": 0.4, "mix_a": "hold_quality", "mix_b": "add_long"},
-            {"symbol": "NASDAQ:B", "ticker": "B", "bo_a": 1.2, "bo_b": 0.4, "d_bo": -0.8, "mix_a": "add_long", "mix_b": "avoid_value_trap"},
-            {"symbol": "NASDAQ:C", "ticker": "C", "bo_a": None, "bo_b": 1.5, "d_bo": None, "mix_a": None, "mix_b": "add_long"},
+            {
+                "symbol": "NASDAQ:A",
+                "ticker": "A",
+                "bo_a": 1.0,
+                "bo_b": 1.4,
+                "d_bo": 0.4,
+                "mix_a": "hold_quality",
+                "mix_b": "add_long",
+            },
+            {
+                "symbol": "NASDAQ:B",
+                "ticker": "B",
+                "bo_a": 1.2,
+                "bo_b": 0.4,
+                "d_bo": -0.8,
+                "mix_a": "add_long",
+                "mix_b": "avoid_value_trap",
+            },
+            {
+                "symbol": "NASDAQ:C",
+                "ticker": "C",
+                "bo_a": None,
+                "bo_b": 1.5,
+                "d_bo": None,
+                "mix_a": None,
+                "mix_b": "add_long",
+            },
         ]
         summary = summarize_run_compare(rows, top_n=2, list_n=10)
         self.assertEqual(summary["gainers"][0]["symbol"], "NASDAQ:A")
@@ -377,8 +604,12 @@ class TestLookupResolve(unittest.TestCase):
 
         pack = {
             "run_id": "pack_test",
-            "names": {"NASDAQ:MU": {"symbol": "NASDAQ:MU", "left": 30, "bo": 1.1, "rsi": 55}},
-            "book": [{"symbol": "NASDAQ:MU", "ticker": "MU", "continuity": {"action": "ADD"}}],
+            "names": {
+                "NASDAQ:MU": {"symbol": "NASDAQ:MU", "left": 30, "bo": 1.1, "rsi": 55}
+            },
+            "book": [
+                {"symbol": "NASDAQ:MU", "ticker": "MU", "continuity": {"action": "ADD"}}
+            ],
             "progression": {"NASDAQ:MU": {"delta_vs_prior_run": {"bo": 0.1}}},
             "stances": {},
             "primary_course": {"bias": "mixed"},
@@ -389,6 +620,195 @@ class TestLookupResolve(unittest.TestCase):
         payload = lookup_symbols(["mu"], pack=pack)
         self.assertEqual(payload["dossiers"][0]["symbol"], "NASDAQ:MU")
         self.assertEqual(payload["dossiers"][0]["stance"]["stance"], "ADD")
+
+
+class TestEventPlay(unittest.TestCase):
+    def test_late_sept_unpaid_is_buy_the_rumour(self):
+        from operator_briefing.stance import classify_event_play
+
+        row = {
+            "symbol": "NASDAQ:FOO",
+            "exchange": "NASDAQ",
+            "close": 40,
+            "mcap": 8_000_000_000,
+            "left": 40,
+            "rsi": 50,
+            "rng": 40,
+            "ind": "Packaged Software",
+            "bo": 0.8,
+            "dte": 28,
+        }
+        result = classify_event_play(row)
+        self.assertEqual(result["play"], "BUY_THE_RUMOUR")
+
+    def test_print_week_paid_book_is_derisk(self):
+        from operator_briefing.stance import classify_event_play
+
+        row = {
+            "symbol": "NASDAQ:ZS",
+            "left": -20,
+            "rsi": 68,
+            "rng": 90,
+            "bo": 1.5,
+            "dte": 1,
+        }
+        result = classify_event_play(row, in_book=True)
+        self.assertEqual(result["play"], "DERISK_INTO_PRINT")
+
+    def test_limited_leftover_near_print_is_short_pre(self):
+        from operator_briefing.stance import classify_event_play
+
+        row = {
+            "symbol": "NYSE:WEAK",
+            "exchange": "NYSE",
+            "close": 20,
+            "mcap": 8_000_000_000,
+            "left": 11,
+            "d5": -12,
+            "bo": 0.1,
+            "cont": 0.2,
+            "vs50": -3.6,
+            "rsi": 42,
+            "dte": 6,
+        }
+        result = classify_event_play(row)
+        self.assertEqual(result["play"], "SHORT_PRE")
+
+
+class TestParseDate(unittest.TestCase):
+    def test_unix_seconds_and_iso(self):
+        from datetime import date
+
+        from operator_briefing.extract import _parse_date
+
+        path_print = _parse_date("1788466200")
+        self.assertEqual(path_print, date(2026, 9, 3))
+        mu_print = _parse_date(1790769600)
+        self.assertIsNotNone(mu_print)
+        self.assertGreater(mu_print, path_print)
+        self.assertEqual(_parse_date("2026-09-15"), date(2026, 9, 15))
+        self.assertEqual(_parse_date("03/09/2026"), date(2026, 9, 3))
+        ms = _parse_date(1788466200000)
+        self.assertEqual(ms, date(2026, 9, 3))
+
+
+class TestDedupeByIndustry(unittest.TestCase):
+    def _crowded_rows(self, n=8, industry="Packaged Software"):
+        return [
+            {"symbol": f"NASDAQ:SW{i}", "ind": industry, "left": 50 - i}
+            for i in range(n)
+        ]
+
+    def test_caps_one_industry(self):
+        from operator_briefing.sleeves import dedupe_by_industry
+
+        rows = self._crowded_rows(8) + [
+            {"symbol": "NYSE:MU", "ind": "Semiconductors", "left": 65}
+        ]
+        kept, overflow = dedupe_by_industry(rows, cap=5)
+        kept_industries = [r["ind"] for r in kept]
+        self.assertEqual(kept_industries.count("Packaged Software"), 5)
+        self.assertEqual(kept_industries.count("Semiconductors"), 1)
+        self.assertEqual(len(overflow), 3)
+        self.assertTrue(all(o["industry"] == "Packaged Software" for o in overflow))
+
+    def test_book_symbols_exempt_from_cap(self):
+        from operator_briefing.sleeves import dedupe_by_industry
+
+        rows = self._crowded_rows(7)
+        kept, overflow = dedupe_by_industry(rows, cap=5, book_symbols={"NASDAQ:SW6"})
+        kept_symbols = {r["symbol"] for r in kept}
+        self.assertIn("NASDAQ:SW6", kept_symbols)
+        self.assertEqual(len(overflow), 1)
+        self.assertEqual(overflow[0]["symbol"], "NASDAQ:SW5")
+
+    def test_preserves_input_order(self):
+        from operator_briefing.sleeves import dedupe_by_industry
+
+        rows = [
+            {"symbol": "NASDAQ:A", "ind": "X", "left": 40},
+            {"symbol": "NASDAQ:B", "ind": "Y", "left": 30},
+            {"symbol": "NASDAQ:C", "ind": "X", "left": 20},
+        ]
+        kept, overflow = dedupe_by_industry(rows, cap=5)
+        self.assertEqual(
+            [r["symbol"] for r in kept], ["NASDAQ:A", "NASDAQ:B", "NASDAQ:C"]
+        )
+        self.assertEqual(overflow, [])
+
+
+class TestCurationInCompile(unittest.TestCase):
+    def _synthetic_names(self):
+        names = {}
+        for i in range(10):
+            symbol = f"NASDAQ:SW{i}"
+            names[symbol] = {
+                "symbol": symbol,
+                "exchange": "NASDAQ",
+                "country": "United States",
+                "close": 40.0,
+                "mcap": 8_000_000_000.0,
+                "left": 50.0 - i,
+                "rsi": 55.0,
+                "rng": 40.0,
+                "ind": "Packaged Software",
+                "bo": 1.0,
+                "cont": 0.6,
+                "fwd": 0.5,
+                "opp": 10 + i,
+            }
+        names["NYSE:MU"] = {
+            "symbol": "NYSE:MU",
+            "exchange": "NYSE",
+            "country": "United States",
+            "close": 150.0,
+            "mcap": 200_000_000_000.0,
+            "left": 65.0,
+            "rsi": 53.0,
+            "rng": 73.0,
+            "ind": "Semiconductors",
+            "bo": 1.05,
+            "cont": 1.23,
+            "fwd": 1.35,
+            "opp": 3,
+        }
+        return names
+
+    def test_radar_curated_25_caps_industry_concentration(self):
+        from operator_briefing.compile import _sleeve_lists
+        from operator_briefing.sleeves import RADAR_INDUSTRY_CAP
+
+        result = _sleeve_lists(self._synthetic_names(), book_symbols=set())
+        self.assertIn("NASDAQ:SW0", {r["symbol"] for r in result["radar_upside_100"]})
+        curated_industries = [r["ind"] for r in result["radar_curated_25"]]
+        self.assertLessEqual(
+            curated_industries.count("Packaged Software"), RADAR_INDUSTRY_CAP
+        )
+        self.assertIn("Semiconductors", curated_industries)
+        overflow_symbols = {o["symbol"] for o in result["radar_industry_overflow"]}
+        self.assertTrue(overflow_symbols)
+        self.assertTrue(overflow_symbols.issubset({f"NASDAQ:SW{i}" for i in range(10)}))
+
+    def test_book_symbol_bypasses_radar_cap(self):
+        from operator_briefing.compile import _sleeve_lists
+
+        names = self._synthetic_names()
+        result = _sleeve_lists(names, book_symbols={"NASDAQ:SW9"})
+        curated_symbols = {r["symbol"] for r in result["radar_curated_25"]}
+        self.assertIn("NASDAQ:SW9", curated_symbols)
+
+
+class TestAttachSleeveTags(unittest.TestCase):
+    def test_tags_and_count_joined_onto_rows(self):
+        from operator_briefing.compile import _attach_sleeve_tags
+
+        rows = [{"symbol": "NASDAQ:SNDK"}, {"symbol": "NASDAQ:NONE"}]
+        stances = {"NASDAQ:SNDK": {"sleeves": ["unpaid", "continuation_unpaid"]}}
+        _attach_sleeve_tags(rows, stances)
+        self.assertEqual(rows[0]["sleeve_tags"], ["unpaid", "continuation_unpaid"])
+        self.assertEqual(rows[0]["sleeve_count"], 2)
+        self.assertEqual(rows[1]["sleeve_tags"], [])
+        self.assertEqual(rows[1]["sleeve_count"], 0)
 
 
 if __name__ == "__main__":

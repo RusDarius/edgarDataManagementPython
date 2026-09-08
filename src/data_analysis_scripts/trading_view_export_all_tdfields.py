@@ -180,12 +180,72 @@ def _build_all_fields_duckdb_run_id(
     return f"tradingview_all_fields_{timestamp}_utc_{unique_suffix}"
 
 
+# A genuine full/focused export shouldn't run this long; past this age a
+# writer lock is almost certainly orphaned from an interrupted process rather
+# than a real in-progress export.
+DUCKDB_WRITER_LOCK_STALE_AFTER_SECONDS = 6 * 60 * 60
+
+
+def _pid_is_running(pid: Any) -> bool:
+    if not isinstance(pid, int):
+        return False
+    try:
+        import psutil  # type: ignore
+    except ImportError:
+        # Without psutil we cannot verify liveness cross-platform; treat the
+        # pid as running so only the age threshold can reclaim the lock.
+        return True
+    try:
+        return psutil.pid_exists(pid)
+    except Exception:
+        return True
+
+
+def _duckdb_writer_lock_staleness(lock_path: Path) -> tuple[bool, str]:
+    """Return (is_stale, reason) for an existing writer lock file."""
+    try:
+        lock_age_seconds = time.time() - lock_path.stat().st_mtime
+    except OSError:
+        return True, "lock file disappeared while inspecting it"
+
+    try:
+        payload = json.loads(lock_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        payload = None
+
+    if payload is None:
+        if lock_age_seconds >= DUCKDB_WRITER_LOCK_STALE_AFTER_SECONDS:
+            return True, "lock file is unreadable/corrupt and past the age threshold"
+        return False, ""
+
+    owning_pid = payload.get("process_id")
+    if not _pid_is_running(owning_pid):
+        return True, f"owning process_id={owning_pid} is no longer running"
+    if lock_age_seconds >= DUCKDB_WRITER_LOCK_STALE_AFTER_SECONDS:
+        return True, (
+            f"lock is {lock_age_seconds / 3600:.1f}h old, past the "
+            f"{DUCKDB_WRITER_LOCK_STALE_AFTER_SECONDS / 3600:.0f}h staleness threshold"
+        )
+    return False, ""
+
+
 @contextmanager
 def _duckdb_daily_writer_lock(database_path: Path):
     lock_path = database_path.with_name(f"{database_path.name}.write.lock")
     lock_acquired = False
     try:
-        lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        try:
+            lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            is_stale, stale_reason = _duckdb_writer_lock_staleness(lock_path)
+            if not is_stale:
+                raise
+            print(
+                f"  Clearing stale DuckDB writer lock ({stale_reason}): {lock_path}",
+                flush=True,
+            )
+            lock_path.unlink(missing_ok=True)
+            lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         lock_acquired = True
         with os.fdopen(lock_fd, "w", encoding="utf-8") as lock_file:
             lock_file.write(
@@ -201,7 +261,10 @@ def _duckdb_daily_writer_lock(database_path: Path):
     except FileExistsError as exc:
         raise RuntimeError(
             f"DuckDB daily writer lock already exists: {lock_path}. "
-            "Only one writer should update a daily all-fields database at a time."
+            "Only one writer should update a daily all-fields database at a time. "
+            "The lock's process_id is still running and it isn't old enough to be "
+            "auto-cleared (see DUCKDB_WRITER_LOCK_STALE_AFTER_SECONDS) -- delete the "
+            "lock file manually if you're certain no export is actually in progress."
         ) from exc
     finally:
         if lock_acquired:

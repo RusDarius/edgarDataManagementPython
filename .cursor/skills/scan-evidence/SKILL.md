@@ -15,7 +15,7 @@ python src/operator_briefing/example_entry.py compare
 python src/operator_briefing/example_entry.py stance MU SNDK PGY JD
 ```
 
-Compile first if there is no current `briefing_pack.json`: `python src/operator_briefing/example_entry.py compile`.
+Compile first if there is no current `briefing_pack.json`: `python src/operator_briefing/example_entry.py compile`. Copy-paste blocks: `src/focus_pool_screening/prompts/agent_copy_paste.txt`.
 
 ## What each command is for
 
@@ -31,8 +31,8 @@ Compile first if there is no current `briefing_pack.json`: `python src/operator_
 ## How to decide (never 100%)
 
 1. Quote **raw** (left, rsi, rng, bo, cont, fwd, opp, mix, mtp, dte) and **Δbo/Δcont/Δfwd**.
-2. Rank **inside** a sleeve: unpaid NEW vs paid PASS vs limited-leftover SHORT_WAIT. Do not merge them into one 0–100.
-3. Publish the pack `stance` plus `suggested_conviction` (support 0.15–0.90) and every `conflicts` line.
+2. Rank **inside** a sleeve: unpaid NEW vs paid PASS vs limited-leftover SHORT_WAIT. Do not merge them into one 0–100. Prefer the curated sleeve (`radar_curated_25` / `short_book_15_curated` / `earnings_lanes.*_curated`) over the raw one when pruning — it is already industry-capped with overflow visible, so pruning it doesn't re-introduce a one-industry dump.
+3. Publish the pack `stance` plus `suggested_conviction` (support 0.15–0.90) and every `conflicts` line. Also cite `sleeve_tags`/`sleeve_count` (how many independent sleeves confirm this name) as extra confirmation depth, not a score.
 4. Polar ADD/NEW → EXIT is blocked unless `thesis_kill`. Leftover-91 EXIT is not a short overlay.
 5. MTP ENTER_SMALL is bounce climate, not a buy/short list.
 6. Strongly prefer one course per name, then say what would flip it (`invalidation`, `next_check`).

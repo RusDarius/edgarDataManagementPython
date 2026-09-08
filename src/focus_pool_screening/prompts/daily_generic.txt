@@ -8,27 +8,70 @@ This version has no standing sector, theme, or narrative list. Do not import
 favorite industries, megacap stories, or last week's clusters. Name leadership
 only from the attached scores, breadth, and tape.
 
+OPERATOR PASTE INTENT (what DAILY (full) in agent_copy_paste.txt is asking)
+-------------------------------------------------------------------------
+This is the standing spec for that chat block. Same job every run:
+  Map today and the week to come (today / rest of week / 8–21d / 22–60d late Sep).
+  Top 100 still-to-pay leftover OR continuation with unused upside. Cite pack
+  `rr` (leftover / 52w range) as upside-to-risk, not as a 0–100 score.
+  Short book 15 for betting the downside of limited-leftover names.
+  Earnings-priority BOTH ways, including late-Sep rumour / sell-the-news /
+  pre-earn on paid gains. Analysis may be wide; capital stays budgeted.
+  Pack `suggested_conviction` is support (0.15–0.90). Assign High/Med/Low
+  after conflicts. Canvas first; chat is a snapshot.
+
+CURATION DISCIPLINE (do not skip)
+----------------------------------
+A table that just relays a pack sleeve in its raw sort order, unchanged, is a
+leftover-first dump even if the numbers are correct.
+  - Radar / shorts / earnings headline tables come from the curated pack
+    fields (`sleeves.radar_curated_25`, `sleeves.short_book_15_curated`,
+    `earnings_lanes.upside_curated` / `.downside_curated`) which already cap
+    at most a handful of names per industry (Book names exempt) and expose
+    an overflow list. State the cap and the overflow count in one line
+    (example: "capped at 5/industry; 6 more Packaged Software names held
+    back, see overflow"). The full uncapped sleeve is a secondary/appendix
+    table only.
+  - Every row's `sleeve_tags`/`sleeve_count` (how many independent sleeves —
+    unpaid, continuation_unpaid, forming, continuation_paid,
+    shorts_limited_upside — confirm this name) is available on the compact
+    row. Cite it; a 1-sleeve name gets less conviction than a 2+-sleeve name,
+    unless it is a Book or earnings-window exception.
+  - The Plan tab / capital sequence must be seeded from pack
+    `suggested_courses` (add/new/trim_exit buckets, already ranked by
+    `suggested_conviction`), not re-derived by hand from scratch.
+  - An Operator/Action/Horizon column that is only differentiated for a
+    handful of hardcoded tickers, with a generic stance-passthrough fallback
+    for every other row, is still a pack dump. Every row needs a course- or
+    conflict-derived reason, even when the action is WAIT.
+
 GOALS THIS RUN MUST COVER
 -------------------------
 1. Regime and breadth first. Decide what kind of trade is allowed today.
-2. Every current holding gets one capital action: ADD / HOLD / TRIM / EXIT.
-3. A Top 30 radar of the most important names now, ranked by the attached
-   scoring frameworks, not by a parallel invented ranking.
-4. Per-name depth on radar names that change capital: status, scores, RS,
-   breakout/continuation, trend, fundamentals, catalyst, valuation/extension,
-   regime fit, entry, invalidation, action, conviction.
-5. Upside first. Shorts are a shorter high-bar overlay (deterioration, failed
-   breakouts, relative weakness, event risk, regime fit). Never valuation-only.
-6. Data-derived leadership groups only. No preset sleeves.
-7. Earnings / catalyst priority is first-class: upcoming prints in the next
-   0–30 days must be classified as build-to-sell, buy pre-catalyst, short
-   pre-catalyst, hold-through, derisk-into-print, watch, or stand-aside.
-8. An active-management roadmap: buy now, wait, extended, needs confirmation,
-   next major, cash stance, what not to do.
+2. Map TODAY and the WEEK TO COME (rest of this week, next week 8–21d, late
+   Sep / 22–60d rumour). Capital that must move now vs staged plays.
+3. Every current holding gets one capital action: ADD / HOLD / TRIM / EXIT /
+   DERISK_INTO_PRINT / HOLD_NO_ADD.
+4. A Top 100 radar of still-to-pay leftover PLUS live continuation with unused
+   upside. Rank from pack sleeves (unpaid ∪ continuation_unpaid). Cite pack
+   `rr` (leftover / 52w range) as upside-to-risk, not as a 0–100 composite.
+   Curate the 0–2 NEW / 0–2 ADD budget. Do not paste leftover-first dumps
+   or auto NEW. The headline radar table is `sleeves.radar_curated_25`
+   (industry-capped, cite `sleeve_tags`/`sleeve_count` per name); the raw
+   `radar_upside_100` is an appendix, not the primary surface.
+5. Per-name depth on names that change capital: tape, leftover, rr, bo/cont/fwd,
+   catalyst, invalidation, action, pack `suggested_conviction` (support 0.15–0.90),
+   and the operator High/Med/Low you assign after reading conflicts.
+6. Upside first. Shorts are a 15-name high-bar overlay (deterioration, failed
+   breakouts, limited leftover −25 to +25, US $2B, close ≥ $5). Never
+   valuation-only. Bounce-day default is overlay wait, not new short orders.
+7. Earnings-priority BOTH ways from pack earnings_lanes.upside and .downside:
+   0–7d print week, 8–21d this/next week, 22–60d late-Sep rumour / sell-the-news.
+   Do not double-size a Book ADD as a separate event ticket.
+8. Data-derived leadership groups only. No preset sleeves.
 9. Session continuity: yesterday's Book ADD/NEW cannot become today's EXIT
    unless a thesis-kill from the continuity rules is cited with numbers.
-10. Primary artifact is a Cursor canvas when that surface exists. If it does
-    not, the same briefing must still be delivered in structured output.
+10. Primary artifact is a Cursor canvas. Chat is a short snapshot.
 
 HOW TO LAUNCH (attach these, or the newest equivalents)
 -------------------------------------------------------
@@ -36,14 +79,20 @@ HOW TO LAUNCH (attach these, or the newest equivalents)
      python src/operator_briefing/example_entry.py compile
      Read the newest logs/tradingview_analysis/operator_briefing/runs/briefing_pack_*/briefing_pack.md
      and briefing_pack.json. That file already locks run_ids, leftover, sleeves
-     (filtered), book continuity, MTP climate, earnings 0–21d, Fri–now
-     progression, and per-name stances (suggested_conviction is support, not a
-     probability). Prefer it over ad-hoc DuckDB. If the user pinned run ids,
-     pass --pred-run and --af-run.
+     (filtered Top 100 unpaid/continuation-unpaid, short book 15, earnings
+     0–7 / 8–21 / 22–60), book continuity, MTP climate, Fri–now progression,
+     and per-name stances (suggested_conviction is support, not a probability).
+     Prefer it over ad-hoc DuckDB. If the user pinned run ids, pass --pred-run
+     and --af-run.
+     Recompile when inspect sources differ: prediction_run_id, all_fields_run_id,
+     edge parent, holdings run, MTP run, current_holdings.json, or newer priors.
+     Same ids → reuse pack; lookup/stance only. Do not open DuckDB folders.
      Dossiers: python src/operator_briefing/example_entry.py lookup TICKER [TICKER ...]
      Schema:   python src/operator_briefing/example_entry.py inspect
      Progression vs prior pred run: python src/operator_briefing/example_entry.py compare
      Do not write logs/_tmp_*.py for inspect/extract/print.
+     Chat copy-paste: src/focus_pool_screening/prompts/agent_copy_paste.txt
+     (one block per job: daily, stale-check, lookup, compare, Book, delegate).
 
 Required
   1. Latest holdings-scoring run
@@ -135,8 +184,8 @@ A. Cursor canvas (required when the canvas skill / Cursor canvas surface exists)
    - Import only from `cursor/canvas`. Embed all numbers inline. No fetch, no
      empty placeholder sections, no emoji, no gradients, no box-shadows.
    - The canvas must be usable alone: a reader who never opens the chat should
-     still get regime, book actions, Top 30, earnings catalyst plan, shorts,
-     and the roadmap.
+     still get regime, book actions, Top 100, earnings 0–7 / 8–21 / 22–60,
+     short book 15, and the roadmap.
    - In chat, link the canvas with its full absolute path and tell the operator
      they can open it beside the chat. Chat itself is a short executive
      snapshot only (bias, breadth, 5–8 actions, earnings alerts). No giant
@@ -168,6 +217,8 @@ Step 1.5 Continuity / polar-flip lock (mandatory, before any Book EXIT)
 Step 2  Regime and breadth
         Decide risk-on / mixed / fragile / risk-off BEFORE naming stocks.
         Let leadership clusters come from this step, not from a preset list.
+        Then write a WEEK MAP: today / rest of this week / next week (8–21d) /
+        late Sep 22–60d. Put Book prints and classified event plays on that map.
 Step 3  Book overlay
         Score every current holding with the continuity map, not the naive mix
         map. This is the first capital decision, not an afterthought.
@@ -177,18 +228,21 @@ Step 3  Book overlay
         interpretation changed, it is not a change — keep yesterday's stance
         or HOLD / no-add.
 Step 4  Earnings / catalyst priority
-        Classify every relevant upcoming print (see Earnings section). This is
-        a required sleeve, not a later optional note.
+        Classify prints in 0–7d, 8–21d, and 22–60d from pack earnings_lanes.
+        0–7d is derisk / hold-through / stand-aside, not new builds.
+        8–21d is finish-the-build or wait.
+        22–60d is BUY_THE_RUMOUR / WATCH_SELL_NEWS. Do not double-size a Book
+        ADD as a separate event ticket (example: MU leftover ADD + late-Sep
+        rumour is one capital line).
 Step 5  Opportunity funnel
-        Build a Top 30 radar from the scoring frameworks below. Earnings-window
-        names may enter the radar when they change capital this week.
+        Build a Top 100 radar from pack sleeves.radar_upside_100, then curate
+        capital. Earnings-window names may enter when they change capital.
 Step 6  Data-derived groups
         Group leftover opportunity by whatever the scan actually leads
         (industry, sector, or setup-type). 2–4 groups. Drop empty ones.
 Step 7  Short overlay
-        Short, high-conviction list. Same analytical depth, fewer names.
-        Event shorts belong here and in the earnings sleeve; do not hide them
-        in only one place.
+        Pack short_book_15, then curate. Same analytical depth, 0–1 new short
+        in the budget. Bounce / ENTER_SMALL climate → overlay wait.
 Step 8  Decision framework A–G
         Convert radar + earnings into actions: buy now / wait / trim / sell
         the catalyst / confirm / next major.
@@ -232,6 +286,13 @@ A. Book / holdings scoring
    Conservative-wins applies to *new* risk (do not ADD DUOL vs MTP WATCH).
    It does not authorize dumping a thesis the prior briefing just sized.
 
+   Continuity also sticks (not polar, still required):
+     - Prior DERISK_INTO_PRINT / DERISK while dte ≤ 7 (or dte unknown) even if
+       mix is HOLD. Release only after the print window or a thesis-kill EXIT.
+     - Prior TRIM until tape repairs (weeks RAS ≥ 0.25 and SMA50 held).
+     - Prior HOLD_NO_ADD does not silently become HOLD.
+     - Yesterday EXIT stays EXIT until weeks RAS ≥ 0.25 and SMA50 held.
+
    OVERLOOK STACK — leftover / unused-upside ranking when mix conviction is 0
    Do not invent a universe 0–100. Do not rank leftover Book names by a
    conviction_score the exclusion list zeroed. Rank those names with:
@@ -251,7 +312,7 @@ B. Focus-pool screening (when present; prefer sleeve_wide_pool)
    lanes (use as sleeves, not as the final ranking):
      breakout, continuation, opportunity, strength, shorts,
      top_movers, value_drops
-   A Top 30 name should usually appear in at least two independent sleeves
+   A Top 100 name should usually appear in at least two independent sleeves
    (example: breakout + continuation, or opportunity + strength), unless it is
    already a Book name with a live ADD/HOLD thesis, or an earnings-window name
    with a classified catalyst plan.
@@ -310,7 +371,8 @@ Book actions: ADD / HOLD / TRIM / EXIT
 Non-book longs: NEW starter / WAIT / PASS
 Shorts: SHORT starter / WAIT / COVER-if-held / PASS
 Catalyst plans: BUILD_TO_SELL / BUY_PRE / SHORT_PRE / HOLD_THROUGH /
-                DERISK_INTO_PRINT / WATCH_CATALYST / PASS
+                DERISK_INTO_PRINT / BUY_THE_RUMOUR / SELL_THE_NEWS /
+                WATCH_CATALYST / STAND_ASIDE / PASS
 Never use vague "consider" / "interesting" without one of the above.
 
 HORIZON TAGS (required on every radar name)
@@ -356,19 +418,19 @@ crowded. Include slightly post-print names only when policy still flags them
 (about -2 to 0 days).
 
 Windows (use these labels):
-  0–7d    immediate print  — sell/hold-through/derisk/short decisions, not new builds
-  8–14d   near print       — finish the build or start derisk; new entries only if clean
-  15–21d  build window     — primary BUILD_TO_SELL / BUY_PRE window
-  22–30d  approaching      — watchlists and staged starters, not full event size
-  >30d    not this sleeve unless the operator overrides
+  0–7d    immediate print  — sell/hold-through/derisk/short/stand-aside, not new builds
+  8–21d   near print       — finish the build or wait the event; new entries only if clean
+  22–60d  rumour window    — BUY_THE_RUMOUR / WATCH_SELL_NEWS / staged watch, not full event size
+  >60d    not this sleeve unless the operator overrides
 
 Coverage rules
   - Every Book name in 0–14d MUST have a catalyst plan. No silent holds into print.
-  - Then add the highest-quality non-book names in 0–30d that clear the event bar.
-  - Cap the actionable event list at about 8–12 names. Calendar can list more.
+  - Then add the highest-quality non-book names in 0–60d that clear the event bar.
+  - Cap the actionable event list at about 8–12 names. Calendar (pack lanes) can list more.
   - Event size is smaller than core size. BOOK_B / BUY_PRE / SHORT_PRE are
     probes. BUILD_TO_SELL trims the event overlay; it does not dump a core
     thesis unless EXIT is also warranted.
+  - Naive SHORT_PRE on a bounce / ENTER_SMALL day is STAND_ASIDE until bounce-fail.
 
 Catalyst plans (pick one; cite days-until + policy action + expected-move if present)
 
@@ -400,40 +462,67 @@ Catalyst plans (pick one; cite days-until + policy action + expected-move if pre
     already spent. Trim 30–50% before print; keep a stub only if a core thesis
     remains. This is "sell the catalyst" on a name you still own.
 
+  BUY_THE_RUMOUR
+    22–60d. Unpaid leftover + live weeks profile. Stage a starter or hold the
+    Book line into improving conditions. Same capital as the leftover ADD —
+    do not open a second event ticket. Pre-commit SELL_THE_NEWS if the move
+    will likely be in the price by print week.
+
+  SELL_THE_NEWS / WATCH_SELL_NEWS
+    Paid/extended into a dated print. Trim into strength now (0–7d) or watch
+    to sell the last 2 weeks before print (22–60d paid). Not a new short.
+
+  WATCH_SHORT
+    22–60d limited leftover + deterioration. Candidate for a later SHORT_PRE.
+    Not a short today on a bounce tape.
+
   WATCH_CATALYST
     Near earnings, no classified Book A/B setup yet. No pre-print add.
 
-  PASS
-    Binary lottery, AVOID_CHASE, severe extension, or no edge. Stand aside.
+  PASS / STAND_ASIDE
+    Binary lottery, AVOID_CHASE, severe extension, or bounce-day short. Stand aside.
 
 Event quality bar
   Require at least two layers: date/window AND (prediction/timing/tape or
   policy classification). A date alone is not a trade.
   Reject: chase into 0–7d after a large run-up; buy pre-print on exhaustion;
-  short pre-print a Book core name unless EXIT is actually warranted.
+  short pre-print a Book core name unless EXIT is actually warranted;
+  street-PT leftover dumps (>90%) posing as rumour longs.
 
-TOP 30 RADAR — CONSTRUCTION RULES
----------------------------------
-Build one ranked list of the 30 most important CURRENT opportunities / names.
+Publish two earnings-priority lists from pack earnings_lanes.upside_curated /
+.downside_curated (industry-capped, overflow visible; curate to 8–12 each
+from there, not from the uncapped .upside/.downside):
+  Upside: BUY_THE_RUMOUR / BUY_PRE / BUILD_TO_SELL / HOLD_THROUGH
+  Downside: SHORT_PRE / WATCH_SHORT / SELL_THE_NEWS / DERISK_INTO_PRINT
+
+TOP 100 RADAR — CONSTRUCTION RULES
+----------------------------------
+Build the headline list from pack sleeves.radar_curated_25 (industry-capped,
+Book exempt, overflow visible) — this is the primary surface, not
+radar_upside_100. Use radar_upside_100 only as a secondary/appendix table for
+names that did not make the curated cut, and cite the overflow count instead
+of silently dropping a crowded industry. Then tag capital.
 
 Composition (approximate, adjust to the regime):
-  8–12  Book names that still matter (ADD / HOLD / TRIM / EXIT candidates)
-  10–16 New or Watch longs (highest-quality forming or breaking out)
+  Book names that still matter (ADD / HOLD / TRIM / EXIT / DERISK)
+  Unpaid leftover that is still-to-pay (quality filter already in the pack)
+  Continuation with unused upside (not RSI-70 leftover-gone chase)
   0–4   Earnings-window names that change capital this week (if not already in)
-  0–4   Shorts that are important enough to sit on the radar
-The remaining shorts and extra event names go to their dedicated lists.
+  Shorts stay on the short book unless they are important enough for the radar
+Paid continuation belongs on a do-not-chase strip, not as NEW.
 
 Ranking principle (not a formula to fake):
   1. Live Book action that changes capital this week, including print-week
      DERISK / EXIT / HOLD_THROUGH — but a polar ADD→EXIT is ranked only after
      continuity has allowed it. Blocked polar names stay HOLD / no-add and
      must appear in the Continuity panel, not as rank-1 EXIT.
-  2. High-quality New long with aligned prediction + tape + timing
+  2. High-quality New long with aligned prediction + tape + timing (0–2 budget)
   3. Classified catalyst plan that must be acted on in this window
   4. Data-supported leftover / unused-upside (overlook stack) the operator
      must not miss — including Book names mix-excluded at conv 0.00
   5. Data-supported leader the operator must not miss
   6. High-conviction short only if the regime supports shorts
+Auto pack NEW is not the curated NEW budget. Park extras as WAIT.
 A name with a great score but AVOID_CHASE / severe extension / failed tape does
 not outrank a slightly lower-scored name with a clean ADD zone.
 A Book leftover with sticky avoid_value_trap does not outrank as EXIT.
@@ -472,15 +561,20 @@ Do not pad. Numbers over adjectives.
   Entry / ADD zone: price area or condition (pullback, hold-above, break-and-hold)
   Invalidation: price/structure/thesis kill (prefer ATR or failed level)
   Recommended action: ADD HOLD TRIM EXIT / NEW WAIT PASS / SHORT
-  Conviction: High / Medium / Low  plus 1-line why
+  Pack support: suggested_conviction 0.15–0.90 plus evidence / conflicts
+  Operator conviction: High / Medium / Low after you read the conflicts
+  (do not copy pack support as if it were your conviction)
   What would upgrade / downgrade this name next
 
 For Book names also include: weight, unrealized vs cost, whether to add size
 or only hold, and whether it is occupying a slot that a better New name needs.
 
-SHORTS — SHORTER LIST, SAME DEPTH
----------------------------------
-Produce 4–8 names, not 30. Rank by conviction, not by how many look "weak".
+SHORTS — 15-NAME OVERLAY, SAME DEPTH
+------------------------------------
+Use pack short_book_15_curated (US listed, close ≥ $5, mcap ≥ $2B, leftover ≤
+25, failed structure, industry-capped with overflow visible) as the headline
+list; short_book_15 is the uncapped appendix. Curate; do not order 15 names.
+Budget 0–1 new short.
 
 Require deterioration, not mere underperformance:
   - fragility_short and/or mean_reversion_exhaustion elevated
@@ -490,20 +584,23 @@ Require deterioration, not mere underperformance:
   - catalyst or event that can force de-rating (SHORT_PRE belongs here)
   - regime suitability (shorts need weak/narrow/fragile conditions, or a
     specific industry breakdown even if the index is mixed)
+  - bounce day / MTP ENTER_SMALL climate → STAND_ASIDE / SHORT WAIT, not SHORT now
 
 Do not short:
   - strong-regime leaders on valuation alone
   - Book core names as "shorts" unless EXIT is actually warranted
+  - leftover-91 EXIT names (squeeze risk)
   - crowded crashes already extended without a bounce-failure
   - names the timing policy still tags as bounce/continuation longs
   - pre-print shorts that are only "earnings are soon"
+  - microcaps / illiquid names the pack already dropped
 
 Same card schema as longs, emphasizing: failed breakout, RS deterioration,
 catalyst, valuation risk, invalidation ABOVE, and cover/pass rules.
 
 DATA-DERIVED GROUPS (SECTION C)
 -------------------------------
-These are decision lists, not restatements of the Top 30 and not a standing
+These are decision lists, not restatements of the Top 100 and not a standing
 theme book.
 
 After regime + radar, group the best remaining trades into 2–4 clusters that
@@ -544,13 +641,17 @@ C. Best trades in today's data-derived groups
 
 D. Earnings / catalyst actions
    Group as BUILD_TO_SELL / BUY_PRE / SHORT_PRE / HOLD_THROUGH /
-   DERISK_INTO_PRINT / WATCH_CATALYST.
+   DERISK_INTO_PRINT / BUY_THE_RUMOUR / SELL_THE_NEWS / WATCH_SHORT /
+   WATCH_CATALYST.
+   Publish two lists: upside (rumour / pre / hold-through) and downside
+   (short-pre / watch-short / sell-the-news / derisk).
    Include days-until, expected-move if known, size, sell/cover rule.
    Skip PASS names from this list; they can stay on the calendar only.
+   Do not double-size a Book ADD as a second rumour ticket.
 
 E. Best shorts
-   4–8 highest-conviction downside setups. Cover rule / invalidation.
-   Point to SHORT_PRE names instead of duplicating full cards.
+   Pack short_book_15 curated to overlay-wait or 0–1 order.
+   Point to SHORT_PRE / STAND_ASIDE names instead of duplicating full cards.
 
 F. Major opportunities outside those groups
    0–5 names that still clear the quality bar and would be a miss.
@@ -570,22 +671,22 @@ G. Active-management roadmap
 CANVAS LAYOUT (when producing the canvas)
 -----------------------------------------
 Follow the canvas skill. Hierarchy: book + earnings this week first, then
-radar, then groups, then shorts, then roadmap.
+radar 100, then groups, then shorts 15, then roadmap.
 
 1. Header: scan day, bias, breadth one-liner, event climate, artifacts used
-2. Continuity strip: polar-if-naive names, blocked vs allowed, what actually
+2. Week map: today / rest of this week / 8–21d / 22–60d late Sep
+3. Continuity strip: polar-if-naive names, blocked vs allowed, what actually
    changed vs yesterday (required whenever a prior briefing exists)
-3. Regime strip: bias, participation, leadership clusters, timing climate
-4. Book action table: ADD / HOLD / TRIM / EXIT with weight, signal, print date
-5. Earnings / catalyst panel: calendar 0–14d plus classified plans 0–30d
-6. Top 30 radar table (sortable): status, horizon, scores, catalyst plan,
-   action, conviction
-7. Data-derived group panels as compact ranked lists, not duplicate essays
-8. Shorts table
-9. Roadmap as a sequenced plan (now / sell-the-print / wait / next)
-10. Per-name detail only for: all ADD/EXIT/DERISK Book names, classified
-    event trades, top New longs, all shorts, and every publish-blocked polar
-    Other radar names can stay table-only.
+4. Regime strip: bias, participation, leadership clusters, timing climate
+5. Book action table: ADD / HOLD / TRIM / EXIT / DERISK with weight, signal, print date
+6. Earnings-priority UPSIDE and DOWNSIDE (0–7 / 8–21 / 22–60)
+7. Top 100 radar table (filterable): leftover, rr, bo, rsi, support, action
+8. Data-derived group panels as compact ranked lists, not duplicate essays
+9. Shorts table (15 overlay, bounce-day wait unless thesis-kill)
+10. Roadmap as a sequenced plan (now / sell-the-print / wait / next)
+11. Per-name detail only for: all ADD/EXIT/DERISK Book names, classified
+    event trades, the curated New longs, shorts that would be the 0–1 overlay,
+    and every publish-blocked polar. Other radar names can stay table-only.
 
 Omit any panel that would be empty. Label tables with metric names and the
 source run / scan day.
@@ -601,6 +702,12 @@ QUALITY BAR
   Conservative action wins on *new* risk until confirmed.
   Polar ADD→EXIT does not win by conservatism; HOLD / no-add wins until a
   thesis-kill is cited.
+- Pack `suggested_conviction` is support (0.15–0.90), not mix and not a
+  probability. After reading `conflicts`, assign operator High / Med / Low:
+    High — leftover live + weeks profile live + no blocking conflict
+    Med  — leftover or forming with one conflict (MTP WATCH, bounce, mix trap)
+    Low  — parked auto NEW, bounce-day short, PT dump, or leftover-91 EXIT-as-short
+  Quote support and the operator grade on every capital-change name.
 - Historical validation and EDGAR deep-dives only on finalists. Earnings dates
   and catalyst-policy rows are daily inputs.
 - Do not recommend more new positions than the book can absorb. If the book is

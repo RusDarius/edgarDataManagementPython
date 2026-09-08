@@ -9,6 +9,8 @@ Usage:
     python src/operator_briefing/example_entry.py compare --run-a RUN --run-b RUN
     python src/operator_briefing/example_entry.py stance MU SNDK
     python -m operator_briefing inspect
+
+Chat copy-paste blocks: src/focus_pool_screening/prompts/agent_copy_paste.txt
 """
 
 from __future__ import annotations

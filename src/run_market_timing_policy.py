@@ -25,6 +25,7 @@ from edge_research_tools.run_resolution import discover_latest_edge_parent_run_d
 from edge_research_tools.upside_move_potential_scanner import (
     compute_expected_move_proxy_pct,
 )
+from db.trading_view_all_fields_duckdb import resolve_latest_and_full_all_fields_run_ids
 
 DEFAULT_ALL_FIELDS_ROOT = (
     PROJECT_ROOT / "logs/tradingview_analysis/trading_view_all_fields_data"
@@ -254,11 +255,11 @@ def _first_existing_csv(*paths: Path) -> Path | None:
 
 def _load_edge_unified_rows(edge_parent_dir: Path) -> dict[str, dict[str, Any]]:
     aggregate = edge_parent_dir / "aggregate"
-    rows = _read_csv(aggregate / "edge_unified_highlights" / "edge_unified_highlights.csv")
+    rows = _read_csv(
+        aggregate / "edge_unified_highlights" / "edge_unified_highlights.csv"
+    )
     return {
-        symbol: row
-        for row in rows
-        if (symbol := str(row.get("symbol") or "").strip())
+        symbol: row for row in rows if (symbol := str(row.get("symbol") or "").strip())
     }
 
 
@@ -270,27 +271,21 @@ def _load_edge_trade_plan_rows(edge_parent_dir: Path) -> dict[str, dict[str, Any
     )
     rows = _read_csv(ranked_csv) if ranked_csv is not None else []
     return {
-        symbol: row
-        for row in rows
-        if (symbol := str(row.get("symbol") or "").strip())
+        symbol: row for row in rows if (symbol := str(row.get("symbol") or "").strip())
     }
 
 
 def _load_earnings_priority_rows(edge_parent_dir: Path) -> dict[str, dict[str, Any]]:
     aggregate = edge_parent_dir / "aggregate"
     candidates_csv = _first_existing_csv(
-        aggregate
-        / "earnings_priority_lens"
-        / "edge_earnings_priority_candidates.csv",
+        aggregate / "earnings_priority_lens" / "edge_earnings_priority_candidates.csv",
         edge_parent_dir
         / "earnings_priority_lens"
         / "edge_earnings_priority_candidates.csv",
     )
     rows = _read_csv(candidates_csv) if candidates_csv is not None else []
     return {
-        symbol: row
-        for row in rows
-        if (symbol := str(row.get("symbol") or "").strip())
+        symbol: row for row in rows if (symbol := str(row.get("symbol") or "").strip())
     }
 
 
@@ -395,7 +390,9 @@ def _build_catalyst_event_universe_rows(
         )
 
         current_close = _number(current.get("current_close"))
-        merged.update(_history_features(history_rows.get(clean_symbol, []), current_close))
+        merged.update(
+            _history_features(history_rows.get(clean_symbol, []), current_close)
+        )
 
         expected_move_proxy = compute_expected_move_proxy_pct(
             merged, horizon_days=CATALYST_EVENT_MOVE_HORIZON_DAYS
@@ -490,28 +487,59 @@ def _load_current_all_fields(
             if str(row.get("run_date_utc") or "")[:10] == scan_day
         ][:same_day_scan_limit]
         available_columns = _table_columns(connection, "all_fields_rows")
-        earnings_days_expr = (
-            "TRY_CAST(earnings_days_until AS DOUBLE) AS earnings_days_until, "
-            if "earnings_days_until" in available_columns
-            else "CAST(NULL AS DOUBLE) AS earnings_days_until, "
+        full_run_id = resolve_latest_and_full_all_fields_run_ids(connection).get(
+            "full_run_id"
         )
         snapshots: list[dict[str, dict[str, Any]]] = []
-        for metadata in same_day_metadata:
+        for index, metadata in enumerate(same_day_metadata):
+            run_id = str(metadata["run_id"])
+            # Only the freshest run (index 0, possibly a focused-catalog
+            # refresh) needs a fallback join; older same-day rows only feed
+            # intraday deltas and are read as-is.
+            use_fallback = (
+                index == 0 and full_run_id is not None and full_run_id != run_id
+            )
+            if use_fallback:
+                source_sql = (
+                    "(SELECT * FROM all_fields_rows WHERE run_id = ?) AS latest "
+                    "FULL OUTER JOIN "
+                    "(SELECT * FROM all_fields_rows WHERE run_id = ?) AS full_run "
+                    "ON latest.symbol = full_run.symbol"
+                )
+
+                def _col(name: str) -> str:
+                    return f'COALESCE(latest."{name}", full_run."{name}")'
+
+                query_params = [run_id, full_run_id]
+            else:
+                source_sql = (
+                    "(SELECT * FROM all_fields_rows WHERE run_id = ?) AS latest"
+                )
+
+                def _col(name: str) -> str:
+                    return f'latest."{name}"'
+
+                query_params = [run_id]
             rows = _fetch_dicts(
                 connection,
-                "SELECT symbol, industry, TRY_CAST(close AS DOUBLE) AS current_close, "
-                "TRY_CAST(change AS DOUBLE) AS current_day_pct, "
-                'TRY_CAST("Perf.5D" AS DOUBLE) AS perf_5d, '
-                'TRY_CAST("Perf.1M" AS DOUBLE) AS perf_1m, '
-                "TRY_CAST(gap AS DOUBLE) AS regular_gap_pct, "
-                "TRY_CAST(premarket_gap AS DOUBLE) AS premarket_gap_pct, "
-                "TRY_CAST(premarket_change AS DOUBLE) AS premarket_change_pct, "
-                'TRY_CAST("ADRP" AS DOUBLE) AS adrp, '
-                'TRY_CAST("ATRP" AS DOUBLE) AS atrp, '
-                + earnings_days_expr
-                + "TRY_CAST(market_cap_basic AS DOUBLE) AS market_cap_basic "
-                + "FROM all_fields_rows WHERE run_id = ?",
-                [metadata["run_id"]],
+                f"SELECT {_col('symbol')} AS symbol, {_col('industry')} AS industry, "
+                f"TRY_CAST({_col('close')} AS DOUBLE) AS current_close, "
+                f"TRY_CAST({_col('change')} AS DOUBLE) AS current_day_pct, "
+                f'TRY_CAST({_col("Perf.5D")} AS DOUBLE) AS perf_5d, '
+                f'TRY_CAST({_col("Perf.1M")} AS DOUBLE) AS perf_1m, '
+                f"TRY_CAST({_col('gap')} AS DOUBLE) AS regular_gap_pct, "
+                f"TRY_CAST({_col('premarket_gap')} AS DOUBLE) AS premarket_gap_pct, "
+                f"TRY_CAST({_col('premarket_change')} AS DOUBLE) AS premarket_change_pct, "
+                f'TRY_CAST({_col("ADRP")} AS DOUBLE) AS adrp, '
+                f'TRY_CAST({_col("ATRP")} AS DOUBLE) AS atrp, '
+                + (
+                    f'TRY_CAST({_col("earnings_days_until")} AS DOUBLE) AS earnings_days_until, '
+                    if "earnings_days_until" in available_columns
+                    else "CAST(NULL AS DOUBLE) AS earnings_days_until, "
+                )
+                + f"TRY_CAST({_col('market_cap_basic')} AS DOUBLE) AS market_cap_basic "
+                + f"FROM {source_sql}",
+                query_params,
             )
             snapshots.append(_build_all_fields_snapshot(rows, checkpoint=checkpoint))
     finally:

@@ -1,0 +1,138 @@
+AGENT COPY-PASTE — ACTIVE-MANAGER SCAN
+======================================
+Paste ONE block into chat. Do not paste this whole file.
+Standing spec: daily_generic.txt (themed file only if you asked for that sleeve).
+Pins: overrides_template.txt. Do not @ briefing_pack.json or DuckDB folders.
+
+Shell once per session:
+  $env:PYTHONPATH='src;.'
+
+Locked data (compile joins these; inspect shows what is newest):
+  move-prediction run_id, all-fields day + run_id, edge parent,
+  holdings_scoring_*, current_holdings.json, MTP run, priors JSON.
+Pack freeze: logs/tradingview_analysis/operator_briefing/runs/briefing_pack_*/
+Skills: .cursor/skills/daily-operator-scan/SKILL.md
+        .cursor/skills/scan-evidence/SKILL.md
+        .cursor/skills/tv-dataset-analysis/SKILL.md
+
+
+--- DAILY (full) ---
+Daily operator scan. Latest scoring + leftover/projections. Map today and the week.
+
+@.cursor/skills/daily-operator-scan/SKILL.md
+@src/focus_pool_screening/prompts/daily_generic.txt
+
+inspect, then compile only if pack sources differ (pred / all-fields / edge / holdings / MTP / Book / priors).
+Read briefing_pack.md. JSON only for names that change capital.
+
+What to produce (canvas first; chat is a short snapshot):
+  1. Week map — today / rest of this week / 8–21d / 22–60d late Sep.
+  2. Book — one action each. Polar ADD/NEW cannot become EXIT unless thesis_kill.
+  3. Top 100 still-to-pay leftover ∪ continuation with unused upside.
+     Cite left / rr (upside-to-risk) / rsi / bo / d_bo / conflicts.
+     Auto pack NEW is not the 0–2 NEW budget. Do not paste leftover-first dumps.
+  4. Short book 15 — overlay to bet the downside. Bounce / ENTER_SMALL → wait, not new shorts.
+     Do not short leftover-91 EXIT.
+  5. Earnings BOTH ways from pack earnings_lanes.upside and .downside. Curate 8–12 each.
+     0–7d derisk / hold-through. 8–21d finish-the-build or wait.
+     22–60d BUY_THE_RUMOUR / WATCH_SELL_NEWS / WATCH_SHORT / pre-earn on paid gains.
+     Late-Sep rumour on a Book ADD is the same line — no second ticket.
+  6. Wide analysis, tight capital. Quote pack suggested_conviction (support 0.15–0.90, not a probability).
+     Assign High / Med / Low yourself after conflicts.
+
+Budget 0-2 NEW, 0-2 ADD, 0-2 TRIM/EXIT, 0-2 event, 0-1 short.
+Canvas daily-focus-YYYYMMDD. Chat: bias + 5-8 actions + canvas path.
+No DuckDB fishing. No logs/_tmp_*.py. No 0–100 mix.
+
+
+--- DAILY (pack already good) ---
+@.cursor/skills/daily-operator-scan/SKILL.md
+@logs/tradingview_analysis/operator_briefing/runs/<newest>/briefing_pack.md
+
+Same deliverable as DAILY (full): week map, Book, Top 100 unpaid ∪ continuation,
+short book 15, earnings both ways (incl. late-Sep rumour / sell-the-news),
+operator High/Med/Low after pack support.
+
+Brief from this pack. Do not recompile. Do not open DuckDB.
+Continuity from pack book + logs/AI_ANALYSIS_UTILS/priors.
+Canvas daily-focus-YYYYMMDD. Chat snapshot only.
+
+
+--- STALE CHECK / RECOMPILE ---
+Is the briefing pack stale vs disk?
+
+python src/operator_briefing/example_entry.py inspect
+Diff inspect.sources vs pack sources: prediction_run_id, all_fields_run_id,
+edge_parent_dir, holdings_run_dir, mtp_dir.
+Mismatch or new current_holdings.json / priors → compile, then brief.
+Match → reuse pack; lookup/stance only.
+Do not open DuckDB folders.
+
+
+--- LOOKUP / PRUNE ---
+@.cursor/skills/scan-evidence/SKILL.md
+
+python src/operator_briefing/example_entry.py lookup MU SNDK PGY JD PATH ZS BIDU
+
+Each name: stance, suggested_conviction, left, rsi, bo, d_bo, mix, mtp, dte,
+conflicts, invalidation, one course.
+Rank inside unpaid / forming / paid / short. Do not merge sleeves.
+Quote pack support, then assign High/Med/Low after conflicts.
+If missing from pack, say so — do not SQL.
+
+
+--- COMPARE (pred progression) ---
+@.cursor/skills/scan-evidence/SKILL.md
+
+python src/operator_briefing/example_entry.py compare
+
+compare is weeks bo/cont/fwd deltas, not leftover.
+Lookup only names that are Book or unpaid/forming before NEW/ADD.
+Do not chase paid continuation. Do not short leftover-91 EXIT.
+
+
+--- BOOK ONLY ---
+@.cursor/skills/daily-operator-scan/SKILL.md
+
+inspect; compile if holdings or pred/all-fields ids moved.
+One capital action per holding. Polar gate on. Mix avoid_value_trap on live leftover = HOLD_NO_ADD.
+Chat: ticker, prior, today, left, d_bo, conflicts, pack support, operator High/Med/Low.
+No radar, no canvas unless asked.
+
+
+--- DELEGATE (child agent) ---
+Read .cursor/skills/scan-evidence/SKILL.md.
+Pack already exists. Do not compile. Do not inspect unless lookup missing.
+
+python src/operator_briefing/example_entry.py lookup MU SNDK PGY JD PATH ZS
+
+Return only: stance, suggested_conviction, left, rsi, bo, d_bo, opp, mix, mtp, dte,
+conflicts, course, invalidation, next_check, operator High/Med/Low after conflicts.
+No canvas. No DuckDB. No 0-100 score.
+
+
+--- THEMED (only if asked) ---
+Same overlay as DAILY (full): week map, Top 100 unpaid ∪ continuation,
+short book 15, earnings both ways, late-Sep rumour / sell-the-news,
+pack support then operator High/Med/Low.
+
+Standing prompt is
+src/focus_pool_screening/prompts/daily_themed_chips_software.txt
+Leadership still from pack industries_5d, not a remembered list.
+
+
+--- DETERMINISTIC FOCUS (no agent judgment) ---
+@.cursor/skills/tv-dataset-analysis/SKILL.md
+
+Export the compiled FOCUS set and scan it yourself.
+
+python src/generic_utils/tv_scan_cli.py pack-focus --pack logs/tradingview_analysis/operator_briefing/runs/<newest>/briefing_pack.json --sleeve sleeves.radar_curated_25 --out focus.csv
+python src/generic_utils/tv_scan_cli.py summary --csv focus.csv --fields left,rsi,d5,bo,rr
+python src/generic_utils/tv_scan_cli.py group --csv focus.csv --by ind --metrics d5,left,rsi --min-n 1 --pct-positive d5
+
+Do not invent SQL. Do not write logs/_tmp_*.py. Empty --where means no filter.
+
+
+--- OVERRIDES (append, keep blank lines unused) ---
+@src/focus_pool_screening/prompts/overrides_template.txt
+Fill only what differs: scan day, force-include names, shorts-on/off, earnings 0-14d, max new names.

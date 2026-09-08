@@ -1,0 +1,9 @@
+Copy-paste chat prompts for this CLI live in:
+
+  src/focus_pool_screening/prompts/agent_copy_paste.txt
+
+Index: src/focus_pool_screening/prompts/00_index.txt
+Standing spec: daily_generic.txt
+Pins: overrides_template.txt
+
+Do not duplicate those blocks here. Paste one section from agent_copy_paste.txt.

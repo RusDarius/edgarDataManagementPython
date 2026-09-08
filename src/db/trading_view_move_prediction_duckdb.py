@@ -553,7 +553,9 @@ class MovePredictionDuckDBStore:
         self.enable_object_cache = enable_object_cache
         self.preserve_insertion_order = preserve_insertion_order
         self.memory_limit = memory_limit
-        self.temp_directory = Path(temp_directory) if temp_directory is not None else None
+        self.temp_directory = (
+            Path(temp_directory) if temp_directory is not None else None
+        )
         self._duckdb: Any | None = None
         self._conn: Any | None = None
 
@@ -951,10 +953,17 @@ class MovePredictionDuckDBStore:
                 return 0
 
             columns_sql = ", ".join(_quote_identifier(column) for column in columns)
+            # PARALLEL false always: DuckDB's parallel CSV reader can raise
+            # NotImplementedException on rows with large/irregular fields, and
+            # inside an explicit transaction that failure leaves the connection
+            # aborted -- any further statement (including a single-threaded
+            # retry) then raises TransactionException instead of succeeding.
+            # Single-threaded COPY is reliable for these batch-sized appends,
+            # so it is used unconditionally rather than retried-on-failure.
             self.conn.execute(
                 f"COPY {_quote_identifier(table_name)} ({columns_sql}) "
                 f"FROM {_quote_path_literal(temporary_path)} "
-                "(FORMAT CSV, HEADER false, NULL '', STRICT_MODE false)"
+                "(FORMAT CSV, HEADER false, NULL '', STRICT_MODE false, PARALLEL false)"
             )
             return row_count
         finally:

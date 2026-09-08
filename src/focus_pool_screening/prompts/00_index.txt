@@ -4,10 +4,12 @@ Attach one version file per run. Do not attach this index.
 
 daily_generic.txt
   Default daily prompt. No standing sector or theme list. Leadership and
-  clusters come from the attached scores. Includes a required earnings /
-  catalyst sleeve (build-to-sell, buy or short pre-print, hold-through,
-  derisk). Session continuity is mandatory: attach yesterday's canvas and/or
-  run logs/AI_ANALYSIS_UTILS/priors plus the briefing pack book.continuity
+  clusters come from the attached scores. Required sleeves: week map (today /
+  this week / 8–21d / 22–60d), Top 100 unpaid / continuation-unpaid radar with
+  leftover-to-range (rr), short book 15, earnings-priority UPSIDE and DOWNSIDE
+  (buy-the-rumour / sell-the-news / derisk / short-pre). Session continuity is mandatory:
+  attach yesterday's canvas and/or
+  logs/AI_ANALYSIS_UTILS/priors plus the briefing pack book.continuity
   before any Book EXIT.
   Mix avoid_value_trap is a no-add filter on a live leftover Book thesis, not
   an automatic EXIT. Primary output is a Cursor canvas, with structured fallback.
@@ -19,6 +21,15 @@ daily_themed_chips_software.txt
 overrides_template.txt
   Optional add-on. Append or attach after the chosen version to pin
   scan day, forced names, style tilt, or earnings window.
+
+agent_copy_paste.txt
+  Short chat blocks. Paste one. DAILY (full) is the operator's spoken scan:
+  week map, Top 100 unpaid ∪ continuation, short book 15, earnings both ways
+  (late-Sep rumour / sell-the-news), pack support then operator High/Med/Low.
+  Same overlay on DAILY (pack already good) and THEMED. Also: stale-check,
+  lookup, compare, Book-only, delegate, deterministic FOCUS. Do not attach this index or the whole
+  file. Pointer also at src/operator_briefing/COPY_PASTE_PROMPTS.txt.
+  Generic TV interrogation: .cursor/skills/tv-dataset-analysis/SKILL.md
 
 Launch: run python src/operator_briefing/example_entry.py compile, then attach the
 newest briefing_pack.md/.json plus the version file. The pack is the locked

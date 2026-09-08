@@ -7,9 +7,14 @@ import uuid
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
-from .continuity import continuity_action, load_prior_actions, map_mix_to_naive_book_action, prior_action_for
+from .continuity import (
+    continuity_action,
+    load_prior_actions,
+    map_mix_to_naive_book_action,
+    prior_action_for,
+)
 from .discovery import BRIEFING_RUNS, LockedSources, lock_sources
 from .extract import (
     extract_all_fields,
@@ -22,17 +27,29 @@ from .extract import (
     universe_stats,
 )
 from .sleeves import (
+    EARNINGS_INDUSTRY_CAP,
     MTP_AVOID_ACTIONS,
     MTP_BOUNCE_ACTIONS,
+    RADAR_INDUSTRY_CAP,
+    SHORT_INDUSTRY_CAP,
     continuation_paid,
+    continuation_unpaid,
+    dedupe_by_industry,
     forming_eligible,
     is_us_listed,
     leftover_pct,
+    profile_live,
+    reward_risk,
     short_limited_upside,
     unpaid_eligible,
     unpaid_sort_key,
 )
-from .stance import rank_suggested_courses, suggest_stance, summarize_operator_course
+from .stance import (
+    classify_event_play,
+    rank_suggested_courses,
+    suggest_stance,
+    summarize_operator_course,
+)
 
 DEFAULT_OUTPUT_ROOT = BRIEFING_RUNS
 
@@ -46,6 +63,7 @@ GOTCHAS = [
     "Auto leftover-first lists dump biotech/ADR junk. Use unpaid_eligible / forming / continuation_paid / short_limited_upside.",
     "DuckDB paths with '=' must be quoted. Prefer this pack over ad-hoc SQL.",
     "suggested_conviction is support for a named course, not mix and not a probability. Keep conflicts visible.",
+    "rr is leftover / max(52w range, 15). High = unused upside vs already-paid range. Not a 0-100 score.",
     "Do not write _tmp_*.py under logs/. Use inspect / lookup / compare / stance.",
 ]
 
@@ -96,6 +114,7 @@ def _compact_name(row: dict[str, Any]) -> dict[str, Any]:
         "regime",
         "pe",
         "opm",
+        "rr",
     )
     return {k: row.get(k) for k in keys if row.get(k) is not None}
 
@@ -137,11 +156,28 @@ def _merge_names(
         rec["edge_left"] = _round(edge_row.get("forward_valuation_upside_pct"), 1)
         rec["opp"] = _f(edge_row.get("upside_opportunity_rank"))
         rec["lean"] = edge_row.get("directional_lean")
-        rec["left"] = _round(leftover_pct(rec.get("close"), rec.get("pt"), rec.get("edge_left")), 1)
+        rec["left"] = _round(
+            leftover_pct(rec.get("close"), rec.get("pt"), rec.get("edge_left")), 1
+        )
+        rec["rr"] = reward_risk(rec)
         rec["mtp"] = (mtp.get(symbol) or {}).get("action")
         rec["mtp_setup"] = (mtp.get(symbol) or {}).get("primary_setup")
-        for key in ("close", "mcap", "day", "d5", "m1", "rsi", "rng", "vs50", "pe", "opm", "dte"):
-            rec[key] = _round(rec.get(key), 1 if key in {"rsi", "rng", "dte", "left"} else 2)
+        for key in (
+            "close",
+            "mcap",
+            "day",
+            "d5",
+            "m1",
+            "rsi",
+            "rng",
+            "vs50",
+            "pe",
+            "opm",
+            "dte",
+        ):
+            rec[key] = _round(
+                rec.get(key), 1 if key in {"rsi", "rng", "dte", "left"} else 2
+            )
         names[symbol] = rec
     return names
 
@@ -174,11 +210,13 @@ def _book_rows(
             close=close,
             vs_cost_pct=vs_cost,
             weeks_ras=_f(name.get("weeks_ras")) or _f(row.get("consensus_weeks_ras")),
-            months_ras=_f(name.get("months_ras")) or _f(row.get("consensus_months_ras")),
+            months_ras=_f(name.get("months_ras"))
+            or _f(row.get("consensus_months_ras")),
             lost_sma50=lost_sma50,
             leftover=_f(name.get("left")),
             rsi=_f(name.get("rsi")),
             rng=_f(name.get("rng")),
+            dte=_f(name.get("dte")),
         )
         book.append(
             {
@@ -202,10 +240,13 @@ def _book_rows(
     return book
 
 
-def _sleeve_lists(names: dict[str, dict[str, Any]], book_symbols: set[str]) -> dict[str, list[dict[str, Any]]]:
+def _sleeve_lists(
+    names: dict[str, dict[str, Any]], book_symbols: set[str]
+) -> dict[str, list[dict[str, Any]]]:
     unpaid = []
     forming = []
     paid = []
+    cont_unpaid = []
     shorts = []
     for rec in names.values():
         compact = _compact_name(rec)
@@ -215,17 +256,48 @@ def _sleeve_lists(names: dict[str, dict[str, Any]], book_symbols: set[str]) -> d
             forming.append(compact)
         if continuation_paid(rec):
             paid.append(compact)
+        if continuation_unpaid(rec):
+            cont_unpaid.append(compact)
         if short_limited_upside(rec) and rec.get("symbol") not in book_symbols:
             shorts.append(compact)
     unpaid.sort(key=unpaid_sort_key)
     forming.sort(key=lambda r: (_f(r.get("rng")) or 99, -(_f(r.get("left")) or 0)))
     paid.sort(key=lambda r: (-(_f(r.get("bo")) or 0), -(_f(r.get("rsi")) or 0)))
-    shorts.sort(key=lambda r: ((_f(r.get("left")) or 0), _f(r.get("d5")) or 0))
+    cont_unpaid.sort(key=unpaid_sort_key)
+    shorts.sort(
+        key=lambda r: (
+            0 if (_f(r.get("day")) or 0) < 3 else 1,
+            -(_f(r.get("frag")) or 0),
+            _f(r.get("d5")) or 0,
+            abs(_f(r.get("left")) or 0),
+        )
+    )
+    seen: set[str] = set()
+    radar_pool: list[dict[str, Any]] = []
+    for row in unpaid + cont_unpaid:
+        symbol = str(row.get("symbol") or "")
+        if not symbol or symbol in seen:
+            continue
+        seen.add(symbol)
+        radar_pool.append(row)
+    radar_curated, radar_overflow = dedupe_by_industry(
+        radar_pool, cap=RADAR_INDUSTRY_CAP, book_symbols=book_symbols
+    )
+    shorts_curated, shorts_overflow = dedupe_by_industry(
+        shorts, cap=SHORT_INDUSTRY_CAP, book_symbols=book_symbols
+    )
     return {
-        "unpaid": unpaid[:40],
+        "unpaid": unpaid[:80],
+        "continuation_unpaid": cont_unpaid[:40],
         "forming": forming[:25],
         "continuation_paid": paid[:20],
         "shorts_limited_upside": shorts[:20],
+        "radar_upside_100": radar_pool[:100],
+        "radar_curated_25": radar_curated[:25],
+        "radar_industry_overflow": radar_overflow,
+        "short_book_15": shorts[:15],
+        "short_book_15_curated": shorts_curated[:15],
+        "short_book_15_overflow": shorts_overflow,
     }
 
 
@@ -250,6 +322,102 @@ def _mtp_climate(mtp_rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _event_quality(row: Mapping[str, Any], book_symbols: set[str]) -> bool:
+    symbol = str(row.get("symbol") or "")
+    if symbol in book_symbols:
+        return True
+    leftover = _f(row.get("left"))
+    if leftover is not None and leftover > 90:
+        return False
+    if leftover is not None and leftover < -25:
+        return False
+    return bool(profile_live(row) or short_limited_upside(row))
+
+
+def _earnings_lanes(
+    names: dict[str, dict[str, Any]],
+    book_symbols: set[str],
+) -> dict[str, list[dict[str, Any]]]:
+    rows: list[dict[str, Any]] = []
+    for rec in names.values():
+        dte = rec.get("dte")
+        if dte is None or dte < -1 or dte > 60:
+            continue
+        if not is_us_listed(rec):
+            continue
+        if (_f(rec.get("mcap")) or 0) < 2_000_000_000:
+            continue
+        compact = _compact_name(rec)
+        event = classify_event_play(rec, in_book=str(rec.get("symbol")) in book_symbols)
+        compact["play"] = event.get("play")
+        compact["window"] = event.get("window")
+        compact["rr"] = rec.get("rr")
+        rows.append(compact)
+    rows.sort(
+        key=lambda r: (
+            r.get("dte") if r.get("dte") is not None else 99,
+            -(_f(r.get("left")) or 0),
+        )
+    )
+
+    def _bucket(lo: int, hi: int, *, quality: bool = False) -> list[dict[str, Any]]:
+        out = [r for r in rows if r.get("dte") is not None and lo <= r["dte"] <= hi]
+        if quality:
+            out = [r for r in out if _event_quality(r, book_symbols)]
+        return out
+
+    upside_plays = {
+        "BUY_PRE",
+        "BUILD_TO_SELL",
+        "BUY_THE_RUMOUR",
+        "HOLD_THROUGH",
+    }
+    down_plays = {
+        "SHORT_PRE",
+        "WATCH_SHORT",
+        "SELL_THE_NEWS",
+        "WATCH_SELL_NEWS",
+        "DERISK_INTO_PRINT",
+    }
+    quality_rows = [r for r in rows if _event_quality(r, book_symbols)]
+    upside = [r for r in quality_rows if r.get("play") in upside_plays][:40]
+    downside = [r for r in quality_rows if r.get("play") in down_plays][:30]
+    upside_curated, upside_overflow = dedupe_by_industry(
+        upside, cap=EARNINGS_INDUSTRY_CAP, book_symbols=book_symbols
+    )
+    downside_curated, downside_overflow = dedupe_by_industry(
+        downside, cap=EARNINGS_INDUSTRY_CAP, book_symbols=book_symbols
+    )
+    return {
+        "all_0_60d": rows[:120],
+        "print_week_0_7d": _bucket(0, 7, quality=True)[:40],
+        "near_8_21d": _bucket(8, 21, quality=True)[:40],
+        "rumour_22_60d": _bucket(22, 60, quality=True)[:40],
+        "upside": upside,
+        "downside": downside,
+        "upside_curated": upside_curated[:12],
+        "upside_overflow": upside_overflow,
+        "downside_curated": downside_curated[:12],
+        "downside_overflow": downside_overflow,
+    }
+
+
+def _attach_sleeve_tags(
+    rows: list[dict[str, Any]] | None,
+    stances: Mapping[str, Mapping[str, Any]],
+) -> None:
+    """Join stance.py's per-symbol sleeve tags onto compact rows in place.
+
+    Lets a canvas/agent cite cross-sleeve confirmation without re-joining
+    `stances` against every sleeve/earnings bucket by hand.
+    """
+    for row in rows or []:
+        symbol = str(row.get("symbol") or "")
+        tags = list((stances.get(symbol) or {}).get("sleeves") or [])
+        row["sleeve_tags"] = tags
+        row["sleeve_count"] = len(tags)
+
+
 def compile_briefing_pack(
     *,
     output_root: Path | None = None,
@@ -262,9 +430,13 @@ def compile_briefing_pack(
     )
     edge = load_csv_by_symbol(sources.edge_opportunity_csv)
     mtp = load_csv_by_symbol(sources.mtp_policy_csv)
-    holdings = load_csv_by_symbol(sources.holdings_summary_csv, symbol_key="matched_symbol")
+    holdings = load_csv_by_symbol(
+        sources.holdings_summary_csv, symbol_key="matched_symbol"
+    )
     if not holdings:
-        holdings = load_csv_by_symbol(sources.holdings_summary_csv, symbol_key="config_ticker")
+        holdings = load_csv_by_symbol(
+            sources.holdings_summary_csv, symbol_key="config_ticker"
+        )
     if sources.holdings_run_dir is not None:
         etf_csv = (
             sources.holdings_run_dir
@@ -272,7 +444,9 @@ def compile_briefing_pack(
             / "etf_active_book_v1"
             / "holdings__summary.csv"
         )
-        for symbol, row in load_csv_by_symbol(etf_csv, symbol_key="matched_symbol").items():
+        for symbol, row in load_csv_by_symbol(
+            etf_csv, symbol_key="matched_symbol"
+        ).items():
             holdings.setdefault(symbol, row)
     priors = load_prior_actions(sources.priors_path)
     extra_symbols = list(holdings.keys()) + list(mtp.keys())
@@ -285,24 +459,18 @@ def compile_briefing_pack(
     book = _book_rows(holdings, names, priors)
     book_symbols = {str(r["symbol"]) for r in book}
     sleeves = _sleeve_lists(names, book_symbols)
+    earnings_lanes = _earnings_lanes(names, book_symbols)
 
     watch = set(book_symbols)
-    for bucket in sleeves.values():
-        for row in bucket:
+    for bucket_name in ("radar_upside_100", "short_book_15", "continuation_paid"):
+        for row in sleeves.get(bucket_name) or []:
             symbol = str(row.get("symbol") or "")
             if symbol:
                 watch.add(symbol)
-    earnings = [
-        _compact_name(rec)
-        for rec in names.values()
-        if rec.get("dte") is not None
-        and -1 <= rec["dte"] <= 21
-        and (_f(rec.get("mcap")) or 0) >= 2_000_000_000
-        and is_us_listed(rec)
-    ]
-    earnings.sort(key=lambda r: r.get("dte") or 99)
-    for row in earnings[:25]:
-        watch.add(str(row.get("symbol")))
+    for row in (earnings_lanes.get("all_0_60d") or [])[:50]:
+        symbol = str(row.get("symbol") or "")
+        if symbol:
+            watch.add(symbol)
 
     try:
         progression = extract_progression(sources, sorted(watch))
@@ -316,7 +484,9 @@ def compile_briefing_pack(
             continue
         book_row = book_by_symbol.get(symbol)
         prog = progression.get(symbol) if isinstance(progression, dict) else None
-        delta = (prog or {}).get("delta_vs_prior_run") if isinstance(prog, dict) else None
+        delta = (
+            (prog or {}).get("delta_vs_prior_run") if isinstance(prog, dict) else None
+        )
         stances[symbol] = suggest_stance(
             rec,
             in_book=symbol in book_symbols,
@@ -324,9 +494,17 @@ def compile_briefing_pack(
             delta=delta if isinstance(delta, dict) else None,
         )
     suggested_courses = rank_suggested_courses(stances)
+    for bucket in sleeves.values():
+        if isinstance(bucket, list):
+            _attach_sleeve_tags(bucket, stances)
+    for bucket in earnings_lanes.values():
+        if isinstance(bucket, list):
+            _attach_sleeve_tags(bucket, stances)
     us2b = [r for r in af_rows if (_f(r.get("mcap")) or 0) >= 2_000_000_000]
     created = datetime.now(tz=timezone.utc)
-    run_id = f"briefing_pack_{created.strftime('%Y%m%d_%H%M')}_utc_{uuid.uuid4().hex[:8]}"
+    run_id = (
+        f"briefing_pack_{created.strftime('%Y%m%d_%H%M')}_utc_{uuid.uuid4().hex[:8]}"
+    )
     regime = {
         "us_2b": universe_stats(af_rows, min_mcap=2_000_000_000),
         "us_500m": universe_stats(af_rows, min_mcap=500_000_000),
@@ -346,7 +524,9 @@ def compile_briefing_pack(
         "mtp": mtp_climate,
         "book": book,
         "sleeves": sleeves,
-        "earnings_0_21d": earnings[:40],
+        "earnings_0_21d": (earnings_lanes.get("print_week_0_7d") or [])
+        + (earnings_lanes.get("near_8_21d") or []),
+        "earnings_lanes": earnings_lanes,
         "progression": progression,
         "names": {s: _compact_name(names[s]) for s in sorted(watch) if s in names},
         "stances": stances,
@@ -370,9 +550,15 @@ def compile_briefing_pack(
     md_path = run_dir / "briefing_pack.md"
     json_path.write_text(json.dumps(pack, indent=2, default=str), encoding="utf-8")
     md_path.write_text(render_markdown(pack), encoding="utf-8")
-    pack["output"] = {"json": json_path.as_posix(), "md": md_path.as_posix(), "run_dir": run_dir.as_posix()}
+    pack["output"] = {
+        "json": json_path.as_posix(),
+        "md": md_path.as_posix(),
+        "run_dir": run_dir.as_posix(),
+    }
     (run_dir / "manifest.json").write_text(
-        json.dumps({"run_id": run_id, "json": json_path.name, "md": md_path.name}, indent=2),
+        json.dumps(
+            {"run_id": run_id, "json": json_path.name, "md": md_path.name}, indent=2
+        ),
         encoding="utf-8",
     )
     return pack
@@ -424,12 +610,30 @@ def render_markdown(pack: dict[str, Any]) -> str:
             f"-> {cont.get('action')} (prior {cont.get('prior_action')}, naive {cont.get('naive_action')}"
             f"{', POLAR BLOCKED' if cont.get('polar_blocked') else ''})"
         )
-    lines += ["", "## Unpaid leftover (filtered)", ""]
-    lines.append("| symbol | left | bo | rsi | rng | opp | mix |")
-    lines.append("|---|---:|---:|---:|---:|---:|---|")
-    for row in (pack.get("sleeves") or {}).get("unpaid") or []:
+    radar_curated = (pack.get("sleeves") or {}).get("radar_curated_25") or []
+    radar_overflow = (pack.get("sleeves") or {}).get("radar_industry_overflow") or []
+    lines += [
+        "",
+        f"## Top 100 radar \u2014 curated headline (industry-capped, {len(radar_overflow)} names held back to industry cap; see radar_upside_100 for the full appendix)",
+        "",
+    ]
+    lines.append("| symbol | left | rr | bo | rsi | rng | opp | mix | sleeves |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|---|---:|")
+    for row in radar_curated[:25]:
         lines.append(
-            f"| {row.get('symbol')} | {row.get('left')} | {row.get('bo')} | {row.get('rsi')} | {row.get('rng')} | {row.get('opp')} | {row.get('mix')} |"
+            f"| {row.get('symbol')} | {row.get('left')} | {row.get('rr')} | {row.get('bo')} | "
+            f"{row.get('rsi')} | {row.get('rng')} | {row.get('opp')} | {row.get('mix')} | {row.get('sleeve_count')} |"
+        )
+    short_curated = (pack.get("sleeves") or {}).get("short_book_15_curated") or []
+    short_overflow = (pack.get("sleeves") or {}).get("short_book_15_overflow") or []
+    lines += [
+        "",
+        f"## Short book (15, limited leftover, curated; {len(short_overflow)} names held back to industry cap)",
+        "",
+    ]
+    for row in short_curated:
+        lines.append(
+            f"- {row.get('symbol')} left {row.get('left')} 5D {row.get('d5')} day {row.get('day')} rsi {row.get('rsi')} mtp {row.get('mtp')}"
         )
     lines += ["", "## Forming", ""]
     for row in ((pack.get("sleeves") or {}).get("forming") or [])[:12]:
@@ -446,11 +650,27 @@ def render_markdown(pack: dict[str, Any]) -> str:
         lines.append(
             f"- {row.get('symbol')} left {row.get('left')} 5D {row.get('d5')} day {row.get('day')} mtp {row.get('mtp')}"
         )
-    lines += ["", "## Prints 0-21d (US $2B)", ""]
-    for row in pack.get("earnings_0_21d") or []:
-        lines.append(
-            f"- dte {row.get('dte')} {row.get('symbol')} left {row.get('left')} rsi {row.get('rsi')} 5D {row.get('d5')} mtp {row.get('mtp')}"
-        )
+    lanes = pack.get("earnings_lanes") or {}
+    lines += ["", "## Earnings lanes (US $2B, quality filter)", ""]
+    for label, key in (
+        ("0-7d print week", "print_week_0_7d"),
+        ("8-21d this/next week", "near_8_21d"),
+        ("22-60d late Sep / next month rumour", "rumour_22_60d"),
+        (
+            "upside plays, curated (BUY_PRE / BUILD / RUMOUR / HOLD_THROUGH)",
+            "upside_curated",
+        ),
+        (
+            "downside plays, curated (SHORT_PRE / WATCH_SHORT / SELL_NEWS / DERISK)",
+            "downside_curated",
+        ),
+    ):
+        lines.append(f"### {label}")
+        for row in (lanes.get(key) or [])[:12]:
+            lines.append(
+                f"- dte {row.get('dte')} {row.get('play')} {row.get('symbol')} "
+                f"left {row.get('left')} rr {row.get('rr')} rsi {row.get('rsi')} bo {row.get('bo')}"
+            )
     primary = pack.get("primary_course") or {}
     lines += [
         "",
@@ -466,7 +686,10 @@ def render_markdown(pack: dict[str, Any]) -> str:
     for item in primary.get("do_not") or []:
         lines.append(f"- {item}")
     courses = pack.get("suggested_courses") or {}
-    lines += ["", "### Ranked NEW (pack watch, leftover+profile, not a 0-100 composite)"]
+    lines += [
+        "",
+        "### Ranked NEW (pack watch, leftover+profile, not a 0-100 composite)",
+    ]
     for row in (courses.get("new") or [])[:8]:
         lines.append(
             f"- {row.get('rank_in_bucket')} {row.get('symbol')} {row.get('stance')} "

@@ -72,6 +72,24 @@ Implemented in `src/operator_briefing/sleeves.py`:
 
 Auto unpaid from raw leftover rank is **invalid input**.
 
+## Curated headline sleeves (industry-capped)
+
+`dedupe_by_industry` (`sleeves.py`) is the domain wrapper around
+`generic_utils.ranking.group_capped_top_n`: cap a pre-sorted sleeve at
+`RADAR_INDUSTRY_CAP`/`SHORT_INDUSTRY_CAP`/`EARNINGS_INDUSTRY_CAP` (default 5)
+names per industry so one crowded industry (e.g. Packaged Software) cannot
+fill the whole list. Book names are always exempt. `compile.py` uses it to
+build, alongside the original uncapped sleeves:
+
+- `sleeves.radar_curated_25` (+ `sleeves.radar_industry_overflow`) — headline Top 100 view; `radar_upside_100` is the appendix
+- `sleeves.short_book_15_curated` (+ `sleeves.short_book_15_overflow`) — headline shorts; `short_book_15` is the appendix
+- `earnings_lanes.upside_curated` / `.downside_curated` (+ `.upside_overflow` / `.downside_overflow`) — headline earnings lanes; `.upside` / `.downside` are the appendix
+
+Every compact row in every sleeve/earnings bucket also carries `sleeve_tags`
+(list of which sleeves — unpaid/continuation_unpaid/forming/continuation_paid/
+shorts_limited_upside — confirm this name) and `sleeve_count`. Use it as
+cross-sleeve confirmation depth, not as a score.
+
 ## MTP
 
 `action_policy_recommendations.csv` column `action`: ENTER_SMALL, ENTER_PROBE, WATCH, AVOID_CHASE.
@@ -92,3 +110,6 @@ Coverage is edge upside 1–50 ∪ screen 1–100. That is why crashed high-ADR 
 - New risk: conservative wins (no DUOL ADD vs MTP WATCH)
 - Live leftover ADD from yesterday: HOLD_NO_ADD wins over naive EXIT
 - Yesterday EXIT stays EXIT until tape repairs (weeks RAS ≥ 0.25 and SMA50 held)
+- Prior DERISK_INTO_PRINT sticks while dte ≤ 7
+- Prior TRIM sticks until weeks RAS ≥ 0.25 and SMA50 held
+- Prior HOLD_NO_ADD does not silently become HOLD

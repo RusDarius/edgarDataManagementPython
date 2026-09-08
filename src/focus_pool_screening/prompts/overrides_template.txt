@@ -12,5 +12,7 @@ Historical check symbols:
 Forced clusters (only if named here):
 Ignore groups / themes:
 Max new names:
+Week map / two-way earnings (default on):
+Operator High/Med/Low after pack support (default on):
 Prior briefing / polar-flip check (default on; path to canvas or reconciliation run):
 Other:

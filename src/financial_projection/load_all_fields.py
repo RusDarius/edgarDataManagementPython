@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from constants.trading_view_constants import PREFERRED_MARKETS
+from db.trading_view_all_fields_duckdb import resolve_latest_and_full_all_fields_run_ids
 
 from .config import DEFAULT_ALL_FIELDS_ROOT, DEFAULT_PREDICTION_ROOT
 from .fields import PROJECTION_FIELD_WHITELIST
@@ -133,7 +134,9 @@ def resolve_all_fields_database(
     return discovered.resolve()
 
 
-def _available_columns(connection: Any, table_name: str = "all_fields_rows") -> set[str]:
+def _available_columns(
+    connection: Any, table_name: str = "all_fields_rows"
+) -> set[str]:
     rows = connection.execute(f"DESCRIBE {table_name}").fetchall()
     return {str(row[0]) for row in rows}
 
@@ -147,6 +150,12 @@ def load_latest_all_fields_universe(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """
     Load one latest all-fields row per symbol with the projection whitelist.
+
+    Prefers the freshest scan (``latest_run_id``, which may be a fast focused-
+    catalog intraday refresh) for every field, and falls back per-column to the
+    most recent full-catalog run in the same database (``full_run_id``) for any
+    field the freshest run didn't fetch (left NULL). When no full-catalog run is
+    present yet (e.g. only focused runs so far today), the fallback is a no-op.
 
     Returns (rows, load_metadata).
     """
@@ -171,71 +180,72 @@ def load_latest_all_fields_universe(
             ).fetchall()
         }
         if "all_fields_rows" not in tables:
-            raise ValueError(
-                f"Table all_fields_rows missing in {db_path.as_posix()}"
-            )
+            raise ValueError(f"Table all_fields_rows missing in {db_path.as_posix()}")
 
         available = _available_columns(conn)
+
+        latest_run_id: str | None = None
+        full_run_id: str | None = None
+        latest_created_at = ""
+        if "run_metadata" in tables:
+            resolved_run_ids = resolve_latest_and_full_all_fields_run_ids(conn)
+            latest_run_id = resolved_run_ids["latest_run_id"]
+            full_run_id = resolved_run_ids["full_run_id"]
+            if latest_run_id is not None:
+                created_at_row = conn.execute(
+                    "SELECT created_at_utc FROM run_metadata WHERE run_id = ?",
+                    [latest_run_id],
+                ).fetchone()
+                if created_at_row is not None:
+                    latest_created_at = str(created_at_row[0])
+        if latest_run_id is None:
+            fallback_row = conn.execute(
+                "SELECT run_id FROM all_fields_rows GROUP BY run_id "
+                "ORDER BY run_id DESC LIMIT 1"
+            ).fetchone()
+            latest_run_id = str(fallback_row[0]) if fallback_row else None
+        if latest_run_id is None:
+            raise ValueError(
+                f"No rows found in all_fields_rows for {db_path.as_posix()}"
+            )
+
+        uses_fallback = full_run_id is not None and full_run_id != latest_run_id
+
+        if uses_fallback:
+            from_clause = f"""
+                FROM (SELECT * FROM all_fields_rows WHERE run_id = {_q(latest_run_id)}) AS latest
+                FULL OUTER JOIN
+                    (SELECT * FROM all_fields_rows WHERE run_id = {_q(full_run_id)}) AS full_run
+                    ON latest.symbol = full_run.symbol
+            """
+
+            def _col(name: str) -> str:
+                return f'COALESCE(latest."{name}", full_run."{name}")'
+
+        else:
+            from_clause = f"FROM (SELECT * FROM all_fields_rows WHERE run_id = {_q(latest_run_id)}) AS latest"
+
+            def _col(name: str) -> str:
+                return f'latest."{name}"'
+
         select_parts: list[str] = []
         for field in fields:
             if field not in available:
                 select_parts.append(f'CAST(NULL AS VARCHAR) AS "{field}"')
             else:
-                select_parts.append(
-                    f'CAST(r."{field}" AS VARCHAR) AS "{field}"'
-                )
-
-        has_run_metadata = "run_metadata" in tables
-        if has_run_metadata:
-            latest_run_cte = """
-                latest_run AS (
-                    SELECT run_id, created_at_utc
-                    FROM run_metadata
-                    WHERE suite_name = 'tradingview_all_fields_export_duckdb'
-                       OR suite_name IS NULL
-                       OR suite_name = ''
-                    ORDER BY created_at_utc DESC NULLS LAST, run_id DESC
-                    LIMIT 1
-                )
-            """
-            from_clause = """
-                FROM all_fields_rows AS r
-                INNER JOIN latest_run AS lr ON r.run_id = lr.run_id
-            """
-            run_id_select = "lr.run_id AS source_run_id, CAST(lr.created_at_utc AS VARCHAR) AS source_created_at_utc"
-        else:
-            latest_run_cte = """
-                latest_run AS (
-                    SELECT run_id
-                    FROM all_fields_rows
-                    GROUP BY run_id
-                    ORDER BY run_id DESC
-                    LIMIT 1
-                )
-            """
-            from_clause = """
-                FROM all_fields_rows AS r
-                INNER JOIN latest_run AS lr ON r.run_id = lr.run_id
-            """
-            run_id_select = "lr.run_id AS source_run_id, CAST(NULL AS VARCHAR) AS source_created_at_utc"
+                select_parts.append(f'CAST({_col(field)} AS VARCHAR) AS "{field}"')
 
         market_filter_sql = "TRUE"
         if resolved_markets and "market" in available:
             market_literals = ", ".join(_q(m) for m in resolved_markets)
-            market_filter_sql = (
-                f"lower(COALESCE(CAST(r.market AS VARCHAR), '')) IN ({market_literals})"
-            )
+            market_filter_sql = f"lower(COALESCE(CAST({_col('market')} AS VARCHAR), '')) IN ({market_literals})"
 
         market_cap_filter_sql = "TRUE"
         if min_market_cap_usd > 0 and "market_cap_basic" in available:
-            market_cap_filter_sql = (
-                f"TRY_CAST(r.market_cap_basic AS DOUBLE) >= {float(min_market_cap_usd)}"
-            )
+            market_cap_filter_sql = f"TRY_CAST({_col('market_cap_basic')} AS DOUBLE) >= {float(min_market_cap_usd)}"
 
         query = f"""
-            WITH {latest_run_cte}
             SELECT
-                {run_id_select},
                 {", ".join(select_parts)}
             {from_clause}
             WHERE {market_filter_sql}
@@ -248,16 +258,13 @@ def load_latest_all_fields_universe(
         conn.close()
 
     rows = [_normalize_row(row) for row in raw_rows]
-    source_run_id = ""
-    source_created_at = ""
-    if rows:
-        source_run_id = str(rows[0].get("source_run_id") or "")
-        source_created_at = str(rows[0].get("source_created_at_utc") or "")
 
     metadata = {
         "database_path": db_path.as_posix(),
-        "source_run_id": source_run_id,
-        "source_created_at_utc": source_created_at,
+        "source_run_id": latest_run_id or "",
+        "source_created_at_utc": latest_created_at,
+        "source_full_run_id": full_run_id or "",
+        "used_full_run_fallback": uses_fallback,
         "row_count_raw": len(rows),
         "markets_filter": resolved_markets,
         "min_market_cap_usd": float(min_market_cap_usd),
@@ -334,7 +341,12 @@ def prepare_projection_universe(
             revenue = None
         ev = _safe_float(row.get("enterprise_value_current"))
         ev_rev = _safe_float(row.get("enterprise_value_to_revenue_ttm"))
-        if (ev_rev is None or ev_rev <= 0) and ev is not None and revenue and revenue > 0:
+        if (
+            (ev_rev is None or ev_rev <= 0)
+            and ev is not None
+            and revenue
+            and revenue > 0
+        ):
             ev_rev = ev / revenue
         if (ev is None or ev <= 0) and ev_rev is not None and revenue and revenue > 0:
             ev = ev_rev * revenue
