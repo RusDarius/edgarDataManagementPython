@@ -33,5 +33,11 @@ JSON: `{"spec": {...params...}, "rows": [...], "overflow": [...]}` (`overflow` o
 - `top_n` / `top_n_by` / `rank_by_weights` (`_composite_score` is visible)
 - `group_capped_top_n(..., overflow_fields=())` → `(kept, overflow)`
 - Presets: `top_upside`, `top_movers`, `top_rankers` (same zero-filter contract)
+- Size without a screen: `cover_rows` (optional sort, then take N). Not an industry cap. Operator dumps clamp at 1000 via `forward_value.clamp_cover` / `run_operator_suites.py`.
+- Both tails / multi-horizon: `both_tails`, `horizon_movers`, `flatten_movers` (CLI: `tv_scan_cli.py movers`). Generic default cover 50 per field, 75% leaders / 25% laggards (`split_cover`). Operator recipes pin `n_leaders`/`n_laggards` (movers_day / movers_3m = 25 / 25, no industry cap). `--top N` without a recipe is still per-tail. Bounce vs continue-down is **not** in this module — `sleeves.classify_punished_tape`.
+- Book NAV / loss ladders: `generic_utils.risk` / `tv_scan_cli.py risk` (zero-cutoff math). TRIM vs EXIT is **not** here.
+- Identity hygiene (not an eligibility cutoff): `drop_duplicate_id_suffixes` / `ticker_of` — drop `TICKER23` when `TICKER` is also in the set.
 
 Load rows with `generic_utils.scan_sources`. Do not add eligibility thresholds inside `ranking.py`. Echo `spec`. Overflow is never silently dropped.
+
+Scoring layer order (edge + move prediction + leftover → Build-50): `src/generic_utils/specs/`.

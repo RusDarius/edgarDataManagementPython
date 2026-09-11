@@ -7,14 +7,16 @@ consensus_rows.ticker is a fallback only.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from db.trading_view_move_prediction_duckdb import query_move_prediction_duckdb
 
 from .discovery import lock_sources
 
 AVOID_MIX_PREFIX = ("avoid_",)
+US_CORE_EXCHANGES = ("NASDAQ", "NYSE", "AMEX", "ARCA", "BATS")
 
 
 def _f(value: Any) -> float | None:
@@ -31,6 +33,49 @@ def _round(value: Any, digits: int = 3) -> float | None:
     if number is None:
         return None
     return round(number, digits)
+
+
+def run_day_from_id(run_id: str) -> str | None:
+    """YYYYMMDD from `move_prediction_20260909_1748_utc_...`."""
+    match = re.search(r"(20\d{6})", str(run_id))
+    return match.group(1) if match else None
+
+
+def pick_session_prior(prior_ids: Sequence[str], current_id: str) -> str | None:
+    """First prior whose calendar day differs from the current run_id."""
+    current_day = run_day_from_id(current_id)
+    for prior in prior_ids:
+        if current_day and run_day_from_id(prior) == current_day:
+            continue
+        return prior
+    return prior_ids[0] if prior_ids else None
+
+
+def symbol_exchange(symbol: str) -> str:
+    text = str(symbol or "")
+    if ":" not in text:
+        return ""
+    return text.split(":", 1)[0].upper()
+
+
+def filter_compare_universe(
+    rows: list[dict[str, Any]],
+    *,
+    exchanges: Sequence[str] | None = None,
+    ids: Sequence[str] | None = None,
+) -> list[dict[str, Any]]:
+    wanted_ex = {str(item).upper() for item in exchanges} if exchanges else None
+    wanted_ids = {str(item).upper() for item in ids} if ids else None
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        symbol = str(row.get("symbol") or "")
+        ticker = str(row.get("ticker") or symbol.split(":")[-1]).upper()
+        if wanted_ids and symbol.upper() not in wanted_ids and ticker not in wanted_ids:
+            continue
+        if wanted_ex and symbol_exchange(symbol) not in wanted_ex:
+            continue
+        out.append(row)
+    return out
 
 
 def _query(database_path: Path, sql: str, params: list[Any]) -> list[dict[str, Any]]:
@@ -232,28 +277,41 @@ def compare_prediction_runs(
     database_path: Path | str | None = None,
     top_n: int = 40,
     list_n: int = 20,
+    session: bool = False,
+    exchanges: Sequence[str] | None = None,
+    ids: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     sources = lock_sources()
     db = Path(database_path) if database_path else sources.prediction_db
     current = run_b or sources.prediction_run_id
-    prior = run_a or (sources.prediction_prior_run_ids[0] if sources.prediction_prior_run_ids else None)
+    if run_a:
+        prior = run_a
+    elif session:
+        prior = pick_session_prior(sources.prediction_prior_run_ids, current)
+    else:
+        prior = sources.prediction_prior_run_ids[0] if sources.prediction_prior_run_ids else None
     if not prior or not current:
         raise ValueError("Need two prediction run_ids (pass --run-a and --run-b).")
     profiles_a = _profile_map(db, prior)
     profiles_b = _profile_map(db, current)
     conv_a = _conviction_map(db, prior)
     conv_b = _conviction_map(db, current)
-    notes = []
+    notes: list[str] = []
     if not conv_a and not conv_b:
         notes.append("conviction_rankings missing — mix taken from consensus_rows.ticker if present")
+    if session and run_day_from_id(prior) == run_day_from_id(current):
+        notes.append("session prior still same calendar day — only intra-day priors exist")
     consensus_a = _consensus_ticker_map(db, prior)
     consensus_b = _consensus_ticker_map(db, current)
     rows = build_compare_rows(profiles_a, profiles_b, conv_a, conv_b, consensus_a, consensus_b)
+    rows = filter_compare_universe(rows, exchanges=exchanges, ids=ids)
     summary = summarize_run_compare(rows, top_n=top_n, list_n=list_n)
     return {
         "run_a": prior,
         "run_b": current,
         "database": db.as_posix(),
+        "session": session,
+        "exchanges": list(exchanges) if exchanges else None,
         "notes": notes,
         **summary,
     }

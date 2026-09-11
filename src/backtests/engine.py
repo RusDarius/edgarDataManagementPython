@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import uuid
 from collections import defaultdict
 from dataclasses import replace
@@ -150,6 +151,7 @@ def run_backtests(
         adapter_coverage=adapter_coverage,
         label_metadata=label_result.metadata,
     )
+    shutil.rmtree(label_temp_dir, ignore_errors=True)
     return {
         **write_result,
         "calendar_day_count": len(calendar_days),

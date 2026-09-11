@@ -8,10 +8,32 @@ whatever it just scanned without writing its own loader.
 from __future__ import annotations
 
 import csv
+import re
 from pathlib import Path
 from typing import Any, Sequence
 
 from db.trading_view_move_prediction_duckdb import query_move_prediction_duckdb
+
+_UNQUOTED_LEFT_COL = re.compile(
+    r"(?i)(?:select|,\s*|order\s+by\s+|where\s+|and\s+|or\s+)\bleft\b"
+)
+
+
+def duckdb_sql_hint(sql: str, exc: BaseException) -> str | None:
+    """Hint when leftover column `left` is parsed as the JOIN keyword."""
+    text = str(exc).lower()
+    if "parser" not in text and "syntax" not in text:
+        return None
+    if '"left"' in sql:
+        return None
+    if not _UNQUOTED_LEFT_COL.search(sql):
+        return None
+    return (
+        'DuckDB treats leftover column left as a reserved word. '
+        'Quote it as "left", or use tv_scan_cli.py named --fields left '
+        "(named already quotes). Prefer --csv over raw --sql. "
+        "Do not write logs/_tmp_*.py."
+    )
 
 
 def rows_from_duckdb(
@@ -24,7 +46,13 @@ def rows_from_duckdb(
     Thin re-export of the existing generic query helper -- do not duplicate
     DuckDB connection handling here.
     """
-    return query_move_prediction_duckdb(database_path, sql, parameters)
+    try:
+        return query_move_prediction_duckdb(database_path, sql, parameters)
+    except Exception as exc:
+        hint = duckdb_sql_hint(sql, exc)
+        if hint:
+            raise ValueError(hint) from exc
+        raise
 
 
 def rows_from_csv(

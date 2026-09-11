@@ -1,0 +1,21 @@
+{
+  "name": "movers_3m",
+  "description": "3M tape both-tails. Dedicated suite — not the DAILY Tape section. Top 25 up by 3M price (best to least, no industry cap). Bottom 25 punished names are a pool to split BOUNCE vs CONTINUE_DOWN. Same valuation / peer / projection keep as movers_day.",
+  "fields": ["m3"],
+  "n_leaders": 25,
+  "n_laggards": 25,
+  "where": "mcap>=2000000000",
+  "keep": [
+    "rsi", "relvol", "left", "rr", "bo", "cont", "fwd", "rng", "vs50", "adx",
+    "mix", "mtp", "pe", "pe_fwd", "peg", "evrev", "evebitda", "pb", "evfcf", "opm",
+    "street_left", "dte", "d5", "m1", "close", "street_px", "target_px",
+    "mcap", "exchange", "ind", "day", "w"
+  ],
+  "vs_group": {
+    "by": "ind",
+    "fields": ["evrev", "pe", "pe_fwd", "evebitda", "pb", "evfcf", "opm", "left", "d5"],
+    "min_n": 6
+  },
+  "id_field": "symbol",
+  "drop_duplicate_suffixes": true
+}

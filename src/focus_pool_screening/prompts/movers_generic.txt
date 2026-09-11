@@ -1,0 +1,35 @@
+MOVERS — TAPE-ONLY / 3M
+=======================
+Do not attach this file on DAILY (full). DAILY already has one Tape section
+(day / week / 5D / 1M) on daily-focus-YYYYMMDD.
+
+This file is a tape-only rerun or --- MOVERS (3M) ---.
+Do not attach daily_generic.txt.
+Day / week / 5D / 1M = one canvas movers-YYYYMMDD (horizon filter or
+stacked H2s on Tape). Do not split movers-day / movers-5d / movers-1m.
+3M = movers-3m-YYYYMMDD. A new horizon = another JSON under
+config/generic_utils/, not another canvas per period and not a new skill.
+
+@.cursor/skills/price-movers/SKILL.md
+Recipe: config/generic_utils/movers_day.json  (3M: movers_3m.json)
+Cover: top 25 up by that horizon’s return (best → least, no industry cap)
+and bottom 25 punished names as a pool. Downside is not leftover-first:
+BOUNCE (fundamentals/technicals can justify a bounce) vs CONTINUE_DOWN
+(likely to keep falling). MIXED may be omitted. One movers canvas Tape: ranked 25 up with
+Val / Peer / Proj / Tech; two down groups — repeat per horizon on that
+same canvas. DuckDB is the full 25+25 per horizon. Laggards carry
+down_class from sleeves.classify_punished_tape.
+
+Val = pack val_label / val (generic_utils.setup). Not always EV/Rev.
+Peer = val_vs_ind on that same field (negative = discount to US $2B industry).
+Do not quote EV/Rev to manufacture a discount. Proj = left, bo, cont, fwd,
+street_px / target_px. Tech = tech_sma, tech_rng, RSI, vs50. Classify with those — no 0–100 composite.
+
+  python src/generic_utils/tv_scan_cli.py movers --recipe RECIPE --csv TAPE.csv --out-dir RUN/movers
+
+Prefer `--csv` / `named`. DuckDB leftover column is `"left"` (reserved). Recipes drop TICKER23 listing leaks when the stem ticker is in the universe.
+
+Up classes: IS_SUPPORTED / CHASE / UNSUPPORTED / MIXED.
+Down classes: BOUNCE / CONTINUE_DOWN (from the punished 25).
+CAN_PAY is a DAILY pointer. No second NEW/ADD budget. No 0–100 supported score.
+No logs/_tmp_*.py. overview.log + movers.duckdb are the manual artifacts.

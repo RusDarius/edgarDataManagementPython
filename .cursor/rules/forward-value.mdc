@@ -1,0 +1,14 @@
+---
+description: Forward value projections (street/TV leftover + financial_projection). Not leftover radar, movers, or Book risk.
+alwaysApply: false
+---
+
+# Forward value
+
+When the user wants street vs model price, PE fwd / PEG vs leftover, or financial_projection terminals/CAGRs:
+
+1. Read `.cursor/skills/forward-value/SKILL.md`.
+2. Prefer `python src/run_operator_suites.py forward --cover 1000` or `tv_scan_cli.py forward`. Cover is a size (max 1000), not a screen, and not an industry cap.
+3. Quote street leftover, pack leftover, and `fp_*` separately. Empty `pe_fwd` is a data gap — do not fill with EV/Rev.
+4. Value/tech (`setup`) already has street/TV `fwd_*`. `--forward` or the forward command joins `finproj_*` / `fingrowth_*`.
+5. DuckDB + overview.log is enough unless the operator asks for a canvas.

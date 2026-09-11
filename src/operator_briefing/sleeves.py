@@ -7,7 +7,7 @@ the radar. Agents should not re-invent this list in SQL.
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from generic_utils.derive import leftover_pct, leftover_to_range, pct_vs, range_position_pct
 from generic_utils.ranking import group_capped_top_n, to_float
@@ -261,6 +261,87 @@ def short_limited_upside(row: Mapping[str, Any]) -> bool:
     return deteriorated
 
 
+MTP_BOUNCE_ACTIONS = frozenset({"ENTER_SMALL", "ENTER_PROBE"})
+MTP_AVOID_ACTIONS = frozenset({"AVOID_CHASE", "AVOID"})
+AVOID_MIX_SIGNALS = frozenset({"avoid_value_trap", "avoid_reversal_trap"})
+
+
+def classify_punished_tape(row: Mapping[str, Any]) -> str:
+    """First-pass class for a price laggard. Not a 0–100 score.
+
+    CONTINUE_DOWN = structure + leftover say it can keep falling.
+    BOUNCE = leftover / unused range / cheap multiples / timing climate can
+    justify a bounce. MIXED = punished but neither case is clean.
+    Operator may override with Val / Peer / Proj / Tech.
+    """
+    mix = str(row.get("mix") or "")
+    leftover = _f(row.get("left"))
+    rsi = _f(row.get("rsi"))
+    rng = _f(row.get("rng"))
+    vs50 = _f(row.get("vs50"))
+    from generic_utils.setup import peer_discount_pct
+
+    peer_vs = peer_discount_pct(row)
+    mtp = str(row.get("mtp") or "").upper()
+    squeeze_leftover = leftover is not None and leftover > 40 and mix in AVOID_MIX_SIGNALS
+    paid_no_leftover = leftover is not None and leftover <= 8
+    unused = leftover is not None and leftover >= 12 and rng is not None and rng <= 35
+    leftover_live = leftover is not None and leftover >= 18 and (
+        rsi is None or rsi <= 52
+    )
+    cheap = peer_vs is not None and peer_vs <= -20 and leftover is not None and leftover >= 10
+    timing_bounce = mtp in MTP_BOUNCE_ACTIONS and leftover is not None and leftover >= 12
+    live_repair = profile_live(row) and leftover is not None and leftover >= 12
+
+    if short_limited_upside(row) or squeeze_leftover:
+        return "CONTINUE_DOWN"
+    if paid_no_leftover and (rng is None or rng >= 50):
+        return "CONTINUE_DOWN"
+    if paid_no_leftover and vs50 is not None and vs50 <= -8:
+        return "CONTINUE_DOWN"
+    if leftover_live or unused or cheap or timing_bounce or live_repair:
+        return "BOUNCE"
+    return "MIXED"
+
+
+def attach_punished_classes(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    treat_as: str | None = None,
+) -> list[dict[str, Any]]:
+    """Stamp `down_class` on movers laggard rows. Leaders stay None.
+
+    `treat_as` stamps nested horizon lists that do not yet have `tail`.
+    """
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        rec = dict(row)
+        tail = treat_as or str(rec.get("tail") or "")
+        if tail == "laggards":
+            rec["down_class"] = classify_punished_tape(rec)
+        else:
+            rec.setdefault("down_class", None)
+        out.append(rec)
+    return out
+
+
+def stamp_movers_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Attach `down_class` on nested horizon tails before flatten/CSV."""
+    out = dict(payload)
+    horizons: dict[str, Any] = {}
+    for field, block in (payload.get("horizons") or {}).items():
+        rec = dict(block)
+        rec["leaders"] = attach_punished_classes(
+            rec.get("leaders") or [], treat_as="leaders"
+        )
+        rec["laggards"] = attach_punished_classes(
+            rec.get("laggards") or [], treat_as="laggards"
+        )
+        horizons[field] = rec
+    out["horizons"] = horizons
+    return out
+
+
 def reward_risk(row: Mapping[str, Any]) -> float | None:
     """Leftover % per unit of 52w range already used. High = unused upside.
 
@@ -273,13 +354,12 @@ def reward_risk(row: Mapping[str, Any]) -> float | None:
     )
 
 
-MTP_BOUNCE_ACTIONS = frozenset({"ENTER_SMALL", "ENTER_PROBE"})
-MTP_AVOID_ACTIONS = frozenset({"AVOID_CHASE", "AVOID"})
-
 # Headline curated sleeves cap names per industry so one crowded industry
 # (e.g. Packaged Software) cannot fill the whole radar/short list. The
 # uncapped sleeve stays available for research; curated is the headline view.
 RADAR_INDUSTRY_CAP = 5
+RADAR_BUILD_N = 50  # best trades / positions to build on (industry-capped)
+RADAR_CURATED_LEGACY_N = 25  # first 25 of radar_curated_50 (older packs / md excerpt)
 SHORT_INDUSTRY_CAP = 5
 EARNINGS_INDUSTRY_CAP = 5
 
@@ -293,7 +373,7 @@ def dedupe_by_industry(
     """Cap a pre-sorted (best-first) sleeve at `cap` names per industry.
 
     Domain wrapper around `group_capped_top_n`: maps `ind`/`industry`, keeps
-    Book names, and returns overflow as symbol/industry/left so a crowded
+    Book names, and returns overflow as symbol/industry/left/rr/rng/bo so a crowded
     industry cut is visible instead of silently dropped.
     """
     prepared: list[Mapping[str, Any]] = []
@@ -310,13 +390,21 @@ def dedupe_by_industry(
         cap=cap,
         exempt=set(book_symbols or ()),
         id_field="symbol",
-        overflow_fields=("left",),
+        overflow_fields=("left", "rr", "rng", "bo", "rsi", "evrev", "d5", "vs50", "sleeve_count"),
     )
     mapped = [
         {
             "symbol": o.get("symbol"),
             "industry": o.get("ind") or o.get("industry"),
             "left": o.get("left"),
+            "rr": o.get("rr"),
+            "rng": o.get("rng"),
+            "bo": o.get("bo"),
+            "rsi": o.get("rsi"),
+            "evrev": o.get("evrev"),
+            "d5": o.get("d5"),
+            "vs50": o.get("vs50"),
+            "sleeve_count": o.get("sleeve_count"),
         }
         for o in overflow
     ]

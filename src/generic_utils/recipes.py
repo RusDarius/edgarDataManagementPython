@@ -31,6 +31,18 @@ RECIPES: dict[str, dict[str, Any]] = {
         "params": ["run_id"],
         "notes": "Tape identity. Never SELECT * on raw_scan_rows (200+ cols).",
     },
+    "pred.tape_returns": {
+        "sql": """
+            SELECT symbol, name, exchange, industry,
+                   close, change AS day, "Perf.5D" AS d5, "Perf.W" AS w,
+                   "Perf.1M" AS m1, "Perf.3M" AS m3, RSI AS rsi,
+                   relative_volume_10d_calc AS relvol
+            FROM raw_scan_rows
+            WHERE run_id = ?
+        """,
+        "params": ["run_id"],
+        "notes": "Day/week/5D/1M/3M returns from pred tape. Prefer all-fields named if a Perf.* column is missing.",
+    },
     "pred.profile_weeks": {
         "sql": """
             SELECT symbol, profile_name, score, manager_action_signal, risk_adjusted_score

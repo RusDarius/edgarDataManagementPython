@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+from generic_utils.derive import implied_price
+
 from .continuity import (
     continuity_action,
     load_prior_actions,
@@ -30,9 +32,13 @@ from .sleeves import (
     EARNINGS_INDUSTRY_CAP,
     MTP_AVOID_ACTIONS,
     MTP_BOUNCE_ACTIONS,
+    RADAR_BUILD_N,
+    RADAR_CURATED_LEGACY_N,
     RADAR_INDUSTRY_CAP,
     SHORT_INDUSTRY_CAP,
+    attach_punished_classes,
     continuation_paid,
+    stamp_movers_payload,
     continuation_unpaid,
     dedupe_by_industry,
     forming_eligible,
@@ -52,6 +58,38 @@ from .stance import (
 )
 
 DEFAULT_OUTPUT_ROOT = BRIEFING_RUNS
+MOVERS_DAY_RECIPE = (
+    Path(__file__).resolve().parents[2] / "config" / "generic_utils" / "movers_day.json"
+)
+TAPE_FIELDS = (
+    "symbol",
+    "company",
+    "ind",
+    "close",
+    "mcap",
+    "day",
+    "w",
+    "d5",
+    "m1",
+    "m3",
+    "rsi",
+    "relvol",
+    "street_left",
+    "rng",
+    "vs50",
+    "adx",
+    "pe",
+    "pe_fwd",
+    "peg",
+    "evrev",
+    "evebitda",
+    "pb",
+    "evfcf",
+    "opm",
+    "sector",
+    "vs200",
+    "dte",
+)
 
 GOTCHAS = [
     "Do not flatten mix / conviction / leftover / MTP into one 0-100 rank.",
@@ -94,7 +132,10 @@ def _compact_name(row: dict[str, Any]) -> dict[str, Any]:
         "mcap",
         "day",
         "d5",
+        "w",
         "m1",
+        "m3",
+        "relvol",
         "rsi",
         "rng",
         "vs50",
@@ -113,8 +154,39 @@ def _compact_name(row: dict[str, Any]) -> dict[str, Any]:
         "conv",
         "regime",
         "pe",
+        "pe_fwd",
+        "peg",
+        "evebitda",
+        "pb",
+        "evfcf",
         "opm",
+        "evrev",
         "rr",
+        "street_px",
+        "target_px",
+        "pt",
+        "sma50",
+        "atr",
+        "atrp",
+        "beta",
+        "vs200",
+        "sector",
+        "val_field",
+        "val_label",
+        "val",
+        "val_vs_ind",
+        "val_ind_med",
+        "val_n",
+        "val_family",
+        "eff_field",
+        "eff_label",
+        "eff",
+        "eff_vs_ind",
+        "peer",
+        "tech_sma",
+        "tech_sma200",
+        "tech_rng",
+        "tech_rsi",
     )
     return {k: row.get(k) for k in keys if row.get(k) is not None}
 
@@ -159,6 +231,10 @@ def _merge_names(
         rec["left"] = _round(
             leftover_pct(rec.get("close"), rec.get("pt"), rec.get("edge_left")), 1
         )
+        rec["street_px"] = rec.get("pt") or implied_price(
+            rec.get("close"), rec.get("street_left")
+        )
+        rec["target_px"] = implied_price(rec.get("close"), rec.get("left"))
         rec["rr"] = reward_risk(rec)
         rec["mtp"] = (mtp.get(symbol) or {}).get("action")
         rec["mtp_setup"] = (mtp.get(symbol) or {}).get("primary_setup")
@@ -167,19 +243,44 @@ def _merge_names(
             "mcap",
             "day",
             "d5",
+            "w",
             "m1",
+            "m3",
+            "relvol",
             "rsi",
             "rng",
             "vs50",
             "pe",
+            "pe_fwd",
+            "peg",
+            "evebitda",
+            "pb",
+            "evfcf",
             "opm",
+            "evrev",
             "dte",
+            "street_px",
+            "target_px",
+            "pt",
         ):
             rec[key] = _round(
                 rec.get(key), 1 if key in {"rsi", "rng", "dte", "left"} else 2
             )
         names[symbol] = rec
+    _attach_name_setup(names)
     return names
+
+
+def _attach_name_setup(names: dict[str, dict[str, Any]]) -> None:
+    """Primary value / peer / tech on every name. Peer set is US $2B."""
+    from generic_utils.setup import attach_setup
+
+    rows = list(names.values())
+    peer = [r for r in rows if (_f(r.get("mcap")) or 0) >= 2_000_000_000]
+    for rec in attach_setup(rows, peer_rows=peer):
+        symbol = str(rec.get("symbol") or "")
+        if symbol:
+            names[symbol] = rec
 
 
 def _book_rows(
@@ -193,9 +294,18 @@ def _book_rows(
         ticker = str(row.get("config_ticker") or symbol.split(":")[-1])
         name = names.get(symbol) or names.get(matched) or {}
         vs_cost = _f(row.get("unrealized_return_pct"))
-        close = _f(row.get("close")) or _f(name.get("close"))
+        close = (
+            _f(row.get("close_usd"))
+            or _f(name.get("close"))
+            or _f(row.get("close"))
+        )
         vs50 = _f(name.get("vs50"))
         lost_sma50 = vs50 is not None and vs50 < 0
+        cost_usd = _f(row.get("invested_sum_usd"))
+        shares = _f(row.get("implied_shares"))
+        avg_px = _f(row.get("average_price"))
+        if cost_usd is not None and shares and shares > 0:
+            avg_px = cost_usd / shares
         naive = map_mix_to_naive_book_action(
             str(name.get("mix") or row.get("consensus_weeks_manager_action") or ""),
             mtp=name.get("mtp"),
@@ -223,8 +333,12 @@ def _book_rows(
                 "symbol": symbol,
                 "ticker": ticker,
                 "wt": _round(row.get("portfolio_weight_pct"), 2),
+                "wt_cost": _round(row.get("portfolio_weight_pct"), 2),
                 "vs_cost": _round(vs_cost, 1),
                 "value_usd": _round(row.get("current_value_usd"), 0),
+                "cost_usd": _round(cost_usd, 0),
+                "shares": _round(shares, 4),
+                "average_price": _round(avg_px, 4),
                 "close": _round(close, 2),
                 "mix": name.get("mix") or row.get("consensus_weeks_manager_action"),
                 "mtp": name.get("mtp"),
@@ -232,6 +346,27 @@ def _book_rows(
                 "bo": name.get("bo"),
                 "dte": name.get("dte"),
                 "rsi": name.get("rsi"),
+                "d5": name.get("d5"),
+                "m1": name.get("m1"),
+                "vs50": name.get("vs50"),
+                "sma50": name.get("sma50"),
+                "rng": name.get("rng"),
+                "rr": name.get("rr"),
+                "evrev": name.get("evrev"),
+                "val_field": name.get("val_field"),
+                "val_label": name.get("val_label"),
+                "val": name.get("val"),
+                "val_vs_ind": name.get("val_vs_ind"),
+                "val_family": name.get("val_family"),
+                "eff_field": name.get("eff_field"),
+                "eff": name.get("eff"),
+                "peer": name.get("peer"),
+                "tech_sma": name.get("tech_sma"),
+                "tech_rng": name.get("tech_rng"),
+                "ind": name.get("ind") or row.get("industry"),
+                "atr": name.get("atr"),
+                "atrp": name.get("atrp"),
+                "beta": name.get("beta"),
                 "continuity": cont,
                 "event_alert": name.get("dte") is not None and name["dte"] <= 2,
             }
@@ -293,7 +428,8 @@ def _sleeve_lists(
         "continuation_paid": paid[:20],
         "shorts_limited_upside": shorts[:20],
         "radar_upside_100": radar_pool[:100],
-        "radar_curated_25": radar_curated[:25],
+        "radar_curated_50": radar_curated[:RADAR_BUILD_N],
+        "radar_curated_25": radar_curated[:RADAR_CURATED_LEGACY_N],
         "radar_industry_overflow": radar_overflow,
         "short_book_15": shorts[:15],
         "short_book_15_curated": shorts_curated[:15],
@@ -418,6 +554,132 @@ def _attach_sleeve_tags(
         row["sleeve_count"] = len(tags)
 
 
+def _tape_for_movers(
+    af_rows: list[dict[str, Any]], names: Mapping[str, Mapping[str, Any]]
+) -> list[dict[str, Any]]:
+    tape: list[dict[str, Any]] = []
+    for row in af_rows:
+        rec = {key: row.get(key) for key in TAPE_FIELDS}
+        extra = names.get(str(rec.get("symbol") or "")) or {}
+        rec["left"] = extra.get("left")
+        if rec["left"] is None:
+            rec["left"] = rec.get("street_left")
+        rec["bo"] = extra.get("bo")
+        rec["cont"] = extra.get("cont")
+        rec["fwd"] = extra.get("fwd")
+        rec["mix"] = extra.get("mix")
+        rec["mtp"] = extra.get("mtp")
+        rec["rr"] = extra.get("rr")
+        if extra.get("rng") is not None:
+            rec["rng"] = extra.get("rng")
+        if extra.get("vs50") is not None:
+            rec["vs50"] = extra.get("vs50")
+        for key in ("pe", "pe_fwd", "peg", "evrev", "evebitda", "pb", "evfcf", "opm", "sector", "vs200"):
+            if rec.get(key) is None and extra.get(key) is not None:
+                rec[key] = extra.get(key)
+        tape.append(rec)
+    return tape
+
+
+def _build_movers(
+    tape: list[dict[str, Any]], recipe_path: Path
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    from generic_utils.derive import enrich_mover_rows, keep_with_vs_group
+    from generic_utils.predicates import filter_rows
+    from generic_utils.ranking import flatten_movers, horizon_movers, movers_size_kwargs_from_recipe
+    from generic_utils.run_export import load_json_recipe
+
+    recipe = load_json_recipe(recipe_path)
+    filtered, clauses = filter_rows(tape, recipe.get("where"))
+    enriched = enrich_mover_rows(filtered, recipe)
+    keep = keep_with_vs_group(list(recipe.get("keep") or ()), recipe)
+    payload = horizon_movers(
+        enriched,
+        fields=list(recipe.get("fields") or ["day", "d5", "m1"]),
+        group_field=recipe.get("group_field"),
+        cap=recipe.get("cap"),
+        id_field=str(recipe.get("id_field") or "symbol"),
+        keep=keep,
+        **movers_size_kwargs_from_recipe(recipe),
+    )
+    spec = dict(payload["spec"])
+    spec["recipe"] = recipe.get("name")
+    spec["where"] = clauses
+    spec["filtered_rows"] = len(filtered)
+    spec["vs_group"] = (recipe.get("vs_group") or None)
+    payload = stamp_movers_payload(payload)
+    flat = attach_punished_classes(flatten_movers(payload))
+    return {"spec": spec, "horizons": payload["horizons"]}, flat
+
+
+def _flatten_courses(suggested: Mapping[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for bucket, items in (suggested or {}).items():
+        if not isinstance(items, list):
+            continue
+        for index, item in enumerate(items, start=1):
+            rec = dict(item) if isinstance(item, Mapping) else {"value": item}
+            rec["bucket"] = bucket
+            rec["rank"] = index
+            rows.append(rec)
+    return rows
+
+
+def _write_pack_duckdb(
+    run_dir: Path,
+    pack: Mapping[str, Any],
+    *,
+    tape: list[dict[str, Any]],
+    movers_flat: list[dict[str, Any]],
+) -> dict[str, Any]:
+    from generic_utils.risk import slim_position_row
+    from generic_utils.run_export import write_run_export
+
+    sleeves = pack.get("sleeves") or {}
+    lanes = pack.get("earnings_lanes") or {}
+    src = pack.get("sources") or {}
+    tables = {
+        "book": [slim_position_row(r) for r in pack.get("book") or []],
+        "capital": [pack["capital"]] if pack.get("capital") else [],
+        "industry_exposure": list(pack.get("industry_exposure") or []),
+        "risk_levels": list(pack.get("risk_levels") or []),
+        "radar_curated_50": list(sleeves.get("radar_curated_50") or []),
+        "radar_curated_25": list(sleeves.get("radar_curated_25") or []),
+        "short_book_15_curated": list(sleeves.get("short_book_15_curated") or []),
+        "earnings_upside_curated": list(lanes.get("upside_curated") or []),
+        "earnings_downside_curated": list(lanes.get("downside_curated") or []),
+        "industries_5d": list((pack.get("regime") or {}).get("industries_5d") or []),
+        "suggested_courses": _flatten_courses(pack.get("suggested_courses")),
+        "movers_tails": movers_flat,
+        "us2b_tape": tape,
+        "names": list((pack.get("names") or {}).values()),
+    }
+    sources = {
+        "run_id": pack.get("run_id"),
+        "prediction_run_id": src.get("prediction_run_id"),
+        "all_fields_run_id": src.get("all_fields_run_id"),
+        "all_fields_day_label": src.get("all_fields_day_label"),
+        "edge_parent_dir": src.get("edge_parent_dir"),
+        "holdings_run_dir": src.get("holdings_run_dir"),
+        "mtp_dir": src.get("mtp_dir"),
+    }
+    return write_run_export(
+        run_dir,
+        tool="operator_briefing.compile",
+        tables=tables,
+        sources=sources,
+        schema_version=str(pack.get("schema_version") or ""),
+        notes=[
+            "SQL this folder instead of all_fields_rows SELECT *",
+            "Tape section = movers_tails (day/w/d5/m1). 3M = movers_3m.json",
+        ],
+        extra={"pack_json": "briefing_pack.json"},
+        duckdb_name="briefing_pack.duckdb",
+        log_name="overview.log",
+        write_csv=False,
+    )
+
+
 def compile_briefing_pack(
     *,
     output_root: Path | None = None,
@@ -457,6 +719,15 @@ def compile_briefing_pack(
 
     names = _merge_names(af_rows, profiles, conviction, regime, edge, mtp)
     book = _book_rows(holdings, names, priors)
+    from generic_utils.risk import (
+        attach_book_risk,
+        cash_from_holdings_config,
+        slim_position_row,
+    )
+
+    cash = cash_from_holdings_config(sources.holdings_config)
+    risk_pack = attach_book_risk(book, cash_usd=cash)
+    book = risk_pack["positions"]
     book_symbols = {str(r["symbol"]) for r in book}
     sleeves = _sleeve_lists(names, book_symbols)
     earnings_lanes = _earnings_lanes(names, book_symbols)
@@ -523,6 +794,9 @@ def compile_briefing_pack(
         "regime": regime,
         "mtp": mtp_climate,
         "book": book,
+        "capital": risk_pack["capital"],
+        "industry_exposure": risk_pack["industry"],
+        "risk_levels": risk_pack["levels"],
         "sleeves": sleeves,
         "earnings_0_21d": (earnings_lanes.get("print_week_0_7d") or [])
         + (earnings_lanes.get("near_8_21d") or []),
@@ -543,6 +817,10 @@ def compile_briefing_pack(
             "book": len(book),
         },
     }
+    tape = _tape_for_movers(us2b, names)
+    movers_pack, movers_flat = _build_movers(tape, MOVERS_DAY_RECIPE)
+    pack["movers"] = movers_pack
+    pack["counts"]["movers_tails"] = len(movers_flat)
     root = Path(output_root or DEFAULT_OUTPUT_ROOT)
     run_dir = root / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -550,14 +828,26 @@ def compile_briefing_pack(
     md_path = run_dir / "briefing_pack.md"
     json_path.write_text(json.dumps(pack, indent=2, default=str), encoding="utf-8")
     md_path.write_text(render_markdown(pack), encoding="utf-8")
+    exported = _write_pack_duckdb(
+        run_dir, pack, tape=tape, movers_flat=movers_flat
+    )
     pack["output"] = {
         "json": json_path.as_posix(),
         "md": md_path.as_posix(),
         "run_dir": run_dir.as_posix(),
+        "duckdb": exported.get("duckdb"),
+        "overview_log": exported.get("overview_log"),
     }
     (run_dir / "manifest.json").write_text(
         json.dumps(
-            {"run_id": run_id, "json": json_path.name, "md": md_path.name}, indent=2
+            {
+                "run_id": run_id,
+                "json": json_path.name,
+                "md": md_path.name,
+                "duckdb": "briefing_pack.duckdb",
+                "overview_log": "overview.log",
+            },
+            indent=2,
         ),
         encoding="utf-8",
     )
@@ -594,6 +884,36 @@ def render_markdown(pack: dict[str, Any]) -> str:
         lines.append(
             f"- {row.get('ind')}: 5D {row.get('d5')} / 1M {row.get('m1')} / RSI {row.get('rsi')}"
         )
+    movers = pack.get("movers") or {}
+    lines += [
+        "",
+        "## Tape movers (day / week / 5D / 1M) — one canvas section",
+        f"- recipe `{(movers.get('spec') or {}).get('recipe')}` cover={(movers.get('spec') or {}).get('cover')} up={(movers.get('spec') or {}).get('n_leaders')} down={(movers.get('spec') or {}).get('n_laggards')} n={((movers.get('spec') or {}).get('filtered_rows'))}",
+        "- DuckDB table `movers_tails`. Top 25 up by price (best→least, no industry cap) and bottom 25 punished. Laggards carry `down_class` BOUNCE / CONTINUE_DOWN / MIXED. Val/Peer/Proj/Tech (`*_vs_ind`). Canvas Tape: ranked 25 up; downside split bounce vs keep-falling.",
+    ]
+    horizons = movers.get("horizons") or {}
+    for field in ("day", "w", "d5", "m1"):
+        block = horizons.get(field) or {}
+        leaders = ", ".join(
+            str(r.get("symbol") or "") for r in (block.get("leaders") or [])[:25]
+        )
+        lag_rows = block.get("laggards") or []
+        bounce = ", ".join(
+            str(r.get("symbol") or "")
+            for r in lag_rows
+            if r.get("down_class") == "BOUNCE"
+        )
+        keep_falling = ", ".join(
+            str(r.get("symbol") or "")
+            for r in lag_rows
+            if r.get("down_class") == "CONTINUE_DOWN"
+        )
+        if leaders or lag_rows:
+            lines.append(f"- {field} leaders (best→least): {leaders}")
+            if bounce:
+                lines.append(f"- {field} bounce: {bounce}")
+            if keep_falling:
+                lines.append(f"- {field} continue-down: {keep_falling}")
     mtp = pack.get("mtp") or {}
     lines += [
         "",
@@ -603,25 +923,34 @@ def render_markdown(pack: dict[str, Any]) -> str:
         "",
         "## Book continuity",
     ]
+    capital = pack.get("capital") or {}
+    if capital:
+        lines += [
+            f"- NAV {capital.get('nav_usd')} = equity {capital.get('equity_usd')} + cash {capital.get('cash_usd')} ({capital.get('cash_pct')}% cash)",
+            f"- unrealized {capital.get('unrealized_usd')} ({capital.get('unrealized_pct')}% vs cost)",
+            "- DuckDB `capital` / `risk_levels` / `industry_exposure`. Standalone: `tv_scan_cli.py risk --run latest --pack PACK.json --out-dir RUN/book_risk`",
+        ]
     for row in pack.get("book") or []:
         cont = row.get("continuity") or {}
         lines.append(
-            f"- {row.get('ticker')} wt {row.get('wt')} vs-cost {row.get('vs_cost')}% "
+            f"- {row.get('ticker')} wt_nav {row.get('wt_nav')} vs-cost {row.get('vs_cost')}% "
+            f"wipe {row.get('wipe_nav_pct')}% NAV m15_nav {row.get('m15_nav')} "
             f"-> {cont.get('action')} (prior {cont.get('prior_action')}, naive {cont.get('naive_action')}"
             f"{', POLAR BLOCKED' if cont.get('polar_blocked') else ''})"
         )
-    radar_curated = (pack.get("sleeves") or {}).get("radar_curated_25") or []
-    radar_overflow = (pack.get("sleeves") or {}).get("radar_industry_overflow") or []
+    sleeves_pack = pack.get("sleeves") or {}
+    radar_curated = sleeves_pack.get("radar_curated_50") or sleeves_pack.get("radar_curated_25") or []
+    radar_overflow = sleeves_pack.get("radar_industry_overflow") or []
     lines += [
         "",
-        f"## Top 100 radar \u2014 curated headline (industry-capped, {len(radar_overflow)} names held back to industry cap; see radar_upside_100 for the full appendix)",
+        f"## Build-50 radar — best trades / positions to build on (industry-capped, {len(radar_overflow)} names held back to industry cap; radar_upside_100 is the uncapped appendix; radar_curated_25 is the first {RADAR_CURATED_LEGACY_N})",
         "",
     ]
-    lines.append("| symbol | left | rr | bo | rsi | rng | opp | mix | sleeves |")
-    lines.append("|---|---:|---:|---:|---:|---:|---:|---|---:|")
-    for row in radar_curated[:25]:
+    lines.append("| # | symbol | left | rr | bo | rsi | rng | opp | mix | sleeves |")
+    lines.append("|---:|---|---:|---:|---:|---:|---:|---:|---|---:|")
+    for index, row in enumerate(radar_curated[:RADAR_BUILD_N], start=1):
         lines.append(
-            f"| {row.get('symbol')} | {row.get('left')} | {row.get('rr')} | {row.get('bo')} | "
+            f"| {index} | {row.get('symbol')} | {row.get('left')} | {row.get('rr')} | {row.get('bo')} | "
             f"{row.get('rsi')} | {row.get('rng')} | {row.get('opp')} | {row.get('mix')} | {row.get('sleeve_count')} |"
         )
     short_curated = (pack.get("sleeves") or {}).get("short_book_15_curated") or []

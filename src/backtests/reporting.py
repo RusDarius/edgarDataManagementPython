@@ -145,6 +145,11 @@ def _write_duckdb(
     if database_path.exists():
         database_path.unlink()
     building_path.replace(database_path)
+    try:
+        if temp_dir.is_dir() and not any(temp_dir.iterdir()):
+            temp_dir.rmdir()
+    except OSError:
+        pass
     return persist_modes
 
 

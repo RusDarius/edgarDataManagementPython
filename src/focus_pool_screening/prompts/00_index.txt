@@ -3,16 +3,26 @@ FOCUS / REGIME OPERATOR PROMPTS
 Attach one version file per run. Do not attach this index.
 
 daily_generic.txt
-  Default daily prompt. No standing sector or theme list. Leadership and
-  clusters come from the attached scores. Required sleeves: week map (today /
-  this week / 8–21d / 22–60d), Top 100 unpaid / continuation-unpaid radar with
-  leftover-to-range (rr), short book 15, earnings-priority UPSIDE and DOWNSIDE
-  (buy-the-rumour / sell-the-news / derisk / short-pre). Session continuity is mandatory:
-  attach yesterday's canvas and/or
-  logs/AI_ANALYSIS_UTILS/priors plus the briefing pack book.continuity
-  before any Book EXIT.
-  Mix avoid_value_trap is a no-add filter on a live leftover Book thesis, not
-  an automatic EXIT. Primary output is a Cursor canvas, with structured fallback.
+  Short standing spec DAILY (full) attaches. One Tape/Support section
+  (day / week / 5D / 1M). Do not attach daily_generic_reference.md.
+
+daily_generic_reference.md
+  Earnings lanes, scoring contract, canvas layout, manual DuckDB runs.
+  Open only when that detail is needed.
+
+movers_generic.txt
+  Tape-only rerun or MOVERS (3M). Do not attach on DAILY (full).
+  Top 25 up by price (best→least); bottom 25 punished split BOUNCE vs
+  CONTINUE_DOWN. Day/week/5D/1M = one canvas movers-YYYYMMDD.
+  3M = movers-3m-YYYYMMDD. Canvas Tape: Val / Peer / Proj / Tech.
+  Do not attach daily_generic.txt.
+
+risk_generic.txt
+  Book loss vs NAV (position %, $, % of equity+cash). Standalone check
+  on current_holdings.json and/or latest holdings_scoring scan.
+  Canvas book-risk-YYYYMMDD (project canvases/). Scan folder --out-dir
+  (book_risk.md + duckdb). Do not attach on DAILY (full) unless asked
+  for trim-size / loss tolerance.
 
 daily_themed_chips_software.txt
   Same core flow, with a standing datacenter/chips and software/cyber
@@ -24,12 +34,19 @@ overrides_template.txt
 
 agent_copy_paste.txt
   Short chat blocks. Paste one. DAILY (full) is the operator's spoken scan:
-  week map, Top 100 unpaid ∪ continuation, short book 15, earnings both ways
-  (late-Sep rumour / sell-the-news), pack support then operator High/Med/Low.
+  week map, Build-50 ranking (radar_curated_50), Top 100 unpaid ∪ continuation
+  appendix, short book 15, earnings both ways
+  (late-Sep rumour / sell-the-news), one Tape/Support section (day/week/5D/1M),
+  pack support then operator High/Med/Low.
   Same overlay on DAILY (pack already good) and THEMED. Also: stale-check,
-  lookup, compare, Book-only, delegate, deterministic FOCUS. Do not attach this index or the whole
+  lookup, compare, Book-only, RISK (loss vs NAV), delegate, deterministic FOCUS,
+  WISDOM / all-suite dumps. Do not attach this index or the whole
   file. Pointer also at src/operator_briefing/COPY_PASTE_PROMPTS.txt.
   Generic TV interrogation: .cursor/skills/tv-dataset-analysis/SKILL.md
+  Forward value + all-suite dumps: .cursor/skills/forward-value/SKILL.md
+  python src/run_operator_suites.py --list
+  Git Bash Prompt | Command | Usage/output: python src/run_operator_suites.py --gitbash
+  src/generic_utils/specs/gitbash_agent_data_flows.md
 
 Launch: run python src/operator_briefing/example_entry.py compile, then attach the
 newest briefing_pack.md/.json plus the version file. The pack is the locked

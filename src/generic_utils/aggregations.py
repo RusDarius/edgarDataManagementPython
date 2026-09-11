@@ -205,3 +205,57 @@ def overlap(
 
 def ids_of(rows: Sequence[Mapping[str, Any]], id_field: str = "symbol") -> list[str]:
     return [str(row.get(id_field) or "") for row in rows if row.get(id_field)]
+
+
+def weighted_group_stats(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    group_field: str,
+    weight_field: str,
+    metrics: Sequence[str] = (),
+    min_n: int = 1,
+    digits: int | None = 2,
+) -> list[dict[str, Any]]:
+    """Sum of `weight_field` plus weighted means of `metrics` per group.
+
+    Rows with missing/non-positive weight are skipped for the weight sum
+    and for weighted means. No eligibility cutoff lives here.
+    """
+    groups: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for row in rows:
+        key = str(row.get(group_field) or "")
+        if not key:
+            continue
+        groups[key].append(row)
+
+    out: list[dict[str, Any]] = []
+    for key, members in groups.items():
+        n = len(members)
+        if n < min_n:
+            continue
+        weights = [to_float(m.get(weight_field)) for m in members]
+        usable = [(w, m) for w, m in zip(weights, members) if w is not None and w > 0]
+        weight_sum = sum(w for w, _ in usable)
+        rec: dict[str, Any] = {
+            group_field: key,
+            "n": n,
+            "weight": _round(weight_sum, digits) if usable else None,
+        }
+        for metric in metrics:
+            if not usable or weight_sum <= 0:
+                rec[metric] = None
+                continue
+            numer = 0.0
+            denom = 0.0
+            for weight, member in usable:
+                value = to_float(member.get(metric))
+                if value is None:
+                    continue
+                numer += weight * value
+                denom += weight
+            rec[metric] = _round(numer / denom, digits) if denom else None
+        out.append(rec)
+    out.sort(
+        key=lambda r: (r.get("weight") is None, -(r.get("weight") or 0)),
+    )
+    return out

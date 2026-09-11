@@ -32,6 +32,39 @@ def pack_path_rows(pack: Mapping[str, Any], path: str) -> list[dict[str, Any]]:
     raise TypeError(f"Pack path {path!r} is not a list or object of rows")
 
 
+def pack_us2b_rows(
+    pack: Mapping[str, Any],
+    *,
+    pack_path: str | Path | None = None,
+) -> list[dict[str, Any]]:
+    """US $2B tape: JSON `us2b_tape` if present, else `briefing_pack.duckdb`.
+
+    Compile keeps the tape in DuckDB (not the JSON). ``SELECT *`` is OK here —
+    this is the compact tape table, not ``all_fields_rows``.
+    """
+    from generic_utils.scan_sources import rows_from_duckdb
+
+    raw = pack.get("us2b_tape")
+    if isinstance(raw, list) and raw:
+        return [dict(row) for row in raw if isinstance(row, Mapping)]
+    path = pack_path or pack.get("_pack_path") or (pack.get("output") or {}).get("json")
+    if path:
+        database = Path(str(path)).parent / "briefing_pack.duckdb"
+        if database.exists():
+            try:
+                rows = rows_from_duckdb(database, "SELECT * FROM us2b_tape")
+                if rows:
+                    return rows
+            except Exception:
+                pass
+    names = pack.get("names") or {}
+    if isinstance(names, Mapping):
+        return [dict(row) for row in names.values() if isinstance(row, Mapping)]
+    if isinstance(names, list):
+        return [dict(row) for row in names if isinstance(row, Mapping)]
+    return []
+
+
 def build_focus(
     rows: Sequence[Mapping[str, Any]],
     *,

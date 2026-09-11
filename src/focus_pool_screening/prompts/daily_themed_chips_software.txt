@@ -366,6 +366,9 @@ CANVAS LAYOUT (when producing the canvas)
 7. Roadmap G as a sequenced plan (now / wait / next)
 8. Per-name detail only for: all ADD/EXIT Book names, top New longs, all shorts
    Other radar names can stay table-only.
+9. Ledger menu (required, once): one tab that explains every abbreviation
+   and symbol used anywhere on the canvas. Do not put a ledger on other
+   sections. See `.cursor/skills/canvas-ledger/SKILL.md`.
 
 QUALITY BAR
 -----------

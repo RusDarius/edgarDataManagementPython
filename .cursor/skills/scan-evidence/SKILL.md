@@ -23,15 +23,23 @@ Compile first if there is no current `briefing_pack.json`: `python src/operator_
 |---|---|---|
 | `inspect` | Locked paths, run_ids, tables, key columns, all-fields whitelist | Schema / "what is in today's DuckDB" |
 | `lookup` | Per name: `raw`, `book`, `progression`, `stance` | Dossiers, prune a list, quote numbers |
-| `compare` | Δbo/Δcont/Δfwd, gainers/losers, new/dropped top-40, mix flips, rising_actionable | Progression between two pred runs |
+| `compare` | Δbo/Δcont/Δfwd, gainers/losers, new/dropped top-40, mix flips, rising_actionable | Progression between two pred runs. DAILY: `--session --exchanges NASDAQ,NYSE,AMEX` |
 | `stance` | `stance`, `suggested_conviction`, `course`, `evidence`, `conflicts` | Suggest ADD/NEW/WAIT/PASS/SHORT_WAIT |
 
 `compare` is weeks **profile** deltas, not leftover. Confirm leftover with `lookup` before NEW/ADD.
 
+DAILY (full) default:
+
+```powershell
+python src/operator_briefing/example_entry.py compare --session --exchanges NASDAQ,NYSE,AMEX
+```
+
+Bare `compare` is the last intra-day pred run (noisy: OTC/LSE). `--session` skips same-calendar-day priors. `--ids MU,SNDK` keeps a named list.
+
 ## How to decide (never 100%)
 
 1. Quote **raw** (left, rsi, rng, bo, cont, fwd, opp, mix, mtp, dte) and **Δbo/Δcont/Δfwd**.
-2. Rank **inside** a sleeve: unpaid NEW vs paid PASS vs limited-leftover SHORT_WAIT. Do not merge them into one 0–100. Prefer the curated sleeve (`radar_curated_25` / `short_book_15_curated` / `earnings_lanes.*_curated`) over the raw one when pruning — it is already industry-capped with overflow visible, so pruning it doesn't re-introduce a one-industry dump.
+2. Rank **inside** a sleeve: unpaid NEW vs paid PASS vs limited-leftover SHORT_WAIT. Do not merge them into one 0–100. Prefer the curated sleeve (`radar_curated_50` / `short_book_15_curated` / `earnings_lanes.*_curated`) over the raw one when pruning — it is already industry-capped with overflow visible, so pruning it doesn't re-introduce a one-industry dump.
 3. Publish the pack `stance` plus `suggested_conviction` (support 0.15–0.90) and every `conflicts` line. Also cite `sleeve_tags`/`sleeve_count` (how many independent sleeves confirm this name) as extra confirmation depth, not a score.
 4. Polar ADD/NEW → EXIT is blocked unless `thesis_kill`. Leftover-91 EXIT is not a short overlay.
 5. MTP ENTER_SMALL is bounce climate, not a buy/short list.

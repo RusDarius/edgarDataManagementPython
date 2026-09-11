@@ -1,5 +1,5 @@
 ---
-description: Daily operator scan contract — compile briefing pack first; no mix composite; polar ADD→EXIT blocked. Use when briefing, daily-focus canvas, leftover radar, holdings scoring, move-prediction scan, or market-timing-policy review.
+description: Daily leftover briefing (Book, Build-50 ranking, Top 100 unpaid appendix, shorts, earnings, daily-focus). Not for price movers or groovers.
 alwaysApply: false
 ---
 
@@ -12,6 +12,6 @@ When the user wants a daily briefing, radar, or trade scan:
 3. Do not invent a 0–100 rank. Use pack sleeves independently. `suggested_conviction` is support for a named course, not mix and not a probability.
 4. Polar rule: yesterday Book ADD/NEW cannot become EXIT unless the pack marks `thesis_kill`.
 5. MTP ENTER_SMALL is not a buy list. Catalyst PASS-all is not a filter.
-6. Output a `daily-focus-YYYYMMDD.canvas.tsx`; keep chat to a short snapshot.
+6. Output a `daily-focus-YYYYMMDD.canvas.tsx`; keep chat to a short snapshot. One Ledger menu. One Tape/Support section (clusters, not four Daily mover tabs). If the user also asked MOVERS, full 25s go on one `movers-YYYYMMDD` — not `movers-day` / `movers-5d` / `movers-1m`. Radar covers **Build-50** (`sleeves.radar_curated_50`). Layer map: `src/generic_utils/specs/`. DuckDB + overview.log sit next to the pack JSON.
 
 Coding-only tasks (refactors, tests, loaders) ignore this rule.

@@ -1,7 +1,9 @@
 AGENT COPY-PASTE — ACTIVE-MANAGER SCAN
 ======================================
 Paste ONE block into chat. Do not paste this whole file.
-Standing spec: daily_generic.txt (themed file only if you asked for that sleeve).
+Standing spec: daily_generic.txt (do not @ daily_generic_reference.md).
+Tape-only / 3M spec: movers_generic.txt (do not @ daily_generic.txt).
+Book risk / loss vs NAV: risk_generic.txt (do not @ daily_generic.txt).
 Pins: overrides_template.txt. Do not @ briefing_pack.json or DuckDB folders.
 
 Shell once per session:
@@ -14,6 +16,15 @@ Pack freeze: logs/tradingview_analysis/operator_briefing/runs/briefing_pack_*/
 Skills: .cursor/skills/daily-operator-scan/SKILL.md
         .cursor/skills/scan-evidence/SKILL.md
         .cursor/skills/tv-dataset-analysis/SKILL.md
+        .cursor/skills/generic-vs-domain/SKILL.md
+        .cursor/skills/canvas-ledger/SKILL.md
+        .cursor/skills/price-movers/SKILL.md
+        .cursor/skills/book-risk/SKILL.md
+        .cursor/skills/forward-value/SKILL.md
+Scoring layers: src/generic_utils/specs/
+Manual dumps (raw data the model uses, no canvas): python src/run_operator_suites.py --gitbash
+  table: Prompt | Command | Usage / output
+  src/generic_utils/specs/gitbash_agent_data_flows.md
 
 
 --- DAILY (full) ---
@@ -28,9 +39,12 @@ Read briefing_pack.md. JSON only for names that change capital.
 What to produce (canvas first; chat is a short snapshot):
   1. Week map — today / rest of this week / 8–21d / 22–60d late Sep.
   2. Book — one action each. Polar ADD/NEW cannot become EXIT unless thesis_kill.
-  3. Top 100 still-to-pay leftover ∪ continuation with unused upside.
+  3. Build-50 ranking — best trades / positions to build on.
+     Pack sleeves.radar_curated_50 (industry-capped, Book exempt). Cover all 50
+     on the canvas Radar tab (filters OK). Not leftover-first.
+     radar_upside_100 is the uncapped appendix. radar_curated_25 is the first 25 of the 50.
      Cite left / rr (upside-to-risk) / rsi / bo / d_bo / conflicts.
-     Auto pack NEW is not the 0–2 NEW budget. Do not paste leftover-first dumps.
+     Auto pack NEW is not the 0–2 NEW budget. Spec: src/generic_utils/specs/
   4. Short book 15 — overlay to bet the downside. Bounce / ENTER_SMALL → wait, not new shorts.
      Do not short leftover-91 EXIT.
   5. Earnings BOTH ways from pack earnings_lanes.upside and .downside. Curate 8–12 each.
@@ -41,21 +55,62 @@ What to produce (canvas first; chat is a short snapshot):
      Assign High / Med / Low yourself after conflicts.
 
 Budget 0-2 NEW, 0-2 ADD, 0-2 TRIM/EXIT, 0-2 event, 0-1 short.
-Canvas daily-focus-YYYYMMDD. Chat: bias + 5-8 actions + canvas path.
+Canvas daily-focus-YYYYMMDD. One Tape/Support section (day / week / 5D / 1M) —
+not four mover tabs. Tape: ranked Top 25 up by price (best→least). Downside:
+from the bottom 25, BOUNCE (can justify a bounce) vs CONTINUE_DOWN.
+3M is --- MOVERS (3M) ---.
+Chat: bias + 5-8 actions + canvas path.
+One Ledger tab for all abbreviations/symbols — not a glossary on every section.
+Do not @ movers_generic.txt or daily_generic_reference.md.
 No DuckDB fishing. No logs/_tmp_*.py. No 0–100 mix.
+Manual: briefing_pack.duckdb + overview.log next to the pack JSON.
 
 
 --- DAILY (pack already good) ---
 @.cursor/skills/daily-operator-scan/SKILL.md
 @logs/tradingview_analysis/operator_briefing/runs/<newest>/briefing_pack.md
 
-Same deliverable as DAILY (full): week map, Book, Top 100 unpaid ∪ continuation,
+Same deliverable as DAILY (full): week map, Book, Build-50 ranking (radar_curated_50),
 short book 15, earnings both ways (incl. late-Sep rumour / sell-the-news),
 operator High/Med/Low after pack support.
 
 Brief from this pack. Do not recompile. Do not open DuckDB.
 Continuity from pack book + logs/AI_ANALYSIS_UTILS/priors.
 Canvas daily-focus-YYYYMMDD. Chat snapshot only.
+One Ledger tab. One Tape/Support section (day / week / 5D / 1M), not four tabs.
+Tape: ranked Top 25 up; downside BOUNCE vs CONTINUE_DOWN from the punished 25.
+Do not @ movers_generic.txt.
+
+
+--- MOVERS (day / 5D / 1M) ---
+Tape-only rerun. One canvas movers-YYYYMMDD covering day / week / 5D / 1M.
+Do not split movers-day / movers-5d / movers-1m. Do not @ daily_generic.txt.
+If daily-focus exists this session, Daily Tape stays condensed and points here.
+
+@.cursor/skills/price-movers/SKILL.md
+@src/focus_pool_screening/prompts/movers_generic.txt
+
+inspect; compile only if pack sources differ. Prefer pack.movers / movers_tails.
+Else: movers --recipe config/generic_utils/movers_day.json --out-dir RUN/movers_day
+Top 25 up by price (best→least, no industry cap). Bottom 25 punished pool:
+BOUNCE vs CONTINUE_DOWN (down_class). Canvas: Plan / Tape / Ledger.
+Tape: every requested horizon (filter or stacked H2s). Ranked 25 up + two
+down groups. Columns Val / Peer / Proj / Tech.
+Val = pack val_label + val (generic_utils.setup). Not always EV/Rev.
+Peer = val_vs_ind (neg = cheaper than US $2B industry on that same field).
+Proj = left, bo, cont, fwd, street_px / target_px. Tech = tech_sma / rng / RSI / vs50.
+DuckDB holds 25+25 per horizon.
+Up: IS_SUPPORTED / CHASE / UNSUPPORTED / MIXED. CAN_PAY = DAILY unpaid pointer.
+One Ledger tab. No 0–100 supported score. No logs/_tmp_*.py.
+
+
+--- MOVERS (3M) ---
+Same skill. Recipe config/generic_utils/movers_3m.json. Not a Daily tab.
+@.cursor/skills/price-movers/SKILL.md
+@src/focus_pool_screening/prompts/movers_generic.txt
+Canvas movers-3m-YYYYMMDD (one Tape section): ranked Top 25 3M up; downside
+BOUNCE vs CONTINUE_DOWN from the punished 25. Do not @ daily_generic.txt.
+Prefer --csv. Quote leftover as "left". Recipes drop TICKER23 listing leaks.
 
 
 --- STALE CHECK / RECOMPILE ---
@@ -84,9 +139,10 @@ If missing from pack, say so — do not SQL.
 --- COMPARE (pred progression) ---
 @.cursor/skills/scan-evidence/SKILL.md
 
-python src/operator_briefing/example_entry.py compare
+python src/operator_briefing/example_entry.py compare --session --exchanges NASDAQ,NYSE,AMEX
+python src/operator_briefing/example_entry.py compare --session --exchanges NASDAQ,NYSE,AMEX --ids MU,SNDK,PGY,JD,BIDU,ADBE,ZS,INTU,FSLR
 
-compare is weeks bo/cont/fwd deltas, not leftover.
+compare is weeks bo/cont/fwd deltas, not leftover. DAILY uses --session (prior calendar day) and --exchanges NASDAQ,NYSE,AMEX. Bare compare is intra-day OTC/LSE. `--ids` for Book/capital names.
 Lookup only names that are Book or unpaid/forming before NEW/ADD.
 Do not chase paid continuation. Do not short leftover-91 EXIT.
 
@@ -98,6 +154,37 @@ inspect; compile if holdings or pred/all-fields ids moved.
 One capital action per holding. Polar gate on. Mix avoid_value_trap on live leftover = HOLD_NO_ADD.
 Chat: ticker, prior, today, left, d_bo, conflicts, pack support, operator High/Med/Low.
 No radar, no canvas unless asked.
+
+
+--- RISK (Book loss vs NAV) ---
+How much loss to tolerate: position %, net $, % of NAV (equity + cash).
+Do not @ daily_generic.txt. Do not steal Daily tabs.
+
+@.cursor/skills/book-risk/SKILL.md
+@src/focus_pool_screening/prompts/risk_generic.txt
+
+inspect; compile if holdings or current_holdings.json moved.
+Prefer pack.capital / book[].wt_nav / risk_levels.
+Else: risk --run latest --pack PACK.json --out-dir logs/tradingview_analysis/operator_briefing/runs/<newest>/book_risk
+Config-only (USD-naive on FX): --holdings config/holdings_scoring/current_holdings.json --config-only
+Custom scan folder: pass --out-dir. Omitted → logs/.../book_risk_YYYYMMDD_HHMM_utc/.
+
+What to produce (canvas first; chat is a short snapshot):
+  1. Scan: --out-dir/book_risk.md (numbers) + csv + duckdb + overview.log.
+  2. Canvas book-risk-YYYYMMDD.canvas.tsx (project canvases/, same as
+     daily-focus-YYYYMMDD and movers-3m-YYYYMMDD). Every Book name.
+     One Ledger. Guide / Plan / Positions / Ladders / Path / Setup /
+     Concentration / Ledger.
+  3. Chat: NAV + capital actions + markdown link to the canvas.
+     If canvas Write fails, link book_risk.md. Never stop at "writing next".
+
+Quote three frames per name: position %, $, % NAV.
+Ladders: m5/m10/m15 from mark, c15 vs cost, SMA50, ATR×1.5, wipe, trim 33/50.
+If vs50>0 SMA50 is stop below; if vs50<0 bounce above (stop ATR/c15).
+Path: history/span close+PT+ATRP + val_field (not EV/Rev for every name). Average down default no.
+Live leftover → do not cut for m5 noise. Continuity −15%+lost SMA50 = thesis-kill.
+Cut-and-reenter: remaining wipe_nav + cash for SMA50/ATR starter.
+No 0–100 risk score. No logs/_tmp_*.py. Polar still on.
 
 
 --- DELEGATE (child agent) ---
@@ -112,7 +199,7 @@ No canvas. No DuckDB. No 0-100 score.
 
 
 --- THEMED (only if asked) ---
-Same overlay as DAILY (full): week map, Top 100 unpaid ∪ continuation,
+Same overlay as DAILY (full): week map, Build-50 ranking, Top 100 unpaid ∪ continuation appendix,
 short book 15, earnings both ways, late-Sep rumour / sell-the-news,
 pack support then operator High/Med/Low.
 
@@ -126,11 +213,28 @@ Leadership still from pack industries_5d, not a remembered list.
 
 Export the compiled FOCUS set and scan it yourself.
 
-python src/generic_utils/tv_scan_cli.py pack-focus --pack logs/tradingview_analysis/operator_briefing/runs/<newest>/briefing_pack.json --sleeve sleeves.radar_curated_25 --out focus.csv
+python src/generic_utils/tv_scan_cli.py pack-focus --pack logs/tradingview_analysis/operator_briefing/runs/<newest>/briefing_pack.json --sleeve sleeves.radar_curated_50 --out focus.csv
 python src/generic_utils/tv_scan_cli.py summary --csv focus.csv --fields left,rsi,d5,bo,rr
 python src/generic_utils/tv_scan_cli.py group --csv focus.csv --by ind --metrics d5,left,rsi --min-n 1 --pct-positive d5
+python src/generic_utils/tv_scan_cli.py movers --recipe config/generic_utils/movers_day.json --csv focus.csv --out-dir RUN/movers_day
+python src/generic_utils/tv_scan_cli.py export --out-dir RUN/focus --table focus=focus.csv --source-note pack
 
 Do not invent SQL. Do not write logs/_tmp_*.py. Empty --where means no filter.
+
+
+--- WISDOM / ALL SUITES (manual, no agent scan) ---
+@.cursor/skills/forward-value/SKILL.md
+@src/run_operator_suites.py
+
+Dump value/tech, forward (street + finproj), movers, pack-focus, risk.
+Max 1000 names. No leftover/RSI capoff. No industry cap on these tables.
+DuckDB + overview.log. No canvas unless asked.
+
+python src/run_operator_suites.py --list
+python src/run_operator_suites.py wisdom --cover 1000
+python src/run_operator_suites.py forward --cover 1000
+python src/run_operator_suites.py value-tech --cover 1000
+python src/run_operator_suites.py wisdom --run-finproj --cover 1000
 
 
 --- OVERRIDES (append, keep blank lines unused) ---

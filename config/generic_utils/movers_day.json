@@ -1,0 +1,21 @@
+{
+  "name": "movers_day",
+  "description": "Daily tape both-tails: session, week, 5D, 1M. Not 3M. Top 25 up by price (best to least, no industry cap). Bottom 25 punished names are a pool to split BOUNCE vs CONTINUE_DOWN. Val / Peer / Proj / Tech kept. Caller --where is the universe; this file is not an eligibility screen.",
+  "fields": ["day", "w", "d5", "m1"],
+  "n_leaders": 25,
+  "n_laggards": 25,
+  "where": "mcap>=2000000000",
+  "keep": [
+    "rsi", "relvol", "left", "rr", "bo", "cont", "fwd", "rng", "vs50", "adx",
+    "mix", "mtp", "pe", "pe_fwd", "peg", "evrev", "evebitda", "pb", "evfcf", "opm",
+    "street_left", "dte", "close", "street_px", "target_px",
+    "mcap", "exchange", "ind", "day", "w", "d5", "m1"
+  ],
+  "vs_group": {
+    "by": "ind",
+    "fields": ["evrev", "pe", "pe_fwd", "evebitda", "pb", "evfcf", "opm", "left", "d5"],
+    "min_n": 6
+  },
+  "id_field": "symbol",
+  "drop_duplicate_suffixes": true
+}

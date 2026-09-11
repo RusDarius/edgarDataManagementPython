@@ -4,24 +4,24 @@
   "portfolio_currency": "USD",
   "description": "Current book — set invested_sum/average_price in their currencies; portfolio aggregates in USD. Use optional symbol (EXCHANGE:TICKER) when ticker alone is ambiguous. Optional instrument_type is stock (default) or etf; ETFs join the latest ETF analysis scan.",
   "cash_position": {
-    "value": 9500,
+    "value": 2200,
     "currency": "USD"
   },
   "holdings": [
     {
       "ticker": "UNH",
       "sleeve": "core",
-      "invested_sum": 5425.13,
+      "invested_sum": 7425.13,
       "invested_currency": "USD",
-      "average_price": 263.30,
+      "average_price": 289.30,
       "price_currency": "USD"
     },
     {
       "ticker": "MU",
       "sleeve": "core",
-      "invested_sum": 1965,
+      "invested_sum": 11000,
       "invested_currency": "USD",
-      "average_price": 959.24,
+      "average_price": 1001,
       "price_currency": "USD"
     },
     {
@@ -31,32 +31,6 @@
       "invested_currency": "USD",
       "average_price": 133.26,
       "price_currency": "USD"
-    },
-    {
-      "ticker": "MRVL",
-      "sleeve": "core",
-      "invested_sum": 2068,
-      "invested_currency": "USD",
-      "average_price": 241.5,
-      "price_currency": "USD"
-    },
-    {
-      "ticker": "PATH",
-      "sleeve": "core",
-      "invested_sum": 3810,
-      "invested_currency": "USD",
-      "average_price": 15.2,
-      "price_currency": "USD",
-      "notes": "UiPath"
-    },
-    {
-      "ticker": "VEEV",
-      "sleeve": "core",
-      "invested_sum": 3600.17,
-      "invested_currency": "USD",
-      "average_price": 235.6,
-      "price_currency": "USD",
-      "notes": "Veeva Systems"
     },
     {
       "ticker": "JD",
@@ -89,9 +63,9 @@
     {
       "ticker": "ADBE",
       "sleeve": "core",
-      "invested_sum": 12101,
+      "invested_sum": 14101,
       "invested_currency": "USD",
-      "average_price": 281.8,
+      "average_price": 279.5,
       "price_currency": "USD",
       "notes": "Adobe"
     },
@@ -125,36 +99,27 @@
     {
       "ticker": "PGY",
       "sleeve": "core",
-      "invested_sum": 13011,
+      "invested_sum": 12810,
       "invested_currency": "USD",
-      "average_price": 21.98,
+      "average_price": 21.7,
       "price_currency": "USD",
       "notes": "PGY"
     },
     {
       "ticker": "FSLR",
       "sleeve": "core",
-      "invested_sum": 6000,
+      "invested_sum": 8000,
       "invested_currency": "USD",
-      "average_price": 229.78,
+      "average_price": 225.45,
       "price_currency": "USD",
       "notes": "First Solar"
     },
     {
-      "ticker": "CSCO",
-      "sleeve": "core",
-      "invested_sum": 2000,
-      "invested_currency": "USD",
-      "average_price": 123.44,
-      "price_currency": "USD",
-      "notes": "Cisco"
-    },
-    {
       "ticker": "DUOL",
       "sleeve": "core",
-      "invested_sum": 9900,
+      "invested_sum": 12900,
       "invested_currency": "USD",
-      "average_price": 133.97,
+      "average_price": 138.2,
       "price_currency": "USD",
       "notes": "Duolingo"
     },

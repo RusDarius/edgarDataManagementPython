@@ -1,0 +1,30 @@
+{
+  "name": "forward_value",
+  "description": "Street / TradingView leftover targets plus optional financial_projection terminals and growth CAGRs. Field attach only — not a 0-100 and not an eligibility screen. Empty pe_fwd is a data gap; do not fill with EV/Rev.",
+  "id_field": "symbol",
+  "close_field": "close",
+  "pt_field": "pt",
+  "scenario": "base",
+  "growth_lane": "own",
+  "price_table": "projection_summary",
+  "growth_table": "growth_summary",
+  "price_map": {
+    "fp_terminal_px": "terminal_price",
+    "fp_terminal_upside_pct": "terminal_upside_pct",
+    "fp_primary_upside_pct": "primary_upside_pct",
+    "fp_primary_source": "primary_upside_source",
+    "fp_street_upside_pct": "street_price_upside_pct",
+    "fp_y1_upside_pct": "model_y1_upside_pct",
+    "fp_fy_eps_upside_pct": "fy_eps_implied_upside_pct",
+    "fp_lens": "valuation_lens",
+    "fp_regime": "valuation_regime",
+    "fp_scenario": "scenario"
+  },
+  "growth_map": {
+    "fp_rev_cagr_own": "revenue_cagr_implied_pct",
+    "fp_ebitda_cagr_own": "ebitda_cagr_implied_pct",
+    "fp_y1_rev_own": "y1_revenue_growth_pct",
+    "fp_growth_source": "own_revenue_growth_source",
+    "fp_growth_lane": "growth_lane"
+  }
+}

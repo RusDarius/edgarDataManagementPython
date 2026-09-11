@@ -1,0 +1,51 @@
+RISK — BOOK LOSS vs NAV
+=======================
+Do not attach this file on DAILY (full) unless the operator asked for
+loss-tolerance / trim-size. DAILY already cites pack capital / wt_nav
+on Book.
+
+This file is a standalone Book risk run.
+Do not attach daily_generic.txt or movers_generic.txt.
+
+@.cursor/skills/book-risk/SKILL.md
+@.cursor/skills/canvas-ledger/SKILL.md
+Recipe: config/generic_utils/book_risk.json
+Holdings: config/holdings_scoring/current_holdings.json
+Scan: latest holdings_scoring_* (marks, FX USD). Config-only is USD-naive.
+
+  python src/generic_utils/tv_scan_cli.py risk --run latest --pack PACK.json --out-dir logs/tradingview_analysis/operator_briefing/runs/<newest>/book_risk
+
+What to produce (canvas first; chat is a short snapshot):
+  1. Generic scan folder --out-dir (custom path allowed):
+     book_risk.md + book_risk.csv + book_risk.duckdb + overview.log.
+     If --out-dir omitted, CLI writes
+     logs/tradingview_analysis/operator_briefing/runs/book_risk_YYYYMMDD_HHMM_utc/.
+     book_risk.md is numbers only (no TRIM/HOLD/EXIT).
+  2. Cursor canvas book-risk-YYYYMMDD.canvas.tsx in the project canvases/
+     directory — same place as daily-focus-YYYYMMDD and movers-3m-YYYYMMDD.
+     Cover every Book name. Three frames: position %, $, % NAV.
+     Tabs: Guide / Plan / Positions / Ladders / Path / Setup / Concentration / Ledger.
+     One Ledger tab. Do not steal Daily tabs.
+  3. Chat: NAV + cash + capital actions + markdown link to the canvas.
+     If canvas Write fails, link --out-dir/book_risk.md and finish the
+     course in chat. Never stop at "writing next".
+
+NAV = equity mark + cash. Ladders: m5/m10/m15/m20 from mark, c15 vs cost
+(continuity zone), SMA50, ATR×1.5, wipe, trim 25/33/50 cash vs remaining
+NAV-at-risk. Industry nav_pct. close_usd / cost USD per share (not DKK/EUR
+quote). No 0–100 risk score.
+
+Live leftover + unused range → do not cut a thesis for m5 noise.
+vs_cost ≤ −15 + lost SMA50 + weak RAS = coded thesis-kill.
+Paid chase (leftover gone, rng≥85, RSI≥70) → TRIM locks a win.
+Mix avoid + live leftover = HOLD_NO_ADD. Polar ADD ↛ EXIT.
+If vs50>0 SMA50 is stop below; if vs50<0 SMA50 is bounce above (stop ATR/c15).
+Path = history/span (close, PT, ATRP, weeks scores, **and val_field** — not EV/Rev for every name).
+Setup = generic_utils.setup (val_field / peer / tech_sma). Do not quote EV/Rev
+when PE / EV/EBITDA / P/B is populated. Leftover opening vs dying vs cheap-and-broken.
+Average down default no (print / thesis-kill / leftover gone / street cut).
+ADD only leftover live + mix not avoid + cash from EXIT/TRIM, toward SMA50/ATR.
+Cut-and-reenter: TRIM so remaining wipe_nav is a size you still want AND
+cash can restart at SMA50/ATR without enlarging the original.
+
+No logs/_tmp_*.py.

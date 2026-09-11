@@ -539,6 +539,30 @@ def run_dense_backwards_every_2_days_example() -> dict[str, object]:
     return result
 
 
+def run_operator_wisdom_dumps(cover: int = 1000, **kwargs):
+    """Manual suite dumps (DuckDB + overview.log). Cover max 1000, no industry cap.
+
+    Full catalog / CLI: ``python src/run_operator_suites.py --list``
+    (file: ``src/run_operator_suites.py``, sibling of this module).
+    """
+    from run_operator_suites import run_wisdom
+
+    return run_wisdom(cover=cover, **kwargs)
+
+
+def run_forward_value_dump(cover: int = 1000, **kwargs):
+    """Street/TV leftover + financial_projection join. See run_operator_suites."""
+    from run_operator_suites import run_forward_value_suite
+
+    return run_forward_value_suite(cover=cover, **kwargs)
+
+
+def run_value_tech_dump(cover: int = 1000, **kwargs):
+    from run_operator_suites import run_value_tech_suite
+
+    return run_value_tech_suite(cover=cover, **kwargs)
+
+
 def daily_prediction_move_analysis_suite() -> dict[str, object]:
     # Model Analysis scan with duckdb storage solution
     move_prediction_scan_response = (
@@ -564,22 +588,11 @@ def daily_prediction_move_analysis_suite() -> dict[str, object]:
         regime_context_config_path=REGIME_CONTEXT_CONFIG,
         write_industry_packs=True,
     )
-    # Financial projection on prediction names (fundamentals from latest all-fields):
-    # All symbols from that prediction run (omit prediction_top_n / pass None):
-    # run_financial_projection_from_latest_prediction_analysis(
-    #     prediction_database=base_duckdb_result["_duckdb_database"],
-    #     min_market_cap_usd=500_000_000,
-    # )
-    # Or trim to top-N by score:
-    # run_financial_projection_from_latest_prediction_analysis(
-    #     prediction_database=base_duckdb_result["_duckdb_database"],
-    #     min_market_cap_usd=500_000_000,
-    #     prediction_top_n=40,
-    # )
-    # Or auto-discover latest prediction week DB (no base_duckdb_result needed):
-    # run_financial_projection_from_latest_prediction_analysis(
-    #     min_market_cap_usd=500_000_000,
-    # )
+    # Financial projection: src/run_financial_projection.py
+    # Join street leftover + finproj onto tape (cover 1000, no industry cap):
+    #   python src/run_operator_suites.py forward --cover 1000
+    #   python src/run_operator_suites.py wisdom --cover 1000
+    #   run_forward_value_dump() / run_operator_wisdom_dumps() from this module.
 
     # FOR INDUSTRY RUN SPLIT Or post-process an existing run:
     # write_industry_packs_from_duckdb_run(base_duckdb_result)
@@ -650,12 +663,14 @@ def main():
     # # Output: logs/tradingview_analysis/holdings_scoring_analysis/runs/<run_id>/
     # #   holdings_scoring__shortlist.log  — human-readable portfolio shortlist
     # # Optional cash_position in config (value + currency) is passed through to manifest/logs.
-    # run_holdings_scoring_analysis(
-    #     holdings_config_path=PROJECT_ROOT
-    #     / "config"
-    #     / "holdings_scoring"
-    #     / "current_holdings.json",
-    # )
+    run_holdings_scoring_analysis(
+        holdings_config_path=PROJECT_ROOT
+        / "config"
+        / "holdings_scoring"
+        / "current_holdings.json",
+    )
+    # ── Single Stock report ─────────────────────────────────────────────
+    # run_symbol_intelligence_report_example("NASDAQ:PGY")
 
     # ── ETF analysis (world primary listings) ─────────────────────────────
     # Fetch + v1 composite + active-management book + persist. Output:
@@ -669,10 +684,7 @@ def main():
     #     min_aum_usd=1_000_000_000,
     # )
 
-    # ── Single Stock report ─────────────────────────────────────────────
-    # run_symbol_intelligence_report_example("NASDAQ:PGY")
-
-    # ── Stock move-prediction ─────────────────────────────────────────────
+    # # ── Stock move-prediction ─────────────────────────────────────────────
     # daily_prediction_move_analysis_suite()
 
     # Price-driven decile analysis: bucket by change / Perf.5D / Perf.1M, score profiles,

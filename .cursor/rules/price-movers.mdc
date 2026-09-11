@@ -1,0 +1,15 @@
+---
+description: Price movers / groovers — day, week, 5D, 1M on one movers canvas (3M is a JSON recipe). Not leftover radar, Top 100 unpaid, or the DAILY leftover briefing.
+alwaysApply: false
+---
+
+# Price movers
+
+When the user wants movers, groovers, or whether tape is supported:
+
+1. Read `.cursor/skills/price-movers/SKILL.md`.
+2. On DAILY (full), update the **Tape** section on `daily-focus-YYYYMMDD` — condensed clusters, not four Daily tabs.
+3. Tape-only / --- MOVERS (day / 5D / 1M) ---: one canvas `movers-YYYYMMDD`. All those horizons on that file. Do not split `movers-day-*` / `movers-5d-*` / `movers-1m-*`.
+4. 3M: `movers_generic.txt` + `config/generic_utils/movers_3m.json` → `movers-3m-YYYYMMDD`. Do not @ `daily_generic.txt`.
+5. Prefer pack `movers` / `briefing_pack.duckdb`. Else `tv_scan_cli.py movers --recipe ... --out-dir`. Top 25 up by price; bottom 25 punished split BOUNCE vs CONTINUE_DOWN. Tape tables: Val / Peer / Proj / Tech.
+6. Do not publish a second NEW/ADD budget.

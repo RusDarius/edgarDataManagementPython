@@ -10,11 +10,12 @@ rows**. Growth lanes are the default suite; price and overview are secondary.
 | **Overview** | `--mode overview --ticker …` | `tickoverview_*` | What ~100 all-fields metrics does this name show **today** (no projection path)? |
 
 **Entrypoint:** [`src/run_financial_projection.py`](../src/run_financial_projection.py)  
+**Operator join / all-suite dumps:** [`src/run_operator_suites.py`](../src/run_operator_suites.py) (`forward`, `finproj-growth`, `finproj-price`, `wisdom --run-finproj`)  
 **Config:** [`config/financial_projection/scenarios_v1.json`](../config/financial_projection/scenarios_v1.json)  
 **Package:** [`src/financial_projection/`](../src/financial_projection/)  
 **Field catalog:** [`savedData/trading_view_stock_fields.csv`](../savedData/trading_view_stock_fields.csv)
 
-Do **not** wire run examples into `src/main.py`. Use entrypoint helpers.
+`main.py` exposes `run_forward_value_dump()` / `run_operator_wisdom_dumps()` which call the suites runner. The projection engine itself stays on `run_financial_projection.py`. Cover on those dumps is a size (max 1000), not a leftover/RSI screen and not an industry cap.
 
 ---
 

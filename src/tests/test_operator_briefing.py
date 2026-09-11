@@ -6,6 +6,8 @@ from operator_briefing.continuity import (
     map_mix_to_naive_book_action,
 )
 from operator_briefing.sleeves import (
+    attach_punished_classes,
+    classify_punished_tape,
     continuation_paid,
     leftover_pct,
     range_position_pct,
@@ -266,6 +268,85 @@ class TestPaidAndShorts(unittest.TestCase):
             "vs50": -3.6,
         }
         self.assertTrue(short_limited_upside(row))
+
+
+class TestPunishedTape(unittest.TestCase):
+    def test_continue_down_from_limited_upside(self):
+        row = {
+            "symbol": "NYSE:WEAK",
+            "exchange": "NYSE",
+            "close": 20,
+            "mcap": 8_000_000_000,
+            "left": 11,
+            "d5": -12,
+            "bo": 0.1,
+            "cont": 0.2,
+            "vs50": -3.6,
+            "tail": "laggards",
+        }
+        self.assertEqual(classify_punished_tape(row), "CONTINUE_DOWN")
+
+    def test_bounce_from_unused_range(self):
+        row = {
+            "symbol": "NASDAQ:CHEAP",
+            "exchange": "NASDAQ",
+            "close": 22,
+            "mcap": 8_000_000_000,
+            "left": 28,
+            "rsi": 38,
+            "rng": 18,
+            "bo": 0.5,
+            "cont": 0.4,
+        }
+        self.assertEqual(classify_punished_tape(row), "BOUNCE")
+
+    def test_continue_down_from_avoid_mix_with_leftover(self):
+        row = {
+            "symbol": "NASDAQ:TRAP",
+            "exchange": "NASDAQ",
+            "close": 40,
+            "mcap": 20_000_000_000,
+            "left": 55,
+            "mix": "avoid_value_trap",
+            "rsi": 42,
+            "rng": 20,
+        }
+        self.assertEqual(classify_punished_tape(row), "CONTINUE_DOWN")
+
+    def test_mixed_when_neither_case_is_clean(self):
+        row = {
+            "symbol": "NASDAQ:MEH",
+            "exchange": "NASDAQ",
+            "close": 40,
+            "mcap": 20_000_000_000,
+            "left": 10,
+            "rsi": 58,
+            "rng": 55,
+            "bo": 0.4,
+            "cont": 0.4,
+        }
+        self.assertEqual(classify_punished_tape(row), "MIXED")
+
+    def test_attach_only_stamps_laggards(self):
+        rows = attach_punished_classes(
+            [
+                {"symbol": "NASDAQ:UP", "tail": "leaders", "left": 40, "rsi": 40, "rng": 20},
+                {
+                    "symbol": "NYSE:WEAK",
+                    "exchange": "NYSE",
+                    "close": 20,
+                    "mcap": 8_000_000_000,
+                    "left": 11,
+                    "d5": -12,
+                    "bo": 0.1,
+                    "cont": 0.2,
+                    "vs50": -3.6,
+                    "tail": "laggards",
+                },
+            ]
+        )
+        self.assertIsNone(rows[0]["down_class"])
+        self.assertEqual(rows[1]["down_class"], "CONTINUE_DOWN")
 
 
 class TestContinuity(unittest.TestCase):
@@ -597,6 +678,33 @@ class TestCompareSummary(unittest.TestCase):
         self.assertEqual(summary["rising_actionable"][0]["symbol"], "NASDAQ:A")
         self.assertTrue(summary["mix_flips"])
 
+    def test_session_prior_skips_same_day(self):
+        from operator_briefing.compare import pick_session_prior, run_day_from_id
+
+        current = "move_prediction_20260909_1748_utc_23e08bc0"
+        priors = (
+            "move_prediction_20260909_1516_utc_b92f0736",
+            "move_prediction_20260908_1743_utc_b43dd416",
+        )
+        self.assertEqual(run_day_from_id(current), "20260909")
+        self.assertEqual(
+            pick_session_prior(priors, current),
+            "move_prediction_20260908_1743_utc_b43dd416",
+        )
+
+    def test_filter_compare_universe_us_core(self):
+        from operator_briefing.compare import filter_compare_universe
+
+        rows = [
+            {"symbol": "NASDAQ:MU", "ticker": "MU", "d_bo": 0.1},
+            {"symbol": "OTC:MCEM", "ticker": "MCEM", "d_bo": 0.9},
+            {"symbol": "LSE:ITM", "ticker": "ITM", "d_bo": 0.5},
+        ]
+        us = filter_compare_universe(rows, exchanges=("NASDAQ", "NYSE", "AMEX"))
+        self.assertEqual([r["symbol"] for r in us], ["NASDAQ:MU"])
+        named = filter_compare_universe(rows, ids=("MU", "ITM"))
+        self.assertEqual({r["ticker"] for r in named}, {"MU", "ITM"})
+
 
 class TestLookupResolve(unittest.TestCase):
     def test_ticker_or_full_symbol(self):
@@ -774,13 +882,13 @@ class TestCurationInCompile(unittest.TestCase):
         }
         return names
 
-    def test_radar_curated_25_caps_industry_concentration(self):
+    def test_radar_curated_50_caps_industry_concentration(self):
         from operator_briefing.compile import _sleeve_lists
         from operator_briefing.sleeves import RADAR_INDUSTRY_CAP
 
         result = _sleeve_lists(self._synthetic_names(), book_symbols=set())
         self.assertIn("NASDAQ:SW0", {r["symbol"] for r in result["radar_upside_100"]})
-        curated_industries = [r["ind"] for r in result["radar_curated_25"]]
+        curated_industries = [r["ind"] for r in result["radar_curated_50"]]
         self.assertLessEqual(
             curated_industries.count("Packaged Software"), RADAR_INDUSTRY_CAP
         )
@@ -788,13 +896,18 @@ class TestCurationInCompile(unittest.TestCase):
         overflow_symbols = {o["symbol"] for o in result["radar_industry_overflow"]}
         self.assertTrue(overflow_symbols)
         self.assertTrue(overflow_symbols.issubset({f"NASDAQ:SW{i}" for i in range(10)}))
+        self.assertEqual(
+            [r["symbol"] for r in result["radar_curated_25"]],
+            [r["symbol"] for r in result["radar_curated_50"][:25]],
+        )
+        self.assertLessEqual(len(result["radar_curated_50"]), 50)
 
     def test_book_symbol_bypasses_radar_cap(self):
         from operator_briefing.compile import _sleeve_lists
 
         names = self._synthetic_names()
         result = _sleeve_lists(names, book_symbols={"NASDAQ:SW9"})
-        curated_symbols = {r["symbol"] for r in result["radar_curated_25"]}
+        curated_symbols = {r["symbol"] for r in result["radar_curated_50"]}
         self.assertIn("NASDAQ:SW9", curated_symbols)
 
 

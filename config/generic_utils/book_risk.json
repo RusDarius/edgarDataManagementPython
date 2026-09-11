@@ -1,0 +1,10 @@
+{
+  "name": "book_risk",
+  "description": "Book capital + loss ladders. Formulas only — not a trim/EXIT screen. NAV = equity mark + cash. Caller supplies cash (holdings JSON / --cash). Join leftover / vs50 / ATR from pack or all-fields.",
+  "ladder_from_mark_pct": [-5, -10, -15, -20],
+  "ladder_from_cost_pct": [-10, -15, -20, -25],
+  "atr_mult": 1.5,
+  "trim_fracs": [0.25, 0.33, 0.5],
+  "group_field": "ind",
+  "weight_field": "value_usd"
+}

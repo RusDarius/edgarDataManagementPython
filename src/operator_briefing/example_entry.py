@@ -55,6 +55,8 @@ def _cmd_compile(argv: list[str]) -> dict[str, object]:
             "run_id": pack.get("run_id"),
             "json": output.get("json"),
             "md": output.get("md"),
+            "duckdb": output.get("duckdb"),
+            "overview_log": output.get("overview_log"),
             "counts": pack.get("counts"),
             "us_2b": (pack.get("regime") or {}).get("us_2b"),
             "primary_course": {
@@ -102,8 +104,28 @@ def _cmd_compare(argv: list[str]) -> dict[str, object]:
     parser.add_argument("--run-a", default=None, help="Prior run_id (default: previous in run_metadata)")
     parser.add_argument("--run-b", default=None, help="Current run_id (default: latest)")
     parser.add_argument("--top", type=int, default=40)
+    parser.add_argument(
+        "--session",
+        action="store_true",
+        help="Prior run from a different calendar day, not the last intra-day scan.",
+    )
+    parser.add_argument(
+        "--exchanges",
+        default=None,
+        help="Comma exchanges to keep (DAILY: NASDAQ,NYSE,AMEX).",
+    )
+    parser.add_argument("--ids", default=None, help="Comma symbols or tickers to keep.")
     args = parser.parse_args(argv)
-    payload = compare_prediction_runs(run_a=args.run_a, run_b=args.run_b, top_n=args.top)
+    exchanges = [item.strip() for item in (args.exchanges or "").split(",") if item.strip()] or None
+    ids = [item.strip() for item in (args.ids or "").split(",") if item.strip()] or None
+    payload = compare_prediction_runs(
+        run_a=args.run_a,
+        run_b=args.run_b,
+        top_n=args.top,
+        session=args.session,
+        exchanges=exchanges,
+        ids=ids,
+    )
     print(_dumps(payload))
     return payload
 

@@ -51,6 +51,7 @@ Do not rank leftover Book names by a conviction_score that `avoid_value_trap` ze
 |---|---|
 | `python src/operator_briefing/example_entry.py compile` | Lock sources, sleeves, continuity, stances |
 | `... inspect` | Tables, columns, latest run_ids, pack path |
+| `python src/generic_utils/tv_scan_cli.py risk --run latest --pack PACK.json --out-dir RUN/book_risk` | Book NAV / loss ladders (standalone) |
 | `... lookup MU SNDK` | Raw + progression + stance dossier |
 | `... compare [--run-a A --run-b B]` | Weeks bo/cont/fwd deltas, top-40 churn, mix flips |
 | `... stance MU SNDK` | Course + suggested_conviction + conflicts only |
@@ -81,7 +82,7 @@ names per industry so one crowded industry (e.g. Packaged Software) cannot
 fill the whole list. Book names are always exempt. `compile.py` uses it to
 build, alongside the original uncapped sleeves:
 
-- `sleeves.radar_curated_25` (+ `sleeves.radar_industry_overflow`) — headline Top 100 view; `radar_upside_100` is the appendix
+- `sleeves.radar_curated_50` (+ `sleeves.radar_industry_overflow`) — **Build-50** headline (best trades / positions to build on); `radar_curated_25` is the first 25; `radar_upside_100` is the uncapped appendix
 - `sleeves.short_book_15_curated` (+ `sleeves.short_book_15_overflow`) — headline shorts; `short_book_15` is the appendix
 - `earnings_lanes.upside_curated` / `.downside_curated` (+ `.upside_overflow` / `.downside_overflow`) — headline earnings lanes; `.upside` / `.downside` are the appendix
 
