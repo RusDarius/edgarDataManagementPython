@@ -1,0 +1,14 @@
+---
+description: Horizon plan from generic backtest IC plus current leftover pack. Not Daily leftover, movers, or Book risk.
+alwaysApply: false
+---
+
+# Backtest horizon
+
+When the user wants a week/month plan from backtests, or HORIZON copy-paste:
+
+1. Read `.cursor/skills/backtest-horizon/SKILL.md`.
+2. Rank `family_metrics.csv` with `rank_cli.py --field spearman_ic`. Prefer IC and day_count over Top20Lift.
+3. Join the newest briefing pack (`inspect` / `lookup` / `compare --session`). Do not invent a 0–100 horizon score.
+4. MTP ENTER_SMALL is not a leftover gate. Reconstructed edge/timing is worse than missing.
+5. Canvas `horizon-plan-YYYYMMDD.canvas.tsx`. One Ledger. Chat is a snapshot + link.

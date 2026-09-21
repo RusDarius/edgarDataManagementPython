@@ -23,7 +23,7 @@ Compile compact (`_compact_name`) is what Radar / Build-50 / Book tables see.
 | pt, street_left, street_px | 1+5 | fundamental | Street PT $ and leftover |
 | edge_left, opp, lean | 3 | edge | FV upside %, opportunity rank, directional lean |
 | left, rr, target_px | 5 | derived | Pack leftover (max street, edge), rr, pack $ target |
-| bo, cont, fwd, exh, frag | 2 | technical (profile) | Weeks profile scores |
+| bo, cont, fwd, early, sms, recov, rev, exh, frag | 2 | technical (profile) | Weeks profile scores. Sort still uses bo/cont/fwd live only. |
 | mix, conv, regime | 2 | mix / composite | Mix class, conviction (do not leftover-rank with it), regime fit |
 | dte | 4 | calendar | Days to next earnings |
 | mtp | 4 | timing | ENTER_SMALL / WATCH / AVOID_CHASE |

@@ -1,6 +1,6 @@
 ---
 name: book-risk
-description: Data-driven Book risk exposure and loss tolerance (position %, net $, % of NAV including cash). Progressive ladders, SMA50/ATR structure, trim-and-reenter cash, industry concentration. Use when the user asks how much loss to tolerate, whether to trim or add, cut-and-go-back-in, NAV risk, or to run a standalone check on current_holdings.json / the latest holdings scan. Do not use for leftover radar, movers, or Build-50.
+description: Data-driven Book risk exposure and loss tolerance (position %, net $, % of NAV including cash). Progressive ladders, SMA50/ATR structure, trim-and-reenter cash, industry concentration. Use when the user asks how much loss to tolerate, whether to trim or add, cut-and-go-back-in, NAV risk, or to run a standalone check on current_holdings.json / the latest holdings scan. Do not use for leftover radar, movers, Build-50, or week/month IC plans.
 ---
 
 # Book risk (loss vs NAV)

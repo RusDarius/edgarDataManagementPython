@@ -1,0 +1,44 @@
+{
+  // Project allowlist + Auto-review steering for the operator scan loop.
+  // Takes effect when Run Mode is on (Settings → Agents → Approvals & Execution).
+  // In-repo file creates and edits are already in-workspace. This file stops
+  // repeat prompts for the generic commands that write those files.
+  // Concatenates with ~/.cursor/permissions.json if that file exists.
+  "terminalAllowlist": [
+    "python src/run_operator_suites.py",
+    "python src/operator_briefing/example_entry.py",
+    "python src/generic_utils/tv_scan_cli.py",
+    "python src/generic_utils/rank_cli.py",
+    "python src/main.py",
+    "python src/run_financial_projection.py",
+    "python src/run_upside_opportunity_scan.py",
+    "python src/run_market_timing_policy.py",
+    "$env:PYTHONPATH='src;.'; python src/run_operator_suites.py",
+    "$env:PYTHONPATH='src;.'; python src/operator_briefing/example_entry.py",
+    "$env:PYTHONPATH='src;.'; python src/generic_utils/tv_scan_cli.py",
+    "$env:PYTHONPATH='src;.'; python src/generic_utils/rank_cli.py",
+    "$env:PYTHONPATH='src;.'; python src/main.py",
+    "$env:PYTHONPATH='src;.'; python src/run_financial_projection.py",
+    "$env:PYTHONPATH='src;.'; python src/run_upside_opportunity_scan.py",
+    "$env:PYTHONPATH='src;.'; python src/run_market_timing_policy.py",
+    "git status",
+    "git diff",
+    "git log",
+    "git show"
+  ],
+  "autoRun": {
+    "allow_instructions": [
+      "Allow setting PYTHONPATH to src;. and running python under src/run_operator_suites.py, src/operator_briefing/example_entry.py, src/generic_utils/tv_scan_cli.py, src/generic_utils/rank_cli.py, src/main.py, src/run_financial_projection.py, src/run_upside_opportunity_scan.py, and src/run_market_timing_policy.py.",
+      "Allow those commands to create and overwrite scan outputs inside the repo: logs/tradingview_analysis/, logs/AI_ANALYSIS_UTILS/priors/, config/generic_utils/, and CSV, DuckDB, markdown, and overview.log files next to a briefing pack.",
+      "Allow reading and editing project source, tests, config JSON, focus-pool prompts, and .cursor/skills and .cursor/rules when the change is the generic scan, a suite wrapper, or the ledger/prompt that drives it.",
+      "Allow read-only git status, git diff, git log, and git show."
+    ],
+    "block_instructions": [
+      "Ask before git commit, git push, git reset, git clean, or any change to git config.",
+      "Ask before deleting a logs tree, a DuckDB, or more than the one output file the command is rewriting.",
+      "Ask before reading or writing .env, credentials, tokens, or SSH config.",
+      "Ask before pip install, package publishes, or downloads that are not the scan commands above.",
+      "Ask before writing outside this repository. Canvas files under the Cursor project canvases folder still need the external-file approval."
+    ]
+  }
+}

@@ -2338,17 +2338,17 @@ def _build_mark_to_market_overview_lines(
     priced_rows = [
         row
         for row in summary_rows
-        if isinstance(row.get("close"), (int, float))
+        if _coerce_optional_float(row.get("close")) is not None
     ]
     total_current_value_usd = sum(
-        float(row.get("current_value_usd"))
+        value
         for row in summary_rows
-        if isinstance(row.get("current_value_usd"), (int, float))
+        if (value := _coerce_optional_float(row.get("current_value_usd"))) is not None
     )
     total_unrealized_pnl_usd = sum(
-        float(row.get("unrealized_pnl_usd"))
+        pnl
         for row in summary_rows
-        if isinstance(row.get("unrealized_pnl_usd"), (int, float))
+        if (pnl := _coerce_optional_float(row.get("unrealized_pnl_usd"))) is not None
     )
     lines = [
         "Mark-to-market (run close price)",
@@ -2362,7 +2362,7 @@ def _build_mark_to_market_overview_lines(
         f"{total_unrealized_pnl_usd:,.2f}"
         if summary_rows
         and any(
-            isinstance(row.get("unrealized_pnl_usd"), (int, float))
+            _coerce_optional_float(row.get("unrealized_pnl_usd")) is not None
             for row in summary_rows
         )
         else f"  total_unrealized_pnl_{portfolio_currency.lower()}: N/A",
@@ -2372,16 +2372,16 @@ def _build_mark_to_market_overview_lines(
         if row.get("close") is None:
             continue
         ticker = row.get("config_ticker") or row.get("matched_symbol")
-        current_value_usd = row.get("current_value_usd")
-        unrealized_return_pct = row.get("unrealized_return_pct")
+        current_value_usd = _coerce_optional_float(row.get("current_value_usd"))
+        unrealized_return_pct = _coerce_optional_float(row.get("unrealized_return_pct"))
         return_text = (
-            f"{float(unrealized_return_pct):+.2f}%"
-            if isinstance(unrealized_return_pct, (int, float))
+            f"{unrealized_return_pct:+.2f}%"
+            if unrealized_return_pct is not None
             else "N/A"
         )
         value_text = (
-            f"{float(current_value_usd):,.2f}"
-            if isinstance(current_value_usd, (int, float))
+            f"{current_value_usd:,.2f}"
+            if current_value_usd is not None
             else "N/A"
         )
         lines.append(
@@ -2987,9 +2987,9 @@ def _write_overview_log(
         holdings_payload.get("portfolio_currency", "USD"),
     )
     total_invested_usd = sum(
-        float(row.get("invested_sum_usd"))
+        invested
         for row in summary_rows
-        if isinstance(row.get("invested_sum_usd"), (int, float))
+        if (invested := _coerce_optional_float(row.get("invested_sum_usd"))) is not None
     )
     lines = [
         "Holdings Scoring Analysis",
@@ -3015,7 +3015,7 @@ def _write_overview_log(
         lines.append(f"  cash_position: {cash_summary}")
     lines.extend(
         [
-        "  fx_provider: frankfurter.app (ECB rates, free, no API key)",
+        "  fx_provider: frankfurter.dev (ECB-style rates, free, no API key)",
         "",
         ]
     )
@@ -3124,10 +3124,12 @@ def run_holdings_scoring_analysis(
     created_at = reference_time or datetime.now(timezone.utc)
     as_of_date = fx_as_of_date or created_at.date()
     fx_warnings: list[str] = []
+    fx_rate_cache: dict[tuple[str, str, str | None], FxRateQuote] = {}
     holdings, enrich_warnings = enrich_holdings_positions(
         holdings,
         portfolio_currency=portfolio_currency,
         as_of_date=as_of_date,
+        rate_cache=fx_rate_cache,
         allow_external_fx=resolve_fx_rates,
     )
     fx_warnings.extend(enrich_warnings)
@@ -3135,6 +3137,7 @@ def run_holdings_scoring_analysis(
         cash_position,
         portfolio_currency=portfolio_currency,
         as_of_date=as_of_date,
+        rate_cache=fx_rate_cache,
         allow_external_fx=resolve_fx_rates,
         fx_warnings=fx_warnings,
     )
@@ -3145,6 +3148,7 @@ def run_holdings_scoring_analysis(
         as_of_date=as_of_date,
         resolve_fx_rates=resolve_fx_rates,
         fx_warnings=fx_warnings,
+        rate_cache=fx_rate_cache,
     )
 
     resolved_scans = (
@@ -3289,7 +3293,7 @@ def run_holdings_scoring_analysis(
             cash_position.to_dict() if cash_position is not None else None
         ),
         "fx_as_of_date": as_of_date.isoformat(),
-        "fx_provider": "frankfurter.app",
+        "fx_provider": "frankfurter.dev",
         "resolve_fx_rates": resolve_fx_rates,
         "fx_warnings": fx_warnings,
         "enabled_scans": list(resolved_scans),

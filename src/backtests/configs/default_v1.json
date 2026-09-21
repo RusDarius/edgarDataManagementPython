@@ -27,7 +27,11 @@
       ],
       "profile_names": [
         "breakout_long_v1",
-        "forward_edge_active_v2"
+        "quality_continuation_v1",
+        "forward_edge_active_v2",
+        "early_momentum_inflection_v1",
+        "value_recovery_v3",
+        "upside_reversal_v1"
       ],
       "include_regime_context": true
     },
@@ -44,13 +48,14 @@
         "change",
         "close",
         "price_target_1y",
+        "price_target_average",
         "total_revenue_yoy_growth_ttm",
         "total_revenue_cagr_5y"
       ]
     },
     "upside_opportunity": {
       "enabled": true,
-      "allow_momentum_reconstruct": true
+      "allow_momentum_reconstruct": false
     },
     "market_timing": {
       "enabled": true,
@@ -104,7 +109,7 @@
     "root_dir": "logs/tradingview_analysis/backtests/runs",
     "write_csv": true,
     "max_report_signals": 20,
-    "persist_raw_row_tables": true,
+    "persist_raw_row_tables": false,
     "duckdb_memory_limit": "2GB",
     "duckdb_materialize_max_bytes": 67108864
   }

@@ -1,0 +1,16 @@
+---
+description: Whole-book capture from holdings history + fundamentals + prediction progression. Not Daily leftover, Movers tape-only, Book risk ladders, or backtest horizon plans.
+alwaysApply: false
+---
+
+# Capture whole-book
+
+When the user asks for whole-book opportunity capture, buy-in-red refinement,
+or deterministic momentum/recovery path evidence:
+
+1. Read `.cursor/skills/capture-book/SKILL.md`.
+2. Run `python src/run_operator_suites.py capture` (default 90-day existing data).
+3. Produce a capture canvas with one Ledger and concise best-moves section.
+4. Keep output deterministic (no 0-100 composite, no ad-hoc SQL scripts).
+5. Include an optional open section for wider `01_04_2026` backtest coverage.
+6. To score how those job tags would have done, run `python src/run_operator_suites.py capture-replay` on the dump (PIT vs later closes). Any matching window: `--af-start` / `--af-end --rebuild`. Do not invent a 0-100; quote sleeve mean / ras / hit_rate.

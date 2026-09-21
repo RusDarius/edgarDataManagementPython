@@ -4,6 +4,8 @@ Paste ONE block into chat. Do not paste this whole file.
 Standing spec: daily_generic.txt (do not @ daily_generic_reference.md).
 Tape-only / 3M spec: movers_generic.txt (do not @ daily_generic.txt).
 Book risk / loss vs NAV: risk_generic.txt (do not @ daily_generic.txt).
+Capture / whole-book progression: capture_generic.txt (do not @ daily_generic.txt).
+Horizon / backtest IC × pack: backtest_horizon.txt (do not @ daily_generic.txt).
 Pins: overrides_template.txt. Do not @ briefing_pack.json or DuckDB folders.
 
 Shell once per session:
@@ -20,7 +22,10 @@ Skills: .cursor/skills/daily-operator-scan/SKILL.md
         .cursor/skills/canvas-ledger/SKILL.md
         .cursor/skills/price-movers/SKILL.md
         .cursor/skills/book-risk/SKILL.md
+        .cursor/skills/capture-book/SKILL.md
         .cursor/skills/forward-value/SKILL.md
+        .cursor/skills/backtest-horizon/SKILL.md
+        .cursor/skills/generic-ranking/SKILL.md
 Scoring layers: src/generic_utils/specs/
 Manual dumps (raw data the model uses, no canvas): python src/run_operator_suites.py --gitbash
   table: Prompt | Command | Usage / output
@@ -187,6 +192,35 @@ Cut-and-reenter: remaining wipe_nav + cash for SMA50/ATR starter.
 No 0–100 risk score. No logs/_tmp_*.py. Polar still on.
 
 
+--- CAPTURE (whole book + fundamentals + progression) ---
+Deterministic whole-book path over existing data (default 90 days).
+Not DAILY, not MOVERS, not RISK, not HORIZON. Do not @ daily_generic.txt.
+
+@.cursor/skills/capture-book/SKILL.md
+@src/focus_pool_screening/prompts/capture_generic.txt
+
+inspect for source lock; compile only if pack ids moved.
+Run: python src/run_operator_suites.py capture
+CLI: python src/generic_utils/tv_scan_cli.py capture --lookback-days 90 --pack PACK.json --out-dir RUN/capture
+
+What to produce:
+  1. Canvas capture-YYYYMMDD with one Ledger and concise sections:
+     Book, Fundamentals, Progression, deterministic Jobs, Best moves, Follow-up.
+  2. Chat snapshot: best 1–4 week / 1–2 month moves from deterministic evidence.
+  3. Optional open section (separate): wider backtest window from 01_04_2026.
+
+Acceptance checks:
+  - exits include PATH/TEAM/VEEV/CSCO/CHKP when present in run history
+  - fund_path continues after exits while tape exists
+  - score_path carries bo/cont/fwd/early/sms/recov/rev over window
+  - coverage_fill_rates shows n_days + fill for close/pt/pe/rsi
+
+Replay the job tags vs later closes on the same dump:
+  python src/run_operator_suites.py capture-replay
+Any window: python src/run_operator_suites.py capture-replay --af-start 01_04_2026 --af-end 11_09_2026 --rebuild
+Canvas Replay tab: PIT vs hindsight sleeves, ras = mean/stdev, tune grid, first-hit entries.
+
+
 --- DELEGATE (child agent) ---
 Read .cursor/skills/scan-evidence/SKILL.md.
 Pack already exists. Do not compile. Do not inspect unless lookup missing.
@@ -235,6 +269,54 @@ python src/run_operator_suites.py wisdom --cover 1000
 python src/run_operator_suites.py forward --cover 1000
 python src/run_operator_suites.py value-tech --cover 1000
 python src/run_operator_suites.py wisdom --run-finproj --cover 1000
+
+
+--- PLAYBOOK (100 + best 25 + shorts + 25w) ---
+One canvas on top of the latest DAILY pack, movers, value/tech, and forward dumps.
+Base list is sleeves.radar_upside_100. Detail 25 is agent judgment on a mesh
+(forming, catalyst, 25-week bo rise, peer discount). Shorts are a separate sleeve.
+Not a second Daily radar and not a 0-100.
+
+@.cursor/skills/tv-dataset-analysis/SKILL.md
+@.cursor/skills/generic-ranking/SKILL.md
+@.cursor/skills/canvas-ledger/SKILL.md
+
+Reuse the newest briefing pack. Compile only if inspect sources differ.
+Peers/tech and street/model are the wisdom dumps (do not re-fish DuckDB):
+
+python src/run_operator_suites.py weeks-progression --weeks 25
+python src/generic_utils/tv_scan_cli.py pack-focus --pack logs/tradingview_analysis/operator_briefing/runs/<newest>/briefing_pack.json --sleeve sleeves.radar_upside_100 --out upside100.csv
+
+weeks-progression writes weeks_path / weeks_span / weeks_breadth under the pack
+folder (newest 25 ISO-week prediction files, one run each, recipe
+pred.profile_weeks_pivot). Ids = upside 100 + Book + forming + short book 15.
+Canvas playbook-YYYYMMDD: Play, Base 100, Best 25, Forming x catalyst, Shorts,
+Peers/tech, 25 weeks, Ledger.
+Do not write logs/_tmp_*.py. Do not invent a mesh score.
+
+
+--- HORIZON (weeks / month) ---
+Backtest IC × current leftover pack. Not Daily radar, not MOVERS, not RISK.
+Do not @ daily_generic.txt. Canvas horizon-plan-YYYYMMDD.
+
+@.cursor/skills/backtest-horizon/SKILL.md
+@src/focus_pool_screening/prompts/backtest_horizon.txt
+
+inspect; compile only if pack sources differ.
+Rank newest backtests_*/family_metrics.csv:
+  python src/generic_utils/rank_cli.py --csv RUN/family_metrics.csv --field spearman_ic --top 16 --id-field signal_name --group-field family --cap 3
+compare --session --exchanges NASDAQ,NYSE,AMEX --ids on Book + unpaid candidates.
+lookup those names. Prefer IC + day_count over Top20Lift.
+
+What to produce:
+  1. Evidence — which families discriminate 5/10/20d.
+  2. Overlay — timing_filter is a drag; MTP is climate.
+  3. Best moves this week / 8–21d / 22–60d. Budget 0–2 NEW, 0–2 ADD. Polar on.
+  4. Follow-up changes (coverage, persist, next window).
+
+Trust artifact edge + live weeks leftover. Do not reconstruct missing edge.
+Do not gate leftover on ENTER_SMALL. Do not chase ATRP/paid continuation.
+One Ledger. No 0–100 horizon score. No logs/_tmp_*.py.
 
 
 --- OVERRIDES (append, keep blank lines unused) ---

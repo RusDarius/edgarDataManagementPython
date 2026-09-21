@@ -79,6 +79,15 @@ python src/run_backtests.py --finalize-run logs/tradingview_analysis/backtests/r
 Set `"persist_raw_row_tables": false` in the config to skip writing the large
 `signal_rows.csv` / `outcome_rows.csv` files (metrics and the report still write).
 
+Operator join (week/month plan on the current pack, not a second Daily):
+
+```powershell
+python src/generic_utils/rank_cli.py --csv logs/tradingview_analysis/backtests/runs/<run_id>/family_metrics.csv --field spearman_ic --top 16 --id-field signal_name --group-field family --cap 3
+```
+
+Standing spec: `src/focus_pool_screening/prompts/backtest_horizon.txt`.
+Skill: `.cursor/skills/backtest-horizon/SKILL.md`. Canvas: `horizon-plan-YYYYMMDD`.
+
 ## Data assumptions
 
 - Daily snapshots come from `export_all_tradingview_fields_duckdb()`.

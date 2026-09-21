@@ -1,0 +1,28 @@
+{
+  "name": "capture_v1",
+  "lookback_days": 90,
+  "holdings_runs_root": "logs/tradingview_analysis/holdings_scoring_analysis/runs",
+  "all_fields_root": "logs/tradingview_analysis/trading_view_all_fields_data",
+  "all_fields_glob": "**/tradingview_all_fields_*.duckdb",
+  "prediction_root": "logs/tradingview_analysis/prediction_analysis/duckdb_runs",
+  "prediction_glob": "**/move_prediction_*.duckdb",
+  "profile_recipe": "pred.profile_weeks_pivot",
+  "ic_root": "logs/tradingview_analysis/backtests/runs",
+  "jobs": {
+    "rerate_left_min": 12,
+    "rerate_pt_pct_min": -8,
+    "rerate_close_lag_max": 8,
+    "forming_left_min": 10,
+    "forming_early_min": 0.45,
+    "forming_bo_min": 0.4,
+    "forming_rng_max": 80,
+    "red_left_min": 8,
+    "red_score_min": 0.45,
+    "monitor_left_min": 10
+  },
+  "replay": {
+    "horizons": [5, 10, 21, 60],
+    "tune_left_floors": [8, 10, 12, 20],
+    "tune_early_floors": [0.3, 0.45, 0.6]
+  }
+}

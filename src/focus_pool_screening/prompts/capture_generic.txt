@@ -1,0 +1,56 @@
+CAPTURE - WHOLE BOOK + FUNDAMENTALS + PROGRESSION
+=================================================
+Do not attach this file on DAILY (full), MOVERS, RISK, or HORIZON.
+Do not attach daily_generic.txt.
+
+This suite is a deterministic path dump for ever-held names:
+- holdings membership/cost (`book_asof`, `book_names`, `exits`)
+- all-fields fundamental progression (`fund_path`, `fund_span`)
+- prediction profile progression (`score_path`, `score_span`)
+- deterministic join flags (`jobs`) + coverage visibility (`coverage_fill_rates`)
+
+@.cursor/skills/capture-book/SKILL.md
+@.cursor/skills/canvas-ledger/SKILL.md
+@.cursor/skills/generic-ranking/SKILL.md
+@.cursor/skills/scan-evidence/SKILL.md
+Recipe: config/generic_utils/capture.json
+
+Run on existing data (default 90-day live progression):
+
+  python src/run_operator_suites.py capture
+
+CLI equivalent:
+  python src/generic_utils/tv_scan_cli.py capture --lookback-days 90 --pack PACK.json --out-dir logs/tradingview_analysis/operator_briefing/runs/<newest>/capture
+
+What to produce (canvas first; chat is a short snapshot):
+  1. Scan folder (`--out-dir`): `capture.duckdb` + `capture.md` + `overview.log`.
+     DuckDB tables: `book_asof`, `book_names`, `exits`, `fund_path`, `fund_span`,
+     `score_path`, `score_span`, `jobs`, `coverage_fill_rates`, `ic_snapshot`.
+  2. Canvas `capture-YYYYMMDD.canvas.tsx` (project canvases/), one Ledger tab.
+     Tabs: Guide / Book / Fundamentals / Progression / Jobs / Follow-up / Ledger.
+  3. Chat: best 1-4 week / 1-2 month moves from deterministic evidence only.
+
+Acceptance checks for the first 90-day run:
+- exits include `PATH`, `TEAM`, `VEEV`, `CSCO`, `CHKP`
+- fund_path for exited names still continues after holdings exit
+- score_path shows `bo/cont/fwd/early/sms/recov/rev` over the window
+- fill rates include `close`, `pt`, `pe`, `rsi` with `n_days`
+
+Replay (same dump, walk-forward vs later closes):
+
+  python src/run_operator_suites.py capture-replay
+
+Any matching window of existing files:
+
+  python src/run_operator_suites.py capture-replay --af-start 01_04_2026 --af-end 11_09_2026 --rebuild
+
+PIT flags use only as_of <= decision date. Hindsight flags are the end-of-window jobs table (labeled). `ras` = mean / sample stdev of event returns, not a 0-100. Canvas Replay tab. Do not attach on HORIZON (that is family IC).
+
+Open section (optional; does not block 90d run):
+
+```powershell
+$env:PYTHONPATH='src;.'
+python src/generic_utils/tv_scan_cli.py capture --lookback-days 180 --af-start 01_04_2026 --pack PACK.json --out-dir RUN/capture_01_04
+```
+
+No `logs/_tmp_*.py`. No 0-100 composite. Do not fetch new data for first validation.

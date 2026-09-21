@@ -24,6 +24,18 @@ risk_generic.txt
   (book_risk.md + duckdb). Do not attach on DAILY (full) unless asked
   for trim-size / loss tolerance.
 
+capture_generic.txt
+  Whole-book path dump from holdings history + all-fields + prediction
+  progression over a deterministic window (default 90d).
+  Canvas capture-YYYYMMDD. Replay: python src/run_operator_suites.py capture-replay
+  (PIT vs later closes; any --af-start/--af-end that exists on disk).
+  Do not attach on DAILY (full).
+
+backtest_horizon.txt
+  Week/month plan from generic backtest IC plus the locked briefing pack.
+  Canvas horizon-plan-YYYYMMDD. Do not attach on DAILY (full).
+  Rank family_metrics with rank_cli. MTP is climate, not a leftover gate.
+
 daily_themed_chips_software.txt
   Same core flow, with a standing datacenter/chips and software/cyber
   sleeve. Use only when that focus is intended.
@@ -39,8 +51,8 @@ agent_copy_paste.txt
   (late-Sep rumour / sell-the-news), one Tape/Support section (day/week/5D/1M),
   pack support then operator High/Med/Low.
   Same overlay on DAILY (pack already good) and THEMED. Also: stale-check,
-  lookup, compare, Book-only, RISK (loss vs NAV), delegate, deterministic FOCUS,
-  WISDOM / all-suite dumps. Do not attach this index or the whole
+  lookup, compare, Book-only, RISK (loss vs NAV), HORIZON (backtest IC ×
+  pack), delegate, deterministic FOCUS, WISDOM / all-suite dumps. Do not attach this index or the whole
   file. Pointer also at src/operator_briefing/COPY_PASTE_PROMPTS.txt.
   Generic TV interrogation: .cursor/skills/tv-dataset-analysis/SKILL.md
   Forward value + all-suite dumps: .cursor/skills/forward-value/SKILL.md

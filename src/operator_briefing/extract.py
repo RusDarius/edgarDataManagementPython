@@ -21,6 +21,8 @@ PROFILE_WEEKS = (
     "forward_edge_active_v2",
     "early_momentum_inflection_v1",
     "sustained_momentum_safety_v1",
+    "value_recovery_v3",
+    "upside_reversal_v1",
     "fragility_short",
     "mean_reversion_exhaustion_v1",
 )

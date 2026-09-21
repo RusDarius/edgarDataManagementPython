@@ -1,22 +1,28 @@
 """Resolve FX rates for holdings position normalization.
 
-Uses the free Frankfurter API (ECB reference rates, no API key):
-https://api.frankfurter.app/docs/
+Uses the free Frankfurter API (no API key):
+https://api.frankfurter.dev/
 
-Rates are typically available for the latest ECB business day when
-``as_of_date`` is omitted or is today.
+v1 keeps the ECB-style ``{rates: {USD: ...}}`` payload. The old
+``api.frankfurter.app`` host 301s to ``.dev`` and can hang on the redirect.
 """
 
 from __future__ import annotations
 
+import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from typing import Any
 
 import requests
 
-FRANKFURTER_API_BASE = "https://api.frankfurter.app"
+FRANKFURTER_API_BASE = "https://api.frankfurter.dev/v1"
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 15
+DEFAULT_MAX_RETRIES = 2
+DEFAULT_RETRY_BACKOFF_SECONDS = 1.0
+
+_LOOKUP_FAILURES: dict[tuple[str, str, str | None], BaseException] = {}
 
 
 @dataclass(frozen=True)
@@ -35,6 +41,11 @@ def normalize_currency_code(currency: str | None, *, default: str = "USD") -> st
     return normalized
 
 
+def clear_fx_lookup_failures() -> None:
+    """Drop cached FX lookup failures (used by tests and long-lived processes)."""
+    _LOOKUP_FAILURES.clear()
+
+
 def _parse_rate_date(value: Any) -> str:
     if isinstance(value, datetime):
         return value.date().isoformat()
@@ -43,22 +54,11 @@ def _parse_rate_date(value: Any) -> str:
     return str(value)
 
 
-def _request_frankfurter_rate(
+def _quote_from_payload(
+    payload: Mapping[str, Any],
     from_currency: str,
     to_currency: str,
-    *,
-    as_of_date: date | None = None,
 ) -> FxRateQuote:
-    if as_of_date is None:
-        url = f"{FRANKFURTER_API_BASE}/latest"
-        params = {"from": from_currency, "to": to_currency}
-    else:
-        url = f"{FRANKFURTER_API_BASE}/{as_of_date.isoformat()}"
-        params = {"from": from_currency, "to": to_currency}
-
-    response = requests.get(url, params=params, timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS)
-    response.raise_for_status()
-    payload = response.json()
     rates = payload.get("rates") or {}
     if to_currency not in rates:
         raise ValueError(
@@ -71,6 +71,55 @@ def _request_frankfurter_rate(
         rate_date=_parse_rate_date(payload.get("date")),
         provider="frankfurter",
     )
+
+
+def _frankfurter_candidates(
+    from_currency: str,
+    to_currency: str,
+    *,
+    as_of_date: date | None = None,
+) -> list[tuple[str, dict[str, str]]]:
+    params = {"from": from_currency, "to": to_currency}
+    if as_of_date is None:
+        return [(f"{FRANKFURTER_API_BASE}/latest", params)]
+    return [
+        (f"{FRANKFURTER_API_BASE}/{as_of_date.isoformat()}", params),
+        (f"{FRANKFURTER_API_BASE}/latest", params),
+    ]
+
+
+def _request_frankfurter_rate(
+    from_currency: str,
+    to_currency: str,
+    *,
+    as_of_date: date | None = None,
+) -> FxRateQuote:
+    last_error: BaseException | None = None
+    for url, params in _frankfurter_candidates(
+        from_currency,
+        to_currency,
+        as_of_date=as_of_date,
+    ):
+        for attempt in range(1, DEFAULT_MAX_RETRIES + 1):
+            try:
+                response = requests.get(
+                    url,
+                    params=params,
+                    timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS,
+                )
+                response.raise_for_status()
+                return _quote_from_payload(response.json(), from_currency, to_currency)
+            except (requests.Timeout, requests.ConnectionError) as exc:
+                last_error = exc
+                if attempt < DEFAULT_MAX_RETRIES:
+                    time.sleep(DEFAULT_RETRY_BACKOFF_SECONDS * attempt)
+                    continue
+            except Exception as exc:
+                last_error = exc
+                break
+    if last_error is None:
+        raise RuntimeError("Frankfurter FX lookup failed without an error")
+    raise last_error
 
 
 def get_fx_rate(
@@ -96,8 +145,15 @@ def get_fx_rate(
     cache_key = (source, target, as_of_date.isoformat() if as_of_date else None)
     if rate_cache is not None and cache_key in rate_cache:
         return rate_cache[cache_key]
+    cached_failure = _LOOKUP_FAILURES.get(cache_key)
+    if cached_failure is not None:
+        raise cached_failure
 
-    quote = _request_frankfurter_rate(source, target, as_of_date=as_of_date)
+    try:
+        quote = _request_frankfurter_rate(source, target, as_of_date=as_of_date)
+    except Exception as exc:
+        _LOOKUP_FAILURES[cache_key] = exc
+        raise
     if rate_cache is not None:
         rate_cache[cache_key] = quote
     return quote

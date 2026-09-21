@@ -17,6 +17,7 @@ Shell once (Git Bash)::
     export PYTHONPATH=src:.
     python src/run_operator_suites.py --gitbash
     python src/run_operator_suites.py --list
+    python src/run_operator_suites.py capture
     python src/run_operator_suites.py wisdom --cover 1000
     python src/main.py   # wrappers: run_operator_wisdom_dumps()
 
@@ -52,6 +53,7 @@ MOVERS_3M_RECIPE = str(
     PROJECT_ROOT / "config" / "generic_utils" / "movers_3m.json"
 )
 BOOK_RISK_RECIPE = str(PROJECT_ROOT / "config" / "generic_utils" / "book_risk.json")
+CAPTURE_RECIPE = str(PROJECT_ROOT / "config" / "generic_utils" / "capture.json")
 HOLDINGS_CONFIG = str(
     PROJECT_ROOT / "config" / "holdings_scoring" / "current_holdings.json"
 )
@@ -181,6 +183,20 @@ GITBASH_FLOWS: tuple[dict[str, str], ...] = (
     },
     {
         "stage": "5 skill dumps",
+        "prompt": "CAPTURE",
+        "command": "python src/run_operator_suites.py capture",
+        "skill": "capture-book",
+        "feeds": "capture.duckdb (book_asof/book_names/exits/fund_path/score_path/jobs/coverage_fill_rates) + capture.md",
+    },
+    {
+        "stage": "5 skill dumps",
+        "prompt": "CAPTURE-REPLAY",
+        "command": "python src/run_operator_suites.py capture-replay",
+        "skill": "capture-book",
+        "feeds": "capture_replay.duckdb (replay_sleeves/tune/first_hit/paths/events) + capture_replay.md",
+    },
+    {
+        "stage": "5 skill dumps",
         "prompt": "FORWARD / Value",
         "command": "python src/run_operator_suites.py value-tech --cover 1000 --forward",
         "skill": "forward-value / tv-dataset-analysis",
@@ -192,6 +208,13 @@ GITBASH_FLOWS: tuple[dict[str, str], ...] = (
         "command": "python src/run_operator_suites.py forward --cover 1000",
         "skill": "forward-value",
         "feeds": "forward_value.duckdb (street/pack leftover + fp_*)",
+    },
+    {
+        "stage": "5 skill dumps",
+        "prompt": "PLAYBOOK / 25w",
+        "command": "python src/run_operator_suites.py weeks-progression --weeks 25",
+        "skill": "tv-dataset-analysis",
+        "feeds": "weeks_progression.duckdb (bo/cont/fwd/early/recov path + span for upside 100, Book, forming, shorts)",
     },
     {
         "stage": "5 skill dumps",
@@ -268,6 +291,18 @@ PROMPT_RUNS: tuple[dict[str, str], ...] = (
         "command": "python src/run_operator_suites.py risk",
         "usage": "NAV ladders from latest holdings scan + pack leftover. No TRIM/EXIT in the dump.",
         "output": "briefing_pack_*/book_risk/  book_risk.md book_risk.csv risk_levels.csv capital.csv industry_exposure.csv book_risk.duckdb overview.log",
+    },
+    {
+        "prompt": "CAPTURE (whole book 90d)",
+        "command": "python src/run_operator_suites.py capture",
+        "usage": "Whole-book membership + all-fields fundamentals path + prediction progression path. Uses existing on-disk data; deterministic flags only.",
+        "output": "briefing_pack_*/capture/  capture.duckdb tables book_asof book_names exits fund_path fund_span score_path score_span jobs coverage_fill_rates ic_snapshot  + capture.md overview.log",
+    },
+    {
+        "prompt": "CAPTURE-REPLAY (PIT vs later closes)",
+        "command": "python src/run_operator_suites.py capture-replay",
+        "usage": "Walk-forward the capture job tags on an existing dump (default latest 90d). PIT flags do not peek; hindsight flags are the end-of-window jobs table. Any window: --af-start/--af-end --rebuild.",
+        "output": "CAPTURE_DIR/replay/  capture_replay.duckdb tables replay_sleeves replay_tune replay_first_hit replay_paths replay_events  + capture_replay.md overview.log",
     },
     {
         "prompt": "FORWARD / Value",
@@ -376,6 +411,27 @@ SUITES: tuple[dict[str, str], ...] = (
         "python": "run_book_risk_suite()",
         "skill": "book-risk",
         "out": "book_risk.duckdb + book_risk.md (NAV ladders, no TRIM/EXIT cutoff)",
+    },
+    {
+        "id": "capture",
+        "cli": "python src/generic_utils/tv_scan_cli.py capture --lookback-days 90 --pack PACK.json --out-dir DIR",
+        "python": "run_capture_suite(lookback_days=90)",
+        "skill": "capture-book",
+        "out": "capture.duckdb + capture.md (whole-book fund/progression path + deterministic jobs)",
+    },
+    {
+        "id": "capture-replay",
+        "cli": "python src/generic_utils/tv_scan_cli.py capture-replay --capture-dir DIR --out-dir DIR/replay",
+        "python": "run_capture_replay_suite()",
+        "skill": "capture-book",
+        "out": "capture_replay.duckdb + capture_replay.md (PIT vs hindsight job tags vs later closes; ras = mean/stdev)",
+    },
+    {
+        "id": "weeks-progression",
+        "cli": "python src/run_operator_suites.py weeks-progression --weeks 25",
+        "python": "run_weeks_progression_suite(weeks=25)",
+        "skill": "tv-dataset-analysis (history + span)",
+        "out": "weeks_progression.duckdb + span/path CSVs (newest N ISO-week pred files, one run each)",
     },
     {
         "id": "pack-focus",
@@ -708,6 +764,213 @@ def run_book_risk_suite(
         quiet=quiet,
     )
     return _cmd_risk(args)
+
+
+def run_capture_suite(
+    *,
+    pack: str | Path | None = None,
+    lookback_days: int = 90,
+    af_start: str | None = None,
+    af_end: str | None = None,
+    out_dir: str | Path | None = None,
+    quiet: bool = True,
+) -> dict[str, Any]:
+    """Whole-book capture: holdings membership + fundamentals + progression."""
+    from argparse import Namespace
+
+    from generic_utils.tv_scan_cli import _cmd_capture
+    from operator_briefing.discovery import latest_briefing_pack_path
+
+    pack_path = str(pack) if pack else None
+    if pack_path is None:
+        found = latest_briefing_pack_path()
+        pack_path = str(found) if found else None
+    if out_dir is None:
+        out_dir = _default_pack_raw_dir(pack_path, "capture")
+    args = Namespace(
+        pack=pack_path,
+        recipe=CAPTURE_RECIPE,
+        lookback_days=int(lookback_days),
+        af_start=af_start,
+        af_end=af_end,
+        holdings_runs_root=None,
+        all_fields_root=None,
+        prediction_root=None,
+        out=None,
+        out_dir=str(out_dir) if out_dir else None,
+        include_rows=False,
+        quiet=quiet,
+    )
+    return _cmd_capture(args)
+
+
+def run_capture_replay_suite(
+    *,
+    pack: str | Path | None = None,
+    capture_dir: str | Path | None = None,
+    lookback_days: int | None = None,
+    af_start: str | None = None,
+    af_end: str | None = None,
+    rebuild: bool = False,
+    horizons: str | None = None,
+    out_dir: str | Path | None = None,
+    quiet: bool = True,
+) -> dict[str, Any]:
+    """Walk-forward replay of capture jobs vs later closes on existing data."""
+    from argparse import Namespace
+
+    from generic_utils.capture import latest_capture_dir
+    from generic_utils.tv_scan_cli import _cmd_capture_replay
+    from operator_briefing.discovery import latest_briefing_pack_path
+
+    pack_path = str(pack) if pack else None
+    if pack_path is None:
+        found = latest_briefing_pack_path()
+        pack_path = str(found) if found else None
+    dump_dir = Path(capture_dir) if capture_dir else latest_capture_dir()
+    need_build = bool(rebuild or af_start or af_end or dump_dir is None)
+    if need_build:
+        built = run_capture_suite(
+            pack=pack_path,
+            lookback_days=int(lookback_days or 90),
+            af_start=af_start,
+            af_end=af_end,
+            out_dir=None,
+            quiet=True,
+        )
+        exported = built.get("export") or {}
+        dump_dir = Path(exported.get("out_dir") or "")
+    if out_dir is None and dump_dir:
+        out_dir = dump_dir / "replay"
+    args = Namespace(
+        capture_dir=str(dump_dir) if dump_dir else None,
+        pack=pack_path,
+        recipe=CAPTURE_RECIPE,
+        lookback_days=lookback_days,
+        af_start=None,
+        af_end=None,
+        rebuild=False,
+        horizons=horizons,
+        out_dir=str(out_dir) if out_dir else None,
+        include_rows=False,
+        quiet=quiet,
+    )
+    return _cmd_capture_replay(args)
+
+
+def run_weeks_progression_suite(
+    *,
+    pack: str | Path | None = None,
+    out_dir: str | Path | None = None,
+    weeks: int = 25,
+    sleeve: str = "sleeves.radar_upside_100",
+) -> dict[str, Any]:
+    """Newest N ISO-week prediction files, one run each, for a pack sleeve.
+
+    Reuses ``series.field_history`` + ``series_span``. No eligibility cutoff
+    and no 0-100. Ids are the sleeve plus Book, forming, and the short book
+    so a later playbook can join them. ``--weeks 25`` keeps the last 25 week
+    files after date sort (one DuckDB per ISO week in this repo).
+    """
+    from generic_utils.capture import DEFAULT_PREDICTION_ROOT
+    from generic_utils.focus import pack_path_rows
+    from generic_utils.run_export import write_run_export
+    from generic_utils.series import field_history, group_history, list_dated_files, series_span
+
+    loaded = load_pack(pack)
+    n_weeks = max(1, int(weeks))
+    symbols: list[str] = []
+    seen: set[str] = set()
+
+    def _add(rows: list[dict[str, Any]]) -> None:
+        for row in rows:
+            sym = str(row.get("symbol") or "").strip()
+            if sym and sym not in seen:
+                seen.add(sym)
+                symbols.append(sym)
+
+    _add(pack_path_rows(loaded, sleeve))
+    for extra in ("book", "sleeves.forming", "sleeves.short_book_15"):
+        try:
+            _add(pack_path_rows(loaded, extra))
+        except (KeyError, TypeError):
+            continue
+    sources = list_dated_files(
+        DEFAULT_PREDICTION_ROOT,
+        "**/move_prediction_*.duckdb",
+        newest=n_weeks,
+    )
+    history = field_history(
+        sources,
+        table="profile_horizon_scores",
+        columns=["symbol"],
+        id_field="symbol",
+        ids=symbols,
+        recipe="pred.profile_weeks_pivot",
+    )
+    score_fields = ("bo", "cont", "fwd", "early", "sms", "recov", "rev", "frag", "exh")
+    best: dict[tuple[str, str], dict[str, Any]] = {}
+    order: list[tuple[str, str]] = []
+    for row in history["rows"]:
+        rec = dict(row)
+        rec["universe"] = "sleeve"
+        key = (str(rec.get("symbol") or ""), str(rec.get("as_of") or ""))
+        if not key[0]:
+            continue
+        prev = best.get(key)
+        if prev is None:
+            order.append(key)
+            best[key] = rec
+            continue
+        prev_fill = sum(prev.get(field) is not None for field in score_fields)
+        new_fill = sum(rec.get(field) is not None for field in score_fields)
+        if new_fill >= prev_fill:
+            best[key] = rec
+    path_rows = [best[key] for key in order]
+    span_rows = series_span(
+        path_rows,
+        id_field="symbol",
+        fields=["bo", "cont", "fwd", "early", "sms", "recov", "rev", "frag", "exh"],
+    )
+    breadth = group_history(
+        path_rows,
+        group_field="universe",
+        metrics=["bo", "cont", "fwd", "early", "recov"],
+        min_n=1,
+    )
+    directory = Path(out_dir) if out_dir else _default_pack_raw_dir(
+        loaded.get("_pack_path") or pack, "weeks_progression"
+    )
+    notes = [
+        f"newest {n_weeks} ISO-week prediction files, one run per file (all_runs off)",
+        "recipe pred.profile_weeks_pivot; span is first-to-last on that window",
+        "ids = sleeve + book + forming + short_book_15; no leftover/RSI cutoff",
+        "one row per symbol per as_of (older week files store both bare and prefixed ids)",
+    ]
+    exported = write_run_export(
+        directory,
+        tool="run_operator_suites.weeks_progression",
+        tables={
+            "weeks_path": path_rows,
+            "weeks_span": span_rows,
+            "weeks_breadth": breadth,
+        },
+        sources={
+            "pack": str(loaded.get("_pack_path") or pack or ""),
+            "prediction_root": DEFAULT_PREDICTION_ROOT.as_posix(),
+            "sleeve": sleeve,
+            "n_ids": len(symbols),
+            "n_week_files": len(sources),
+            "first_as_of": (sources[0].get("as_of") if sources else None),
+            "last_as_of": (sources[-1].get("as_of") if sources else None),
+        },
+        notes=notes,
+        extra={"weeks": n_weeks, "snapshots": len(history.get("snapshots") or [])},
+        duckdb_name="weeks_progression.duckdb",
+    )
+    exported["spec"] = history.get("spec")
+    exported["snapshots"] = history.get("snapshots")
+    return exported
 
 
 def run_pack_focus_suite(
@@ -1047,6 +1310,29 @@ def main(argv: list[str] | None = None) -> dict[str, Any] | None:
     risk = sub.add_parser("risk")
     risk.add_argument("--pack", default=None)
     risk.add_argument("--out-dir", default=None)
+    cap = sub.add_parser("capture")
+    cap.add_argument("--pack", default=None)
+    cap.add_argument("--out-dir", default=None)
+    cap.add_argument("--lookback-days", type=int, default=90)
+    cap.add_argument("--af-start", default=None, help="Optional DD_MM_YYYY or YYYY-MM-DD.")
+    cap.add_argument("--af-end", default=None, help="Optional DD_MM_YYYY or YYYY-MM-DD.")
+    capr = sub.add_parser("capture-replay")
+    capr.add_argument("--pack", default=None)
+    capr.add_argument("--capture-dir", default=None)
+    capr.add_argument("--out-dir", default=None)
+    capr.add_argument("--lookback-days", type=int, default=None)
+    capr.add_argument("--af-start", default=None)
+    capr.add_argument("--af-end", default=None)
+    capr.add_argument("--rebuild", action="store_true")
+    capr.add_argument("--horizons", default=None)
+    wk = sub.add_parser(
+        "weeks-progression",
+        help="Last N ISO weeks of weeks-profile scores for the upside 100 + Book.",
+    )
+    wk.add_argument("--pack", default=None)
+    wk.add_argument("--out-dir", default=None)
+    wk.add_argument("--weeks", type=int, default=25)
+    wk.add_argument("--sleeve", default="sleeves.radar_upside_100")
     pf = sub.add_parser("pack-focus")
     pf.add_argument("--pack", default=None)
     pf.add_argument("--out-dir", default=None)
@@ -1123,6 +1409,34 @@ def main(argv: list[str] | None = None) -> dict[str, Any] | None:
         payload = run_book_risk_suite(
             pack=args.pack, out_dir=args.out_dir, quiet=False
         )
+    elif command == "capture":
+        payload = run_capture_suite(
+            pack=args.pack,
+            out_dir=args.out_dir,
+            lookback_days=args.lookback_days,
+            af_start=args.af_start,
+            af_end=args.af_end,
+            quiet=False,
+        )
+    elif command == "capture-replay":
+        payload = run_capture_replay_suite(
+            pack=args.pack,
+            capture_dir=args.capture_dir,
+            out_dir=args.out_dir,
+            lookback_days=args.lookback_days,
+            af_start=args.af_start,
+            af_end=args.af_end,
+            rebuild=args.rebuild,
+            horizons=args.horizons,
+            quiet=False,
+        )
+    elif command == "weeks-progression":
+        payload = run_weeks_progression_suite(
+            pack=args.pack,
+            out_dir=args.out_dir,
+            weeks=args.weeks,
+            sleeve=args.sleeve,
+        )
     elif command == "pack-focus":
         payload = run_pack_focus_suite(
             pack=args.pack, cover=args.cover, out_dir=args.out_dir
@@ -1150,7 +1464,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any] | None:
         )
     else:
         raise SystemExit(f"Unknown command {command}")
-    if command in {"wisdom", "all", "pack-focus", "inspect"}:
+    if command in {"wisdom", "all", "pack-focus", "inspect", "weeks-progression"}:
         print(json.dumps(
             {k: payload.get(k) for k in ("out_dir", "overview_log", "cover", "pack", "run_id", "sections") if k in payload}
             if isinstance(payload, dict)

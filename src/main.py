@@ -563,6 +563,20 @@ def run_value_tech_dump(cover: int = 1000, **kwargs):
     return run_value_tech_suite(cover=cover, **kwargs)
 
 
+def run_capture_dump(lookback_days: int = 90, **kwargs):
+    """Whole-book capture dump from existing data (fundamentals + progression)."""
+    from run_operator_suites import run_capture_suite
+
+    return run_capture_suite(lookback_days=lookback_days, **kwargs)
+
+
+def run_capture_replay_dump(**kwargs):
+    """Walk-forward replay of capture job tags vs later closes on existing data."""
+    from run_operator_suites import run_capture_replay_suite
+
+    return run_capture_replay_suite(**kwargs)
+
+
 def daily_prediction_move_analysis_suite() -> dict[str, object]:
     # Model Analysis scan with duckdb storage solution
     move_prediction_scan_response = (
@@ -591,8 +605,10 @@ def daily_prediction_move_analysis_suite() -> dict[str, object]:
     # Financial projection: src/run_financial_projection.py
     # Join street leftover + finproj onto tape (cover 1000, no industry cap):
     #   python src/run_operator_suites.py forward --cover 1000
+    # Whole-book 90d capture (holdings + fundamentals + progression):
+    #   python src/run_operator_suites.py capture
     #   python src/run_operator_suites.py wisdom --cover 1000
-    #   run_forward_value_dump() / run_operator_wisdom_dumps() from this module.
+    #   run_forward_value_dump() / run_capture_dump() / run_operator_wisdom_dumps() from this module.
 
     # FOR INDUSTRY RUN SPLIT Or post-process an existing run:
     # write_industry_packs_from_duckdb_run(base_duckdb_result)
@@ -663,12 +679,12 @@ def main():
     # # Output: logs/tradingview_analysis/holdings_scoring_analysis/runs/<run_id>/
     # #   holdings_scoring__shortlist.log  — human-readable portfolio shortlist
     # # Optional cash_position in config (value + currency) is passed through to manifest/logs.
-    run_holdings_scoring_analysis(
-        holdings_config_path=PROJECT_ROOT
-        / "config"
-        / "holdings_scoring"
-        / "current_holdings.json",
-    )
+    # run_holdings_scoring_analysis(
+    #     holdings_config_path=PROJECT_ROOT
+    #     / "config"
+    #     / "holdings_scoring"
+    #     / "current_holdings.json",
+    # )
     # ── Single Stock report ─────────────────────────────────────────────
     # run_symbol_intelligence_report_example("NASDAQ:PGY")
 

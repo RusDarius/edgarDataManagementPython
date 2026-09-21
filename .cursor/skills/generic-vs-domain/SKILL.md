@@ -33,11 +33,16 @@ Formulas, group stats, named-column history, top-N with no eligibility cutoff, l
 | Book NAV / loss ladders / trim-size | `generic_utils.risk` / `tv_scan_cli.py risk --run latest` (recipe `book_risk.json`; `--out-dir` writes `book_risk.md`) | A 0–100 risk score; hand % of NAV; `--config-only` as mark-to-market on FX names; announcing a canvas without writing `book-risk-YYYYMMDD.canvas.tsx` |
 | Book price / multiple / score path | `history` / `span` on close, PT, ATRP, **and `val_field`** (not EV/Rev for every name) | A homemade path score; quoting EV/Rev path to manufacture a discount; mixing leftover from a later pred close with an older mark by hand |
 | Pred-run Δbo/Δcont/Δfwd | `example_entry.py compare --session --exchanges NASDAQ,NYSE,AMEX` | Bare compare (intra-day OTC/LSE dump) as the DAILY progression |
+| Last N ISO weeks of bo/cont/fwd/early/recov | `run_operator_suites.py weeks-progression --weeks 25` (`series.field_history` + `series_span` on `pred.profile_weeks_pivot`, newest N week files, one run each) | A homemade weekly score; `SELECT *` on profile_horizon_scores; treating span Δbo as a 0–100 |
 | Street / pack price levels | `derive.implied_price` → `street_px` / `target_px` | Recode PT in chat from leftover % |
 | DuckDB leftover column | `named --fields left` or SQL `"left"` (`series.qident`) | `SELECT left` (reserved word); `logs/_tmp_*.py` |
 | Manual section DuckDB + overview.log | `run_export.write_run_export` / `tv_scan_cli.py export` | `_tmp_*.py`; SELECT * on all_fields_rows |
 | Abbreviation / symbol explainers (rng, rr, leftover, mix, …) | one Ledger tab on the canvas (`.cursor/skills/canvas-ledger/SKILL.md`) | A glossary repeated on every section |
 | Scoring layer order / field inventory | `src/generic_utils/specs/` | A homemade 0–100; leftover-first dump as the daily ranking |
+| Backtest IC / overlay lift / coverage | `src/backtests` + `rank_cli.py --csv family_metrics.csv --field spearman_ic` (`.cursor/skills/backtest-horizon/SKILL.md`) | `SELECT *` on 15 GB `signal_rows`; a 0–100 horizon score; MTP as a leftover gate |
+| Recovery / early-turn / bounce (buy-the-red, forming) | pack `recov` / `early` / `rev` + next backtest `profile_names` + `history`/`span` on close and street PT | A new 0–100 momentum score; ranking leftover by 5D; merging groovers into Build-50 |
+| Whole-book path + capture job tags | `generic_utils.capture` / `tv_scan_cli.py capture` / `run_operator_suites.py capture` | A 0–100 capture score; `SELECT *` on all-fields; using only current_holdings.json as the universe |
+| Capture job replay vs later closes | `tv_scan_cli.py capture-replay` / `run_operator_suites.py capture-replay` (PIT flags; hindsight jobs labeled; `ras` = mean/stdev) | Feeding future span into PIT flags; treating replay ras as a 0–100; mixing with HORIZON family IC |
 
 3. If the same SQL or `_tmp_*.py` would be written a **third** time, promote it before briefing. Do not ship the third copy.
 4. If a ranking omitted a live leftover + unused-range name, do **not** invent a cutoff. Read pack `radar_industry_overflow` and high-`rr` rows on `radar_upside_100`. Present those as opportunity the cap dropped.

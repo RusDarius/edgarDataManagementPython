@@ -6,6 +6,9 @@ Index: src/focus_pool_screening/prompts/00_index.txt
 Standing spec: daily_generic.txt (not daily_generic_reference.md)
 Tape-only / 3M: movers_generic.txt (not daily_generic.txt)
 Book risk / loss vs NAV: risk_generic.txt (not daily_generic.txt)
+Capture / whole-book progression: capture_generic.txt (not daily_generic.txt)
+Horizon / backtest IC × pack: backtest_horizon.txt (not daily_generic.txt)
+Capture / whole-book + replay: capture_generic.txt (not daily_generic.txt; replay is capture-replay, not HORIZON)
 Manual all-suite dumps: python src/run_operator_suites.py --list
 Git Bash Prompt | Command | Usage/output: python src/run_operator_suites.py --gitbash
   (table: src/generic_utils/specs/gitbash_agent_data_flows.md)

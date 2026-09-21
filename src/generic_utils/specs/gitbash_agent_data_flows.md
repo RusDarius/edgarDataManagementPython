@@ -2,7 +2,7 @@
 
 From repo root. Same list as `python src/run_operator_suites.py --gitbash`.
 
-These commands write the **raw files the model reads** (DuckDB / CSV / JSON / stdout). Canvases (`daily-focus`, `movers-YYYYMMDD`, `book-risk`) are a later agent step.
+These commands write the **raw files the model reads** (DuckDB / CSV / JSON / stdout). Canvases (`daily-focus`, `movers-YYYYMMDD`, `book-risk`, `capture-YYYYMMDD`) are a later agent step.
 
 ```bash
 export PYTHONPATH=src:.
@@ -27,6 +27,8 @@ Paste blocks live in `src/focus_pool_screening/prompts/agent_copy_paste.txt`.
 | MOVERS (day / 5D / 1M) | `$ python src/run_operator_suites.py movers` | Both-tail 25 up / 25 punished per horizon. Val/Peer/Proj/Tech. **Output:** `briefing_pack_*/movers/` — `movers.duckdb` table `movers_tails`, `movers_tails.csv`, `us2b_tape.csv`, `overview.log`. |
 | MOVERS (3M) | `$ python src/run_operator_suites.py movers-3m` | Same as movers, recipe `movers_3m.json`. **Output:** `briefing_pack_*/movers_3m/` — `movers.duckdb`, `movers_tails.csv`, `overview.log`. |
 | RISK (Book loss vs NAV) | `$ python src/run_operator_suites.py risk` | NAV ladders from latest holdings scan + pack leftover. No TRIM/EXIT in the dump. **Output:** `briefing_pack_*/book_risk/` — `book_risk.md`, `book_risk.csv`, `risk_levels.csv`, `capital.csv`, `industry_exposure.csv`, `book_risk.duckdb`, `overview.log`. |
+| CAPTURE (whole book 90d) | `$ python src/run_operator_suites.py capture` | Whole-book membership + all-fields fundamentals path + prediction progression path. Existing on-disk data only; deterministic flags. **Output:** `briefing_pack_*/capture/` — `capture.duckdb` tables `book_asof`, `book_names`, `exits`, `fund_path`, `fund_span`, `score_path`, `score_span`, `jobs`, `coverage_fill_rates`, `ic_snapshot`, plus `capture.md`, `overview.log`. |
+| CAPTURE-REPLAY | `$ python src/run_operator_suites.py capture-replay` | Walk-forward capture job tags vs later closes on the dump. PIT = no future leak into flags; hindsight = end-of-window jobs. Any window: `--af-start` / `--af-end --rebuild`. **Output:** `CAPTURE_DIR/replay/` — `capture_replay.duckdb` tables `replay_sleeves`, `replay_tune`, `replay_first_hit`, `replay_paths`, `replay_events`, plus `capture_replay.md`, `overview.log`. |
 | FORWARD / Value | `$ python src/run_operator_suites.py value-tech --cover 1000 --forward` | Primary `val_field` / peer / tech + street/TV `fwd_*` + join latest finproj. Cover 1000, no industry cap. **Output:** `briefing_pack_*/value_tech/` — `setup.duckdb`, `setup.csv`, `overview.log`. |
 | FORWARD (street vs model) | `$ python src/run_operator_suites.py forward --cover 1000` | Street PT leftover, pack leftover, `pe_fwd`, `fp_terminal_px` / `fp_rev_cagr_own`. Empty `pe_fwd` stays empty. **Output:** `briefing_pack_*/forward_value/` — `forward_value.duckdb`, `forward_value.csv`, `overview.log`. |
 | FORWARD (run model first) | `$ python src/run_financial_projection.py --top-n 1000 && python src/run_financial_projection.py --mode price --top-n 1000` | Optional before forward join if dumps are stale. Growth default; `--mode price` = terminals. **Output:** `logs/.../financial_projection/<dd_mm_yyyy>/fingrowth_*.duckdb` and `finproj_*.duckdb` (`growth_summary` / `projection_summary`). |
@@ -74,6 +76,8 @@ PACK=$(ls -td logs/tradingview_analysis/operator_briefing/runs/briefing_pack_*/b
 $ python src/generic_utils/tv_scan_cli.py movers --recipe config/generic_utils/movers_day.json --csv us2b_tape.csv --out-dir RUN/movers
 $ python src/generic_utils/tv_scan_cli.py movers --recipe config/generic_utils/movers_3m.json --csv us2b_tape.csv --out-dir RUN/movers_3m
 $ python src/generic_utils/tv_scan_cli.py risk --run latest --pack "$PACK" --out-dir RUN/book_risk
+$ python src/generic_utils/tv_scan_cli.py capture --lookback-days 90 --pack "$PACK" --out-dir RUN/capture
+$ python src/generic_utils/tv_scan_cli.py capture-replay --capture-dir RUN/capture --out-dir RUN/capture/replay
 $ python src/generic_utils/tv_scan_cli.py setup --pack "$PACK" --sleeve us2b --forward --cover 1000 --out-dir RUN/value_tech
 $ python src/generic_utils/tv_scan_cli.py forward --pack "$PACK" --sleeve us2b --cover 1000 --out-dir RUN/forward
 $ python src/generic_utils/tv_scan_cli.py pack-focus --pack "$PACK" --sleeve sleeves.radar_curated_50 --out radar50.csv

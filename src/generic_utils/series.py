@@ -161,15 +161,39 @@ def expand_ids(ids: Iterable[str], *, also_bare: bool = False) -> list[str]:
     return out
 
 
+def bare_id(value: Any) -> str:
+    return str(value or "").strip().split(":")[-1]
+
+
+def match_wanted_id(value: Any, wanted: Sequence[str]) -> str | None:
+    """Map a stored id onto the caller's id.
+
+    Exact match wins. A bare stored ticker (older week files use ``MU``)
+    maps to the single prefixed caller id that shares that ticker
+    (``NASDAQ:MU``). Two caller listings of the same ticker do not match,
+    so a bare row is not assigned to the wrong exchange.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return None
+    wanted_list = [str(w).strip() for w in wanted if str(w).strip()]
+    if not wanted_list:
+        return text
+    if text in wanted_list:
+        return text
+    bare = bare_id(text)
+    hits = [w for w in wanted_list if bare_id(w) == bare]
+    if len(hits) == 1:
+        return hits[0]
+    return None
+
+
 def row_id_matches(row: Mapping[str, Any], wanted: Sequence[str], id_fields: Sequence[str]) -> bool:
-    wanted_set = {str(x) for x in wanted if x}
-    if not wanted_set:
+    wanted_list = [str(x) for x in wanted if x]
+    if not wanted_list:
         return True
     for field in id_fields:
-        value = str(row.get(field) or "").strip()
-        if not value:
-            continue
-        if value in wanted_set or value.split(":")[-1] in wanted_set:
+        if match_wanted_id(row.get(field), wanted_list):
             return True
     return False
 
@@ -259,7 +283,7 @@ def fetch_named(
         params.append(run_id)
     if wanted_ids and id_field:
         params.extend(wanted_ids)
-        params.extend(wanted_ids)
+        params.extend(bare_id(item) for item in wanted_ids)
     if filters and filter_field:
         params.extend(filters)
     params.extend(eq.values())
@@ -361,11 +385,18 @@ def field_history(
                 }
                 wanted = expand_ids(ids or [])
                 if wanted:
-                    rows = [
-                        r
-                        for r in rows
-                        if row_id_matches(r, wanted, (id_field or "symbol", "ticker"))
-                    ]
+                    id_key = id_field or "symbol"
+                    kept: list[dict[str, Any]] = []
+                    for raw_row in rows:
+                        canon = match_wanted_id(raw_row.get(id_key) or raw_row.get("symbol"), wanted)
+                        if not canon:
+                            continue
+                        rec = dict(raw_row)
+                        rec[id_key] = canon
+                        if "symbol" in rec:
+                            rec["symbol"] = canon
+                        kept.append(rec)
+                    rows = kept
                     spec["n"] = len(rows)
             else:
                 fetched = fetch_named(

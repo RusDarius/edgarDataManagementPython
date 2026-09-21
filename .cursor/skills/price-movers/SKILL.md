@@ -1,6 +1,6 @@
 ---
 name: price-movers
-description: Classify whether day / week / 5D / 1M (or 3M) price movers are supported by leftover, weeks scores, mix, MTP, industry participation, valuation, and peer-relative discount. Use when the user asks for movers, groovers, tape leaders/laggards, or the MOVERS copy-paste suite. Do not use for leftover radar, Top 100 unpaid, shorts overlay, or the DAILY leftover briefing.
+description: Classify whether day / week / 5D / 1M (or 3M) price movers are supported by leftover, weeks scores, mix, MTP, industry participation, valuation, and peer-relative discount. Use when the user asks for movers, groovers, tape leaders/laggards, or the MOVERS copy-paste suite. Do not use for leftover radar, Top 100 unpaid, shorts overlay, the DAILY leftover briefing, or week/month IC plans (backtest-horizon).
 ---
 
 # Price movers (supported tape)

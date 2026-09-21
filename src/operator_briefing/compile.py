@@ -145,8 +145,13 @@ def _compact_name(row: dict[str, Any]) -> dict[str, Any]:
         "bo",
         "cont",
         "fwd",
+        "early",
+        "sms",
+        "recov",
+        "rev",
         "exh",
         "frag",
+        "weeks_ras",
         "opp",
         "dte",
         "mtp",
@@ -212,6 +217,8 @@ def _merge_names(
         rec["fwd"] = _round(prof.get("forward_edge_active_v2"), 2)
         rec["early"] = _round(prof.get("early_momentum_inflection_v1"), 2)
         rec["sms"] = _round(prof.get("sustained_momentum_safety_v1"), 2)
+        rec["recov"] = _round(prof.get("value_recovery_v3"), 2)
+        rec["rev"] = _round(prof.get("upside_reversal_v1"), 2)
         rec["frag"] = _round(prof.get("fragility_short"), 2)
         rec["exh"] = _round(prof.get("mean_reversion_exhaustion_v1"), 2)
         conv = conviction.get(symbol) or {}

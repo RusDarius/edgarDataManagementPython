@@ -83,8 +83,10 @@ Table: `profile_horizon_scores`. Daily pack uses **weeks**.
 | `bo` | `breakout_long_v1` | Confirmed upside continuation (tape; quality/valuation ~0 on weeks) |
 | `cont` | `quality_continuation_v1` | Continuation **with** operating quality |
 | `fwd` | `forward_edge_active_v2` | Quality/earnings improvement before it is fully priced |
-| `early` | `early_momentum_inflection_v1` | Early turn |
+| `early` | `early_momentum_inflection_v1` | Early turn (coiled → first expansion) |
 | `sms` | `sustained_momentum_safety_v1` | Stay-long safety |
+| `recov` | `value_recovery_v3` | Quality + cheap + repair from a depressed base |
+| `rev` | `upside_reversal_v1` | Tactical pullback-to-bounce (not a turnaround) |
 | `frag` | `fragility_short` | Fragile / short-lean structure |
 | `exh` | `mean_reversion_exhaustion_v1` | Exhausted move |
 
@@ -96,6 +98,9 @@ differ by profile **and** by horizon (days / weeks / months / years).
 JSON source of truth: `config/move_prediction_profiles/profiles/*.json`.
 
 `profile_live` (sleeve) = any of bo/cont/fwd ≥ 0.35.
+`early` / `sms` / `recov` / `rev` stay on the compact name row for lookup
+and backtests. They are **not** the Build-50 sort key until a generic IC
+run says they discriminate 20–60d. Do not average them into leftover.
 
 **Compare** (`example_entry.py compare --session`) is Δbo / Δcont / Δfwd vs
 the prior **calendar** pred run, not leftover and not intra-day OTC noise.
@@ -323,6 +328,28 @@ Paid continuation (RSI ≥ 70, leftover gone, rng ≥ 85) = CHASE, do not add.
 | Order the 50 names to build on | 7 |
 | Named course + support | 8 |
 | Size, timing, High/Med/Low | 9 |
+
+## Backtest evidence (generic, not a new layer)
+
+Generic runner: `src/backtests/` / `python src/run_backtests.py`.
+Agent join: `.cursor/skills/backtest-horizon/SKILL.md` — rank `family_metrics.csv`
+with `rank_cli.py`, then apply to the current pack. Prefer **IC + day_count**
+over Top20Lift.
+
+On the Jun–Aug 2026 default_v1 window (`backtests_20260911_1050_utc_295c09eb`):
+
+- Layer 3 artifact edge scores (opp / magnitude / opportunity) had the **highest
+  10–20d IC**, on a **thin** calendar (edge parents only the last ~26 days).
+- Layer 2 weeks consensus RAS had **modest IC** and a fuller sample — keep it
+  in the Build-50 sort; do not leftover-rank by conviction.
+- Layer 4 MTP **artifact scores rank** 10–20d returns, but using MTP as a
+  **filter/weight on leftover picks** (`timing_filter` / `timing_weight`)
+  **cuts IC**. Climate, not a buy list — already the overlay rule.
+- Reconstructing missing edge/timing is worse than leaving the gap.
+- All-fields ATRP/ADRP Top20Lift is outlier noise (negative IC).
+- Financial-projection filters are not ready (growth 4/62 days, price 2/62).
+
+Horizon canvas: `horizon-plan-YYYYMMDD`. Do not add a layer 10 composite.
 
 ## Forbidden shortcuts
 

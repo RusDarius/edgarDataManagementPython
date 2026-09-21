@@ -3,7 +3,7 @@
 Replaces ad-hoc agent SQL / `_tmp_*.py`. No eligibility cutoffs.
 Subcommands: recipes, inventory, summary, group, histogram, counts,
 overlap, fetch, named, history, span, weight-group, join, derive, focus,
-pack-focus, movers, setup, forward, risk, export.
+pack-focus, movers, setup, forward, risk, capture, capture-replay, export.
 Rank-only (no --where): rank_cli.py.
 All-suite manual runner: src/run_operator_suites.py
 """
@@ -930,6 +930,197 @@ def _cmd_risk(args: argparse.Namespace) -> dict[str, Any]:
     return out_payload
 
 
+def _cmd_capture(args: argparse.Namespace) -> dict[str, Any]:
+    from generic_utils.capture import (
+        build_capture_dump,
+        default_capture_out_dir,
+        format_capture_md,
+        load_capture_recipe,
+    )
+    from generic_utils.run_export import write_run_export
+    from generic_utils.scan_sources import rows_to_csv
+
+    recipe = load_capture_recipe(args.recipe)
+    pack_path = args.pack
+    if not pack_path:
+        try:
+            from operator_briefing.discovery import latest_briefing_pack_path
+
+            found = latest_briefing_pack_path()
+            pack_path = str(found) if found else None
+        except Exception:
+            pack_path = None
+
+    payload = build_capture_dump(
+        recipe=recipe,
+        lookback_days=args.lookback_days,
+        af_start=args.af_start,
+        af_end=args.af_end,
+        pack_path=pack_path,
+        holdings_runs_root=args.holdings_runs_root,
+        all_fields_root=args.all_fields_root,
+        prediction_root=args.prediction_root,
+    )
+    spec = dict(payload.get("spec") or {})
+    summary = dict(payload.get("summary") or {})
+    notes = list(payload.get("notes") or [])
+    if not args.out_dir:
+        args.out_dir = default_capture_out_dir().as_posix()
+        notes.append("defaulted --out-dir")
+    out_payload: dict[str, Any] = {
+        "spec": spec,
+        "summary": summary,
+        "jobs": payload.get("jobs") if args.include_rows else [],
+    }
+    if args.out:
+        out_payload["out"] = rows_to_csv(
+            args.out, [dict(r) for r in (payload.get("jobs") or [])]
+        ).as_posix()
+    if args.out_dir:
+        exported = write_run_export(
+            args.out_dir,
+            tool="tv_scan_cli.capture",
+            tables={
+                "book_asof": payload.get("book_asof") or [],
+                "book_names": payload.get("book_names") or [],
+                "exits": payload.get("exits") or [],
+                "fund_path": payload.get("fund_path") or [],
+                "fund_span": payload.get("fund_span") or [],
+                "score_path": payload.get("score_path") or [],
+                "score_span": payload.get("score_span") or [],
+                "jobs": payload.get("jobs") or [],
+                "coverage_fill_rates": payload.get("coverage_fill_rates") or [],
+                "ic_snapshot": payload.get("ic_snapshot") or [],
+                "fund_snapshots": payload.get("fund_snapshots") or [],
+                "score_snapshots": payload.get("score_snapshots") or [],
+            },
+            sources={
+                "recipe": str(args.recipe),
+                "pack": pack_path,
+                "holdings_runs_root": args.holdings_runs_root,
+                "all_fields_root": args.all_fields_root,
+                "prediction_root": args.prediction_root,
+            },
+            schema_version="capture_v1",
+            notes=notes,
+            extra={
+                "lookback_days": spec.get("lookback_days") or args.lookback_days,
+                "window_start": summary.get("window_start"),
+                "window_end": summary.get("window_end"),
+                "n_symbols": summary.get("n_symbols"),
+                "n_exits": summary.get("n_exits"),
+            },
+            duckdb_name="capture.duckdb",
+        )
+        md_path = Path(args.out_dir) / "capture.md"
+        md_path.write_text(format_capture_md(payload), encoding="utf-8")
+        exported["md"] = md_path.as_posix()
+        out_payload["export"] = exported
+    if not getattr(args, "quiet", False):
+        print(_dumps(out_payload))
+    return out_payload
+
+
+def _cmd_capture_replay(args: argparse.Namespace) -> dict[str, Any]:
+    from generic_utils.capture import (
+        build_capture_dump,
+        build_capture_replay,
+        format_capture_replay_md,
+        latest_capture_dir,
+        load_capture_dump,
+        load_capture_recipe,
+    )
+    from generic_utils.run_export import write_run_export
+
+    recipe = load_capture_recipe(args.recipe)
+    capture_dir = Path(args.capture_dir) if args.capture_dir else None
+    dump: dict[str, Any] | None = None
+    notes: list[str] = []
+    rebuild = bool(getattr(args, "rebuild", False) or args.af_start or args.af_end)
+    if capture_dir and (capture_dir / "fund_path.csv").exists() and not rebuild:
+        dump = load_capture_dump(capture_dir)
+        notes.append(f"loaded dump {capture_dir.as_posix()}")
+    elif not rebuild:
+        found = latest_capture_dir()
+        if found is not None:
+            capture_dir = found
+            dump = load_capture_dump(found)
+            notes.append(f"loaded latest dump {found.as_posix()}")
+    if dump is None:
+        pack_path = args.pack
+        if not pack_path:
+            try:
+                from operator_briefing.discovery import latest_briefing_pack_path
+
+                found_pack = latest_briefing_pack_path()
+                pack_path = str(found_pack) if found_pack else None
+            except Exception:
+                pack_path = None
+        dump = build_capture_dump(
+            recipe=recipe,
+            lookback_days=args.lookback_days,
+            af_start=args.af_start,
+            af_end=args.af_end,
+            pack_path=pack_path,
+        )
+        notes.append("built capture dump then replayed")
+        if capture_dir is None:
+            from generic_utils.capture import default_capture_out_dir
+
+            capture_dir = default_capture_out_dir()
+    horizons = None
+    if args.horizons:
+        horizons = [int(item.strip()) for item in str(args.horizons).split(",") if item.strip()]
+    payload = build_capture_replay(dump, recipe=recipe, horizons=horizons)
+    spec = dict(payload.get("spec") or {})
+    summary = dict(payload.get("summary") or {})
+    notes.extend(payload.get("notes") or [])
+    if not args.out_dir:
+        base = capture_dir or latest_capture_dir()
+        args.out_dir = ((base / "replay") if base else Path("logs") / "capture_replay").as_posix()
+        notes.append("defaulted --out-dir to dump/replay")
+    out_payload: dict[str, Any] = {
+        "spec": spec,
+        "summary": summary,
+        "replay_sleeves": payload.get("replay_sleeves") if args.include_rows else [],
+        "replay_tune": payload.get("replay_tune") if args.include_rows else [],
+    }
+    if args.out_dir:
+        exported = write_run_export(
+            args.out_dir,
+            tool="tv_scan_cli.capture_replay",
+            tables={
+                "replay_sleeves": payload.get("replay_sleeves") or [],
+                "replay_tune": payload.get("replay_tune") or [],
+                "replay_first_hit": payload.get("replay_first_hit") or [],
+                "replay_paths": payload.get("replay_paths") or [],
+                "replay_events": payload.get("replay_events") or [],
+            },
+            sources={
+                "recipe": str(args.recipe),
+                "capture_dir": spec.get("capture_dir") or (capture_dir.as_posix() if capture_dir else None),
+                "pack": args.pack,
+            },
+            schema_version="capture_replay_v1",
+            notes=notes,
+            extra={
+                "n_events": summary.get("n_events"),
+                "n_symbols": summary.get("n_symbols"),
+                "horizons": summary.get("horizons"),
+                "window_start": summary.get("window_start"),
+                "window_end": summary.get("window_end"),
+            },
+            duckdb_name="capture_replay.duckdb",
+        )
+        md_path = Path(args.out_dir) / "capture_replay.md"
+        md_path.write_text(format_capture_replay_md(payload), encoding="utf-8")
+        exported["md"] = md_path.as_posix()
+        out_payload["export"] = exported
+    if not getattr(args, "quiet", False):
+        print(_dumps(out_payload))
+    return out_payload
+
+
 def _cmd_export(args: argparse.Namespace) -> dict[str, Any]:
     from generic_utils.run_export import parse_table_specs, write_run_export
 
@@ -1270,6 +1461,57 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     risk_p.add_argument("--include-rows", action="store_true")
     risk_p.add_argument("--quiet", action="store_true")
     risk_p.set_defaults(func=_cmd_risk)
+
+    cap_p = sub.add_parser(
+        "capture",
+        help="Whole-book capture path: holdings membership + fundamentals + prediction progression.",
+    )
+    cap_p.add_argument("--pack", default=None, help="briefing_pack.json (optional join layer).")
+    cap_p.add_argument("--recipe", default="config/generic_utils/capture.json")
+    cap_p.add_argument("--lookback-days", type=int, default=None)
+    cap_p.add_argument(
+        "--af-start",
+        default=None,
+        help="Window start day label (DD_MM_YYYY or YYYY-MM-DD).",
+    )
+    cap_p.add_argument(
+        "--af-end",
+        default=None,
+        help="Window end day label (DD_MM_YYYY or YYYY-MM-DD).",
+    )
+    cap_p.add_argument("--holdings-runs-root", default=None)
+    cap_p.add_argument("--all-fields-root", default=None)
+    cap_p.add_argument("--prediction-root", default=None)
+    cap_p.add_argument("--out", default=None, help="Optional jobs CSV path.")
+    cap_p.add_argument(
+        "--out-dir",
+        default=None,
+        help="Run folder with capture.duckdb + CSV tables + capture.md + overview.log.",
+    )
+    cap_p.add_argument("--include-rows", action="store_true")
+    cap_p.add_argument("--quiet", action="store_true")
+    cap_p.set_defaults(func=_cmd_capture)
+
+    capr_p = sub.add_parser(
+        "capture-replay",
+        help="Walk-forward replay of capture job tags vs later closes on an existing dump (or rebuild a window).",
+    )
+    capr_p.add_argument("--capture-dir", default=None, help="Existing capture dump folder (default: latest).")
+    capr_p.add_argument("--pack", default=None)
+    capr_p.add_argument("--recipe", default="config/generic_utils/capture.json")
+    capr_p.add_argument("--lookback-days", type=int, default=None)
+    capr_p.add_argument("--af-start", default=None)
+    capr_p.add_argument("--af-end", default=None)
+    capr_p.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="Rebuild the capture dump before replaying (needed for a new window).",
+    )
+    capr_p.add_argument("--horizons", default=None, help="Comma steps along fund_path (default 5,10,21,60).")
+    capr_p.add_argument("--out-dir", default=None, help="Default: CAPTURE_DIR/replay")
+    capr_p.add_argument("--include-rows", action="store_true")
+    capr_p.add_argument("--quiet", action="store_true")
+    capr_p.set_defaults(func=_cmd_capture_replay)
 
     exp_p = sub.add_parser(
         "export",

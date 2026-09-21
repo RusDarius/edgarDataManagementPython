@@ -1,6 +1,6 @@
 ---
 name: canvas-ledger
-description: Requires operator canvases to include exactly one Ledger menu that explains all abbreviations and symbols used anywhere on that canvas. Use when writing or editing daily-focus, movers-YYYYMMDD, movers-3m, book-risk, or other .canvas.tsx briefings, or when the user mentions rng, rr, leftover, glossary, abbreviations, or ledger.
+description: Requires operator canvases to include exactly one Ledger menu that explains every abbreviation and, for coded columns, every allowed value. Use when writing or editing daily-focus, movers, book-risk, playbook, horizon-plan, or other .canvas.tsx briefings, or when the user mentions rng, rr, leftover, mesh, glossary, abbreviations, or ledger.
 ---
 
 # Canvas ledger
@@ -12,8 +12,27 @@ Every operator canvas must be readable without the chat. Abbreviations are not o
 1. **Exactly one menu named Ledger** (a top-level tab / pill, not a footnote). It lists **every** abbreviation, ticker-status word, and symbol used anywhere on that canvas — tape, value, actions, events, sources.
 2. **Do not repeat ledgers on other sections.** Plan, Book, Radar, Value, and the rest stay data. Duplicating Abbr. / Meaning tables on every tab is a defect.
 3. If a new abbreviation is introduced in any section, add it to the **one** Ledger menu in the same edit. Do not add a local glossary to that section.
+4. **A code is not explained until its values are.** Any column whose cells are abbreviations, letters, or a string of letters needs, on that one Ledger:
+   - the **field**: what the cell is, the allowed character set, the order letters are written, and the empty value
+   - **one row per value** that can appear, with the rule that turns it on and what absence of that value means
+5. A count or filter built from a code (`nmesh`, `Mesh 3+`) is its own row: it is the number of letters in that field, and the filter threshold is stated. It is not a 0–100 score.
+6. "The letters above", "see the header", and "same as the other canvas" are defects. Other tabs do not restate the code key. A header may name the column and point at Ledger. The definition lives only on Ledger.
 
 Do not skip Ledger because "the operator already knows rr". Do not paste a short ledger at the top of each tab.
+
+## Coded fields (Mesh is the pattern)
+
+`Mesh` is a string of letters, not a score. Copy this shape when a canvas invents a similar column. Do not invent a second on/off rule for these letters.
+
+| Field or value | Meaning |
+|---|---|
+| Mesh | Letters written in order `F` `C` `P` `D` `T`, only the ones that are on. Example `FCPD` means F, C, P, and D are on and T is off. `-` means none of the five are on. |
+| F | On: pack forming sleeve, or weeks `early` ≥ 0.4 with `rng` under 55. Off: neither. |
+| C | On: earnings `dte` ≤ 45. Off: no print inside 45 days, or `dte` missing. |
+| P | On: 25-week `Δbo` ≥ 0.15 and at least 8 weeks in the span. Off: breakout flat, down, or too few weeks. |
+| D | On: Peer is `DISCOUNT`. Off: `PREMIUM`, `THIN`, `NA`, or no peer. |
+| T | On: `tech_sma` is `ABOVE` and `rng` < 85. Off: below the 50-day, or range already paid. |
+| nmesh / Mesh 3+ | Count of letters in `Mesh` (0–5). `Mesh 3+` is the filter `nmesh` ≥ 3. |
 
 ## Standing meanings (copy these; do not invent a second definition)
 

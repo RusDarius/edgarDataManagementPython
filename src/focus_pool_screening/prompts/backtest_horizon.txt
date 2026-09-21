@@ -1,0 +1,31 @@
+HORIZON — BACKTEST × CURRENT PACK
+=================================
+Do not attach this file on DAILY (full), MOVERS, or RISK.
+Do not attach daily_generic.txt.
+
+This suite turns the generic backtest IC tables into week/month
+position choices on the locked briefing pack. It is not a leftover
+radar, not a tape 25, and not NAV ladders.
+
+@.cursor/skills/backtest-horizon/SKILL.md
+@.cursor/skills/generic-ranking/SKILL.md
+@.cursor/skills/scan-evidence/SKILL.md
+
+inspect; compile only if pack sources differ (pred / all-fields / edge /
+holdings / MTP). Prefer the newest `backtests_*/family_metrics.csv`.
+Rank IC with rank_cli (group by family, cap 3). Do not SQL the 15 GB
+signal_rows.csv. Do not write logs/_tmp_*.py.
+
+What to produce (canvas first; chat is a short snapshot):
+  1. Evidence — IC / day_count / coverage by family. Prefer IC over Top20Lift.
+  2. Overlays — timing_filter / timing_weight vs picks_only. MTP is climate.
+  3. Scan join — Build-50 + Book + compare --session on the capital names.
+     Trust artifact edge + live weeks leftover. Do not reconstruct missing
+     edge. Do not gate leftover names on ENTER_SMALL.
+  4. Best moves — this week / 8–21d / 22–60d. Budget 0–2 NEW, 0–2 ADD.
+     Polar ADD/NEW cannot become EXIT unless thesis_kill.
+  5. Follow-up — coverage gaps, persist, next window. Not a second Daily.
+
+Canvas horizon-plan-YYYYMMDD. One Ledger tab.
+Quote pack suggested_conviction (support 0.15–0.90), then High/Med/Low
+after conflicts. Spec: src/generic_utils/specs/scoring_layer_order.md

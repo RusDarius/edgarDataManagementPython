@@ -10,6 +10,7 @@ No RSI/leftover/mcap filters live here.
 
 - Schema, histograms, leftover formulas, named SQL, FOCUS CSV → `.cursor/skills/tv-dataset-analysis/SKILL.md`
 - Book / sleeves / polar / earnings → `.cursor/skills/daily-operator-scan/SKILL.md`
+- Backtest `family_metrics.csv` by IC → `.cursor/skills/backtest-horizon/SKILL.md` (same CLI, `--field spearman_ic`)
 
 Filter then rank: `tv_scan_cli.py focus --where ...` (same engine). This CLI is rank-only.
 

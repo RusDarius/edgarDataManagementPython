@@ -1,6 +1,6 @@
 ---
 name: daily-operator-scan
-description: Compile and brief the daily active-manager leftover scan (Book, Build-50 ranking, Top 100 unpaid appendix, shorts overlay, earnings lanes, daily-focus canvas). Use when the user asks for a daily focus, operator briefing, leftover radar, or Top 100 unpaid scan. Do not use for price movers, groovers, or tape-leader scans — that is price-movers.
+description: Compile and brief the daily active-manager leftover scan (Book, Build-50 ranking, Top 100 unpaid appendix, shorts overlay, earnings lanes, daily-focus canvas). Use when the user asks for a daily focus, operator briefing, leftover radar, or Top 100 unpaid scan. Do not use for price movers, groovers, or tape-leader scans — that is price-movers. Do not use for week/month IC plans — that is backtest-horizon.
 ---
 
 # Daily operator scan

@@ -593,8 +593,15 @@ class TestRecipesAndCli(unittest.TestCase):
         sql, params = render_recipe(
             "pred.profile_weeks_pivot", run_id="move_prediction_demo"
         )
-        self.assertIn("breakout_long_v1", sql)
+        self.assertIn("IN ('breakout_long_v1', 'breakout_long')", sql)
         self.assertEqual(params, ["move_prediction_demo"])
+
+    def test_bare_ticker_maps_to_single_prefixed_id(self):
+        from generic_utils.series import match_wanted_id
+
+        self.assertEqual(match_wanted_id("MU", ["NASDAQ:MU", "NYSE:UNH"]), "NASDAQ:MU")
+        self.assertEqual(match_wanted_id("NASDAQ:MU", ["NASDAQ:MU"]), "NASDAQ:MU")
+        self.assertIsNone(match_wanted_id("MU", ["NASDAQ:MU", "NYSE:MU"]))
 
     def test_tape_returns_recipe_aliases_horizons(self):
         from generic_utils.recipes import render_recipe

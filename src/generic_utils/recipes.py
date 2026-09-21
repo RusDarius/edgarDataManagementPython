@@ -56,20 +56,22 @@ RECIPES: dict[str, dict[str, Any]] = {
     "pred.profile_weeks_pivot": {
         "sql": """
             SELECT symbol,
-                   max(CASE WHEN profile_name = 'breakout_long_v1' THEN score END) AS bo,
-                   max(CASE WHEN profile_name = 'quality_continuation_v1' THEN score END) AS cont,
-                   max(CASE WHEN profile_name = 'forward_edge_active_v2' THEN score END) AS fwd,
-                   max(CASE WHEN profile_name = 'early_momentum_inflection_v1' THEN score END) AS early,
-                   max(CASE WHEN profile_name = 'sustained_momentum_safety_v1' THEN score END) AS sms,
-                   max(CASE WHEN profile_name = 'fragility_short' THEN score END) AS frag,
-                   max(CASE WHEN profile_name = 'mean_reversion_exhaustion_v1' THEN score END) AS exh
+                   max(CASE WHEN profile_name IN ('breakout_long_v1', 'breakout_long') THEN score END) AS bo,
+                   max(CASE WHEN profile_name IN ('quality_continuation_v1', 'quality_continuation') THEN score END) AS cont,
+                   max(CASE WHEN profile_name IN ('forward_edge_active_v2', 'forward_edge_active') THEN score END) AS fwd,
+                   max(CASE WHEN profile_name IN ('early_momentum_inflection_v1', 'early_momentum_inflection') THEN score END) AS early,
+                   max(CASE WHEN profile_name IN ('sustained_momentum_safety_v1', 'sustained_momentum_safety') THEN score END) AS sms,
+                   max(CASE WHEN profile_name IN ('value_recovery_v3', 'value_recovery') THEN score END) AS recov,
+                   max(CASE WHEN profile_name IN ('upside_reversal_v1', 'upside_reversal') THEN score END) AS rev,
+                   max(CASE WHEN profile_name IN ('fragility_short', 'fragility_short_v1') THEN score END) AS frag,
+                   max(CASE WHEN profile_name IN ('mean_reversion_exhaustion_v1', 'mean_reversion_exhaustion') THEN score END) AS exh
             FROM profile_horizon_scores
             WHERE run_id = ?
               AND horizon_name = 'weeks'
             GROUP BY 1
         """,
         "params": ["run_id"],
-        "notes": "The bo/cont/fwd join the briefing pack uses. Compare is weeks profile deltas, not leftover.",
+        "notes": "Weeks profile pivot. Matches versioned names (breakout_long_v1) and the unversioned stems used in older week files (breakout_long). Build-50 still sorts on bo/cont/fwd live. Compare is still Δbo/Δcont/Δfwd.",
     },
     "pred.conviction": {
         "sql": """
