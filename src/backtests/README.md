@@ -85,8 +85,18 @@ Operator join (week/month plan on the current pack, not a second Daily):
 python src/generic_utils/rank_cli.py --csv logs/tradingview_analysis/backtests/runs/<run_id>/family_metrics.csv --field spearman_ic --top 16 --id-field signal_name --group-field family --cap 3
 ```
 
-Standing spec: `src/focus_pool_screening/prompts/backtest_horizon.txt`.
+Standing spec: `src/research_prompt/backtest_horizon.txt`.
 Skill: `.cursor/skills/backtest-horizon/SKILL.md`. Canvas: `horizon-plan-YYYYMMDD`.
+
+Briefing top-100 review is a different command. It scores the published
+upside list against later pack closes and writes a KEEP / CHANGE matrix.
+It can attach an existing `family_metrics.csv`. It does not rerun this package.
+
+```powershell
+python src/run_decision_review.py
+```
+
+Skill: `.cursor/skills/decision-review/SKILL.md`.
 
 ## Data assumptions
 

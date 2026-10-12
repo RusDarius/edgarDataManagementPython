@@ -25,6 +25,12 @@ from data_analysis_scripts.trading_view_all_fields_metric_pattern_analyzer impor
 from data_analysis_scripts.trading_view_regime_context_overlay import (
     load_regime_context_config,
 )
+from generic_utils.symbol_identity import (
+    SymbolCatalog,
+    bare_symbol,
+    lookup_mapping,
+    parse_symbol,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -58,29 +64,68 @@ DEFAULT_REGIME_SECTION_HEADERS: dict[str, str] = {
     "playbook_a": "PLAYBOOK A TACTICAL",
 }
 
-PREFERRED_EXCHANGE_PREFIXES: tuple[str, ...] = (
-    "NASDAQ",
-    "NYSE",
-    "OMXSTO",
-    "LSE",
-    "XETR",
-    "EURONEXT",
-    "SIX",
-    "OMXHEX",
-    "TSX",
-    "AMEX",
-    "BATS",
-    "OTC",
-    "NEWCONNECT",
-    "BME",
-    "VIE",
-    "GPW",
-    "BVB",
-)
-
-
 def _normalize_symbol(symbol: str) -> str:
-    return symbol.split(":", 1)[-1].strip().upper()
+    return bare_symbol(symbol)
+
+
+def _normalize_requested_symbol(symbol: str) -> str:
+    return parse_symbol(symbol).normalized
+
+
+def _symbol_filter_sql(column: str, requested_symbols: Sequence[str]) -> str:
+    clauses: list[str] = []
+    for requested in requested_symbols:
+        identity = parse_symbol(requested)
+        if not identity.normalized:
+            continue
+        normalized = _quote_sql_literal(identity.normalized)
+        if identity.qualified:
+            bare = _quote_sql_literal(identity.ticker)
+            clauses.append(
+                f"(UPPER({column}) = {normalized} OR UPPER({column}) = {bare})"
+            )
+        else:
+            clauses.append(
+                f"(UPPER({column}) = {normalized} "
+                f"OR split_part(UPPER({column}), ':', 2) = {normalized})"
+            )
+    return "(" + " OR ".join(clauses) + ")" if clauses else "FALSE"
+
+
+def _resolve_requested_symbols(
+    rows: Sequence[Mapping[str, Any]],
+    requested_symbols: Sequence[str],
+) -> dict[str, str]:
+    available = [str(row.get("symbol") or "") for row in rows]
+    catalog = SymbolCatalog.build(available)
+    resolved: dict[str, str] = {}
+    for requested in requested_symbols:
+        matched, _, _ = catalog.resolve(requested)
+        if matched is not None:
+            resolved[requested] = matched
+    return resolved
+
+
+def _select_rows_for_requests(
+    rows: Sequence[Mapping[str, Any]],
+    requested_symbols: Sequence[str],
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    resolved = _resolve_requested_symbols(rows, requested_symbols)
+    matched_symbols = {parse_symbol(symbol).normalized for symbol in resolved.values()}
+    selected = [
+        dict(row)
+        for row in rows
+        if parse_symbol(row.get("symbol")).normalized in matched_symbols
+    ]
+    return selected, resolved
+
+
+def _lookup_symbol_mapping(
+    mapping: Mapping[str, Any],
+    requested: str,
+    catalog: SymbolCatalog | None = None,
+) -> Any | None:
+    return lookup_mapping(mapping, requested, catalog)
 
 
 def parse_regime_context_log_section(
@@ -120,7 +165,7 @@ def parse_regime_context_log_section(
             continue
         rows.append(
             {
-                "symbol": _normalize_symbol(match.group("symbol")),
+                "symbol": _normalize_requested_symbol(match.group("symbol")),
                 "regime_fit_score": float(match.group("regfit")),
                 "current_atrp_1w": float(match.group("atrp")),
                 "current_relative_volume": float(match.group("relvol")),
@@ -138,43 +183,6 @@ def _resolve_daily_db_for_day(
         if _extract_day_label_from_database_path(candidate) == normalized:
             return candidate
     return None
-
-
-def _exchange_prefix(symbol: str) -> str:
-    if ":" in symbol:
-        return symbol.split(":", 1)[0].upper()
-    return ""
-
-
-def _dedupe_period_rows_by_bare_symbol(
-    rows: Sequence[Mapping[str, Any]],
-    *,
-    preferred_exchanges: Sequence[str] = PREFERRED_EXCHANGE_PREFIXES,
-) -> list[dict[str, Any]]:
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    for row in rows:
-        symbol = str(row.get("symbol") or "")
-        bare_symbol = _normalize_symbol(symbol)
-        grouped.setdefault(bare_symbol, []).append(dict(row))
-
-    deduped: list[dict[str, Any]] = []
-    for bare_symbol in sorted(grouped):
-        candidates = grouped[bare_symbol]
-        if len(candidates) == 1:
-            deduped.append(candidates[0])
-            continue
-
-        def rank(candidate: Mapping[str, Any]) -> tuple[int, float]:
-            prefix = _exchange_prefix(str(candidate.get("symbol") or ""))
-            try:
-                exchange_rank = preferred_exchanges.index(prefix)
-            except ValueError:
-                exchange_rank = len(preferred_exchanges)
-            period_return = _coerce_float(candidate.get("period_return_pct"))
-            return (exchange_rank, -(period_return or -9999.0))
-
-        deduped.append(min(candidates, key=rank))
-    return deduped
 
 
 def _fetch_dict_rows(conn: Any, sql: str) -> list[dict[str, Any]]:
@@ -329,7 +337,7 @@ def run_scan_period_ticker_watchlist_analysis(
         )
 
     normalized_tickers = [
-        _normalize_symbol(symbol)
+        _normalize_requested_symbol(symbol)
         for symbol in (tickers or [])
         if str(symbol).strip()
     ]
@@ -384,11 +392,7 @@ def run_scan_period_ticker_watchlist_analysis(
     )
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
 
-    ticker_literals = ", ".join(_quote_sql_literal(symbol) for symbol in normalized_tickers)
-    symbol_filter_sql = (
-        f"(e.symbol IN ({ticker_literals}) "
-        f"OR split_part(e.symbol, ':', 2) IN ({ticker_literals}))"
-    )
+    symbol_filter_sql = _symbol_filter_sql("e.symbol", normalized_tickers)
     predictor_select_parts = [
         f"TRY_CAST(e.{_quote_identifier(field)} AS DOUBLE) AS {_quote_identifier(field.replace('|', '_').replace('.', '_'))}"
         for field in WATCHLIST_PREDICTOR_FIELDS
@@ -416,7 +420,7 @@ def run_scan_period_ticker_watchlist_analysis(
             """
         ).fetchone()[0]
 
-        period_rows = _fetch_dict_rows(
+        period_candidate_rows = _fetch_dict_rows(
             conn,
             f"""
             SELECT e.symbol,
@@ -430,7 +434,10 @@ def run_scan_period_ticker_watchlist_analysis(
             ORDER BY p.period_return_pct DESC NULLS LAST, e.symbol
             """,
         )
-        period_rows = _dedupe_period_rows_by_bare_symbol(period_rows)
+        period_rows, period_resolutions = _select_rows_for_requests(
+            period_candidate_rows,
+            normalized_tickers,
+        )
 
         progression_rows: list[dict[str, Any]] = []
         progression_stats: dict[str, dict[str, Any]] = {}
@@ -444,8 +451,7 @@ def run_scan_period_ticker_watchlist_analysis(
                     close_price,
                     cumulative_return_from_start_pct
                 FROM prog.period_symbol_progression
-                WHERE symbol IN ({ticker_literals})
-                   OR split_part(symbol, ':', 2) IN ({ticker_literals})
+                WHERE {_symbol_filter_sql("symbol", normalized_tickers)}
                 ORDER BY source_day_label, symbol
                 """,
             )
@@ -458,17 +464,22 @@ def run_scan_period_ticker_watchlist_analysis(
                     close_price,
                     cumulative_return_from_start_pct
                 FROM read_parquet({_quote_path_literal(progression_parquet_path)})
-                WHERE symbol IN ({ticker_literals})
-                   OR split_part(symbol, ':', 2) IN ({ticker_literals})
+                WHERE {_symbol_filter_sql("symbol", normalized_tickers)}
                 ORDER BY source_day_label, symbol
                 """,
             )
 
-        for symbol in normalized_tickers:
+        progression_rows, _ = _select_rows_for_requests(
+            progression_rows,
+            normalized_tickers,
+        )
+        for symbol in sorted(
+            {str(row.get("symbol") or "") for row in progression_rows}
+        ):
             symbol_rows = [
                 row
                 for row in progression_rows
-                if _normalize_symbol(str(row.get("symbol") or "")) == symbol
+                if str(row.get("symbol") or "") == symbol
                 and row.get("cumulative_return_from_start_pct") is not None
             ]
             if not symbol_rows:
@@ -518,20 +529,34 @@ def run_scan_period_ticker_watchlist_analysis(
                     {_quote_sql_literal(day_label)} AS snapshot_day_label,
                     {", ".join(select_parts)}
                 FROM {_quote_identifier(alias)}.all_fields_rows
-                WHERE symbol IN ({ticker_literals})
-                   OR split_part(symbol, ':', 2) IN ({ticker_literals})
+                WHERE {_symbol_filter_sql("symbol", normalized_tickers)}
                 """,
                 )
             )
+        snapshot_rows, _ = _select_rows_for_requests(
+            snapshot_rows,
+            normalized_tickers,
+        )
     finally:
         conn.close()
 
     summary_rows: list[dict[str, Any]] = []
+    regime_catalog = (
+        SymbolCatalog.build(regime_by_symbol) if regime_by_symbol else None
+    )
+    progression_catalog = (
+        SymbolCatalog.build(progression_stats) if progression_stats else None
+    )
     for row in period_rows:
         symbol = str(row.get("symbol") or "")
         bare_symbol = _normalize_symbol(symbol)
-        regime_meta = regime_by_symbol.get(bare_symbol, {})
-        prog = progression_stats.get(symbol) or progression_stats.get(bare_symbol, {})
+        regime_meta = (
+            _lookup_symbol_mapping(regime_by_symbol, symbol, regime_catalog) or {}
+        )
+        prog = (
+            _lookup_symbol_mapping(progression_stats, symbol, progression_catalog)
+            or {}
+        )
         warning_count = 0
         for field in WATCHLIST_PREDICTOR_FIELDS:
             col_alias = field.replace("|", "_").replace(".", "_")
@@ -652,8 +677,7 @@ def run_scan_period_ticker_watchlist_analysis(
             f"warn={row.get('warning_predictor_count', 0)}{flag_suffix}"
         )
     unmatched = sorted(
-        set(normalized_tickers)
-        - {_normalize_symbol(str(row["symbol"])) for row in summary_rows}
+        set(normalized_tickers) - set(period_resolutions)
     )
     if unmatched:
         log_lines.extend(["", "UNMATCHED SYMBOLS (not in period universe)", "-" * 120])

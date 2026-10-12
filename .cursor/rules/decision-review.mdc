@@ -1,0 +1,14 @@
+---
+description: Briefing top-100 rank review versus later closes (KEEP or CHANGE matrix). Not Daily, not Movers, and not a backtest rerun.
+alwaysApply: false
+---
+
+# Decision review
+
+When the user asks how briefing rankings or decisions captured later returns, or what should change:
+
+1. Read `.cursor/skills/decision-review/SKILL.md`.
+2. Run `python src/run_decision_review.py` and read `highlights.log`.
+3. Name rows stay in `decision_review.duckdb` table `ranks`. Do not paste the top 100 into chat.
+4. Do not rerun `python src/run_backtests.py` for this review. `family_metrics.csv` is support only.
+5. KEEP / CHANGE is not a 0-100 and does not replace the Daily budget.

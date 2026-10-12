@@ -122,6 +122,18 @@ def _round(value: Any, digits: int = 2) -> float | None:
     return round(number, digits)
 
 
+_RELATIVE_KEYS: tuple[str, ...] | None = None
+
+
+def _relative_keys() -> tuple[str, ...]:
+    global _RELATIVE_KEYS
+    if _RELATIVE_KEYS is None:
+        from generic_utils.setup import recipe_relative_columns
+
+        _RELATIVE_KEYS = tuple(recipe_relative_columns())
+    return _RELATIVE_KEYS
+
+
 def _compact_name(row: dict[str, Any]) -> dict[str, Any]:
     keys = (
         "symbol",
@@ -181,19 +193,35 @@ def _compact_name(row: dict[str, Any]) -> dict[str, Any]:
         "val",
         "val_vs_ind",
         "val_ind_med",
+        "val_vs_avg",
+        "val_ind_avg",
         "val_n",
         "val_family",
         "eff_field",
         "eff_label",
         "eff",
         "eff_vs_ind",
+        "eff_ind_med",
+        "eff_vs_avg",
+        "eff_ind_avg",
         "peer",
         "tech_sma",
         "tech_sma200",
         "tech_rng",
         "tech_rsi",
     )
-    return {k: row.get(k) for k in keys if row.get(k) is not None}
+    from generic_utils.forward_fundamentals import PACK_FORWARD_KEYS
+    from generic_utils.setup import FORWARD_PEER_FIELDS, TV_AS_IS_PEER_FIELDS
+
+    peer_bins = tuple(
+        f"{field}_peer" for field in (*TV_AS_IS_PEER_FIELDS, *FORWARD_PEER_FIELDS)
+    )
+    extra = tuple(
+        key
+        for key in (*PACK_FORWARD_KEYS, *peer_bins)
+        if key not in keys
+    )
+    return {k: row.get(k) for k in (*keys, *extra, *_relative_keys()) if row.get(k) is not None}
 
 
 def _merge_names(
@@ -265,6 +293,13 @@ def _merge_names(
             "evfcf",
             "opm",
             "evrev",
+            "ni",
+            "ebitda",
+            "fcf",
+            "net_debt",
+            "total_debt",
+            "cash",
+            "ev",
             "dte",
             "street_px",
             "target_px",
@@ -274,8 +309,19 @@ def _merge_names(
                 rec.get(key), 1 if key in {"rsi", "rng", "dte", "left"} else 2
             )
         names[symbol] = rec
+    _attach_projection_forward(names)
     _attach_name_setup(names)
     return names
+
+
+def _attach_projection_forward(names: dict[str, dict[str, Any]]) -> None:
+    """Quoted pe_fwd / evebitda_fwd from the financial_projection path or CAGR."""
+    from generic_utils.forward_fundamentals import annotate_projection_forward
+
+    for rec in annotate_projection_forward(list(names.values())):
+        symbol = str(rec.get("symbol") or "")
+        if symbol:
+            names[symbol] = rec
 
 
 def _attach_name_setup(names: dict[str, dict[str, Any]]) -> None:
@@ -364,9 +410,16 @@ def _book_rows(
                 "val_label": name.get("val_label"),
                 "val": name.get("val"),
                 "val_vs_ind": name.get("val_vs_ind"),
+                "val_ind_med": name.get("val_ind_med"),
+                "val_vs_avg": name.get("val_vs_avg"),
+                "val_ind_avg": name.get("val_ind_avg"),
                 "val_family": name.get("val_family"),
                 "eff_field": name.get("eff_field"),
                 "eff": name.get("eff"),
+                "eff_vs_ind": name.get("eff_vs_ind"),
+                "eff_ind_med": name.get("eff_ind_med"),
+                "eff_vs_avg": name.get("eff_vs_avg"),
+                "eff_ind_avg": name.get("eff_ind_avg"),
                 "peer": name.get("peer"),
                 "tech_sma": name.get("tech_sma"),
                 "tech_rng": name.get("tech_rng"),
@@ -564,6 +617,8 @@ def _attach_sleeve_tags(
 def _tape_for_movers(
     af_rows: list[dict[str, Any]], names: Mapping[str, Mapping[str, Any]]
 ) -> list[dict[str, Any]]:
+    from generic_utils.forward_fundamentals import PACK_FORWARD_KEYS
+
     tape: list[dict[str, Any]] = []
     for row in af_rows:
         rec = {key: row.get(key) for key in TAPE_FIELDS}
@@ -581,7 +636,19 @@ def _tape_for_movers(
             rec["rng"] = extra.get("rng")
         if extra.get("vs50") is not None:
             rec["vs50"] = extra.get("vs50")
-        for key in ("pe", "pe_fwd", "peg", "evrev", "evebitda", "pb", "evfcf", "opm", "sector", "vs200"):
+        for key in (
+            "pe",
+            "pe_fwd",
+            "peg",
+            "evrev",
+            "evebitda",
+            "pb",
+            "evfcf",
+            "opm",
+            "sector",
+            "vs200",
+            *PACK_FORWARD_KEYS,
+        ):
             if rec.get(key) is None and extra.get(key) is not None:
                 rec[key] = extra.get(key)
         tape.append(rec)

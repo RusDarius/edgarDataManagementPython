@@ -208,6 +208,7 @@ from db.bvb_tickers_operations import (
 from db.trading_view_company_data_map_operations import (
     get_trading_view_company_by_symbol,
 )
+from backtracking import prepare_backtracking_run
 from focus_pool_screening import run_focus_pool_screening
 from portfolio_performance_tracking.portfolio_performance_tracker import (
     PortfolioPerformanceTracker,
@@ -686,7 +687,7 @@ def main():
     #     / "current_holdings.json",
     # )
     # ── Single Stock report ─────────────────────────────────────────────
-    # run_symbol_intelligence_report_example("NASDAQ:PGY")
+    # run_symbol_intelligence_report_example("NYSE:MMS")
 
     # ── ETF analysis (world primary listings) ─────────────────────────────
     # Fetch + v1 composite + active-management book + persist. Output:
@@ -740,6 +741,22 @@ def main():
     #   python src/run_backtests.py
     #   python src/run_backtests.py --start-day 01_06_2026 --end-day 30_08_2026
     #   python src/run_backtests.py --config src/backtests/configs/default_v1.json
+
+    # ── Weekly backtracking investing runs (PIT panel -> picks -> score) ────────
+    # Build decision-week panel from existing prediction + edge + all-fields sources:
+    #   python src/run_backtracking.py prepare --start-day 01_04_2026 --end-day 01_08_2026
+    # Optional wide preset (focused all-fields numeric catalog):
+    #   python src/run_backtracking.py prepare --start-day 01_04_2026 --end-day 01_08_2026 --raw-preset focused
+    # Deterministic selector:
+    #   python src/run_backtracking.py select --run logs/tradingview_analysis/backtracking_analysis/runs/<run_id> --selector program_bo --field bo --top 15 --group-field industry --cap 3
+    # Score one picks file:
+    #   python src/run_backtracking.py score --run logs/tradingview_analysis/backtracking_analysis/runs/<run_id> --picks picks_program_bo.csv
+    # From this module:
+    # backtracking_run = prepare_backtracking_run(
+    #     start_day_label="01_04_2026",
+    #     end_day_label="01_08_2026",
+    # )
+    # print(backtracking_run["run_dir"])
 
     # Market flow screening (paired daily DuckDB snapshots)
     # Output: logs/tradingview_analysis/market_flow_screening/runs/flow_<base>_<compare>_<id>/

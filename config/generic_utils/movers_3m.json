@@ -7,13 +7,15 @@
   "where": "mcap>=2000000000",
   "keep": [
     "rsi", "relvol", "left", "rr", "bo", "cont", "fwd", "rng", "vs50", "adx",
-    "mix", "mtp", "pe", "pe_fwd", "peg", "evrev", "evebitda", "pb", "evfcf", "opm",
+    "mix", "mtp", "pe", "pe_fwd", "pe_fwd_source", "evebitda_fwd", "peg", "evrev", "evebitda", "pb", "evfcf", "opm",
+    "fp_pe_y1", "fp_pe_y5", "fp_evebitda_y1", "fp_evebitda_y5", "fp_net_debt_y1", "fp_net_debt_y5",
+    "fp_fcf_y1", "fp_fcf_y5", "fp_horizon_year",
     "street_left", "dte", "d5", "m1", "close", "street_px", "target_px",
     "mcap", "exchange", "ind", "day", "w"
   ],
   "vs_group": {
     "by": "ind",
-    "fields": ["evrev", "pe", "pe_fwd", "evebitda", "pb", "evfcf", "opm", "left", "d5"],
+    "fields": ["evrev", "pe", "pe_fwd", "evebitda", "evebitda_fwd", "pb", "evfcf", "opm", "left", "d5"],
     "min_n": 6
   },
   "id_field": "symbol",

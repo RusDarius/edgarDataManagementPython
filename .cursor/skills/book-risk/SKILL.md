@@ -7,6 +7,8 @@ description: Data-driven Book risk exposure and loss tolerance (position %, net 
 
 **How much loss can this Book absorb — on the name, in dollars, and as % of NAV (equity mark + cash)?** Daily leftover answers **can this still pay**. This suite answers **what a drop costs**.
 
+`duckdb output` stops at `book_risk.md` and `book_risk.duckdb`. Write `book-risk-YYYYMMDD` only when the paste says `canvas output`. Position rows keep `opm`, `pe`, `left`, `vs50`, and `dte` next to the ladder.
+
 Do not invent a 0–100 "risk score". Do not write `logs/_tmp_*.py`.
 
 Standalone: `current_holdings.json` and/or latest `holdings_scoring_*` scan. Join leftover / vs50 / ATR from the briefing pack when a pack exists.
@@ -79,4 +81,4 @@ There is no single stop %. Bound each name by **wipe_nav** (size) and the **next
 - **General book.** `stress_m10_nav` is the "if the whole book is −10% from here" number. `max_wipe_nav` is the largest single-name disaster. If that is large, TRIM is de-risking **size**, not a leftover call.
 - MTP ENTER_SMALL is climate, not a buy-the-dip list. Earnings dte ≤ 7: DERISK sticks; do not add into the print to "average down".
 
-Standing spec: `src/focus_pool_screening/prompts/risk_generic.txt`. Field map: [reference.md](reference.md).
+Standing spec: `src/research_prompt/risk_generic.txt`. Field map: [reference.md](reference.md).

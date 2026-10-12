@@ -146,6 +146,22 @@ class TestSymbolFlowMetrics(unittest.TestCase):
         pairs = align_snapshot_pairs(base_rows, compare_rows)
         self.assertEqual(len(pairs), 1)
 
+    def test_align_snapshot_pairs_respects_qualified_exchange(self):
+        base_rows = [_base_row(symbol="NYSE:MMS")]
+        compare_rows = [
+            _base_row(symbol="ASX:MMS", close=2.0),
+            _base_row(symbol="NYSE:MMS", close=53.0),
+        ]
+        pairs = align_snapshot_pairs(base_rows, compare_rows)
+        self.assertEqual(len(pairs), 1)
+        self.assertEqual(pairs[0][1]["symbol"], "NYSE:MMS")
+
+        missing = align_snapshot_pairs(
+            [_base_row(symbol="NASDAQ:MMS")],
+            compare_rows,
+        )
+        self.assertEqual(missing, [])
+
     def test_share_decomposition_buyback_like(self):
         base = _base_row(
             close=100.0,

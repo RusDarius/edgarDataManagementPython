@@ -41,6 +41,7 @@ from data_analysis_scripts.trading_view_all_fields_metric_pattern_analyzer impor
 from db.trading_view_all_fields_duckdb import query_tradingview_all_fields_duckdb
 from db.trading_view_move_prediction_duckdb import open_move_prediction_duckdb_connection
 from generic_utils.log_to_files_util import log_rows_to_csv, log_to_file
+from generic_utils.symbol_identity import SymbolCatalog, lookup_mapping
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT_ROOT = (
@@ -359,15 +360,6 @@ def _bare_symbol(symbol: str) -> str:
     return text
 
 
-def _symbol_lookup_keys(symbol: str) -> list[str]:
-    keys: list[str] = []
-    for candidate in (symbol, _bare_symbol(symbol)):
-        normalized = str(candidate or "").strip()
-        if normalized and normalized not in keys:
-            keys.append(normalized)
-    return keys
-
-
 def _build_row_index(rows: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
     index: dict[str, dict[str, Any]] = {}
     for row in rows:
@@ -375,8 +367,7 @@ def _build_row_index(rows: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, A
         symbol = str(payload.get("symbol") or "").strip()
         if not symbol:
             continue
-        for key in _symbol_lookup_keys(symbol):
-            index.setdefault(key, payload)
+        index.setdefault(symbol, payload)
     return index
 
 
@@ -385,6 +376,7 @@ def align_snapshot_pairs(
     compare_rows: Sequence[Mapping[str, Any]],
 ) -> list[tuple[dict[str, Any], dict[str, Any]]]:
     compare_index = _build_row_index(compare_rows)
+    compare_catalog = SymbolCatalog.build(compare_index) if compare_index else None
     pairs: list[tuple[dict[str, Any], dict[str, Any]]] = []
     seen_compare_symbols: set[str] = set()
     for base_row in base_rows:
@@ -392,12 +384,7 @@ def align_snapshot_pairs(
         symbol = str(base_payload.get("symbol") or "").strip()
         if not symbol:
             continue
-        compare_payload: dict[str, Any] | None = None
-        for key in _symbol_lookup_keys(symbol):
-            candidate = compare_index.get(key)
-            if candidate is not None:
-                compare_payload = candidate
-                break
+        compare_payload = lookup_mapping(compare_index, symbol, compare_catalog)
         if compare_payload is None:
             continue
         compare_symbol = str(compare_payload.get("symbol") or "").strip()

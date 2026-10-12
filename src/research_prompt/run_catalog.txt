@@ -1,0 +1,339 @@
+RUN CATALOG — commands, folders, agent pastes
+=============================================
+Open this file to produce data you can query yourself, or to pick the
+agent block that reads that data. Do not paste this whole file into chat.
+
+Paste blocks: src/research_prompt/agent_copy_paste.txt. Paste ONE block.
+Printed twin of the commands: python src/run_operator_suites.py --gitbash
+Longer command table: src/generic_utils/specs/gitbash_agent_data_flows.md
+
+Shell once per session (PowerShell, repo root):
+  $env:PYTHONPATH='src;.'
+
+Output
+------
+  duckdb output    Default. The suite folder is the deliverable.
+  queries.txt      Written in that folder: every field, its meaning, and
+                   the copy-paste queries. Open it before writing SQL.
+  canvas output    Add this line on the paste when you also want the page.
+  data lists       Name tables on that canvas. Without it the canvas is
+                   decisions plus one Ledger.
+  Wisdom           Always writes wisdom-YYYYMMDD with one Ledger.
+                   Name tables on that canvas only with data lists.
+
+Quote leftover in SQL as "left". Columns stay separate. pe_fwd is the
+projection next-year PE (fp_pe_y1). pe_fwd_tv stays empty. fp_pe_y5,
+fp_evebitda_y1, fp_evebitda_y5, fp_net_debt_y1, and fp_fcf_y1 stay
+separate. Do not fill pe_fwd with EV/Rev. Street price, pack price, and
+model terminal stay three numbers.
+A label is a bin. The dump always keeps the percent beside it, with or
+without an agent and with or without a canvas.
+  ABOVE / BELOW uses vs50 (percent versus the 50-day average). vs200 is the 200-day gap.
+  DISCOUNT / PREMIUM / INLINE uses that column's percent versus the industry median.
+  DISCOUNT is <= -5. PREMIUM is >= 5. INLINE is between.
+  Two valuation reads stay side by side. Do not collapse them into peer.
+  Trailing TV, taken as published: pe_peer beside pe_vs_ind, evebitda_peer
+  beside evebitda_vs_ind, and pb_peer / evfcf_peer when those fields are on the row.
+  Forward derivative, which can be off: pe_fwd_peer beside pe_fwd_vs_ind,
+  evebitda_fwd_peer beside evebitda_fwd_vs_ind.
+  peer / val_vs_ind is only the one multiple setup quoted. Focus tables show
+  the trailing bins and the forward bins, each with its percent.
+  val_ind_med is the median of that quoted field.
+  val_vs_avg is the percent versus the industry average. val_ind_avg is that average.
+  Do not average the two percents. Other relatives use FIELD_vs_ind and FIELD_vs_avg.
+  UNUSED / MID / PAID uses rng (0-100).
+queries.txt in the suite folder names these fields. A canvas table shows
+the percent next to the label. Zoom handles the width.
+
+Global commands (compile, wisdom, all, forward, analysis style) use six
+datasets. The pack already puts the first four on each name. Wisdom also
+writes datasets/ so the files are listed in one DuckDB. Do not rerun a
+multi-hour backtest unless asked. MTP is climate. Backtest IC is not a
+leftover gate.
+
+  all-fields          trading_view_all_fields_data. History and span. Never SELECT *.
+  prediction          prediction_analysis. Weeks bo / cont / fwd on the pack tape.
+  edge                edge_research upside. Pack leftover is max(street PT, edge).
+  market timing       market_timing_policy. On the pack row. Not a buy list.
+  backtest            backtests/runs/*/family_metrics.csv. Rank spearman_ic.
+  value projection    finproj_* and fingrowth_*. Joined as fp_* on forward_value.
+
+Manual lock, no rescan:
+  python src/run_operator_suites.py sources
+Folder: <newest briefing_pack>/datasets/  (wisdom also writes suites_*/datasets/)
+
+
+FIND THE LATEST FOLDER
+----------------------
+Daily pack (fields and rankings):
+  Get-ChildItem logs\tradingview_analysis\operator_briefing\runs -Directory -Filter briefing_pack_* | Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty FullName
+
+Wisdom / all-suite lists:
+  Get-ChildItem logs\tradingview_analysis\operator_briefing\runs -Directory -Filter suites_* | Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty FullName
+
+Inside the pack folder, open queries.txt and briefing_pack.duckdb.
+Rank tables already on that database:
+  radar_curated_50          Build-50
+  radar_upside_100          uncapped leftover appendix
+  radar_curated_25          first 25 of the 50
+  short_book_15_curated     short overlay
+  movers_tails              day / week / 5D / 1M tails
+  book, capital             holdings and NAV
+  earnings_upside_curated   earnings, upside lane
+  earnings_downside_curated earnings, downside lane
+  names, us2b_tape          full locked tape
+
+Inside a wisdom folder, open the root queries.txt. It points at each
+section guide (datasets, value_tech, forward_value, pack_focus, movers,
+movers_3m, risk). datasets/ names the six sources and, when a backtest
+run exists, family_metrics.
+
+
+--- DAILY ---
+What: Lock today's leftover, Build-50, Book, shorts, earnings, tape tails.
+Manual:
+  python src/operator_briefing/example_entry.py inspect
+  python src/operator_briefing/example_entry.py compile
+Folder: logs/.../operator_briefing/runs/briefing_pack_<stamp>/
+  briefing_pack.duckdb, queries.txt, overview.log, briefing_pack.md
+Agent: paste --- DAILY (full) --- . Output line is duckdb output.
+  Add canvas output on that block only when you want daily-focus-YYYYMMDD.
+
+
+--- DAILY (reuse the pack) ---
+What: Same briefing as DAILY, from the newest pack already on disk.
+Manual:
+  python src/operator_briefing/example_entry.py inspect
+Folder: the newest briefing_pack_*/ from FIND THE LATEST FOLDER.
+Agent: paste --- DAILY (pack already good) --- . Do not recompile.
+
+
+--- BRIEF HISTORY (prior briefs vs later closes) ---
+What: One page on how earlier recommendations moved. Notes stay in the prior files.
+Manual:
+  python src/generic_utils/tv_scan_cli.py briefs
+Folder: logs/.../operator_briefing/runs/brief_history_<stamp>/
+  digest.md, brief_history.duckdb, queries.txt, overview.log
+Read digest.md. One name: SELECT * FROM events WHERE ticker = 'MU'.
+Bands live in config/generic_utils/brief_history.json. Not a 0-100.
+Agent: paste --- BRIEF HISTORY --- . Skill: .cursor/skills/brief-history/SKILL.md
+
+
+--- DECISION REVIEW (top 100 ranks vs later closes) ---
+What: One top-100 list per briefing day, later close, and a KEEP / CHANGE matrix.
+      Covers the published upside 100. A short day is filled from that pack's tape by rr.
+Manual:
+  python src/run_decision_review.py
+  python src/run_decision_review.py --top 100 --head 20 --tail 20 --min-n 12 --gap-pct 1
+Folder: logs/.../operator_briefing/runs/decision_review_<stamp>/
+  highlights.log, decision_review.duckdb, queries.txt, overview.log, spec.json
+Read highlights.log. One day: SELECT * FROM ranks WHERE day = 'YYYY-MM-DD'.
+Backtests family_metrics is attached when a run already exists. Do not rerun
+python src/run_backtests.py for this review.
+Agent: paste --- DECISION REVIEW --- . Skill: .cursor/skills/decision-review/SKILL.md
+
+
+--- STALE CHECK ---
+What: See whether pred / all-fields / edge / holdings / MTP / Book moved.
+Manual:
+  python src/operator_briefing/example_entry.py inspect
+Then compile (the DAILY commands) only when those ids differ.
+Agent: paste --- STALE CHECK / RECOMPILE --- .
+
+
+--- POST-EARN (print day vs later close) ---
+What: Names that reported on a date. Afternoon scan vs the later cash close,
+after-hours, and the premarket field. No leftover cutoff.
+Manual:
+  python src/generic_utils/tv_scan_cli.py session --prior-db PRIOR.duckdb --current-db CURRENT.duckdb --prior-run RUN --current-run RUN --earn-on YYYY-MM-DD --out-dir logs/tradingview_analysis/operator_briefing/runs/post_earn_<stamp>
+Folder: that --out-dir. session.duckdb, post_earn.csv, queries.txt.
+pre_repeat true means premarket_change was not refreshed. Do not call it this morning.
+Agent: paste --- POST-EARN --- . Canvas post-earn-YYYYMMDD when the block says canvas output.
+Skill: .cursor/skills/post-earn/SKILL.md
+
+
+--- MOVERS (day / week / 5D / 1M) ---
+What: 25 up and 25 punished per horizon. Val, peer, leftover, technicals.
+Manual:
+  python src/run_operator_suites.py movers
+Folder: <newest briefing_pack>/movers/
+  movers.duckdb, movers_tails.csv, queries.txt, overview.log
+Agent: paste --- MOVERS (day / 5D / 1M) --- .
+  Canvas movers-YYYYMMDD only when that block says canvas output.
+
+
+--- MOVERS (3M) ---
+What: Same tails on the 3-month recipe.
+Manual:
+  python src/run_operator_suites.py movers-3m
+Folder: <newest briefing_pack>/movers_3m/  (queries.txt inside)
+Agent: paste --- MOVERS (3M) --- .
+
+
+--- RISK (Book loss vs NAV) ---
+What: Position %, dollars, and % of NAV (equity mark plus cash). Ladders.
+Manual:
+  python src/run_operator_suites.py risk
+Folder: <newest briefing_pack>/book_risk/
+  book_risk.duckdb, book_risk.md, queries.txt, overview.log
+Agent: paste --- RISK (Book loss vs NAV) --- .
+  Canvas book-risk-YYYYMMDD only when that block says canvas output.
+
+
+--- FORWARD (value + street/TV) ---
+What: Primary multiple, trailing TV bins, forward bins, technicals, street and pack prices. 1000 names.
+Trailing: pe_peer + pe_vs_ind, evebitda_peer + evebitda_vs_ind.
+Forward: pe_fwd_peer + pe_fwd_vs_ind, evebitda_fwd_peer + evebitda_fwd_vs_ind.
+Manual:
+  python src/run_operator_suites.py value-tech --cover 1000 --forward
+Folder: <newest briefing_pack>/value_tech/
+  setup.duckdb, setup.csv, queries.txt
+Agent: part of --- WISDOM / ALL SUITES --- . Standalone dump has no canvas.
+
+
+--- FORWARD (street vs pack vs model) ---
+What: Street leftover, pack leftover, projection forward PE / EV/EBITDA / debt / FCF (year 1 and up to year 5), model terminal and revenue CAGR.
+Manual:
+  python src/run_operator_suites.py forward --cover 1000
+Folder: <newest briefing_pack>/forward_value/
+  forward_value.duckdb, forward_value.csv, queries.txt
+Optional refresh of the model dumps first:
+  python src/run_financial_projection.py --top-n 1000
+  python src/run_financial_projection.py --mode price --top-n 1000
+Agent: part of --- WISDOM / ALL SUITES --- .
+
+
+--- PACK FOCUS (rankings, no judgment) ---
+What: Build-50, uncapped top 100, and a 1000-name tape. No ADD/WAIT call.
+Each name keeps trailing TV bins (pe_peer, evebitda_peer) and forward bins
+(pe_fwd_peer, evebitda_fwd_peer), each beside its percent.
+Manual:
+  python src/run_operator_suites.py pack-focus --cover 1000
+Folder: <newest briefing_pack>/pack_focus/
+  pack_focus.duckdb, queries.txt
+Agent: paste --- DETERMINISTIC FOCUS (no agent judgment) --- .
+
+
+--- GROWTH RADAR (revenue + earnings) ---
+What: $1B+ names with quoted revenue growth or quoted earnings growth.
+      Peer discount and a short all-fields PE span sit beside the ranks.
+      Two thresholds are edited in run_growth_radar_local_main.
+Manual:
+  python src/run_growth_radar.py
+  python src/run_growth_radar.py --min-mcap 1000000000 --min-growth 15
+Folder: logs/tradingview_analysis/growth_radar/runs/growth_radar_<stamp>/
+  growth_radar.duckdb, queries.txt, overview.log, highlights.log, spec.json
+Agent: paste --- GROWTH RADAR --- . Not a Daily leftover ranking.
+Skill: .cursor/skills/growth-radar/SKILL.md
+
+
+--- PLAYBOOK (100 + shorts + 25 weeks) ---
+What: Upside 100, curated shorts, forming, Book, and a 25-week score path.
+Manual:
+  python src/run_operator_suites.py playbook --weeks 25
+Folder: <newest briefing_pack>/playbook/
+  playbook.duckdb, queries.txt, playbook.json, overview.log
+  weeks_progression/weeks_progression.duckdb and its queries.txt
+Mesh letters and Best 25 are judgment. They are not in the dump.
+Agent: paste --- PLAYBOOK (100 + best 25 + shorts + 25w) --- .
+  Canvas playbook-YYYYMMDD only when that block says canvas output.
+
+
+--- WISDOM (all suites) ---
+What: One folder with value, forward, focus, movers, 3M, and risk.
+Manual:
+  python src/run_operator_suites.py wisdom --cover 1000
+Folder: logs/.../operator_briefing/runs/suites_<stamp>/
+  queries.txt at the root, plus one queries.txt in each section folder.
+  datasets/ locks all-fields, prediction, edge, MTP, backtest IC, and
+  value projection. The other sections are the name tables.
+Optional model refresh first:
+  python src/run_operator_suites.py wisdom --run-finproj --cover 1000
+Compile and then every suite:
+  python src/run_operator_suites.py all --compile --cover 1000
+Agent: paste --- WISDOM / ALL SUITES --- .
+  Always writes wisdom-YYYYMMDD with one Ledger.
+  Name lists on that canvas only if the block also says data lists.
+
+
+--- ANALYSIS STYLE ---
+What: Two orders on a payoff shortlist. ASYM sorted by rr. CONVICTION
+  sorted by bo. Path class from a short all-fields span. News after that.
+Manual data: the wisdom command above. The rank step is the agent.
+Agent: paste --- ANALYSIS STYLE (active management) --- .
+  Canvas analysis-style-YYYYMMDD only when that block says canvas output.
+Skill: .cursor/skills/analysis-style/SKILL.md
+
+
+--- CAPTURE (whole book path) ---
+What: Holdings history, fundamentals path, and score path. Default 90 days.
+Manual:
+  python src/run_operator_suites.py capture
+Folder: <newest briefing_pack>/capture/
+  capture.duckdb, capture.md, queries.txt, overview.log
+Replay the job tags against later closes:
+  python src/run_operator_suites.py capture-replay
+Agent: paste --- CAPTURE (whole book + fundamentals + progression) --- .
+
+
+--- LOOKUP ---
+What: One name from the locked pack. Stance, leftover, weeks, conflicts.
+Manual:
+  python src/operator_briefing/example_entry.py lookup MU SNDK PGY
+  python src/operator_briefing/example_entry.py stance MU SNDK
+Output: stdout JSON. No new folder.
+Agent: paste --- LOOKUP / PRUNE --- or --- DELEGATE (child agent) --- .
+
+
+--- COMPARE (weeks progression) ---
+What: Change in bo / cont / fwd versus the prior calendar-day prediction.
+Manual:
+  python src/operator_briefing/example_entry.py compare --session --exchanges NASDAQ,NYSE,AMEX
+  python src/operator_briefing/example_entry.py compare --session --exchanges NASDAQ,NYSE,AMEX --ids MU,SNDK,PGY
+Output: stdout JSON. This is not a leftover ranking.
+Agent: paste --- COMPARE (pred progression) --- .
+
+
+--- BOOK ONLY ---
+What: One capital line per holding from the pack book and capital tables.
+Manual: same inspect + compile as DAILY, then read table book in queries.txt.
+Agent: paste --- BOOK ONLY --- .
+
+
+--- HORIZON (weeks / month from backtest IC) ---
+What: Which backtest families discriminate, then best moves on the current pack.
+Manual:
+  python src/generic_utils/rank_cli.py --csv RUN/family_metrics.csv --field spearman_ic --top 16 --id-field signal_name --group-field family --cap 3
+Agent: paste --- HORIZON (weeks / month) --- .
+  Canvas horizon-plan-YYYYMMDD is the decision page for that block.
+
+
+--- BACKTRACK (weekly investing run) ---
+What: Build a point-in-time weekly panel, choose picks, then score on later closes.
+Manual:
+  python src/run_backtracking.py prepare --start-day 01_04_2026 --end-day 01_08_2026
+  python src/run_backtracking.py select --run logs/tradingview_analysis/backtracking_analysis/runs/<run_id> --selector program_bo --field bo --top 15 --group-field industry --cap 3
+  python src/run_backtracking.py score --run logs/tradingview_analysis/backtracking_analysis/runs/<run_id> --picks picks_program_bo.csv
+Folder: logs/.../backtracking_analysis/runs/backtracking_<stamp>/
+  backtracking.duckdb, run_manifest.json, coverage_ledger.csv, queries.txt,
+  picks_schema.json, picks_*.csv, name_returns.csv, book_weeks.csv, investing_run.md
+Agent: paste --- BACKTRACK (weekly book) --- .
+
+
+--- THEMED ---
+What: Same pack as DAILY, with the chips/software overlay.
+Manual: the DAILY compile. Agent reads industries_5d from the pack.
+Agent: paste --- THEMED (only if asked) --- .
+
+
+AFTER THE FOLDER EXISTS
+-----------------------
+Open queries.txt in that folder. It already has:
+  1. Column list
+  2. Selection columns (margin, earnings, forward, strength, technicals, payoff)
+  3. Rank by rr
+  4. Rank by bo
+  5. Industry means, when ind is on the table
+Run those SQL lines against the DuckDB named at the top of the file.
+A canvas is a later step. Add canvas output on the matching paste block
+when you want the agent to write the page from these files.

@@ -16,6 +16,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from generic_utils.derive import pct_vs
 from generic_utils.ranking import to_float
 from generic_utils.scan_sources import rows_from_duckdb
+from generic_utils.symbol_identity import bare_symbol, symbol_matches_request
 
 _DAY_FOLDER = re.compile(r"^(\d{2})_(\d{2})_(\d{4})$")
 _ISO_YEAR = re.compile(r"iso_year=(\d{4})$", re.I)
@@ -162,7 +163,7 @@ def expand_ids(ids: Iterable[str], *, also_bare: bool = False) -> list[str]:
 
 
 def bare_id(value: Any) -> str:
-    return str(value or "").strip().split(":")[-1]
+    return bare_symbol(value)
 
 
 def match_wanted_id(value: Any, wanted: Sequence[str]) -> str | None:
@@ -170,8 +171,10 @@ def match_wanted_id(value: Any, wanted: Sequence[str]) -> str | None:
 
     Exact match wins. A bare stored ticker (older week files use ``MU``)
     maps to the single prefixed caller id that shares that ticker
-    (``NASDAQ:MU``). Two caller listings of the same ticker do not match,
-    so a bare row is not assigned to the wrong exchange.
+    (``NASDAQ:MU``). A stored prefixed id never maps to a different prefixed
+    caller id merely because its bare ticker matches (``ASX:MMS`` must not
+    satisfy a request for ``NYSE:MMS``). Bare caller ids may still match
+    prefixed stored ids because the caller explicitly omitted the exchange.
     """
     text = str(value or "").strip()
     if not text:
@@ -181,8 +184,7 @@ def match_wanted_id(value: Any, wanted: Sequence[str]) -> str | None:
         return text
     if text in wanted_list:
         return text
-    bare = bare_id(text)
-    hits = [w for w in wanted_list if bare_id(w) == bare]
+    hits = [w for w in wanted_list if symbol_matches_request(text, w)]
     if len(hits) == 1:
         return hits[0]
     return None
@@ -591,13 +593,14 @@ def join_rows(
         if match is None:
             ticker = normalize_id(full) or normalize_id(alt)
             cands = index_ticker.get(ticker) or []
-            if len(cands) == 1:
-                match = cands[0]
-            elif alt:
-                match = next(
-                    (c for c in cands if str(c.get(right_on) or "") == alt),
-                    None,
-                )
+            requested = full or alt
+            compatible = [
+                candidate
+                for candidate in cands
+                if symbol_matches_request(candidate.get(right_on), requested)
+            ]
+            if len(compatible) == 1:
+                match = compatible[0]
         if match is None:
             if how == "inner":
                 continue

@@ -20,6 +20,7 @@ from data_analysis_scripts.trading_view_move_prediction_pattern_discovery import
     discover_latest_all_fields_db,
 )
 from generic_utils.log_to_files_util import log_to_file
+from generic_utils.symbol_identity import SymbolCatalog, lookup_mapping
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -228,11 +229,14 @@ def _coerce_finite_float(value: Any) -> float | None:
     return numeric
 
 
-def _symbol_lookup_keys(symbol: str) -> list[str]:
-    keys = [symbol]
-    if ":" in symbol:
-        keys.append(symbol.split(":", 1)[1])
-    return keys
+def _lookup_symbol_record(
+    records: Mapping[str, Any],
+    symbol: str,
+    catalog: SymbolCatalog | None = None,
+) -> Any | None:
+    if not records or not str(symbol or "").strip():
+        return None
+    return lookup_mapping(records, symbol, catalog)
 
 
 def _row_get(row: Mapping[str, Any], column: str) -> Any:
@@ -305,8 +309,7 @@ def _load_all_fields_lookup(
             symbol = str(record.get("symbol") or "")
             if not symbol:
                 continue
-            for key in _symbol_lookup_keys(symbol):
-                lookup[key] = record
+            lookup[symbol] = record
         return lookup
     finally:
         con.close()
@@ -364,17 +367,18 @@ def build_symbol_feature_frame(
     all_fields_lookup: dict[str, dict[str, Any]] = {}
     if all_fields_db is not None:
         all_fields_lookup = _load_all_fields_lookup(all_fields_db, predictors)
+    all_fields_catalog = (
+        SymbolCatalog.build(all_fields_lookup) if all_fields_lookup else None
+    )
 
     frame: dict[str, dict[str, PredictorValue]] = {}
     for scan_row in scan_rows:
         symbol = str(scan_row.get("symbol") or "")
         if not symbol:
             continue
-        all_fields_row = None
-        for key in _symbol_lookup_keys(symbol):
-            if key in all_fields_lookup:
-                all_fields_row = all_fields_lookup[key]
-                break
+        all_fields_row = _lookup_symbol_record(
+            all_fields_lookup, symbol, all_fields_catalog
+        )
         frame[symbol] = {
             predictor: _resolve_predictor_value(
                 predictor=predictor,
@@ -656,10 +660,6 @@ def _format_regime_tier_short(tier: str) -> str:
     return mapping.get(tier, tier[:12])
 
 
-def _bare_symbol(symbol: str) -> str:
-    return symbol.split(":", 1)[-1]
-
-
 def _display_symbol_label(row_or_symbol: Mapping[str, Any] | str) -> str:
     """Return EXCHANGE:TICKER for log output when exchange is known."""
     if isinstance(row_or_symbol, Mapping):
@@ -702,22 +702,17 @@ def build_conviction_lookup(
         if not symbol:
             continue
         lookup[symbol] = record
-        bare = _bare_symbol(symbol)
-        lookup.setdefault(bare, record)
     return lookup
 
 
 def _conviction_lookup_for_symbol(
     symbol: str,
     conviction_lookup: Mapping[str, Mapping[str, Any]],
+    catalog: SymbolCatalog | None = None,
 ) -> Mapping[str, Any] | None:
     if not symbol or not conviction_lookup:
         return None
-    record = conviction_lookup.get(symbol)
-    if record is not None:
-        return record
-    bare = _bare_symbol(symbol)
-    return conviction_lookup.get(bare)
+    return _lookup_symbol_record(conviction_lookup, symbol, catalog)
 
 
 def _is_regime_aligned(
@@ -745,6 +740,12 @@ def _write_per_profile_regime_conviction_section(
 ) -> None:
     config = overlay.config
     regime_by_symbol = overlay.by_symbol
+    regime_catalog = (
+        SymbolCatalog.build(regime_by_symbol) if regime_by_symbol else None
+    )
+    conviction_catalog = (
+        SymbolCatalog.build(conviction_lookup) if conviction_lookup else None
+    )
     ranked: list[tuple[float, Mapping[str, Any], RegimeContextRecord]] = []
     for prediction in prediction_rows:
         horizons = prediction.get("horizons") or {}
@@ -753,7 +754,7 @@ def _write_per_profile_regime_conviction_section(
         if weeks_ras is None:
             continue
         row = prediction.get("row") or {}
-        record = get_regime_record_for_row(row, regime_by_symbol)
+        record = get_regime_record_for_row(row, regime_by_symbol, regime_catalog)
         if record is None:
             continue
         if record.active_mgmt_tier in {"warning_overlay", "insufficient_signals"}:
@@ -808,7 +809,9 @@ def _write_per_profile_regime_conviction_section(
             f"{(record.relative_volume or 0.0):>8.2f}"
         )
         if has_conviction:
-            conv_record = _conviction_lookup_for_symbol(symbol, conviction_lookup)
+            conv_record = _conviction_lookup_for_symbol(
+                symbol, conviction_lookup, conviction_catalog
+            )
             conv_score = conv_record.get("conviction_score") if conv_record else None
             conv_rank = conv_record.get("rank_overall") if conv_record else None
             sleeve = str((conv_record or {}).get("sleeve") or "")[:10]
@@ -1020,21 +1023,17 @@ def write_regime_context_focus_log(
         str(row.get("ticker") or row.get("symbol") or ""): row
         for row in consensus_rows
     }
-    for symbol, record in overlay.by_symbol.items():
-        bare = symbol.split(":", 1)[-1]
-        if bare not in consensus_by_symbol and symbol in consensus_by_symbol:
-            continue
-        if symbol not in consensus_by_symbol and bare in consensus_by_symbol:
-            consensus_by_symbol[symbol] = consensus_by_symbol[bare]
+    consensus_catalog = (
+        SymbolCatalog.build(consensus_by_symbol) if consensus_by_symbol else None
+    )
 
     def _aligned_sort_key(item: tuple[str, RegimeContextRecord]) -> float:
         symbol, record = item
         if record.active_mgmt_tier in {"warning_overlay", "insufficient_signals"}:
             return -1.0
-        consensus_row = consensus_by_symbol.get(symbol)
-        if consensus_row is None:
-            bare = symbol.split(":", 1)[-1]
-            consensus_row = consensus_by_symbol.get(bare)
+        consensus_row = _lookup_symbol_record(
+            consensus_by_symbol, symbol, consensus_catalog
+        )
         weeks_ras = 0.0
         if consensus_row:
             horizons = consensus_row.get("horizons") or {}
@@ -1062,10 +1061,9 @@ def write_regime_context_focus_log(
     )
     aligned_symbols: list[str] = []
     for index, (symbol, record) in enumerate(aligned_rows, start=1):
-        consensus_row = consensus_by_symbol.get(symbol)
-        if consensus_row is None:
-            bare = symbol.split(":", 1)[-1]
-            consensus_row = consensus_by_symbol.get(bare)
+        consensus_row = _lookup_symbol_record(
+            consensus_by_symbol, symbol, consensus_catalog
+        )
         weeks_ras = 0.0
         if consensus_row:
             horizons = consensus_row.get("horizons") or {}
@@ -1117,6 +1115,9 @@ def write_regime_context_focus_log(
     _log_symbol_list_line(path, playbook_a_symbols)
     log_to_file(path, "")
 
+    regime_catalog = (
+        SymbolCatalog.build(overlay.by_symbol) if overlay.by_symbol else None
+    )
     consensus_sorted = sorted(
         consensus_rows,
         key=lambda row: abs(
@@ -1132,12 +1133,9 @@ def write_regime_context_focus_log(
     warning_hits: list[tuple[str, RegimeContextRecord, Mapping[str, Any]]] = []
     for consensus_row in consensus_sorted:
         ticker = str(consensus_row.get("ticker") or consensus_row.get("symbol") or "")
-        regime_record = overlay.by_symbol.get(ticker)
-        if regime_record is None:
-            for key in _symbol_lookup_keys(ticker):
-                regime_record = overlay.by_symbol.get(key)
-                if regime_record:
-                    break
+        regime_record = _lookup_symbol_record(
+            overlay.by_symbol, ticker, regime_catalog
+        )
         if regime_record and regime_record.warning_flag_count >= 2:
             warning_hits.append((ticker, regime_record, consensus_row))
 
@@ -1176,17 +1174,9 @@ def write_regime_context_focus_log(
 def get_regime_record_for_row(
     row: Mapping[str, Any],
     regime_by_symbol: Mapping[str, RegimeContextRecord],
+    catalog: SymbolCatalog | None = None,
 ) -> RegimeContextRecord | None:
     symbol = str(row.get("symbol") or row.get("ticker") or "")
     if not symbol:
         return None
-    if symbol in regime_by_symbol:
-        return regime_by_symbol[symbol]
-    for key in _symbol_lookup_keys(symbol):
-        if key in regime_by_symbol:
-            return regime_by_symbol[key]
-    bare = _bare_symbol(symbol)
-    for key, record in regime_by_symbol.items():
-        if _bare_symbol(key) == bare:
-            return record
-    return None
+    return _lookup_symbol_record(regime_by_symbol, symbol, catalog)

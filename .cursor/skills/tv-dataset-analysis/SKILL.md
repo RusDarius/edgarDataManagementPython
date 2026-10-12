@@ -1,6 +1,6 @@
 ---
 name: tv-dataset-analysis
-description: Generic, zero-cutoff interrogation of TradingView scan datasets (move-prediction DuckDB, all-fields, edge CSVs, MTP CSVs, briefing-pack JSON). Use when an agent would otherwise write SQL, `_tmp_*.py`, industry breadth, histograms, leftover/range formulas, overlap, or a FOCUS CSV; or when the operator wants a deterministic scan they can run without agent judgment.
+description: Generic, zero-cutoff interrogation of TradingView scan datasets (move-prediction DuckDB, all-fields, edge CSVs, MTP CSVs, backtest family_metrics, financial_projection, briefing-pack JSON). Use when an agent would otherwise write SQL, `_tmp_*.py`, industry breadth, histograms, leftover/range formulas, overlap, or a FOCUS CSV; or when the operator wants a deterministic scan they can run without agent judgment.
 ---
 
 # TradingView dataset analysis (generic)
@@ -21,8 +21,10 @@ or `raw_scan_rows` (~200 cols). Echo the `spec` block.
 | Book NAV / loss vs cash+equity | `tv_scan_cli.py risk` / book-risk (`--out-dir` → `book_risk.md`; canvas `book-risk-YYYYMMDD`) |
 | Value / efficiency / peer + technical structure | `tv_scan_cli.py setup` / `generic_utils.setup` (`value_tech.json`; pack `val_field`; street/TV `fwd_*`) |
 | Street vs pack vs model forward price | `tv_scan_cli.py forward` / `generic_utils.forward_value` / `run_operator_suites.py forward` |
+| Growth companies, revenue vs earnings, overlooked growers | `python src/run_growth_radar.py` / `.cursor/skills/growth-radar/SKILL.md` |
 | Name dossier / compare / stance | `example_entry.py lookup\|compare\|stance` |
 | Manual all-suite dumps (max 1000, no industry cap) | `src/run_operator_suites.py` (`--list`, `wisdom`) |
+| Six-dataset lock, no rescan | `run_operator_suites.py sources` → `datasets.duckdb` (`datasets`, `family_metrics`) |
 
 ## CLI
 
@@ -53,7 +55,7 @@ python src/generic_utils/tv_scan_cli.py focus --csv PATH --where "left>=25,rsi<=
 | `pack-focus` | dump a compiled pack sleeve to CSV |
 | `movers` | both-tail leaders/laggards; recipes pin 25 up / 25 punished (`movers_day.json`); recipe `vs_group` attaches Val/Peer (`*_vs_ind`); laggards get `down_class` from sleeves; `--out-dir` writes DuckDB + overview.log. Generic CLI with no recipe still defaults to cover 50 at 75/25. |
 | `setup` | Primary value / efficiency / peer + tech labels + street/TV `fwd_*`. `--recipe value_tech.json`. `--forward` joins financial_projection. `--cover` is a size (max 1000), not a screen. |
-| `forward` | Street/TV leftover targets + `finproj_*` / `fingrowth_*` join. Recipe `forward_value.json`. Cover default/max 1000, no industry cap. `--no-finproj` = street/TV only. |
+| `forward` | Street/TV leftover targets + `finproj_*` / `fingrowth_*` join, including projection PE / EV/EBITDA / debt / FCF (`fp_pe_y1`, `fp_pe_y5`, `fp_evebitda_*`, `fp_net_debt_*`, `fp_fcf_*`). Recipe `forward_value.json`. Cover default/max 1000, no industry cap. `--no-finproj` = street/TV only. |
 | `risk` | Book NAV + loss ladders. `--out-dir` writes `book_risk.md` + csv + duckdb (default dated `book_risk_*` folder). `--pack` leftover/vs50/ATR. `--config-only` is cost-only (USD-naive on FX). Agent canvas is `book-risk-YYYYMMDD`. |
 | `export` | named CSVs → DuckDB + overview.log (manual section reruns) |
 

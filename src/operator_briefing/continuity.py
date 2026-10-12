@@ -10,6 +10,8 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
+from generic_utils.symbol_identity import lookup_mapping
+
 ADD_LIKE = frozenset({"ADD", "NEW", "HOLD_WITH_ADD"})
 EXIT_LIKE = frozenset({"EXIT", "SHORT", "HEDGE", "HEDGE_OR_SHORT"})
 NO_ADD_LIKE = frozenset({"HOLD_NO_ADD", "HOLD", "WAIT", "WATCH", "TRIM", "DERISK_INTO_PRINT", "DERISK"})
@@ -24,19 +26,11 @@ def load_prior_actions(path: Path | None) -> dict[str, Any]:
     return payload
 
 
-def _ticker_key(symbol: str) -> str:
-    text = str(symbol or "").strip()
-    if ":" in text:
-        return text.split(":")[-1]
-    return text
-
-
 def prior_action_for(priors: Mapping[str, Any], symbol: str) -> dict[str, Any] | None:
     actions = priors.get("actions") or {}
     if not isinstance(actions, dict):
         return None
-    ticker = _ticker_key(symbol)
-    row = actions.get(ticker) or actions.get(symbol)
+    row = lookup_mapping(actions, symbol)
     if isinstance(row, dict):
         return row
     return None

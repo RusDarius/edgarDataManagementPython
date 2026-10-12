@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from generic_utils.symbol_identity import parse_symbol
+
 from .config import DEFAULT_ALL_FIELDS_ROOT, DEFAULT_OUTPUT_ROOT
 from .load_all_fields import (
     resolve_all_fields_database,
@@ -47,10 +49,7 @@ def _normalize_text(value: Any) -> str:
 
 
 def _normalize_symbol(symbol: str) -> str:
-    normalized = _normalize_text(symbol).upper()
-    if ":" in normalized:
-        normalized = normalized.split(":", 1)[1]
-    return normalized
+    return parse_symbol(symbol).ticker
 
 
 def _safe_float(value: Any) -> float | None:
@@ -151,8 +150,9 @@ def _fetch_ticker_row(
     fields: Sequence[str],
     available: set[str],
 ) -> dict[str, Any] | None:
-    requested_upper = _normalize_text(ticker).upper()
-    bare_upper = _normalize_symbol(ticker)
+    identity = parse_symbol(ticker)
+    requested_upper = identity.normalized
+    bare_upper = identity.ticker
     select_fields = [field for field in fields if field in available]
     select_parts = ["symbol"] + [
         f"{_quote_ident(field)} AS {_quote_ident(field)}" for field in select_fields
@@ -176,14 +176,22 @@ def _fetch_ticker_row(
         order_bits.append("TRY_CAST(market_cap_basic AS DOUBLE) DESC NULLS LAST")
     order_bits.append("symbol")
 
+    if identity.qualified:
+        symbol_predicate = (
+            "UPPER(CAST(symbol AS VARCHAR)) = ? "
+            "OR UPPER(CAST(symbol AS VARCHAR)) = ?"
+        )
+    else:
+        symbol_predicate = (
+            "UPPER(CAST(symbol AS VARCHAR)) = ? "
+            "OR UPPER(list_element(string_split(CAST(symbol AS VARCHAR), ':'), 2)) = ?"
+        )
+
     sql = f"""
         SELECT {", ".join(select_parts)}
         FROM all_fields_rows
         WHERE {where_run}
-          AND (
-                UPPER(CAST(symbol AS VARCHAR)) = ?
-             OR UPPER(list_element(string_split(CAST(symbol AS VARCHAR), ':'), 2)) = ?
-          )
+          AND ({symbol_predicate})
         ORDER BY {", ".join(order_bits)}
         LIMIT 1
     """

@@ -6,13 +6,13 @@
   "type_field": "type",
   "min_n": 6,
   "peer_mcap_min": 2000000000,
-  "vs_fields": ["pe", "pe_fwd", "peg", "evrev", "evebitda", "pb", "evfcf", "opm", "left"],
+  "vs_fields": ["pe", "pe_fwd", "peg", "evrev", "evebitda", "evebitda_fwd", "pb", "evfcf", "opm", "left"],
   "omit_types": ["etf", "fund", "etp"],
   "omit_industry_substrings": ["etf"],
   "families": {
     "book": ["pb", "pe_fwd", "pe"],
-    "earnings": ["pe_fwd", "pe", "peg", "evebitda"],
-    "cash": ["evebitda", "evfcf", "pe_fwd", "pe"],
+    "earnings": ["pe_fwd", "evebitda_fwd", "pe", "peg", "evebitda"],
+    "cash": ["evebitda_fwd", "evebitda", "evfcf", "pe_fwd", "pe"],
     "sales": ["evrev"]
   },
   "efficiency": {

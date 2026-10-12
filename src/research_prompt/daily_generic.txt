@@ -36,6 +36,9 @@ GOALS
    movers_tails (down_class). CAN_PAY = unpaid unused-range that has not
    ripped. Do not steal the 0–2 NEW budget to chase a groover.
 6. Canvas daily-focus-YYYYMMDD. Budget 0–2 NEW / ADD / TRIM-EXIT / event, 0–1 short.
+   Bear in mind about $5,000 for a new line and about $1,000 and up for an add
+   to a line already held. Advice on the recommendation, not a hard target
+   and not a ranking cutoff.
 
 CURATION
 --------
@@ -44,7 +47,23 @@ Radar covers Build-50. Cite sleeve_tags / sleeve_count. Every row needs a
 course/conflict reason.
 Pack suggested_conviction is support 0.15–0.90, not a probability. Assign
 High/Med/Low after conflicts. No 0–100 mix. No logs/_tmp_*.py.
+
+Prior briefs: run `python src/generic_utils/tv_scan_cli.py briefs` and read
+digest.md before the 0–2 NEW slots. It scores earlier calls against later
+closes and omits the note text. One name is table events. A BAD or MISSED
+label changes the grade. It does not reorder Build-50. Skill:
+.cursor/skills/brief-history/SKILL.md.
 Layer map: src/generic_utils/specs/scoring_layer_order.md
+
+DATASETS
+--------
+The pack source lock is all-fields, prediction, edge, and market timing.
+Value projection is fp_* on the pack and on a forward dump. pe_fwd is
+fp_pe_y1 (next-year projection PE). fp_pe_y5 is the far year, at most 5.
+pe_fwd_tv stays empty. Do not fill pe_fwd with EV/Rev. Backtest family IC is
+datasets/family_metrics when wisdom or `run_operator_suites.py sources`
+has been run. MTP is climate. Backtest IC does not change ADD vs WAIT.
+Week/month IC plans stay --- HORIZON ---.
 
 LAUNCH
 ------
@@ -56,9 +75,16 @@ DAILY compare: `python src/operator_briefing/example_entry.py compare --session 
 
 CANVAS (short)
 --------------
-Plan, week map, Book, breadth, value (val_field / peer / efficiency), tech,
+Plan, week map, Book, breadth, value, tech
+(ABOVE/BELOW with vs50, UNUSED/MID/PAID with rng),
 radar (Build-50), omitted, earnings, shorts,
 Tape/Support (one section: day/w/5D/1M), Ledger once, roadmap on Plan.
+Value shows two reads. Trailing TV, taken as published: pe_peer beside pe_vs_ind
+and evebitda_peer beside evebitda_vs_ind. Forward derivative, which can be off:
+pe_fwd_peer beside pe_fwd_vs_ind and evebitda_fwd_peer beside evebitda_fwd_vs_ind.
+peer beside val_vs_ind is only the one multiple setup quoted.
+DISCOUNT is that column's percent <= -5. PREMIUM is >= 5. INLINE is between.
+The Ledger names each *_peer column. The label and the percent are both on the page.
 Layer map: src/generic_utils/specs/scoring_layer_order.md
 Detail: daily_generic_reference.md (canvas layout + earnings plans).
 

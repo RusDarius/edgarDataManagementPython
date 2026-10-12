@@ -1,0 +1,45 @@
+BACKTRACKING (weekly investing run) — standing spec
+===================================================
+Use this only for weekly backtracking runs produced by:
+  python src/run_backtracking.py prepare ...
+
+Data location
+-------------
+Run folder: logs/tradingview_analysis/backtracking_analysis/runs/backtracking_*/
+Read:
+  backtracking.duckdb table panel_rows
+  decision_weeks, coverage_ledger, queries.txt, picks_schema.json
+
+Do not read:
+  name_returns.csv / book_weeks.csv / investing_run.md while selecting.
+
+Selection contract
+------------------
+Write one picks file in the run folder:
+  picks_agent.csv
+
+Each row must include:
+  decision_date, symbol, selector, source_layer, cited_fields
+Optional:
+  weight, note
+
+Rules:
+  - One decision per week (decision_date in decision_weeks).
+  - Use only columns available on that panel row.
+  - Keep reasons separated by layer: prediction, edge, raw.
+  - Do not invent a blended 0-100 score.
+  - If a column is missing/null, say so instead of inferring.
+  - Default weights can be blank (score step normalizes equal-weight).
+
+Ranking behavior
+----------------
+Program selector can rank a single field (bo, left, edge_*, raw field) with optional
+industry cap. Agent selector should still cite exact panel columns and values for each pick.
+
+Output
+------
+Chat:
+  - strategy bias for this run
+  - what columns drove picks
+  - path to picks_agent.csv
+No canvas in v1.

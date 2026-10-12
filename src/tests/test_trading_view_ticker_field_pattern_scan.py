@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 
 from data_analysis_scripts.trading_view_ticker_field_pattern_scan import (
     _dedupe_events_by_family,
+    _fetch_ticker_row,
     _resolve_effective_forward_days,
     run_ticker_field_pattern_scan,
 )
@@ -131,6 +132,52 @@ def _create_daily_all_fields_database(
 
 @unittest.skipUnless(_duckdb_available(), "duckdb not installed")
 class TestTickerFieldPatternScan(unittest.TestCase):
+    def test_qualified_fetch_does_not_cross_exchange(self):
+        import duckdb
+
+        conn = duckdb.connect()
+        try:
+            conn.execute(
+                """
+                CREATE TABLE all_fields_rows (
+                    run_id VARCHAR,
+                    row_number BIGINT,
+                    symbol VARCHAR,
+                    close DOUBLE
+                )
+                """
+            )
+            conn.execute(
+                """
+                INSERT INTO all_fields_rows VALUES
+                    ('run', 1, 'ASX:MMS', 18.30),
+                    ('run', 2, 'NYSE:MMS', 56.99)
+                """
+            )
+            row = _fetch_ticker_row(
+                conn,
+                run_id="run",
+                ticker_requested_upper="NYSE:MMS",
+                ticker_bare_upper="MMS",
+                selected_columns=("close",),
+            )
+            self.assertIsNotNone(row)
+            self.assertEqual(row["symbol"], "NYSE:MMS")
+            self.assertEqual(row["close"], 56.99)
+
+            conn.execute("DELETE FROM all_fields_rows WHERE symbol = 'NYSE:MMS'")
+            self.assertIsNone(
+                _fetch_ticker_row(
+                    conn,
+                    run_id="run",
+                    ticker_requested_upper="NYSE:MMS",
+                    ticker_bare_upper="MMS",
+                    selected_columns=("close",),
+                )
+            )
+        finally:
+            conn.close()
+
     def test_scan_writes_expected_artifacts(self):
         with TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)

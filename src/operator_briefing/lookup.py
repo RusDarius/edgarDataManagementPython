@@ -8,31 +8,38 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Iterable
 
+from generic_utils.symbol_identity import bare_symbol, symbol_matches_request
+
 from .discovery import load_briefing_pack
 from .stance import suggest_stance
 
 
 def _ticker(symbol: str) -> str:
-    text = str(symbol or "").strip()
-    if ":" in text:
-        return text.split(":")[-1]
-    return text
+    return bare_symbol(symbol)
 
 
 def build_symbol_index(pack: dict[str, Any]) -> dict[str, str]:
     index: dict[str, str] = {}
+    bare_candidates: dict[str, set[str]] = {}
+
+    def _add(symbol_value: Any, ticker_value: Any = None) -> None:
+        symbol = str(symbol_value or "").strip()
+        if not symbol:
+            return
+        index[symbol.upper()] = symbol
+        ticker = str(ticker_value or _ticker(symbol)).strip().upper()
+        if ticker:
+            bare_candidates.setdefault(ticker, set()).add(symbol)
+
     for symbol in (pack.get("names") or {}):
-        index[str(symbol).upper()] = str(symbol)
-        index[_ticker(symbol).upper()] = str(symbol)
+        _add(symbol)
     for row in pack.get("book") or []:
-        symbol = str(row.get("symbol") or "")
-        ticker = str(row.get("ticker") or _ticker(symbol))
-        if symbol:
-            index[symbol.upper()] = symbol
-            index[ticker.upper()] = symbol
+        _add(row.get("symbol"), row.get("ticker"))
     for symbol in (pack.get("stances") or {}):
-        index[str(symbol).upper()] = str(symbol)
-        index[_ticker(symbol).upper()] = str(symbol)
+        _add(symbol)
+    for ticker, symbols in bare_candidates.items():
+        if len(symbols) == 1:
+            index[ticker] = next(iter(symbols))
     return index
 
 
@@ -46,8 +53,6 @@ def resolve_symbols(tokens: Iterable[str], pack: dict[str, Any]) -> tuple[list[s
         if not key:
             continue
         symbol = index.get(key)
-        if symbol is None and ":" in key:
-            symbol = index.get(key.split(":")[-1])
         if symbol is None:
             missing.append(str(token).strip())
             continue
@@ -59,9 +64,11 @@ def resolve_symbols(tokens: Iterable[str], pack: dict[str, Any]) -> tuple[list[s
 
 def _book_row(pack: dict[str, Any], symbol: str) -> dict[str, Any] | None:
     for row in pack.get("book") or []:
-        if str(row.get("symbol") or "") == symbol:
+        if str(row.get("symbol") or "").strip().upper() == symbol.strip().upper():
             return row
-        if str(row.get("ticker") or "").upper() == _ticker(symbol).upper():
+    for row in pack.get("book") or []:
+        stored = row.get("symbol") or row.get("ticker")
+        if symbol_matches_request(stored, symbol):
             return row
     return None
 

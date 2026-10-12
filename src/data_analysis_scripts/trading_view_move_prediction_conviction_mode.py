@@ -323,6 +323,11 @@ def _build_candidate_records(
     earnings_config = config.get("earnings_catalyst") or {}
 
     candidates: list[dict[str, Any]] = []
+    regime_catalog = None
+    if regime_context_by_symbol:
+        from generic_utils.symbol_identity import SymbolCatalog
+
+        regime_catalog = SymbolCatalog.build(regime_context_by_symbol)
     for row in base_rows:
         consensus_row_number = row.get("consensus_row_number")
         symbol = str(row.get("symbol") or "")
@@ -425,6 +430,7 @@ def _build_candidate_records(
                 regime_record = get_regime_record_for_row(
                     {"symbol": symbol},
                     regime_context_by_symbol,
+                    regime_catalog,
                 )
                 if regime_record is not None:
                     regime_fit_score = regime_record.regime_fit_score

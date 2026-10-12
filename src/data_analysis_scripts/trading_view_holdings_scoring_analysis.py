@@ -36,6 +36,7 @@ from db.trading_view_move_prediction_duckdb import (
     describe_move_prediction_duckdb,
     query_move_prediction_duckdb,
 )
+from generic_utils.symbol_identity import SymbolCatalog, lookup_mapping
 
 HOLDINGS_SCORING_LOG_DIR = LOG_DIR.parent / "holdings_scoring_analysis"
 DEFAULT_DUCKDB_RUNS_ROOT = LOG_DIR / "duckdb_runs"
@@ -369,28 +370,35 @@ def _pick_catalog_entry(
     return None
 
 
-def _catalog_entry_for_holding(
+def _catalog_candidates_for_holding(
     holding: HoldingConfig,
     catalog: Sequence[RawScanSymbolEntry],
-) -> RawScanSymbolEntry | None:
+) -> list[RawScanSymbolEntry]:
     if not catalog:
-        return None
+        return []
     match_key, strict = holding_config_match_keys(holding)
     if strict:
-        return next(
-            (
-                entry
-                for entry in catalog
-                if holding_matches_db_symbol_strict(match_key, entry.symbol)
-            ),
-            None,
-        )
-    candidates = [
+        return [
+            entry
+            for entry in catalog
+            if holding_matches_db_symbol_strict(match_key, entry.symbol)
+        ]
+    return [
         entry
         for entry in catalog
         if holding_matches_db_symbol(match_key, entry.symbol)
         or holding_matches_db_symbol(match_key, entry.bare_ticker)
     ]
+
+
+def _catalog_entry_for_holding(
+    holding: HoldingConfig,
+    catalog: Sequence[RawScanSymbolEntry],
+) -> RawScanSymbolEntry | None:
+    candidates = _catalog_candidates_for_holding(holding, catalog)
+    _, strict = holding_config_match_keys(holding)
+    if strict:
+        return candidates[0] if len(candidates) == 1 else None
     return _pick_catalog_entry(holding, candidates)
 
 
@@ -1026,6 +1034,8 @@ def match_holdings_to_db_symbols(
     catalog = list(raw_catalog or [])
 
     for holding in holdings:
+        _, strict = holding_config_match_keys(holding)
+        catalog_candidates = _catalog_candidates_for_holding(holding, catalog)
         catalog_entry = _catalog_entry_for_holding(holding, catalog)
         if catalog_entry is not None:
             lookup_key = catalog_entry.symbol
@@ -1043,18 +1053,22 @@ def match_holdings_to_db_symbols(
             )
             continue
 
-        match_symbol = next(
-            (
-                db_symbol
-                for db_symbol in db_symbols
-                if db_symbol not in used_lookup_keys
-                and holding_matches_db_symbol_for_holding(holding, db_symbol)
-            ),
-            None,
-        )
-        if match_symbol is None:
+        # Several listings share this bare ticker. Do not take the first
+        # alphabetical consensus symbol (BME:NXT before NASDAQ:NXT).
+        if not strict and len(catalog_candidates) > 1:
             unmatched.append(holding_config_label(holding))
             continue
+
+        matching_symbols = [
+            db_symbol
+            for db_symbol in db_symbols
+            if db_symbol not in used_lookup_keys
+            and holding_matches_db_symbol_for_holding(holding, db_symbol)
+        ]
+        if len(matching_symbols) != 1:
+            unmatched.append(holding_config_label(holding))
+            continue
+        match_symbol = matching_symbols[0]
         used_lookup_keys.add(match_symbol)
         matched.append(MatchedHolding(holding=holding, db_symbol=match_symbol))
 
@@ -2601,9 +2615,20 @@ def _build_shortlist_position_rows(
     )
 
     position_rows: list[dict[str, Any]] = []
+    conviction_catalog = (
+        SymbolCatalog.build(conviction_lookup) if conviction_lookup else None
+    )
     for summary_row in summary_rows:
-        ticker = str(summary_row.get("config_ticker") or summary_row.get("matched_symbol") or "")
-        conviction_row = conviction_lookup.get(ticker)
+        symbol = str(
+            summary_row.get("matched_symbol")
+            or summary_row.get("config_ticker")
+            or ""
+        )
+        conviction_row = (
+            lookup_mapping(conviction_lookup, symbol, conviction_catalog)
+            if symbol
+            else None
+        )
         row = _merge_shortlist_scoring_fields(summary_row, conviction_row)
 
         invested_usd = _coerce_optional_float(row.get("invested_sum_usd"))
@@ -3264,9 +3289,9 @@ def run_holdings_scoring_analysis(
                 _load_export_csv_rows(Path(scan_result.exported_files["conviction"]))
             )
     conviction_by_ticker = {
-        str(row.get("config_ticker") or ""): row
+        str(row.get("matched_symbol") or row.get("config_ticker") or ""): row
         for row in conviction_rows
-        if row.get("config_ticker")
+        if row.get("matched_symbol") or row.get("config_ticker")
     }
 
     skipped_unmatched: list[str] = []

@@ -3,7 +3,7 @@
 Replaces ad-hoc agent SQL / `_tmp_*.py`. No eligibility cutoffs.
 Subcommands: recipes, inventory, summary, group, histogram, counts,
 overlap, fetch, named, history, span, weight-group, join, derive, focus,
-pack-focus, movers, setup, forward, risk, capture, capture-replay, export.
+pack-focus, movers, setup, forward, risk, capture, capture-replay, session, briefs, export.
 Rank-only (no --where): rank_cli.py.
 All-suite manual runner: src/run_operator_suites.py
 """
@@ -580,6 +580,18 @@ def _cmd_movers(args: argparse.Namespace) -> dict[str, Any]:
     if group_field and cap is None:
         raise SystemExit("movers --group-field requires --cap")
     filtered, clauses = filter_rows(rows, where)
+    if recipe.get("name") in {"movers_day", "movers_3m"}:
+        from generic_utils.forward_fundamentals import (
+            attach_forward_fundamentals,
+            load_projection_context,
+        )
+
+        try:
+            filtered = attach_forward_fundamentals(
+                filtered, context=load_projection_context()
+            )
+        except Exception:
+            pass
     drop_suffixes = recipe.get("drop_duplicate_suffixes", True)
     if getattr(args, "keep_duplicate_suffixes", False):
         drop_suffixes = False
@@ -689,8 +701,23 @@ def _cmd_setup(args: argparse.Namespace) -> dict[str, Any]:
     from generic_utils.scan_sources import rows_to_csv
     from generic_utils.setup import attach_setup, load_setup_recipe
 
+    from generic_utils.forward_fundamentals import (
+        attach_forward_fundamentals,
+        load_projection_context,
+    )
+
     recipe = load_setup_recipe(args.recipe)
     rows = _load_pack_or_source_rows(args)
+    if getattr(args, "no_finproj", False):
+        rows = attach_forward_fundamentals(rows)
+    else:
+        rows = attach_forward_fundamentals(
+            rows,
+            context=load_projection_context(
+                growth_db=getattr(args, "fingrowth_db", None),
+                price_db=getattr(args, "finproj_db", None),
+            ),
+        )
     peer = _peer_rows_for_setup(args, rows, recipe)
     out_rows = attach_setup(rows, recipe, peer_rows=peer)
     notes = [
@@ -767,6 +794,7 @@ def _cmd_forward(args: argparse.Namespace) -> dict[str, Any]:
         price_run=fp_sources.get("finproj_db"),
         growth_run=fp_sources.get("fingrowth_db"),
         with_setup=not getattr(args, "no_setup", False),
+        load_projection=not getattr(args, "no_finproj", False),
     )
     out_rows, cover_spec = _apply_cover(out_rows, args, clamp=True)
     spec = {
@@ -776,7 +804,8 @@ def _cmd_forward(args: argparse.Namespace) -> dict[str, Any]:
         "peer_n": len(peer) if peer is not None else len(rows),
         "note": (
             "fwd_street_* = analyst PT leftover; fwd_pack_* = max(street, edge); "
-            "fp_* = financial_projection. Empty pe_fwd is a gap, not EV/Rev."
+            "fp_pe_y1 / fp_evebitda_y1 are the projection forwards. "
+            "pe_fwd_tv stays empty when TradingView forward PE is empty. Do not fill with EV/Rev."
         ),
         **cover_spec,
         **{k: v for k, v in fp_sources.items() if k.endswith("_n")},
@@ -1119,6 +1148,121 @@ def _cmd_capture_replay(args: argparse.Namespace) -> dict[str, Any]:
     if not getattr(args, "quiet", False):
         print(_dumps(out_payload))
     return out_payload
+
+
+def _cmd_briefs(args: argparse.Namespace) -> dict[str, Any]:
+    from datetime import datetime, timezone
+
+    from generic_utils.brief_history import (
+        build_brief_history,
+        collect_marks,
+        format_digest_md,
+        load_bands,
+        load_sessions,
+    )
+    from generic_utils.run_export import write_run_export
+
+    project = Path(__file__).resolve().parents[2]
+    priors = Path(args.priors) if args.priors else project / "logs" / "AI_ANALYSIS_UTILS" / "priors"
+    runs = Path(args.runs) if args.runs else project / "logs" / "tradingview_analysis" / "operator_briefing" / "runs"
+    recipe = Path(args.recipe) if args.recipe else project / "config" / "generic_utils" / "brief_history.json"
+    recipe_payload: dict[str, Any] = {}
+    if recipe.exists():
+        loaded = json.loads(recipe.read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            recipe_payload = loaded
+    max_names = int(args.max_names) if args.max_names is not None else int(recipe_payload.get("max_names") or 40)
+    note_chars = int(args.note_chars) if args.note_chars is not None else int(recipe_payload.get("note_chars") or 0)
+    sessions = load_sessions(priors)
+    marks, latest_day, notes = collect_marks(sessions, runs, args.latest_pack)
+    built = build_brief_history(
+        sessions,
+        marks,
+        latest_day=latest_day,
+        bands=load_bands(recipe),
+        max_names=max_names,
+        note_chars=note_chars,
+    )
+    if not args.out_dir:
+        stamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M_utc")
+        args.out_dir = (runs / f"brief_history_{stamp}").as_posix()
+        notes.append("defaulted --out-dir under operator_briefing/runs")
+    notes.append("digest.md omits prior notes. Query events for one ticker.")
+    exported = write_run_export(
+        args.out_dir,
+        tool="tv_scan_cli.briefs",
+        tables={
+            "sessions": built["sessions"],
+            "names": built["names"],
+            "events": built["events"],
+            "adapt": [{"line": line} for line in built["adapt"]],
+        },
+        sources={
+            "priors": priors.as_posix(),
+            "runs": runs.as_posix(),
+            "recipe": recipe.as_posix(),
+            "latest_day": latest_day,
+        },
+        schema_version="brief_history_v1",
+        notes=notes,
+        extra={
+            "n_names": built["spec"]["n_names"],
+            "n_events": built["spec"]["n_events"],
+            "buckets": built["buckets"],
+        },
+        duckdb_name="brief_history.duckdb",
+    )
+    md_path = Path(args.out_dir) / "digest.md"
+    md_path.write_text(format_digest_md(built), encoding="utf-8")
+    exported["digest"] = md_path.as_posix()
+    printed = {
+        "spec": built["spec"],
+        "buckets": built["buckets"],
+        "adapt": built["adapt"],
+        "names": built["names"] if args.include_rows else built["shown"],
+        "notes": notes,
+        "export": exported,
+    }
+    if args.include_rows:
+        printed["events"] = built["events"]
+    if not args.quiet:
+        print(_dumps(printed))
+    return printed
+
+
+def _cmd_session(args: argparse.Namespace) -> dict[str, Any]:
+    from generic_utils.run_export import write_run_export
+    from generic_utils.session_tape import build_post_earn
+
+    exchanges = None
+    if args.exchanges:
+        exchanges = [part.strip() for part in str(args.exchanges).split(",") if part.strip()]
+    built = build_post_earn(
+        prior_db=args.prior_db,
+        current_db=args.current_db,
+        earn_on=args.earn_on,
+        prior_run=args.prior_run,
+        current_run=args.current_run,
+        exchanges=exchanges,
+    )
+    payload = {
+        "spec": built["spec"],
+        "rows": built["rows"] if args.include_rows else [],
+        "n": built["spec"]["n"],
+    }
+    if args.out_dir:
+        exported = write_run_export(
+            args.out_dir,
+            tool="tv_scan_cli.session",
+            tables={"post_earn": built["rows"]},
+            sources=built["spec"],
+            notes=list(built["spec"].get("notes") or []),
+            duckdb_name="session.duckdb",
+        )
+        payload["export"] = exported
+    if not args.quiet:
+        print(_dumps(payload))
+    return payload
 
 
 def _cmd_export(args: argparse.Namespace) -> dict[str, Any]:
@@ -1512,6 +1656,40 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     capr_p.add_argument("--include-rows", action="store_true")
     capr_p.add_argument("--quiet", action="store_true")
     capr_p.set_defaults(func=_cmd_capture_replay)
+
+    briefs_p = sub.add_parser(
+        "briefs",
+        help="Score prior operator briefs vs later pack closes. Digest omits notes.",
+    )
+    briefs_p.add_argument("--priors", default=None, help="Folder of *_operator_actions.json.")
+    briefs_p.add_argument("--runs", default=None, help="operator_briefing/runs with briefing_pack_* folders.")
+    briefs_p.add_argument("--latest-pack", default=None, help="Pack folder or briefing_pack.duckdb. Default: newest pack.")
+    briefs_p.add_argument("--recipe", default=None, help="Band file. Default config/generic_utils/brief_history.json.")
+    briefs_p.add_argument("--max-names", type=int, default=None, help="Names on the digest page. Default from the recipe.")
+    briefs_p.add_argument("--note-chars", type=int, default=None, help="Chars of note kept on events. Default 0.")
+    briefs_p.add_argument("--out-dir", default=None)
+    briefs_p.add_argument("--include-rows", action="store_true")
+    briefs_p.add_argument("--quiet", action="store_true")
+    briefs_p.set_defaults(func=_cmd_briefs)
+
+    ses_p = sub.add_parser(
+        "session",
+        help="Join two all-fields scans for names that reported on a date.",
+    )
+    ses_p.add_argument("--prior-db", required=True)
+    ses_p.add_argument("--current-db", required=True)
+    ses_p.add_argument("--earn-on", required=True, help="YYYY-MM-DD of the print.")
+    ses_p.add_argument("--prior-run", default=None)
+    ses_p.add_argument("--current-run", default=None)
+    ses_p.add_argument(
+        "--exchanges",
+        default="NASDAQ,NYSE,AMEX",
+        help="Comma list. Pass an empty string for every exchange.",
+    )
+    ses_p.add_argument("--out-dir", default=None)
+    ses_p.add_argument("--include-rows", action="store_true")
+    ses_p.add_argument("--quiet", action="store_true")
+    ses_p.set_defaults(func=_cmd_session)
 
     exp_p = sub.add_parser(
         "export",

@@ -5959,14 +5959,22 @@ def _log_regime_aligned_section(
     from data_analysis_scripts.trading_view_regime_context_overlay import (
         get_regime_record_for_row,
     )
+    from generic_utils.symbol_identity import SymbolCatalog
 
+    regime_catalog = (
+        SymbolCatalog.build(regime_context_by_symbol)
+        if regime_context_by_symbol
+        else None
+    )
     ranked: list[tuple[float, dict[str, Any]]] = []
     for prediction in prediction_rows:
         weeks = prediction["horizons"].get("weeks") or {}
         weeks_ras = weeks.get("risk_adjusted_score")
         if weeks_ras is None:
             continue
-        record = get_regime_record_for_row(prediction["row"], regime_context_by_symbol)
+        record = get_regime_record_for_row(
+            prediction["row"], regime_context_by_symbol, regime_catalog
+        )
         if record is None:
             continue
         if record.active_mgmt_tier in {"warning_overlay", "insufficient_signals"}:
@@ -5988,7 +5996,9 @@ def _log_regime_aligned_section(
     for combined, prediction in top_ranked:
         row = prediction["row"]
         weeks = prediction["horizons"].get("weeks") or {}
-        record = get_regime_record_for_row(prediction["row"], regime_context_by_symbol)
+        record = get_regime_record_for_row(
+            prediction["row"], regime_context_by_symbol, regime_catalog
+        )
         if record is None:
             continue
         listed_predictions.append(prediction)

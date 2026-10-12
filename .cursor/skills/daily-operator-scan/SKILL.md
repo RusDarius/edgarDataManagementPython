@@ -7,6 +7,8 @@ description: Compile and brief the daily active-manager leftover scan (Book, Bui
 
 Deterministic scores already exist. This skill is the **reuse contract**: compile a briefing pack, then reason. Do not re-fish DuckDB, invent a 0–100 composite, or write `_tmp_*.py` under `logs/`.
 
+If the pasted block says `duckdb output`, stop at the pack folder. Write `daily-focus-YYYYMMDD` only when it says `canvas output`. Name tables on that canvas only when it also says `data lists`. Selection columns on any name table: `opm`, `pe`, `pe_fwd`, `peg`, `dte`, `bo`/`cont`/`fwd`, `rsi`, `rng`, `vs50`, `vs200`, `tech_sma`, `peer`, `val_vs_ind`, `val_ind_med`, `val_vs_avg`, `val_ind_avg`, `eff_vs_ind`, `eff_vs_avg`, `val`, and street / pack / model prices kept separate. Median percent and average percent are different columns. The peer label uses `val_vs_ind` only. Each other relative metric on the row is `FIELD_vs_ind` plus `FIELD_vs_avg` (and the median and average levels). A bin label (`ABOVE`/`BELOW`, `DISCOUNT`/`PREMIUM`/`INLINE`, `UNUSED`/`MID`/`PAID`) is shown with its percent: `vs50` beside the 50-day label, both peer percents beside Peer, `rng` beside the range label. On a canvas, add those columns even when the page is not a full data list.
+
 ## Commands
 
 ```powershell
@@ -30,18 +32,18 @@ Manual dumps of every suite (value/tech, forward, movers, risk, finproj) without
 Before inventing SQL, a `_tmp_*.py`, or a new cutoff: `.cursor/skills/generic-vs-domain/SKILL.md`.
 Canvas abbreviations: `.cursor/skills/canvas-ledger/SKILL.md` — exactly one Ledger menu for every symbol. Do not repeat ledgers on other tabs.
 
-Prompt text: `src/focus_pool_screening/prompts/daily_generic.txt`. Earnings-lane / canvas-layout / manual DuckDB runs: `daily_generic_reference.md` (do not @ it on DAILY (full)). Overrides: `overrides_template.txt`. Copy-paste: `src/focus_pool_screening/prompts/agent_copy_paste.txt`. DAILY (full) is week map, **Build-50** (`radar_curated_50`) ranking of best trades / positions to build on, Top 100 unpaid ∪ continuation appendix, short 15, earnings both ways, operator High/Med/Low, plus **one Tape/Support section** (day / week / 5D / 1M). Scoring layers: `src/generic_utils/specs/`. 3M tape is --- MOVERS (3M) ---. Do not attach `movers_generic.txt` on DAILY (full).
+Prompt text: `src/research_prompt/daily_generic.txt`. Earnings-lane / canvas-layout / manual DuckDB runs: `src/research_prompt/daily_generic_reference.md` (do not @ it on DAILY (full)). Overrides: `src/research_prompt/overrides_template.txt`. Copy-paste: `src/research_prompt/agent_copy_paste.txt`. DAILY (full) is week map, **Build-50** (`radar_curated_50`) ranking of best trades / positions to build on, Top 100 unpaid ∪ continuation appendix, short 15, earnings both ways, operator High/Med/Low, plus **one Tape/Support section** (day / week / 5D / 1M). Scoring layers: `src/generic_utils/specs/`. 3M tape is --- MOVERS (3M) ---. Do not attach `src/research_prompt/movers_generic.txt` on DAILY (full).
 
 ## Work order
 
-1. Source lock from pack `sources`. Cite run_ids.
-2. Continuity from pack `book[].continuity` plus `logs/AI_ANALYSIS_UTILS/priors/*_operator_actions.json`. Polar ADD/NEW → EXIT is blocked unless `thesis_kill` is true.
+1. Source lock from pack `sources` (all-fields, prediction, edge, MTP). When `datasets/` exists, also cite backtest `family_metrics` and the value-projection dumps. MTP stays climate. Backtest IC does not change ADD vs WAIT — that plan is backtest-horizon.
+2. Continuity from pack `book[].continuity` plus the brief-history digest (`python src/generic_utils/tv_scan_cli.py briefs`, then `digest.md`). Polar ADD/NEW → EXIT is blocked unless `thesis_kill` is true. Do not re-read every prior JSON. Open one prior only for a BAD or MISSED name that needs its original reason. Skill: `.cursor/skills/brief-history/SKILL.md`.
 3. Regime from pack `regime.us_2b` and `industries_5d` **before** naming stocks. Name-level day/week/5D/1M groovers go in the canvas **Tape** section (pack `movers` / DuckDB `movers_tails`): **ranked Top 25 up** by that horizon’s return (best → least) and a **bottom 25 punished pool** split **BOUNCE** vs **CONTINUE_DOWN** (`down_class`). Tables include **Val / Peer / Proj / Tech** on the same tab. Not extra leftover rank and not four extra tabs.
 4. Book: one action per holding. Prefer pack continuity, then pack `stances`. Cite pack `capital` (NAV = mark + cash) and `wt_nav`. Full loss ladders are --- RISK --- (`.cursor/skills/book-risk/SKILL.md`) → own canvas `book-risk-YYYYMMDD` plus `--out-dir/book_risk.md`. Do not steal Daily tabs.
 5. Earnings 0–7 / 8–21 / 22–60 from pack `earnings_lanes`. Publish **upside** and **downside** lists (curate 8–12 each). Catalyst policy PASS-all is not a filter. Unix epoch dates in all-fields are parsed by the pack. Do not double-size a Book ADD as a rumour ticket.
 6. Week map (today / rest of week / 8–21d / 22–60d) before naming extra stocks.
 7. Radar from pack **sleeves** — headline **Build-50** from `radar_curated_50` (industry-capped, Book exempt, overflow on `radar_industry_overflow`). Cover all 50 on the canvas Radar tab (filters OK). `radar_curated_25` is the first 25 of that list. Uncapped `radar_upside_100` / `short_book_15` / `.upside` / `.downside` are appendix-only. Cite each row's `sleeve_tags`/`sleeve_count`. Then pack `suggested_courses` (ranked **inside** ADD / NEW / WAIT / PASS / SHORT_WAIT) seeds the Plan tab — do not re-derive the budget by hand. Do not paste leftover-first dumps. Do not flatten those buckets into one score. Auto NEW is not the 0–2 NEW budget. Layer map: `src/generic_utils/specs/scoring_layer_order.md`.
-8. Canvas: `daily-focus-YYYYMMDD.canvas.tsx`. Chat is a short snapshot + canvas link. Breadth, **Value** (`val_field` / peer / efficiency — not EV/Rev for every name), **Tech** (`tech_sma` / rng / RSI / vs50), Book positioning, and **one Tape/Support section** (clusters + BOUNCE / CONTINUE_DOWN). Not four Daily mover tabs. If the user also asked --- MOVERS ---, full 25s go on **one** `movers-YYYYMMDD` (price-movers skill) — Daily Tape stays condensed and points there. 3M stays off Daily. Required: exactly one **Ledger** menu (`.cursor/skills/canvas-ledger/SKILL.md`).
+8. Canvas: `daily-focus-YYYYMMDD.canvas.tsx`. Chat is a short snapshot + canvas link. Breadth, **Value** (`val_field` / peer / efficiency — not EV/Rev for every name), **Tech** (`tech_sma` / rng / RSI / vs50), every Book row, all of Build-50, shorts, earnings both ways, and **one Tape/Support section** with the ranked Top 25 up and BOUNCE versus CONTINUE_DOWN. Not four Daily mover tabs. If the user also asked --- MOVERS ---, the same 25s also go on **one** `movers-YYYYMMDD`. That movers page does not replace the Daily tape tables. A Daily tape that only says "see movers" is incomplete. 3M stays off Daily. Required: exactly one **Ledger** menu (`.cursor/skills/canvas-ledger/SKILL.md`).
 9. Rankings omit: read `radar_industry_overflow` / high-`rr` unused-range rows in `radar_upside_100` before locking NEW. Do not add a new leftover/RSI cutoff to "clean" the list.
 10. After the brief, log one generic-vs-domain note (what was reused, what should be promoted). See `.cursor/skills/generic-vs-domain/SKILL.md`.
 
@@ -50,14 +52,16 @@ Prompt text: `src/focus_pool_screening/prompts/daily_generic.txt`. Earnings-lane
 - Mix `avoid_value_trap` on a live leftover Book line → HOLD_NO_ADD, not EXIT.
 - Prior DERISK sticks while dte ≤ 7. Prior TRIM sticks until tape repairs. Prior HOLD_NO_ADD does not silently become HOLD.
 - MTP `ENTER_SMALL` / `ENTER_PROBE` → timing climate, not a buy list.
-- Leftover = `left` in the pack = max(street PT, edge forward upside). Do not average it with conviction.
+- Leftover = `left` in the pack = max(street PT, edge forward upside). Do not average it with conviction. When `street_left` is negative and `left` is positive, `generic_utils.derive.leftover_carrier` is `edge_only`. Cite `street_px` beside `left`. Do not spend a NEW on `edge_only`.
 - `rr` = leftover / max(52w range, 15). High = unused upside vs already-paid range. Not a 0–100 score.
 - Book risk: `wt_nav` = mark / NAV. `wipe_nav_pct` is the name-goes-to-zero ceiling. `m15_nav` is a further −15% from mark as % of NAV. Not a 0–100 risk score. Full ladders: `tv_scan_cli.py risk`.
 - `suggested_conviction` is **support for a named course** (0.15–0.90), not mix and not a probability. Always quote `evidence` and `conflicts`. Operator then assigns High / Med / Low.
 - Paid continuation (RSI ≥ 70, leftover gone, rng ≥ 85) → watch, do not chase.
+- Read `src/feedback_models` open lessons before a NEW into an earnings print. `SELL_THE_NEWS` stays the course when weeks `bo` is high. Do not buy the leftover that reopens the same day the price gaps down.
 - Shorts need limited leftover (pack shorts sleeve / SHORT_WAIT). Do not overlay-short a leftover-91 EXIT.
 - A table that just relays a raw pack sleeve, or an Operator/Action column that is only differentiated for a hardcoded handful of tickers, is a pack dump even with correct numbers. Every row needs a course/conflict-derived reason.
 - Default budget: 0–2 NEW, 0–2 ADD, 0–2 TRIM/EXIT, 0–2 event, 0–1 short.
+- Starter size to bear in mind: about $5,000 for a new line. A smaller new position is not a useful book slot. An add to a line already held can be about $1,000 and up. This is advice on the recommendation, not a hard cash target and not a ranking cutoff. Do not put it in `ranking.py`.
 - After publishing, write `logs/AI_ANALYSIS_UTILS/priors/YYYYMMDD_operator_actions.json`.
 
 ## Schema cheat sheet

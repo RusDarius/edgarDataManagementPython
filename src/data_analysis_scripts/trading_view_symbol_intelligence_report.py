@@ -86,6 +86,7 @@ from data_analysis_scripts.trading_view_field_semantic_classifier import (
 from db.trading_view_move_prediction_duckdb import query_move_prediction_duckdb
 from edge_research_tools.run_resolution import discover_latest_edge_parent_run_dir
 from generic_utils.log_to_files_util import log_to_file
+from generic_utils.symbol_identity import parse_symbol, symbol_matches_request
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT_ROOT = (
@@ -623,9 +624,57 @@ def _wrap_text(text: str, indent: str = "    ", width: int = 108) -> list[str]:
 # Symbol / file helpers
 # ---------------------------------------------------------------------------
 def _symbol_candidates(symbol: str) -> tuple[str, str]:
-    normalized = str(symbol or "").strip().upper()
-    bare = normalized.split(":", 1)[1] if ":" in normalized else normalized
-    return normalized, bare
+    identity = parse_symbol(symbol)
+    return identity.normalized, identity.ticker
+
+
+def _symbol_sql_predicate(
+    column: str, normalized: str, bare: str
+) -> tuple[str, list[str]]:
+    """Return an identity-safe SQL predicate and its parameters.
+
+    A qualified request may match its exact full symbol or a genuinely bare
+    legacy row, but never another exchange carrying the same ticker.
+    """
+    if parse_symbol(normalized).qualified:
+        return f"(UPPER({column}) = ? OR UPPER({column}) = ?)", [normalized, bare]
+    return (
+        f"(UPPER({column}) = ? OR UPPER({column}) LIKE '%:' || ?)",
+        [normalized, bare],
+    )
+
+
+def _pick_symbol_row(
+    rows: Sequence[dict[str, Any]],
+    symbol: str,
+    *,
+    symbol_key: str = "symbol",
+) -> dict[str, Any] | None:
+    """Resolve rows without crossing exchanges for a qualified request."""
+    normalized, _ = _symbol_candidates(symbol)
+    exact = [
+        row
+        for row in rows
+        if str(row.get(symbol_key, "")).strip().upper() == normalized
+    ]
+    if exact:
+        return exact[0]
+
+    candidates = [
+        row
+        for row in rows
+        if symbol_matches_request(row.get(symbol_key), normalized)
+    ]
+    if not candidates:
+        return None
+
+    def _market_cap(row: dict[str, Any]) -> float:
+        try:
+            return float(row.get("market_cap_basic") or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    return max(candidates, key=_market_cap)
 
 
 def _symbol_file_token(symbol: str) -> str:
@@ -641,18 +690,7 @@ def _read_csv_rows(path: Path) -> list[dict[str, str]]:
 
 
 def _find_symbol_row(rows: list[dict[str, str]], symbol: str) -> dict[str, str] | None:
-    normalized, bare = _symbol_candidates(symbol)
-    exact = [
-        row for row in rows if str(row.get("symbol", "")).strip().upper() == normalized
-    ]
-    if exact:
-        return exact[0]
-    bare_matches = [
-        row
-        for row in rows
-        if str(row.get("symbol", "")).strip().upper().split(":")[-1] == bare
-    ]
-    return bare_matches[0] if bare_matches else None
+    return _pick_symbol_row(rows, symbol)
 
 
 def _select_populous_latest_run_id(
@@ -689,45 +727,32 @@ def _query_all_fields_symbol_row(
     bare: str,
     run_id: str | None,
 ) -> dict[str, Any] | None:
+    predicate, symbol_params = _symbol_sql_predicate(
+        "r.symbol", normalized, bare
+    )
     if run_id is not None:
-        sql = """
+        sql = f"""
             SELECT r.*
             FROM all_fields_rows AS r
             WHERE r.run_id = ?
-              AND (UPPER(r.symbol) = ? OR UPPER(r.symbol) LIKE '%:' || ?)
+              AND {predicate}
         """
-        params: list[Any] = [run_id, normalized, bare]
+        params: list[Any] = [run_id, *symbol_params]
     else:
         # No good run scoped: search every run for this symbol (newest first) so a
         # symbol missing only from the current run still resolves to its most
         # recent available data instead of "not found".
-        sql = """
+        sql = f"""
             SELECT r.*
             FROM all_fields_rows AS r
             LEFT JOIN run_metadata AS m USING (run_id)
-            WHERE UPPER(r.symbol) = ? OR UPPER(r.symbol) LIKE '%:' || ?
+            WHERE {predicate}
             ORDER BY m.created_at_utc DESC NULLS LAST, r.row_number DESC
             LIMIT 200
         """
-        params = [normalized, bare]
+        params = symbol_params
     rows = query_move_prediction_duckdb(all_fields_db, sql, params)
-    if not rows:
-        return None
-    if len(rows) == 1:
-        return rows[0]
-    exact = [
-        row for row in rows if str(row.get("symbol", "")).strip().upper() == normalized
-    ]
-    if exact:
-        return exact[0]
-
-    def _market_cap(row: dict[str, Any]) -> float:
-        try:
-            return float(row.get("market_cap_basic") or 0.0)
-        except (TypeError, ValueError):
-            return 0.0
-
-    return max(rows, key=_market_cap)
+    return _pick_symbol_row(rows, normalized)
 
 
 def _load_all_fields_snapshot(
@@ -914,6 +939,9 @@ def _load_weekly_history(
 
     selected = sorted(by_week.values(), key=lambda entry: entry["date"])[-weeks:]
     normalized, bare = _symbol_candidates(symbol)
+    predicate, symbol_params = _symbol_sql_predicate(
+        "r.symbol", normalized, bare
+    )
 
     history_rows: list[dict[str, Any]] = []
     weeks_with_symbol = 0
@@ -938,17 +966,20 @@ def _load_weekly_history(
                     for column in columns + helper_columns
                 )
                 sql = f"""
-                    SELECT {select_parts}
+                    SELECT r.symbol AS "_resolved_symbol", {select_parts}
                     FROM all_fields_rows AS r
                     WHERE r.run_id = ?
-                      AND (UPPER(r.symbol) = ? OR UPPER(r.symbol) LIKE '%:' || ?)
-                    LIMIT 1
+                      AND {predicate}
                 """
                 rows = query_move_prediction_duckdb(
-                    entry["db"], sql, [run_id, normalized, bare]
+                    entry["db"], sql, [run_id, *symbol_params]
                 )
-                if rows:
-                    metrics = rows[0]
+                selected_row = _pick_symbol_row(
+                    rows, normalized, symbol_key="_resolved_symbol"
+                )
+                if selected_row:
+                    metrics = dict(selected_row)
+                    record["resolved_symbol"] = metrics.pop("_resolved_symbol", "")
                     close = _to_float(metrics.get("close"))
                     sma200 = _to_float(metrics.pop("SMA200", None))
                     high_52w = _to_float(
@@ -988,7 +1019,9 @@ def _load_move_prediction_context(
     log flag when a fallback was needed.
     """
     normalized, bare = _symbol_candidates(symbol)
-    predicate = "UPPER(t.symbol) = ? OR UPPER(t.symbol) LIKE '%:' || ?"
+    predicate, symbol_params = _symbol_sql_predicate(
+        "t.symbol", normalized, bare
+    )
     db_files = sorted(
         Path(prediction_root).rglob("move_prediction_*.duckdb"),
         key=lambda path: path.stat().st_mtime,
@@ -1021,7 +1054,7 @@ def _load_move_prediction_context(
                 """
                 try:
                     return query_move_prediction_duckdb(
-                        db_file, sql, [run_id, normalized, bare]
+                        db_file, sql, [run_id, *symbol_params]
                     )
                 except Exception:
                     return []
@@ -1060,7 +1093,9 @@ def _load_prediction_weekly_history(
         key=lambda path: path.stat().st_mtime,
     )
     normalized, bare = _symbol_candidates(symbol)
-    predicate = "UPPER(symbol) = ? OR UPPER(symbol) LIKE '%:' || ?"
+    predicate, symbol_params = _symbol_sql_predicate(
+        "symbol", normalized, bare
+    )
     history: list[dict[str, Any]] = []
     for db_file in db_files:
         try:
@@ -1083,7 +1118,7 @@ def _load_prediction_weekly_history(
                 WHERE run_id = ? AND ({predicate})
                 ORDER BY horizon_name
                 """,
-                [run_id, normalized, bare],
+                [run_id, *symbol_params],
             )
             conviction = query_move_prediction_duckdb(
                 db_file,
@@ -1094,7 +1129,7 @@ def _load_prediction_weekly_history(
                 WHERE run_id = ? AND ({predicate})
                 ORDER BY sleeve
                 """,
-                [run_id, normalized, bare],
+                [run_id, *symbol_params],
             )
         except Exception:
             continue
@@ -1342,14 +1377,26 @@ def _projection_symbol_rows(
     extra_where: str = "",
     order_by: str = "",
 ) -> list[dict[str, Any]]:
+    predicate, symbol_params = _symbol_sql_predicate(
+        "t.symbol", normalized, bare
+    )
     sql = f"""
         SELECT t.*
         FROM {table} AS t
-        WHERE (UPPER(t.symbol) = ? OR UPPER(t.symbol) LIKE '%:' || ?)
+        WHERE {predicate}
         {extra_where}
         {order_by}
     """
-    return query_move_prediction_duckdb(db_file, sql, [normalized, bare])
+    rows = query_move_prediction_duckdb(db_file, sql, symbol_params)
+    selected_symbol = _pick_symbol_row(rows, normalized)
+    if selected_symbol is None:
+        return []
+    resolved = str(selected_symbol.get("symbol") or "").strip().upper()
+    return [
+        row
+        for row in rows
+        if str(row.get("symbol") or "").strip().upper() == resolved
+    ]
 
 
 def _load_growth_projection_context(

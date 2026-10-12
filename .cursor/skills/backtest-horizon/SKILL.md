@@ -47,7 +47,7 @@ python src/operator_briefing/example_entry.py compare --session --exchanges NASD
 python src/operator_briefing/example_entry.py lookup MU SNDK FSLR EPAM
 ```
 
-Compile the pack only if inspect sources moved. Do not re-run the multi-hour backtest unless the user asked.
+Compile the pack only if inspect sources moved. Do not re-run the multi-hour backtest unless the user asked. Wisdom `datasets/family_metrics` (or `python src/run_operator_suites.py sources`) is that same CSV, already copied for the global flows.
 
 ## Deliverable
 
@@ -64,4 +64,4 @@ Exactly one Ledger (`.cursor/skills/canvas-ledger/SKILL.md`). Cover:
 5. Filter Build-50 with backtest rules (artifact edge + live weeks + leftover; no MTP gate; no paid ATRP chase). Every row needs a reason.
 6. Follow-up changes (coverage, persist, next window) — not a second Daily.
 
-Standing spec: `src/focus_pool_screening/prompts/backtest_horizon.txt`. Copy-paste: --- HORIZON --- in `agent_copy_paste.txt`.
+Standing spec: `src/research_prompt/backtest_horizon.txt`. Copy-paste: --- HORIZON --- in `src/research_prompt/agent_copy_paste.txt`.

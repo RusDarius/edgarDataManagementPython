@@ -62,6 +62,15 @@ def test_resolve_requested_symbol_rejects_ambiguous_bare_ticker() -> None:
         )
 
 
+def test_resolve_requested_symbol_does_not_cross_exchange() -> None:
+    with pytest.raises(KeyError):
+        _resolve_requested_symbol(["ASX:MMS"], "NYSE:MMS")
+
+    matched_symbol, match_mode = _resolve_requested_symbol(["MMS"], "NYSE:MMS")
+    assert matched_symbol == "MMS"
+    assert match_mode == "legacy-bare-ticker"
+
+
 def test_run_edge_symbol_inspection_method_uses_exact_symbol_match(
     tmp_path: Path,
 ) -> None:

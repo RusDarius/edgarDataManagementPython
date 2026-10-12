@@ -212,9 +212,9 @@ GITBASH_FLOWS: tuple[dict[str, str], ...] = (
     {
         "stage": "5 skill dumps",
         "prompt": "PLAYBOOK / 25w",
-        "command": "python src/run_operator_suites.py weeks-progression --weeks 25",
-        "skill": "tv-dataset-analysis",
-        "feeds": "weeks_progression.duckdb (bo/cont/fwd/early/recov path + span for upside 100, Book, forming, shorts)",
+        "command": "python src/run_operator_suites.py playbook --weeks 25",
+        "skill": "manual dump; agent canvas is src/research_prompt/playbook_generic.txt",
+        "feeds": "briefing_pack_*/playbook/ playbook.duckdb + weeks_progression/ (no mesh, no canvas)",
     },
     {
         "stage": "5 skill dumps",
@@ -224,11 +224,18 @@ GITBASH_FLOWS: tuple[dict[str, str], ...] = (
         "feeds": "pack_focus.duckdb (radar_upside_100 + us2b cover 1000, no industry cap)",
     },
     {
+        "stage": "5 skill dumps",
+        "prompt": "DATASETS",
+        "command": "python src/run_operator_suites.py sources",
+        "skill": "tv-dataset-analysis / generic-vs-domain",
+        "feeds": "datasets.duckdb — all-fields, prediction, edge, MTP, backtest family_metrics, value projection. No rescan.",
+    },
+    {
         "stage": "6 wisdom",
         "prompt": "WISDOM / ALL SUITES",
         "command": "python src/run_operator_suites.py wisdom --cover 1000",
         "skill": "none (dumps only)",
-        "feeds": "suites_*/ child duckdbs + overview.log",
+        "feeds": "suites_*/ child duckdbs including datasets/ (six sources) + overview.log",
     },
     {
         "stage": "6 wisdom",
@@ -247,14 +254,14 @@ GITBASH_FLOWS: tuple[dict[str, str], ...] = (
 )
 
 
-# One row per agent_copy_paste.txt block. Print: --gitbash
+# One row per src/research_prompt/agent_copy_paste.txt block. Print: --gitbash
 # output = raw files the model/agent reads (not the canvas).
 PROMPT_RUNS: tuple[dict[str, str], ...] = (
     {
         "prompt": "DAILY (full)",
         "command": "python src/operator_briefing/example_entry.py inspect && python src/operator_briefing/example_entry.py compile",
         "usage": "Lock leftover, Build-50, Book, shorts, earnings, movers_tails. Compile only if inspect sources moved.",
-        "output": "logs/.../operator_briefing/runs/briefing_pack_*/briefing_pack.json .md briefing_pack.duckdb overview.log  tables: names book capital radar_curated_50 radar_upside_100 short_book_15_curated earnings_* movers_tails us2b_tape suggested_courses",
+        "output": "logs/.../operator_briefing/runs/briefing_pack_*/ briefing_pack.json .md briefing_pack.duckdb queries.txt overview.log. Rank tables: radar_curated_50 radar_upside_100 short_book_15_curated movers_tails. Open queries.txt.",
     },
     {
         "prompt": "THEMED",
@@ -278,19 +285,19 @@ PROMPT_RUNS: tuple[dict[str, str], ...] = (
         "prompt": "MOVERS (day / 5D / 1M)",
         "command": "python src/run_operator_suites.py movers",
         "usage": "Both-tail 25 up / 25 punished per horizon. Val/Peer/Proj/Tech. Agent canvas is later.",
-        "output": "briefing_pack_*/movers/  movers.duckdb table movers_tails  movers_tails.csv  us2b_tape.csv overview.log",
+        "output": "briefing_pack_*/movers/ movers.duckdb movers_tails.csv queries.txt overview.log",
     },
     {
         "prompt": "MOVERS (3M)",
         "command": "python src/run_operator_suites.py movers-3m",
         "usage": "Same as movers, recipe movers_3m.json.",
-        "output": "briefing_pack_*/movers_3m/  movers.duckdb movers_tails.csv overview.log",
+        "output": "briefing_pack_*/movers_3m/ movers.duckdb movers_tails.csv queries.txt overview.log",
     },
     {
         "prompt": "RISK (Book loss vs NAV)",
         "command": "python src/run_operator_suites.py risk",
         "usage": "NAV ladders from latest holdings scan + pack leftover. No TRIM/EXIT in the dump.",
-        "output": "briefing_pack_*/book_risk/  book_risk.md book_risk.csv risk_levels.csv capital.csv industry_exposure.csv book_risk.duckdb overview.log",
+        "output": "briefing_pack_*/book_risk/ book_risk.duckdb book_risk.md queries.txt overview.log",
     },
     {
         "prompt": "CAPTURE (whole book 90d)",
@@ -307,13 +314,13 @@ PROMPT_RUNS: tuple[dict[str, str], ...] = (
     {
         "prompt": "FORWARD / Value",
         "command": "python src/run_operator_suites.py value-tech --cover 1000 --forward",
-        "usage": "Primary val_field / peer / tech + street/TV fwd_* + join latest finproj. Cover 1000, no industry cap.",
+        "usage": "Primary val_field / peer / tech. pe_fwd is projection fp_pe_y1. --forward also joins model terminals. Cover 1000, no industry cap.",
         "output": "briefing_pack_*/value_tech/  setup.duckdb setup.csv overview.log",
     },
     {
         "prompt": "FORWARD (street vs model)",
         "command": "python src/run_operator_suites.py forward --cover 1000",
-        "usage": "Street PT leftover, pack leftover, pe_fwd, fp_terminal_px / fp_rev_cagr_own. Empty pe_fwd stays empty.",
+        "usage": "Street PT leftover, pack leftover, projection pe_fwd (fp_pe_y1 / fp_pe_y5), fp_evebitda_y1, fp_net_debt_y*, fp_fcf_y*, fp_terminal_px / fp_rev_cagr_own. pe_fwd_tv stays empty. Do not fill with EV/Rev.",
         "output": "briefing_pack_*/forward_value/  forward_value.duckdb forward_value.csv overview.log",
     },
     {
@@ -341,6 +348,18 @@ PROMPT_RUNS: tuple[dict[str, str], ...] = (
         "output": "briefing_pack.duckdb tables book capital risk_levels industry_exposure; JSON pack.book / capital",
     },
     {
+        "prompt": "BRIEF HISTORY",
+        "command": "python src/generic_utils/tv_scan_cli.py briefs",
+        "usage": "Score prior operator briefs against later pack closes. Read digest.md. Do not re-read prior notes. One name is table events.",
+        "output": "logs/.../operator_briefing/runs/brief_history_*/ digest.md brief_history.duckdb queries.txt overview.log",
+    },
+    {
+        "prompt": "DECISION REVIEW",
+        "command": "python src/run_decision_review.py",
+        "usage": "Published upside 100 on each briefing day versus the later close. KEEP / CHANGE matrix in highlights.log. Does not rerun backtests.",
+        "output": "logs/.../operator_briefing/runs/decision_review_*/ highlights.log decision_review.duckdb queries.txt overview.log spec.json",
+    },
+    {
         "prompt": "DETERMINISTIC FOCUS",
         "command": "python src/run_operator_suites.py pack-focus --cover 1000",
         "usage": "Raw Build-50 + uncapped Top 100 + leftover-sorted 1000-name tape. No agent judgment.",
@@ -349,14 +368,32 @@ PROMPT_RUNS: tuple[dict[str, str], ...] = (
     {
         "prompt": "WISDOM / ALL SUITES",
         "command": "python src/run_operator_suites.py wisdom --cover 1000",
-        "usage": "One folder: value-tech, forward, movers, movers-3m, pack-focus, risk. No canvas.",
-        "output": "logs/.../operator_briefing/runs/suites_YYYYMMDD_HHMM_utc/  overview.log suites.json child duckdbs",
+        "usage": "DuckDB for every suite. Agent always adds wisdom-YYYYMMDD with one Ledger. Name tables only if the paste says data lists.",
+        "output": "suites_*/queries.txt plus each child queries.txt and duckdb, including datasets/ (all-fields, prediction, edge, MTP, backtest family_metrics, value projection). Agent also writes wisdom-YYYYMMDD ledger. Name tables only if the paste says data lists.",
     },
     {
         "prompt": "WISDOM + refresh finproj",
         "command": "python src/run_operator_suites.py wisdom --run-finproj --cover 1000",
         "usage": "Re-run growth+price for 1000 names, then the wisdom dumps.",
         "output": "fingrowth_* + finproj_* under financial_projection/ plus suites_*/ as above",
+    },
+    {
+        "prompt": "PLAYBOOK (manual dump)",
+        "command": "python src/run_operator_suites.py playbook --weeks 25",
+        "usage": "Raw inputs for the playbook canvas. Upside 100, curated shorts, forming, Book, and 25-week score path. No mesh, no Best 25, no canvas.",
+        "output": "briefing_pack_*/playbook/ playbook.duckdb queries.txt playbook.json overview.log weeks_progression/queries.txt",
+    },
+    {
+        "prompt": "PLAYBOOK (agent canvas)",
+        "command": "python src/run_operator_suites.py playbook --weeks 25",
+        "usage": "Same dump. Agent then writes playbook-YYYYMMDD from those files. Mesh letters and Best 25 stay judgment. Not a second Daily budget.",
+        "output": "playbook/ dumps plus canvas playbook-YYYYMMDD (Play / Base 100 / Best 25 / Forming x catalyst / Shorts / Peers-tech / 25 weeks / Ledger)",
+    },
+    {
+        "prompt": "ANALYSIS STYLE (active management)",
+        "command": "python src/run_operator_suites.py wisdom --cover 1000",
+        "usage": "After a fresh pack: wisdom dumps, then an rr rank and a bo rank on names whose all-fields span is OPENING or CHEAPER. Skill analysis-style. Canvas only if the paste says canvas output.",
+        "output": "suites_*/ child duckdbs and queries.txt. Rank files under analysis_scans/ when the agent runs the payoff focus. Canvas analysis-style-YYYYMMDD only on canvas output.",
     },
 )
 
@@ -375,7 +412,7 @@ SUITES: tuple[dict[str, str], ...] = (
         "cli": "python src/operator_briefing/example_entry.py compile",
         "python": "run_compile()",
         "skill": "daily-operator-scan",
-        "out": "briefing_pack.json/.md/.duckdb + overview.log (domain sleeves; industry cap on Build-50 only)",
+        "out": "briefing_pack.json/.md/.duckdb + queries.txt + overview.log (Build-50 cap stays inside compile)",
     },
     {
         "id": "value-tech",
@@ -389,7 +426,7 @@ SUITES: tuple[dict[str, str], ...] = (
         "cli": "python src/generic_utils/tv_scan_cli.py forward --pack PACK.json --sleeve us2b --cover 1000 --out-dir DIR",
         "python": "run_forward_value_suite(cover=1000)",
         "skill": "forward-value",
-        "out": "forward_value.duckdb - street PT + pack leftover + finproj terminals/CAGRs",
+        "out": "forward_value.duckdb - street PT + pack leftover + fp_pe_y1/y5 + fp_evebitda + debt/FCF + terminals",
     },
     {
         "id": "movers",
@@ -434,6 +471,13 @@ SUITES: tuple[dict[str, str], ...] = (
         "out": "weeks_progression.duckdb + span/path CSVs (newest N ISO-week pred files, one run each)",
     },
     {
+        "id": "playbook",
+        "cli": "python src/run_operator_suites.py playbook --weeks 25",
+        "python": "run_playbook_suite(weeks=25)",
+        "skill": "manual dump; agent canvas is src/research_prompt/playbook_generic.txt",
+        "out": "briefing_pack_*/playbook/ playbook.duckdb (upside 100, shorts, forming, book) + weeks_progression/",
+    },
+    {
         "id": "pack-focus",
         "cli": "python src/generic_utils/tv_scan_cli.py pack-focus --pack PACK.json --sleeve sleeves.radar_upside_100 --out appendix.csv",
         "python": "run_pack_focus_suite(cover=1000)",
@@ -455,11 +499,18 @@ SUITES: tuple[dict[str, str], ...] = (
         "out": "logs/.../financial_projection/*/finproj_*.duckdb (projection_summary)",
     },
     {
+        "id": "sources",
+        "cli": "python src/run_operator_suites.py sources",
+        "python": "run_dataset_lock_suite()",
+        "skill": "tv-dataset-analysis / generic-vs-domain",
+        "out": "briefing_pack_*/datasets/ datasets.duckdb (six sources + family_metrics when a backtest run exists)",
+    },
+    {
         "id": "wisdom",
         "cli": "python src/run_operator_suites.py wisdom --cover 1000",
         "python": "run_wisdom(cover=1000)",
         "skill": "none — dumps only",
-        "out": "suites_YYYYMMDD_HHMM_utc/ with child duckdbs + overview.log",
+        "out": "suites_YYYYMMDD_HHMM_utc/ child duckdbs including datasets/ + root queries.txt + overview.log",
     },
     {
         "id": "all",
@@ -606,7 +657,7 @@ def run_value_tech_suite(
         forward_recipe=FORWARD_RECIPE,
         finproj_db=None,
         fingrowth_db=None,
-        no_finproj=not forward,
+        no_finproj=False,
         cover=clamp_cover(cover) if cover is not None else None,
         rank_field="left",
         out=None,
@@ -973,6 +1024,91 @@ def run_weeks_progression_suite(
     return exported
 
 
+def run_playbook_suite(
+    *,
+    pack: str | Path | None = None,
+    out_dir: str | Path | None = None,
+    weeks: int = 25,
+) -> dict[str, Any]:
+    """Manual playbook inputs. No mesh, no Best 25, no canvas.
+
+    Upside 100, curated shorts, forming, and Book are pack sleeves.
+    Weeks path is the existing 25-week progression on that id set.
+    """
+    from generic_utils.focus import pack_path_rows
+    from generic_utils.run_export import write_overview_log, write_run_export
+
+    loaded = load_pack(pack)
+    pack_path = loaded.get("_pack_path") or pack
+    root = Path(out_dir) if out_dir else _default_pack_raw_dir(pack_path, "playbook")
+    root.mkdir(parents=True, exist_ok=True)
+    sleeve_specs = (
+        ("radar_upside_100", "sleeves.radar_upside_100"),
+        ("short_book_15", "sleeves.short_book_15_curated"),
+        ("forming", "sleeves.forming"),
+        ("book", "book"),
+    )
+    from generic_utils.forward_fundamentals import annotate_projection_forward
+
+    tables: dict[str, list[dict[str, Any]]] = {}
+    for name, path in sleeve_specs:
+        try:
+            tables[name] = annotate_projection_forward(pack_path_rows(loaded, path))
+        except (KeyError, TypeError):
+            tables[name] = []
+    sleeves = write_run_export(
+        root,
+        tool="run_operator_suites.playbook",
+        tables=tables,
+        sources={"pack": str(pack_path or ""), "weeks": weeks},
+        notes=[
+            "manual playbook dump — no mesh letters, no Best 25, no canvas",
+            "radar_upside_100 is uncapped; short_book_15 is the curated sleeve",
+            "weeks_progression/ is bo/cont/fwd/early/recov path + span",
+        ],
+        extra={"weeks": weeks},
+        duckdb_name="playbook.duckdb",
+    )
+    weeks_export = run_weeks_progression_suite(
+        pack=pack_path,
+        out_dir=root / "weeks_progression",
+        weeks=weeks,
+        sleeve="sleeves.radar_upside_100",
+    )
+    log_path = write_overview_log(
+        root / "overview.log",
+        tool="run_operator_suites.playbook",
+        sources={"pack": str(pack_path or "")},
+        tables={key: len(rows) for key, rows in tables.items()},
+        notes=[
+            "agent canvas is a later step; this folder is the raw input",
+            "mesh F/C/P/D/T is domain and is not computed here",
+        ],
+        extra={"weeks_dir": str(root / "weeks_progression")},
+    )
+    payload = {
+        "out_dir": root.as_posix(),
+        "overview_log": log_path.as_posix(),
+        "pack": str(pack_path or ""),
+        "sections": {
+            "sleeves": sleeves,
+            "weeks_progression": {
+                "out_dir": weeks_export.get("out_dir"),
+                "duckdb": weeks_export.get("duckdb"),
+                "tables": weeks_export.get("tables"),
+            },
+        },
+        "notes": [
+            "no canvas",
+            "Best 25 is agent judgment on the dump, not a column in playbook.duckdb",
+        ],
+    }
+    (root / "playbook.json").write_text(
+        json.dumps(payload, indent=2, default=str), encoding="utf-8"
+    )
+    return payload
+
+
 def run_pack_focus_suite(
     *,
     pack: str | Path | None = None,
@@ -984,16 +1120,18 @@ def run_pack_focus_suite(
     from generic_utils.ranking import cover_rows
     from generic_utils.run_export import write_run_export
 
+    from generic_utils.forward_fundamentals import annotate_projection_forward
+
     loaded = load_pack(pack)
-    tape = tape_from_pack(loaded)
+    tape = annotate_projection_forward(tape_from_pack(loaded))
     size = clamp_cover(cover)
     covered = list(cover_rows(tape, size, field="left"))
     try:
-        appendix = pack_path_rows(loaded, "sleeves.radar_upside_100")
+        appendix = annotate_projection_forward(pack_path_rows(loaded, "sleeves.radar_upside_100"))
     except (KeyError, TypeError):
-        appendix = list(loaded.get("radar_upside_100") or [])
+        appendix = annotate_projection_forward(list(loaded.get("radar_upside_100") or []))
     try:
-        radar50 = pack_path_rows(loaded, "sleeves.radar_curated_50")
+        radar50 = annotate_projection_forward(pack_path_rows(loaded, "sleeves.radar_curated_50"))
     except (KeyError, TypeError):
         radar50 = []
     directory = Path(out_dir) if out_dir else _default_pack_raw_dir(
@@ -1062,6 +1200,40 @@ def run_finproj_price_suite(
     return result
 
 
+def run_dataset_lock_suite(
+    *,
+    pack: str | Path | None = None,
+    out_dir: str | Path | None = None,
+    finproj_db: str | Path | None = None,
+    fingrowth_db: str | Path | None = None,
+) -> dict[str, Any]:
+    """Write the six-dataset lock. Does not rescan tape, edge, MTP, or backtests."""
+    from generic_utils.dataset_lock import export_dataset_lock
+    from generic_utils.forward_value import discover_latest_projection_db
+
+    pack_path = Path(pack) if pack else None
+    if pack_path is None:
+        from operator_briefing.discovery import latest_briefing_pack_path
+
+        pack_path = latest_briefing_pack_path()
+    loaded = load_pack(pack_path) if pack_path else {}
+    if out_dir is None:
+        out_dir = _default_pack_raw_dir(pack_path, "datasets")
+    growth = fingrowth_db or discover_latest_projection_db(prefix="fingrowth_")
+    price = finproj_db or discover_latest_projection_db(prefix="finproj_")
+    exported = export_dataset_lock(
+        out_dir,
+        loaded,
+        finproj_db=price,
+        fingrowth_db=growth,
+    )
+    return {
+        "export": exported,
+        "out_dir": exported.get("out_dir"),
+        "overview_log": exported.get("overview_log"),
+    }
+
+
 def run_wisdom(
     *,
     pack: str | Path | None = None,
@@ -1114,6 +1286,17 @@ def run_wisdom(
 
     fingrowth = discover_latest_projection_db(prefix="fingrowth_")
     finproj = discover_latest_projection_db(prefix="finproj_")
+    sections["datasets"] = _export_of(
+        run_dataset_lock_suite(
+            pack=pack_path,
+            out_dir=root / "datasets",
+            finproj_db=finproj,
+            fingrowth_db=fingrowth,
+        )
+    )
+    notes.append(
+        "datasets/: all_fields, prediction, edge, mtp, backtest family_metrics, value_projection"
+    )
 
     value = run_value_tech_suite(
         pack=pack_path, cover=size, out_dir=root / "value_tech", quiet=True
@@ -1162,9 +1345,31 @@ def run_wisdom(
         notes=notes,
         extra={"cover": size, "sections": ",".join(sections)},
     )
+    index = [
+        "Wisdom duckdb output — start here",
+        f"folder={root.as_posix()}",
+        "",
+        "Each section folder has its own queries.txt: field meanings and copy-paste queries.",
+        "The rows stay in those DuckDB files. A wisdom canvas is the ledger, not this list.",
+        "",
+    ]
+    for key, block in sections.items():
+        if not isinstance(block, Mapping):
+            continue
+        db = block.get("duckdb")
+        if not db:
+            continue
+        folder = Path(str(db)).parent
+        index.append(key)
+        index.append(f"  database={db}")
+        index.append(f"  guide={(folder / 'queries.txt').as_posix()}")
+        index.append("")
+    guide_path = root / "queries.txt"
+    guide_path.write_text("\n".join(index).rstrip() + "\n", encoding="utf-8")
     payload = {
         "out_dir": root.as_posix(),
         "overview_log": log_path.as_posix(),
+        "query_guide": guide_path.as_posix(),
         "cover": size,
         "pack": str(pack_path),
         "tape_csv": tape_csv.as_posix(),
@@ -1214,6 +1419,7 @@ def _print_list() -> None:
         "inside compile."
     )
     print("\nPrompt | command | usage/output: python src/run_operator_suites.py --gitbash")
+    print("Short explainers: src/research_prompt/run_catalog.txt")
 
 
 def _cmd_prefix(command: str) -> str:
@@ -1246,6 +1452,7 @@ def _print_gitbash() -> None:
         print(f"             -> {item['feeds']}")
     print(
         "\nSame table: src/generic_utils/specs/gitbash_agent_data_flows.md"
+        "\nShort explainers: src/research_prompt/run_catalog.txt"
     )
 
 
@@ -1333,6 +1540,13 @@ def main(argv: list[str] | None = None) -> dict[str, Any] | None:
     wk.add_argument("--out-dir", default=None)
     wk.add_argument("--weeks", type=int, default=25)
     wk.add_argument("--sleeve", default="sleeves.radar_upside_100")
+    pb = sub.add_parser(
+        "playbook",
+        help="Manual playbook dump: upside 100, shorts, forming, book, 25-week path. No canvas.",
+    )
+    pb.add_argument("--pack", default=None)
+    pb.add_argument("--out-dir", default=None)
+    pb.add_argument("--weeks", type=int, default=25)
     pf = sub.add_parser("pack-focus")
     pf.add_argument("--pack", default=None)
     pf.add_argument("--out-dir", default=None)
@@ -1343,6 +1557,12 @@ def main(argv: list[str] | None = None) -> dict[str, Any] | None:
     fp = sub.add_parser("finproj-price")
     fp.add_argument("--pack", default=None)
     _add_cover(fp)
+    src_p = sub.add_parser(
+        "sources",
+        help="Lock all-fields, prediction, edge, MTP, backtest IC, and value projection. No rescan.",
+    )
+    src_p.add_argument("--pack", default=None)
+    src_p.add_argument("--out-dir", default=None)
     wis = sub.add_parser("wisdom", help="Dump all generic suites from the latest pack.")
     wis.add_argument("--pack", default=None)
     wis.add_argument("--out-dir", default=None)
@@ -1437,6 +1657,12 @@ def main(argv: list[str] | None = None) -> dict[str, Any] | None:
             weeks=args.weeks,
             sleeve=args.sleeve,
         )
+    elif command == "playbook":
+        payload = run_playbook_suite(
+            pack=args.pack,
+            out_dir=args.out_dir,
+            weeks=args.weeks,
+        )
     elif command == "pack-focus":
         payload = run_pack_focus_suite(
             pack=args.pack, cover=args.cover, out_dir=args.out_dir
@@ -1445,6 +1671,8 @@ def main(argv: list[str] | None = None) -> dict[str, Any] | None:
         payload = run_finproj_growth_suite(pack=args.pack, cover=args.cover, print_console=True)
     elif command == "finproj-price":
         payload = run_finproj_price_suite(pack=args.pack, cover=args.cover, print_console=True)
+    elif command == "sources":
+        payload = run_dataset_lock_suite(pack=args.pack, out_dir=args.out_dir)
     elif command == "wisdom":
         payload = run_wisdom(
             pack=args.pack,
@@ -1464,7 +1692,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any] | None:
         )
     else:
         raise SystemExit(f"Unknown command {command}")
-    if command in {"wisdom", "all", "pack-focus", "inspect", "weeks-progression"}:
+    if command in {"wisdom", "all", "pack-focus", "inspect", "weeks-progression", "playbook", "sources"}:
         print(json.dumps(
             {k: payload.get(k) for k in ("out_dir", "overview_log", "cover", "pack", "run_id", "sections") if k in payload}
             if isinstance(payload, dict)

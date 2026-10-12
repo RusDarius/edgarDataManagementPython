@@ -12,6 +12,7 @@ from data_analysis_scripts.trading_view_holdings_scoring_analysis import (
     RawScanSymbolEntry,
     SCAN_KEY_ETF_BOOK,
     SCAN_KEY_MOVE_PREDICTION,
+    _build_shortlist_position_rows,
     _build_mark_to_market_fields,
     _resolve_close_quote_currency,
     default_enabled_scans,
@@ -141,6 +142,22 @@ def _etf_scan_row(symbol: str, name: str, **overrides) -> dict:
 
 
 class TestHoldingTickerMatching(unittest.TestCase):
+    def test_shortlist_conviction_respects_qualified_exchange(self):
+        summary = [
+            {
+                "matched_symbol": "NYSE:MMS",
+                "config_ticker": "MMS",
+                "invested_sum_usd": 100.0,
+                "current_value_usd": 110.0,
+            }
+        ]
+        conviction = {
+            "ASX:MMS": {"manager_action_signal": "WAIT"},
+            "NYSE:MMS": {"manager_action_signal": "ADD"},
+        }
+        rows = _build_shortlist_position_rows(summary, conviction)
+        self.assertEqual(rows[0]["manager_action_signal"], "ADD")
+
     def test_normalize_holding_ticker_uppercases(self):
         self.assertEqual(normalize_holding_ticker(" nasdaq:mu "), "NASDAQ:MU")
 
@@ -205,6 +222,61 @@ class TestHoldingTickerMatching(unittest.TestCase):
         self.assertEqual(matched[0].scan_symbol, "NYSE:CF")
         self.assertEqual(matched[0].company, "CF Industries Holdings, Inc.")
         self.assertEqual(matched[0].lookup_key, "NYSE:CF")
+
+    def test_ambiguous_bare_ticker_is_not_first_alphabetical_listing(self):
+        catalog = [
+            RawScanSymbolEntry(
+                symbol="BME:NXT",
+                company="Nueva Expresion Textil, S.A.",
+                bare_ticker="NXT",
+            ),
+            RawScanSymbolEntry(
+                symbol="LSE:NXT",
+                company="Next plc",
+                bare_ticker="NXT",
+            ),
+            RawScanSymbolEntry(
+                symbol="MIL:NXT",
+                company="Next Geosolutions Europe SpA",
+                bare_ticker="NXT",
+            ),
+            RawScanSymbolEntry(
+                symbol="NASDAQ:NXT",
+                company="Nextpower Inc.",
+                bare_ticker="NXT",
+            ),
+        ]
+        matched, unmatched = match_holdings_to_db_symbols(
+            [HoldingConfig(ticker="NXT")],
+            [entry.symbol for entry in catalog],
+            raw_catalog=catalog,
+        )
+        self.assertEqual(matched, [])
+        self.assertEqual(unmatched, ["NXT"])
+
+    def test_explicit_symbol_selects_nasdaq_nxt_among_shared_ticker(self):
+        catalog = [
+            RawScanSymbolEntry(
+                symbol="BME:NXT",
+                company="Nueva Expresion Textil, S.A.",
+                bare_ticker="NXT",
+            ),
+            RawScanSymbolEntry(
+                symbol="NASDAQ:NXT",
+                company="Nextpower Inc.",
+                bare_ticker="NXT",
+            ),
+        ]
+        matched, unmatched = match_holdings_to_db_symbols(
+            [HoldingConfig(ticker="NXT", symbol="NASDAQ:NXT")],
+            [entry.symbol for entry in catalog],
+            raw_catalog=catalog,
+        )
+        self.assertEqual(unmatched, [])
+        self.assertEqual(matched[0].scan_symbol, "NASDAQ:NXT")
+        self.assertEqual(matched[0].db_symbol, "NXT")
+        self.assertEqual(matched[0].company, "Nextpower Inc.")
+        self.assertEqual(matched[0].lookup_key, "NASDAQ:NXT")
 
     def test_build_mark_to_market_fields_uses_implied_shares_and_close(self):
         holding = HoldingConfig(

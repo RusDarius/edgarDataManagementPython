@@ -1,5 +1,6 @@
 FOCUS / REGIME OPERATOR PROMPTS
 ===============================
+Folder: src/research_prompt/
 Attach one version file per run. Do not attach this index.
 
 daily_generic.txt
@@ -36,6 +37,18 @@ backtest_horizon.txt
   Canvas horizon-plan-YYYYMMDD. Do not attach on DAILY (full).
   Rank family_metrics with rank_cli. MTP is climate, not a leftover gate.
 
+backtracking_generic.txt
+  Weekly point-in-time investing runs from backtracking_analysis.
+  Manual flow: prepare -> write picks -> score.
+  Do not attach on DAILY (full), MOVERS, RISK, or HORIZON.
+
+playbook_generic.txt
+  Base 100, shorts, forming, Book, and a 25-week score path.
+  Manual: python src/run_operator_suites.py playbook --weeks 25
+  writes briefing_pack_*/playbook/ and stops (no canvas, no mesh).
+  Agent canvas playbook-YYYYMMDD reads that folder. Best 25 is judgment.
+  Do not attach on DAILY (full).
+
 daily_themed_chips_software.txt
   Same core flow, with a standing datacenter/chips and software/cyber
   sleeve. Use only when that focus is intended.
@@ -43,6 +56,11 @@ daily_themed_chips_software.txt
 overrides_template.txt
   Optional add-on. Append or attach after the chosen version to pin
   scan day, forced names, style tilt, or earnings window.
+
+run_catalog.txt
+  Command index. One short explainer per flow: manual command, where the
+  newest folder lands, and which agent_copy_paste block to paste.
+  DuckDB is the default. queries.txt sits in that folder.
 
 agent_copy_paste.txt
   Short chat blocks. Paste one. DAILY (full) is the operator's spoken scan:
@@ -52,13 +70,21 @@ agent_copy_paste.txt
   pack support then operator High/Med/Low.
   Same overlay on DAILY (pack already good) and THEMED. Also: stale-check,
   lookup, compare, Book-only, RISK (loss vs NAV), HORIZON (backtest IC ×
-  pack), delegate, deterministic FOCUS, WISDOM / all-suite dumps. Do not attach this index or the whole
+  pack), delegate, deterministic FOCUS, WISDOM / all-suite dumps,
+  ANALYSIS STYLE (asymmetric rr rank and conviction rank on an all-fields span),
+  and BACKTRACK (weekly investing run selection). Do not attach this index or the whole
   file. Pointer also at src/operator_briefing/COPY_PASTE_PROMPTS.txt.
   Generic TV interrogation: .cursor/skills/tv-dataset-analysis/SKILL.md
   Forward value + all-suite dumps: .cursor/skills/forward-value/SKILL.md
   python src/run_operator_suites.py --list
   Git Bash Prompt | Command | Usage/output: python src/run_operator_suites.py --gitbash
   src/generic_utils/specs/gitbash_agent_data_flows.md
+
+Global flows (compile, wisdom, all, forward, analysis style) use six
+datasets: all-fields, prediction, edge, market timing, backtest family IC,
+and value projection. Wisdom writes datasets/ listing those files.
+python src/run_operator_suites.py sources locks them without a rescan.
+MTP is climate. Backtest IC is not a leftover gate.
 
 Launch: run python src/operator_briefing/example_entry.py compile, then attach the
 newest briefing_pack.md/.json plus the version file. The pack is the locked

@@ -1,0 +1,14 @@
+---
+description: Weekly point-in-time backtracking investing runs (prepare panel, choose picks, score later closes). Not Daily, Movers, Book risk, or Horizon.
+alwaysApply: false
+---
+
+# Backtracking weekly investing runs
+
+When the user asks for backtracking, retrospective investing runs, or weekly point-in-time pick/score loops:
+
+1. Read `.cursor/skills/backtracking/SKILL.md`.
+2. Run `python src/run_backtracking.py prepare ...` first, then pick selection, then `score`.
+3. Keep prediction, edge, and raw-field reasons separate. Do not invent a blended 0-100 score.
+4. During selection, read only `panel_rows` from `backtracking.duckdb` and write `picks_*.csv`.
+5. Use `name_returns.csv`, `book_weeks.csv`, and `investing_run.md` only after scoring.

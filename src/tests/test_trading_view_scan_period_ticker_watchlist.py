@@ -5,6 +5,8 @@ from tempfile import TemporaryDirectory
 
 from data_analysis_scripts.trading_view_scan_period_ticker_watchlist import (
     _resolve_watchlist_scan_period_run_root,
+    _select_rows_for_requests,
+    _symbol_filter_sql,
     parse_regime_context_log_section,
     run_scan_period_ticker_watchlist_analysis,
 )
@@ -34,6 +36,43 @@ class TestTradingViewScanPeriodTickerWatchlist(unittest.TestCase):
             self.assertEqual(rows[0]["symbol"], "SILEX")
             self.assertAlmostEqual(rows[0]["regime_fit_score"], 96.3)
             self.assertAlmostEqual(rows[1]["current_atrp_1w"], 162.5)
+
+    def test_parse_regime_context_log_preserves_exchange(self):
+        with TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "regime.log"
+            log_path.write_text(
+                "\n".join(
+                    [
+                        "PLAYBOOK A TACTICAL (1 names)",
+                        "-" * 80,
+                        "  NYSE:MMS     RegFit=96.3 ATRP|1W=18.6 relvol=1.94",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            rows = parse_regime_context_log_section(log_path)
+            self.assertEqual(rows[0]["symbol"], "NYSE:MMS")
+
+    def test_qualified_watchlist_selection_never_crosses_exchanges(self):
+        rows = [
+            {"symbol": "ASX:MMS", "close": 2.0},
+            {"symbol": "NYSE:MMS", "close": 53.0},
+        ]
+        selected, resolved = _select_rows_for_requests(rows, ["NYSE:MMS"])
+        self.assertEqual(selected, [{"symbol": "NYSE:MMS", "close": 53.0}])
+        self.assertEqual(resolved, {"NYSE:MMS": "NYSE:MMS"})
+
+        selected, resolved = _select_rows_for_requests(rows, ["NASDAQ:MMS"])
+        self.assertEqual(selected, [])
+        self.assertEqual(resolved, {})
+
+        selected, resolved = _select_rows_for_requests(rows, ["MMS"])
+        self.assertEqual(selected, [])
+        self.assertEqual(resolved, {})
+
+        sql = _symbol_filter_sql("symbol", ["NYSE:MMS"])
+        self.assertIn("'NYSE:MMS'", sql)
+        self.assertNotIn("split_part", sql)
 
     def test_resolve_watchlist_scan_period_run_root_from_regime_config(self):
         with TemporaryDirectory() as temp_dir:

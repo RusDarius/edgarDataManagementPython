@@ -7,6 +7,7 @@ from data_analysis_scripts.trading_view_move_prediction_analysis import (
     run_full_analysis_suite_duckdb,
 )
 from data_analysis_scripts.trading_view_move_prediction_industry_packs import (
+    _lookup_regime_record,
     write_industry_packs_from_duckdb_run,
 )
 
@@ -64,6 +65,19 @@ def _sample_scan_row(symbol: str, **overrides) -> dict:
 
 @unittest.skipUnless(_duckdb_available(), "duckdb is not installed")
 class TestTradingViewMovePredictionIndustryPacks(unittest.TestCase):
+    def test_regime_lookup_respects_qualified_exchange(self):
+        nyse_record = object()
+        asx_record = object()
+        by_symbol = {"NYSE:MMS": nyse_record, "ASX:MMS": asx_record}
+        self.assertIs(
+            _lookup_regime_record({"symbol": "NYSE:MMS"}, by_symbol),
+            nyse_record,
+        )
+        self.assertIsNone(
+            _lookup_regime_record({"symbol": "NASDAQ:MMS"}, by_symbol)
+        )
+        self.assertIsNone(_lookup_regime_record({"symbol": "MMS"}, by_symbol))
+
     def setUp(self):
         self.temp_dir = TemporaryDirectory()
         self.addCleanup(self.temp_dir.cleanup)

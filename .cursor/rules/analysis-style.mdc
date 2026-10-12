@@ -1,0 +1,14 @@
+---
+description: Active-management analysis style — asymmetric payoff and conviction ranks from derivatives, raw fields, and all-fields history. Not Daily leftover, Movers tape, or Book-risk ladders.
+alwaysApply: false
+---
+
+# Analysis style
+
+When the user asks for analysis style, analysis_style, an asymmetric rank, quality opportunities, or best trades beyond the algos:
+
+1. Read `.cursor/skills/analysis-style/SKILL.md`.
+2. Compile if pack sources moved. Wisdom dump first (`python src/run_operator_suites.py wisdom --cover 1000`). No canvas on the dump.
+3. Rank ASYM by `rr` and CONVICTION by `bo` on the path-qualified shortlist. Path class comes from `history` + `span` on `trading_view_all_fields_data`.
+4. Canvas `analysis-style-YYYYMMDD` with a Rank tab. One Ledger. Do not publish a second NEW/ADD budget. Polar and mix-avoid still bind.
+5. Do not invent a 0–100. Do not add `rr` and `bo` together. Do not write `logs/_tmp_*.py`.

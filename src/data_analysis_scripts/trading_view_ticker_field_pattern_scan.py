@@ -37,6 +37,7 @@ from db.trading_view_move_prediction_duckdb import (
     _quote_path_literal,
     open_move_prediction_duckdb_connection,
 )
+from generic_utils.symbol_identity import parse_symbol
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TICKER_PATTERN_SCAN_ROOT = (
@@ -841,8 +842,13 @@ def _resolve_candidate_fields(
     return limited_candidates, context_fields, selection_meta
 
 
-def _build_ticker_match_where() -> str:
+def _build_ticker_match_where(*, qualified: bool = False) -> str:
     symbol_value_sql = "CAST(symbol AS VARCHAR)"
+    if qualified:
+        return (
+            f"(UPPER({symbol_value_sql}) = ? "
+            f"OR UPPER({symbol_value_sql}) = ?)"
+        )
     symbol_bare_sql = (
         "COALESCE("
         f"NULLIF(split_part({symbol_value_sql}, ':', 2), ''), "
@@ -915,7 +921,9 @@ def _fetch_ticker_row(
         + (", " + sql_columns if sql_columns else "")
         + " FROM all_fields_rows "
         "WHERE run_id = ? AND "
-        + _build_ticker_match_where()
+        + _build_ticker_match_where(
+            qualified=parse_symbol(ticker_requested_upper).qualified
+        )
         + " ORDER BY CASE WHEN UPPER(CAST(symbol AS VARCHAR)) = ? THEN 0 ELSE 1 END, row_number "
         "LIMIT 1"
     )
@@ -944,7 +952,7 @@ def _fetch_universe_field_stats(
     conn: Any,
     *,
     run_id: str,
-    ticker_bare_upper: str,
+    ticker_symbol_upper: str,
     fields: Sequence[str],
     universe_filter_sql: str,
 ) -> dict[str, dict[str, Any]]:
@@ -967,12 +975,7 @@ def _fetch_universe_field_stats(
             + " AS field_value FROM base"
         )
 
-    symbol_key_expr = (
-        "UPPER(COALESCE("
-        "NULLIF(split_part(CAST(symbol AS VARCHAR), ':', 2), ''), "
-        "CAST(symbol AS VARCHAR)"
-        "))"
-    )
+    symbol_key_expr = "UPPER(CAST(symbol AS VARCHAR))"
 
     sql = f"""
     WITH base AS (
@@ -987,7 +990,7 @@ def _fetch_universe_field_stats(
     ticker_values AS (
         SELECT field_name, MAX(field_value) AS ticker_value
         FROM long_values
-        WHERE symbol_key = {_quote_sql_literal(ticker_bare_upper)}
+        WHERE symbol_key = {_quote_sql_literal(ticker_symbol_upper)}
         GROUP BY field_name
     ),
     distribution AS (
@@ -1682,15 +1685,15 @@ def run_ticker_field_pattern_scan(
                 config=config,
                 ticker_row=ticker_row,
             )
+            matched_symbol = _normalize_text(ticker_row.get("symbol"))
             day_stats = _fetch_universe_field_stats(
                 conn,
                 run_id=run.run_id,
-                ticker_bare_upper=ticker_bare_upper,
+                ticker_symbol_upper=matched_symbol.upper(),
                 fields=day_fields,
                 universe_filter_sql=universe_filter_sql,
             )
 
-            matched_symbol = _normalize_text(ticker_row.get("symbol"))
             snapshot = {
                 "source_day_label": run.day_label,
                 "run_id": run.run_id,

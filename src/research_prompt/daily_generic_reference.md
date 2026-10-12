@@ -97,7 +97,7 @@ HOW TO LAUNCH (attach these, or the newest equivalents)
      Schema:   python src/operator_briefing/example_entry.py inspect
      Progression vs prior pred run: python src/operator_briefing/example_entry.py compare
      Do not write logs/_tmp_*.py for inspect/extract/print.
-     Chat copy-paste: src/focus_pool_screening/prompts/agent_copy_paste.txt
+     Chat copy-paste: src/research_prompt/agent_copy_paste.txt
      (one block per job: daily, stale-check, lookup, compare, Book, delegate).
 
 Required
@@ -690,8 +690,12 @@ Build-50 radar, then groups, then shorts 15, then roadmap.
 4. Regime strip: bias, participation, leadership clusters, timing climate
 5. Book action table: ADD / HOLD / TRIM / EXIT / DERISK with weight, signal, print date
 6. Earnings-priority UPSIDE and DOWNSIDE (0–7 / 8–21 / 22–60)
-7. Build-50 radar table (filterable): leftover, rr, bo, rsi, support, action
-   (sleeves.radar_curated_50; 50 names). Top 100 is appendix.
+7. Build-50 radar table (filterable): leftover, rr, bo, rsi, support, action,
+   plus both valuation reads (sleeves.radar_curated_50; 50 names).
+   Trailing TV: pe_peer + pe_vs_ind, evebitda_peer + evebitda_vs_ind.
+   Forward derivative: pe_fwd_peer + pe_fwd_vs_ind, evebitda_fwd_peer + evebitda_fwd_vs_ind.
+   Top 100 is appendix. The Ledger says which bin is the published multiple
+   and which bin is the projection.
 8. Data-derived group panels as compact ranked lists, not duplicate essays
 9. Shorts table (15 overlay, bounce-day wait unless thesis-kill)
 10. Roadmap as a sequenced plan (now / sell-the-print / wait / next)
@@ -704,8 +708,13 @@ Build-50 radar, then groups, then shorts 15, then roadmap.
 13. Tape support (one section, not four tabs): ranked Top 25 up by day /
     week / 5D / 1M return (best → least) with IS_SUPPORTED / CHASE /
     UNSUPPORTED / MIXED. From the bottom 25, BOUNCE vs CONTINUE_DOWN.
-    Tables include columns Val / Peer / Proj / Tech (pack val_field / val_vs_ind,
-    discount, leftover+bo/fwd, RSI/rng/vs50). Source pack.movers or DuckDB
+    Tables include columns Val / Peer / Proj / Tech, and the two valuation bins.
+    Peer is the setup quote: the label plus val_vs_ind (DISCOUNT <= -5, PREMIUM >= 5).
+    Trailing TV bins sit beside it: pe_peer + pe_vs_ind, evebitda_peer + evebitda_vs_ind.
+    Forward bins sit beside those: pe_fwd_peer + pe_fwd_vs_ind, evebitda_fwd_peer + evebitda_fwd_vs_ind.
+    The Ledger names trailing as the TradingView field as published, and forward as the derivative.
+    Tech is ABOVE/BELOW plus vs50, and UNUSED/MID/PAID plus rng.
+    Source pack.movers or DuckDB
     movers_tails (`down_class`). 3M is not on this canvas.
 
 Omit any panel that would be empty. Label tables with metric names and the
@@ -723,7 +732,7 @@ Re-run a section without an agent:
 | Plan | pack-focus --sleeve suggested_courses (or JSON key) | suggested_courses |
 | Book | pack-focus --pack PACK.json --sleeve book --out book.csv | book |
 | Breadth | group --csv us2b_tape.csv --by ind --metrics day,w,d5,m1 --min-n 6 --pct-positive day | industries_5d |
-| Value | setup --csv us2b.csv --peer-mcap 2000000000 --cover 1000 (street/TV fwd_* on the row; or pack names val_field after compile) | setup / names val_* |
+| Value | setup --csv us2b.csv --peer-mcap 2000000000 --cover 1000. Keep trailing TV bins (pe_peer, evebitda_peer) and forward bins (pe_fwd_peer, evebitda_fwd_peer), each with its _vs_ind | setup / names |
 | Forward | forward --pack PACK.json --sleeve us2b --cover 1000 --out-dir RUN/forward (street + pack leftover + finproj join) | forward_value |
 | Radar | pack-focus --sleeve sleeves.radar_curated_50 --out radar.csv | radar_curated_50 |
 | Tape / Support | movers --recipe config/generic_utils/movers_day.json --csv us2b_tape.csv --out-dir RUN/movers_day (25 up / 25 punished, vs_group Val/Peer/Proj/Tech, down_class) | movers_tails |

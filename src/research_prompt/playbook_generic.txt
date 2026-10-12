@@ -1,0 +1,61 @@
+PLAYBOOK — BASE 100, BEST 25, SHORTS, 25 WEEKS
+=============================================
+Do not attach daily_generic.txt. Not a second Daily radar.
+
+Two modes. The manual command writes files and stops. The agent canvas
+is a later step that reads those files.
+
+MANUAL (no canvas, no mesh, no Best 25)
+---------------------------------------
+  python src/run_operator_suites.py playbook --weeks 25
+
+Writes briefing_pack_*/playbook/:
+  playbook.duckdb / CSV  radar_upside_100, short_book_15, forming, book
+  weeks_progression/     weeks_path, weeks_span, weeks_breadth
+  playbook.json          index of those paths
+  overview.log
+
+Ids for the 25-week path are upside 100 + Book + forming + short book.
+No leftover/RSI cutoff inside the dump. No industry cap on the upside 100.
+
+AGENT CANVAS
+------------
+@.cursor/skills/canvas-ledger/SKILL.md
+@.cursor/skills/generic-ranking/SKILL.md
+@.cursor/skills/tv-dataset-analysis/SKILL.md
+
+Compile only if inspect sources differ. Do not re-fish DuckDB.
+Peers and street/model come from the latest wisdom value-tech and forward
+dumps when those folders exist. Quote them as separate columns.
+
+Mesh is letters in order F C P D T, only the ones that are on. `-` means
+none. nmesh is the count of letters. Mesh 3+ is nmesh >= 3. It is not a score.
+Copy the on/off rules from the canvas Ledger skill. Do not invent a second rule.
+
+Best 25 is judgment on the base 100. Cite mesh, dte, 25-week bo change
+(bo_last - bo_first), both valuation reads, and leftover.
+Cite street_left beside left. `generic_utils.derive.leftover_carrier`
+is `edge_only` when street_left is negative and left is positive.
+Do not put an edge_only name in the Best 25.
+Trailing TV, taken as published: pe_peer with pe_vs_ind, evebitda_peer with evebitda_vs_ind.
+Forward derivative, which can be off: pe_fwd_peer with pe_fwd_vs_ind, evebitda_fwd_peer with evebitda_fwd_vs_ind.
+Setup peer with val_vs_ind stays the one quoted multiple. Mesh D uses that peer only.
+DISCOUNT uses that column's median percent only (<= -5). val_vs_avg is
+the gap versus the industry average and stays its own column. ABOVE/BELOW
+is cited with vs50.
+The Ledger names each *_peer column.
+A mesh of 5 with paid range is
+still a watch. Mix avoid_value_trap on a live leftover Book line stays
+HOLD_NO_ADD. Shorts stay on the short sleeve. Do not short a leftover-rich name.
+
+Canvas playbook-YYYYMMDD:
+  Play, Base 100, Best 25, Forming x catalyst, Shorts, Peers/tech, 25 weeks, Ledger.
+One Ledger. No second NEW/ADD budget. No logs/_tmp_*.py.
+A Best 25 name that is not already held is sized with about $5,000 in mind.
+An add to a held name can be about $1,000. That is advice on the
+recommendation, not a mesh input and not a cutoff in the dump.
+
+Read the brief-history digest before Best 25
+(`python src/generic_utils/tv_scan_cli.py briefs`, then digest.md).
+A name that already faded as ADD/NEW stays off a new starter unless the
+path changed. The digest is not a mesh input. Do not paste prior notes.

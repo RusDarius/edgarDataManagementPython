@@ -9,7 +9,9 @@ from data_analysis_scripts.trading_view_backwards_prediction_analysis import (
 )
 from data_analysis_scripts.trading_view_backwards_prediction_progression_viz import (
     HighlightMarker,
+    ProgressionPoint,
     ResolvedBackwardsProfileTarget,
+    _build_watchlist_highlights,
     _latest_profile_target_per_family,
     extract_progression_series,
     render_score_progression_plotly_html,
@@ -129,6 +131,38 @@ def _build_weekly_db(
 
 @unittest.skipUnless(_duckdb_available(), "duckdb not installed")
 class TestBackwardsProgressionViz(unittest.TestCase):
+    def test_watchlist_highlights_respect_qualified_exchange(self):
+        now = datetime.now(timezone.utc)
+
+        def point(symbol: str) -> ProgressionPoint:
+            return ProgressionPoint(
+                backwards_analysis_id="test",
+                point_time=now,
+                anchor_name="current",
+                is_current=True,
+                run_id="run",
+                snapshot_label="current",
+                profile_name="quality",
+                profile_family="quality",
+                anchor_profile_name=None,
+                horizon_name="weeks",
+                symbol=symbol,
+                company=None,
+                sector=None,
+                industry=None,
+                score=1.0,
+                close=1.0,
+                profile_rank=1,
+                direction="long",
+                confidence=1.0,
+            )
+
+        points = [point("ASX:MMS"), point("NYSE:MMS")]
+        highlights = _build_watchlist_highlights(points, ["NYSE:MMS"])
+        self.assertEqual([marker.symbol for marker in highlights], ["NYSE:MMS"])
+        self.assertEqual(_build_watchlist_highlights(points, ["NASDAQ:MMS"]), [])
+        self.assertEqual(_build_watchlist_highlights(points, ["MMS"]), [])
+
     def test_extract_progression_series_and_quality(self):
         with TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)

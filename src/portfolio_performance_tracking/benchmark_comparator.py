@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from generic_utils.symbol_identity import resolve_symbol
+
 
 @dataclass(frozen=True)
 class BenchmarkComparisonPoint:
@@ -138,14 +140,16 @@ def fetch_benchmark_price_from_scan(
     ``scan_global_market_move_prediction``), so you rarely need an extra API call
     just to price the benchmark -- most scans already include ``close``.
     """
-    normalized_symbol = benchmark_symbol.strip().upper()
+    rows_by_symbol: dict[str, dict[str, Any]] = {}
     for row in scan_data:
         candidate = str(row.get(symbol_key) or "").strip().upper()
-        bare_candidate = candidate.split(":")[-1] if ":" in candidate else candidate
-        if normalized_symbol in (candidate, bare_candidate):
-            price = row.get(price_field)
-            if price is not None:
-                return float(price)
+        if candidate:
+            rows_by_symbol.setdefault(candidate, row)
+    matched, _, _ = resolve_symbol(rows_by_symbol.keys(), benchmark_symbol)
+    if matched is not None:
+        price = rows_by_symbol[matched].get(price_field)
+        if price is not None:
+            return float(price)
     return None
 
 

@@ -21,7 +21,7 @@ become daily advice. It is documentation, not executable ranking.
 5. **Book NAV / loss ladders** live in `generic_utils.risk` (not a 0–100).
    Standalone: `tv_scan_cli.py risk`. Skill: `.cursor/skills/book-risk/SKILL.md`.
 
-Daily agent task: `src/focus_pool_screening/prompts/agent_copy_paste.txt`
+Daily agent task: `src/research_prompt/agent_copy_paste.txt`
 (`--- DAILY (full) ---`). Skill: `.cursor/skills/daily-operator-scan/SKILL.md`.
 
 Longer module playbooks (do not duplicate here):

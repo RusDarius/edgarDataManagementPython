@@ -1,0 +1,43 @@
+{
+  "id": "20260924_snx_post_earn",
+  "symbol": "NYSE:SNX",
+  "event_date": "2026-09-24",
+  "event": "Fiscal Q3 2026 print. Adjusted EPS $5.68 beat. Revenue $21.56B, +37.7% year over year. Shares opened down about 11% (prior close $287.89, print near $256).",
+  "outside": "RTT News and 24/7 Wall St., 24 Sep 2026. Operating cash flow swung to about a $917m outflow. Free-cash-flow consumption was about $976m on inventory for Hyve AI servers. Gross margin fell 61 bps.",
+  "pre_event": {
+    "pack_day": "2026-09-23",
+    "course": "SELL_THE_NEWS",
+    "dte": 1,
+    "left": 13.8,
+    "rsi": 73.0,
+    "rng": 98.1,
+    "bo": 1.78,
+    "note": "Weeks breakout looked like strength. The pack course was already sell-the-news, not a new buy."
+  },
+  "post_event": {
+    "pack": "briefing_pack_20260924_1725_utc_5fe6ff44",
+    "close": 256.3,
+    "day_pct": -11.0,
+    "left": 30.3,
+    "street_px": 334.0,
+    "bo": 0.29,
+    "d_bo": -1.40,
+    "opm": 2.6,
+    "peer": "THIN",
+    "fp_terminal_px": null,
+    "fp_rev_cagr_own": 6.4,
+    "down_class": "BOUNCE"
+  },
+  "model_miss": "The weeks score (bo 1.69 into the print) and a revenue beat both looked like support. Neither priced a working-capital cash outflow. The financial-projection terminal is empty, so there was no model price to gap against. The leftover reopened to 30% only because the price fell.",
+  "lesson": "Do not buy a name into a print when the pack course is SELL_THE_NEWS, even if weeks bo is high. After the gap, do not buy the reopened leftover the same day. An empty model terminal is not confirmation. A distributor with thin operating margin can beat EPS and still gap down on cash flow.",
+  "applies_to": [
+    "operator_briefing earnings lanes",
+    "financial_projection terminals",
+    "weeks breakout used as a buy",
+    "wisdom forward_value rows with empty fp_terminal_px"
+  ],
+  "companion_reject": {
+    "symbol": "NASDAQ:AEHR",
+    "why": "Pack NEW support 0.65 on 24 Sep. Model terminal 5.85 against a 98.6 close, model upside -94%. A terminal that far under the price is a reject, not a starter."
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "schema_version": "backtracking_v1",
+  "config_id": "default_v1",
+  "description": "Weekly point-in-time panel and investing-run scoring from existing all-fields, prediction, and edge artifacts.",
+  "paths": {
+    "all_fields_root": "logs/tradingview_analysis/trading_view_all_fields_data",
+    "prediction_root": "logs/tradingview_analysis/prediction_analysis/duckdb_runs",
+    "edge_runs_root": "logs/tradingview_analysis/edge_research_tools/runs",
+    "output_root": "logs/tradingview_analysis/backtracking_analysis/runs",
+    "focused_catalog_csv": "savedData/trading_view_stock_fields_focused.csv"
+  },
+  "window": {
+    "start_day_label": null,
+    "end_day_label": null
+  },
+  "raw_fields": {
+    "preset": "core",
+    "core_fields": [
+      "close",
+      "market_cap_basic",
+      "industry",
+      "RSI",
+      "ATRP",
+      "enterprise_value_to_revenue_ttm",
+      "enterprise_value_ebitda_ttm",
+      "price_earnings_ttm",
+      "price_earnings_forward_fy",
+      "price_earnings_growth_ttm",
+      "operating_margin_ttm",
+      "gross_margin_ttm",
+      "Perf.5D",
+      "Perf.1M",
+      "price_target_average"
+    ]
+  },
+  "output": {
+    "root_dir": "logs/tradingview_analysis/backtracking_analysis/runs",
+    "write_csv": true
+  }
+}

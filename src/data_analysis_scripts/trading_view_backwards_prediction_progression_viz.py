@@ -31,6 +31,7 @@ from data_analysis_scripts.trading_view_backwards_prediction_scout_report import
     _resolve_effective_primary_anchor,
 )
 from db.trading_view_backwards_prediction_duckdb import query_backwards_prediction_duckdb
+from generic_utils.symbol_identity import SymbolCatalog, lookup_mapping, parse_symbol
 
 DEFAULT_HORIZON_NAME = "weeks"
 DEFAULT_RUNS_PER_WEEK = 2
@@ -282,12 +283,6 @@ def _split_symbol_ticker(symbol: str) -> str:
         return normalized.upper()
     _, _, ticker = normalized.partition(":")
     return (ticker or normalized).upper()
-
-
-def _symbol_match(symbol_value: str, requested_symbols: set[str]) -> bool:
-    normalized = symbol_value.upper()
-    ticker = _split_symbol_ticker(symbol_value)
-    return normalized in requested_symbols or ticker in requested_symbols
 
 
 @dataclass(frozen=True)
@@ -575,12 +570,24 @@ def extract_progression_series(
         parameters=params,
     )
 
+    resolved_symbols: set[str] = set()
+    if normalized_symbols:
+        available_symbols = [row.get("symbol") for row in rows]
+        catalog = SymbolCatalog.build(available_symbols)
+        for requested in normalized_symbols:
+            matched, _, _ = catalog.resolve(requested)
+            if matched is not None:
+                resolved_symbols.add(parse_symbol(matched).normalized)
+
     points: list[ProgressionPoint] = []
     for row in rows:
         symbol = _normalize_text(row.get("symbol"))
         if symbol is None:
             continue
-        if normalized_symbols and not _symbol_match(symbol, normalized_symbols):
+        if (
+            normalized_symbols
+            and parse_symbol(symbol).normalized not in resolved_symbols
+        ):
             continue
 
         is_current = bool(row.get("is_current"))
@@ -824,14 +831,28 @@ def _point_lookup(
             point.anchor_name.lower(),
         )
         lookup[key] = point
-        ticker_key = (
-            point.profile_name.lower(),
-            point.horizon_name.lower(),
-            _split_symbol_ticker(point.symbol),
-            point.anchor_name.lower(),
-        )
-        lookup[ticker_key] = point
     return lookup
+
+
+def _point_for_symbol(
+    lookup: dict[tuple[str, str, str, str], ProgressionPoint],
+    *,
+    profile_name: str,
+    horizon_name: str,
+    symbol: str,
+    anchor_name: str,
+) -> ProgressionPoint | None:
+    profile_key = profile_name.lower()
+    horizon_key = horizon_name.lower()
+    anchor_key = anchor_name.lower()
+    candidates = {
+        key[2]: point
+        for key, point in lookup.items()
+        if key[0] == profile_key
+        and key[1] == horizon_key
+        and key[3] == anchor_key
+    }
+    return lookup_mapping(candidates, symbol)
 
 
 def _build_watchlist_highlights(
@@ -841,13 +862,18 @@ def _build_watchlist_highlights(
     if not points or not watchlist_symbols:
         return []
 
-    watchlist = set(_normalize_symbol_candidates(watchlist_symbols))
+    requested_watchlist = _normalize_symbol_candidates(watchlist_symbols)
+    catalog = SymbolCatalog.build(point.symbol for point in points)
+    watchlist: set[str] = set()
+    for requested in requested_watchlist:
+        matched, _, _ = catalog.resolve(requested)
+        if matched is not None:
+            watchlist.add(parse_symbol(matched).normalized)
     highlights: list[HighlightMarker] = []
     best_points_by_symbol: dict[str, ProgressionPoint] = {}
     for point in points:
-        symbol_key = point.symbol.upper()
-        ticker_key = _split_symbol_ticker(point.symbol)
-        if symbol_key not in watchlist and ticker_key not in watchlist:
+        symbol_key = parse_symbol(point.symbol).normalized
+        if symbol_key not in watchlist:
             continue
         existing = best_points_by_symbol.get(symbol_key)
         if existing is None or (
@@ -953,20 +979,18 @@ def extract_scout_highlight_markers(
             symbol = str(row.get("symbol") or "").strip()
             if not symbol:
                 return
-            point = point_lookup.get(
-                (
-                    profile_name.lower(),
-                    horizon_name.lower(),
-                    symbol.upper(),
-                    "current",
-                )
-            ) or point_lookup.get(
-                (
-                    profile_name.lower(),
-                    horizon_name.lower(),
-                    symbol.upper(),
-                    anchor_name.lower(),
-                )
+            point = _point_for_symbol(
+                point_lookup,
+                profile_name=profile_name,
+                horizon_name=horizon_name,
+                symbol=symbol,
+                anchor_name="current",
+            ) or _point_for_symbol(
+                point_lookup,
+                profile_name=profile_name,
+                horizon_name=horizon_name,
+                symbol=symbol,
+                anchor_name=anchor_name,
             )
             if point is None:
                 return
@@ -1238,15 +1262,10 @@ def _progression_symbol_lines_from_points(
 
     if requested_symbols:
         lines: list[ProgressionSymbolSpecLine] = []
+        catalog = SymbolCatalog.build(company_by_symbol.keys())
         for requested in requested_symbols:
-            matched_label = next(
-                (
-                    symbol
-                    for symbol in company_by_symbol
-                    if _symbol_match(symbol, {requested.upper()})
-                ),
-                requested,
-            )
+            matched, _, _ = catalog.resolve(requested)
+            matched_label = matched or requested
             lines.append(
                 ProgressionSymbolSpecLine(
                     requested=requested,

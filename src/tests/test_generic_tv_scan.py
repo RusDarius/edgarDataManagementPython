@@ -12,6 +12,24 @@ class TestDerive(unittest.TestCase):
         self.assertAlmostEqual(leftover_pct(100, 110, 40), 40)
         self.assertIsNone(leftover_pct(None, 110, None))
 
+    def test_leftover_carrier_names_the_quote_without_a_cutoff(self):
+        from generic_utils.derive import leftover_carrier
+
+        self.assertEqual(leftover_carrier(-13.7, 61.7), "edge_only")
+        self.assertEqual(leftover_carrier(35.7, 47.4), "both")
+        self.assertEqual(leftover_carrier(56.1, 56.1), "street")
+        self.assertEqual(leftover_carrier(-3.9, -3.9), "none")
+        self.assertEqual(leftover_carrier(None, 40), "none")
+        from generic_utils.derive import apply_derived
+
+        out = apply_derived(
+            [{"close": 31.86, "pt": 27.5, "edge_left": 61.7}],
+            refresh=True,
+        )
+        self.assertEqual(out[0]["left_carrier"], "edge_only")
+        self.assertLess(out[0]["street_left"], 0)
+        self.assertGreater(out[0]["left"], 0)
+
     def test_leftover_to_range_has_no_default_dump_cutoff(self):
         from generic_utils.derive import leftover_to_range
 
@@ -31,14 +49,22 @@ class TestDerive(unittest.TestCase):
         )
         by_id = {r["symbol"]: r for r in out}
         self.assertEqual(by_id["CHEAP"]["evrev_vs_ind"], -50.0)
+        self.assertEqual(by_id["CHEAP"]["evrev_ind_med"], 8.0)
+        self.assertEqual(by_id["CHEAP"]["evrev_ind_avg"], 7.3)
+        self.assertEqual(by_id["CHEAP"]["evrev_vs_avg"], -45.5)
+        self.assertEqual(by_id["A0"]["evrev_vs_ind"], 0.0)
+        self.assertGreater(by_id["A0"]["evrev_vs_avg"], 0)
         self.assertGreater(by_id["CHEAP"]["left_vs_ind"], 0)
         self.assertIsNone(by_id["B0"]["evrev_vs_ind"])
+        self.assertIsNone(by_id["B0"]["evrev_vs_avg"])
         keep = keep_with_vs_group(
             ["rsi"],
             {"vs_group": {"by": "ind", "fields": ["evrev"], "min_n": 6}},
         )
         self.assertIn("evrev_vs_ind", keep)
         self.assertIn("evrev_ind_med", keep)
+        self.assertIn("evrev_vs_avg", keep)
+        self.assertIn("evrev_ind_avg", keep)
         self.assertIn("close", keep)
         self.assertIn("street_px", keep)
         self.assertIn("target_px", keep)
@@ -133,7 +159,61 @@ class TestSetup(unittest.TestCase):
         cheap = next(r for r in out if r["symbol"] == "NASDAQ:CHEAP")
         self.assertEqual(cheap["val_field"], "pe")
         self.assertEqual(cheap["peer"], "DISCOUNT")
+        self.assertLessEqual(cheap["val_vs_ind"], -5)
+        self.assertIsNotNone(cheap["val_vs_avg"])
+        self.assertIsNotNone(cheap["val_ind_avg"])
+        self.assertIsNotNone(cheap["eff_vs_ind"])
+        self.assertIsNotNone(cheap["eff_vs_avg"])
         self.assertEqual(cheap["tech_sma"], "ABOVE")
+        self.assertGreater(cheap["vs50"], 0)
+
+    def test_trailing_and_forward_peer_bins_stay_separate(self):
+        from generic_utils.setup import attach_setup
+
+        recipe = {
+            "families": {"earnings": ["pe_fwd", "pe", "evebitda"]},
+            "industry_family": {"Semiconductors": "earnings"},
+            "default_family": "earnings",
+            "efficiency": {"earnings": []},
+            "vs_fields": ["pe", "pe_fwd", "evebitda", "evebitda_fwd"],
+            "min_n": 1,
+        }
+        rows = [
+            {
+                "symbol": "A",
+                "ind": "Semiconductors",
+                "pe": 10,
+                "pe_fwd": 30,
+                "evebitda": 8,
+                "evebitda_fwd": 20,
+            },
+            {
+                "symbol": "B",
+                "ind": "Semiconductors",
+                "pe": 20,
+                "pe_fwd": 15,
+                "evebitda": 16,
+                "evebitda_fwd": 10,
+            },
+        ]
+        out = {row["symbol"]: row for row in attach_setup(rows, recipe)}
+        self.assertEqual(out["A"]["pe_peer"], "DISCOUNT")
+        self.assertEqual(out["A"]["pe_fwd_peer"], "PREMIUM")
+        self.assertEqual(out["A"]["evebitda_peer"], "DISCOUNT")
+        self.assertEqual(out["A"]["evebitda_fwd_peer"], "PREMIUM")
+        self.assertLess(out["A"]["pe_vs_ind"], -5)
+        self.assertGreater(out["A"]["pe_fwd_vs_ind"], 5)
+
+    def test_peer_band_is_five_percent_of_the_median(self):
+        from generic_utils.setup import PEER_INLINE_BAND_PCT, _peer_label
+
+        self.assertEqual(PEER_INLINE_BAND_PCT, 5.0)
+        self.assertEqual(_peer_label(-4.9, has_field=True, thin=False), "INLINE")
+        self.assertEqual(_peer_label(-5.0, has_field=True, thin=False), "DISCOUNT")
+        self.assertEqual(_peer_label(4.9, has_field=True, thin=False), "INLINE")
+        self.assertEqual(_peer_label(5.0, has_field=True, thin=False), "PREMIUM")
+        self.assertEqual(_peer_label(-40.0, has_field=True, thin=True), "THIN")
+        self.assertEqual(_peer_label(None, has_field=False, thin=False), "NA")
 
     def test_sales_uses_evrev_only_when_earnings_missing(self):
         from generic_utils.setup import pick_value_field
@@ -423,7 +503,7 @@ class TestAggregations(unittest.TestCase):
             exported = write_run_export(
                 Path(tmp) / "export",
                 tool="tv_scan_cli.export",
-                tables={"radar": [{"symbol": "MU", "left": 55}]},
+                tables={"radar": [{"symbol": "MU", "left": 55, "rr": 1.2, "opm": 18.0, "bo": 0.4}]},
                 sources={"prediction_run_id": "demo"},
                 schema_version="tv_scan_export_v1",
             )
@@ -431,6 +511,23 @@ class TestAggregations(unittest.TestCase):
             self.assertEqual(rows[0]["symbol"], "MU")
             overview = Path(exported["overview_log"]).read_text(encoding="utf-8")
             self.assertIn("source.prediction_run_id=demo", overview)
+            guide = Path(exported["query_guide"]).read_text(encoding="utf-8")
+            self.assertIn("TABLE radar", guide)
+            self.assertIn("left —", guide)
+            self.assertIn('ORDER BY "rr"', guide)
+            self.assertIn("tv_scan_cli.py focus", guide)
+            duck_only = write_run_export(
+                Path(tmp) / "duck_only",
+                tool="operator_briefing.compile",
+                tables={"radar_curated_50": [{"symbol": "MU", "left": 55, "rr": 1.2, "bo": 0.4, "ind": "Semi"}]},
+                duckdb_name="briefing_pack.duckdb",
+                write_csv=False,
+            )
+            duck_guide = Path(duck_only["query_guide"]).read_text(encoding="utf-8")
+            self.assertIn("TABLE radar_curated_50", duck_guide)
+            self.assertIn('ORDER BY "rr"', duck_guide)
+            self.assertIn("tv_scan_cli.py named", duck_guide)
+            self.assertNotIn("tv_scan_cli.py focus", duck_guide)
 
 
 class TestSeries(unittest.TestCase):
@@ -544,6 +641,28 @@ class TestSeries(unittest.TestCase):
         self.assertGreater(refreshed[0]["left"], 30)
         self.assertLess(refreshed[0]["left"], 40)
 
+    def test_join_rows_does_not_cross_exchange_for_qualified_symbol(self):
+        from generic_utils.series import join_rows
+
+        joined = join_rows(
+            [{"symbol": "NYSE:MMS", "left": 50}],
+            [{"symbol": "ASX:MMS", "close": 18.30}],
+            left_on="symbol",
+            right_on="symbol",
+            prefix="tape_",
+        )
+        self.assertNotIn("tape_close", joined[0])
+        self.assertNotIn("_joined", joined[0])
+
+        legacy = join_rows(
+            [{"symbol": "NYSE:MMS"}],
+            [{"symbol": "MMS", "close": 56.99}],
+            left_on="symbol",
+            right_on="symbol",
+            prefix="tape_",
+        )
+        self.assertEqual(legacy[0]["tape_close"], 56.99)
+
 
 class TestPredicates(unittest.TestCase):
     def test_where_filters_without_baked_cutoffs(self):
@@ -602,6 +721,44 @@ class TestRecipesAndCli(unittest.TestCase):
         self.assertEqual(match_wanted_id("MU", ["NASDAQ:MU", "NYSE:UNH"]), "NASDAQ:MU")
         self.assertEqual(match_wanted_id("NASDAQ:MU", ["NASDAQ:MU"]), "NASDAQ:MU")
         self.assertIsNone(match_wanted_id("MU", ["NASDAQ:MU", "NYSE:MU"]))
+        self.assertIsNone(match_wanted_id("ASX:MMS", ["NYSE:MMS"]))
+        self.assertIsNone(match_wanted_id("GPW:MMS", ["NYSE:MMS"]))
+        self.assertEqual(match_wanted_id("MMS", ["NYSE:MMS"]), "NYSE:MMS")
+        self.assertEqual(match_wanted_id("ASX:MMS", ["MMS"]), "MMS")
+
+    def test_fetch_named_keeps_exchange_qualified_id_strict(self):
+        import duckdb
+
+        from generic_utils.series import fetch_named
+
+        with TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "mms.duckdb"
+            conn = duckdb.connect(str(db_path))
+            try:
+                conn.execute(
+                    "CREATE TABLE all_fields_rows (symbol VARCHAR, close DOUBLE)"
+                )
+                conn.execute(
+                    """
+                    INSERT INTO all_fields_rows VALUES
+                        ('ASX:MMS', 18.30),
+                        ('GPW:MMS', 0.259),
+                        ('NYSE:MMS', 56.99)
+                    """
+                )
+            finally:
+                conn.close()
+
+            fetched = fetch_named(
+                db_path,
+                table="all_fields_rows",
+                columns=["symbol", "close"],
+                id_field="symbol",
+                ids=["NYSE:MMS"],
+            )
+            self.assertEqual(
+                fetched["rows"], [{"symbol": "NYSE:MMS", "close": 56.99}]
+            )
 
     def test_tape_returns_recipe_aliases_horizons(self):
         from generic_utils.recipes import render_recipe
@@ -862,6 +1019,25 @@ class TestCoverRows(unittest.TestCase):
 
 
 class TestForwardValue(unittest.TestCase):
+    def test_projection_join_respects_qualified_exchange(self):
+        from generic_utils.forward_value import attach_forward_value
+
+        projections = [
+            {"symbol": "ASX:MMS", "terminal_price": 2.0, "valid": True},
+            {"symbol": "NYSE:MMS", "terminal_price": 53.0, "valid": True},
+        ]
+        nyse = attach_forward_value(
+            [{"symbol": "NYSE:MMS", "close": 50.0}],
+            price_rows=projections,
+        )[0]
+        self.assertEqual(nyse["fp_terminal_px"], 53.0)
+
+        missing = attach_forward_value(
+            [{"symbol": "NASDAQ:MMS", "close": 50.0}],
+            price_rows=projections,
+        )[0]
+        self.assertNotIn("fp_terminal_px", missing)
+
     def test_street_columns_and_ticker_join(self):
         from generic_utils.forward_value import attach_forward_value, clamp_cover
 
@@ -905,6 +1081,7 @@ class TestForwardValue(unittest.TestCase):
         self.assertEqual(rec["fp_joined"], "street_tv+price+growth")
 
     def test_empty_pe_fwd_is_not_filled_with_evrev(self):
+        from generic_utils.forward_fundamentals import attach_forward_fundamentals
         from generic_utils.forward_value import attach_street_forward
 
         rec = attach_street_forward(
@@ -912,6 +1089,175 @@ class TestForwardValue(unittest.TestCase):
         )[0]
         self.assertIsNone(rec["fwd_pe"])
         self.assertEqual(rec["fwd_pack_pct"], 40)
+        projected = attach_forward_fundamentals(
+            [{"symbol": "A", "close": 10, "mcap": 100, "evrev": 8.0}]
+        )[0]
+        self.assertIsNone(projected["pe_fwd"])
+        self.assertIsNone(projected["fp_pe_y1"])
+        self.assertIsNone(projected["evebitda_fwd"])
+
+    def test_projection_path_sets_forward_pe_and_ev_ebitda(self):
+        from generic_utils.forward_fundamentals import (
+            attach_forward_fundamentals,
+            context_from_parts,
+        )
+
+        ctx = context_from_parts(
+            growth_summary=[
+                {
+                    "symbol": "NASDAQ:MU",
+                    "market_cap_basic": 1000,
+                    "net_income_ttm": 40,
+                    "ebitda": 80,
+                    "total_revenue_ttm": 200,
+                }
+            ],
+            growth_years=[
+                {
+                    "symbol": "NASDAQ:MU",
+                    "growth_lane": "own",
+                    "scenario": "base",
+                    "year": 1,
+                    "net_income_ttm": 50,
+                    "ebitda": 100,
+                    "total_revenue_ttm": 220,
+                },
+                {
+                    "symbol": "NASDAQ:MU",
+                    "growth_lane": "own",
+                    "scenario": "base",
+                    "year": 5,
+                    "net_income_ttm": 80,
+                    "ebitda": 140,
+                    "total_revenue_ttm": 400,
+                },
+            ],
+            price_summary=[{"symbol": "NASDAQ:MU", "net_debt": 100}],
+            price_years=[
+                {
+                    "symbol": "NASDAQ:MU",
+                    "scenario": "base",
+                    "year": 1,
+                    "net_debt": 100,
+                },
+                {
+                    "symbol": "NASDAQ:MU",
+                    "scenario": "base",
+                    "year": 5,
+                    "net_debt": 120,
+                },
+            ],
+            trailing=[{"symbol": "NASDAQ:MU", "ev": 900, "fcf": 40, "fcf_cagr": 10}],
+        )
+        rec = attach_forward_fundamentals(
+            [{"symbol": "NASDAQ:MU", "pe_fwd": 18.5, "evrev": 4}],
+            context=ctx,
+        )[0]
+        self.assertEqual(rec["fp_pe_y1"], 20.0)
+        self.assertEqual(rec["fp_pe_y5"], 12.5)
+        self.assertEqual(rec["fp_pe_method"], "path")
+        self.assertEqual(rec["fp_evebitda_y1"], 9.0)
+        self.assertEqual(rec["fp_evebitda_method"], "path")
+        self.assertEqual(rec["pe_fwd"], 20.0)
+        self.assertEqual(rec["pe_fwd_tv"], 18.5)
+        self.assertEqual(rec["pe_fwd_source"], "fp_path")
+        self.assertEqual(rec["fp_net_debt_y1"], 100.0)
+        self.assertEqual(rec["fp_net_debt_y5"], 120.0)
+        self.assertEqual(rec["fp_debt_method"], "path")
+        self.assertEqual(rec["fp_fcf_y1"], 44.0)
+        self.assertEqual(rec["fp_fcf_method"], "cagr")
+        self.assertEqual(rec["fp_horizon_year"], 5)
+        self.assertNotEqual(rec["pe_fwd"], rec["evrev"])
+
+    def test_forward_fundamentals_respect_qualified_exchange(self):
+        from generic_utils.forward_fundamentals import (
+            attach_forward_fundamentals,
+            context_from_parts,
+        )
+
+        context = context_from_parts(
+            growth_years=[
+                {
+                    "symbol": "ASX:MMS",
+                    "growth_lane": "own",
+                    "scenario": "base",
+                    "year": 1,
+                    "net_income_ttm": 2.0,
+                },
+                {
+                    "symbol": "NYSE:MMS",
+                    "growth_lane": "own",
+                    "scenario": "base",
+                    "year": 1,
+                    "net_income_ttm": 53.0,
+                },
+            ]
+        )
+        nyse = attach_forward_fundamentals(
+            [{"symbol": "NYSE:MMS", "mcap": 530.0}],
+            context=context,
+        )[0]
+        self.assertEqual(nyse["fp_ni_y1"], 53.0)
+
+        missing = attach_forward_fundamentals(
+            [{"symbol": "NASDAQ:MMS", "mcap": 530.0}],
+            context=context,
+        )[0]
+        self.assertIsNone(missing["fp_ni_y1"])
+
+    def test_cagr_fallback_and_yoy_does_not_reach_year_five(self):
+        from generic_utils.forward_fundamentals import attach_forward_fundamentals
+
+        rec = attach_forward_fundamentals(
+            [
+                {
+                    "symbol": "NASDAQ:X",
+                    "mcap": 2200,
+                    "ni": 100,
+                    "ni_cagr": 10,
+                    "ebitda": 100,
+                    "ebitda_yoy": 20,
+                    "ev": 800,
+                }
+            ]
+        )[0]
+        self.assertEqual(rec["fp_pe_method"], "cagr")
+        self.assertEqual(rec["fp_pe_y1"], 20.0)
+        self.assertAlmostEqual(rec["fp_ni_y5"], 161.05, places=2)
+        self.assertEqual(rec["fp_pe_y5"], round(2200 / (100 * (1.1 ** 5)), 2))
+        self.assertEqual(rec["fp_ebitda_y1"], 120.0)
+        self.assertIsNone(rec["fp_ebitda_y5"])
+        self.assertEqual(rec["fp_evebitda_y1"], round(800 / 120, 2))
+        self.assertEqual(rec["pe_fwd_source"], "fp_cagr")
+        self.assertIsNone(rec["pe_fwd_tv"])
+
+    def test_negative_earnings_do_not_invent_a_forward_pe(self):
+        from generic_utils.forward_fundamentals import (
+            attach_forward_fundamentals,
+            context_from_parts,
+        )
+
+        ctx = context_from_parts(
+            growth_years=[
+                {
+                    "symbol": "NASDAQ:Z",
+                    "growth_lane": "own",
+                    "scenario": "base",
+                    "year": 1,
+                    "net_income_ttm": -10,
+                    "ebitda": 5,
+                    "total_revenue_ttm": 40,
+                }
+            ]
+        )
+        rec = attach_forward_fundamentals(
+            [{"symbol": "NASDAQ:Z", "mcap": 100, "ev": 120, "evrev": 3}],
+            context=ctx,
+        )[0]
+        self.assertIsNone(rec["fp_pe_y1"])
+        self.assertIsNone(rec["pe_fwd"])
+        self.assertEqual(rec["fp_ni_y1"], -10)
+        self.assertEqual(rec["fp_evebitda_y1"], 24.0)
 
     def test_setup_attaches_street_forward(self):
         from generic_utils.setup import attach_setup
@@ -1012,6 +1358,8 @@ class TestOperatorSuites(unittest.TestCase):
             "finproj-price",
             "wisdom",
             "all",
+            "playbook",
+            "sources",
         ):
             self.assertIn(needed, ids)
 
@@ -1024,6 +1372,7 @@ class TestOperatorSuites(unittest.TestCase):
         self.assertIn("python src/run_market_timing_policy.py", joined)
         self.assertIn("python src/operator_briefing/example_entry.py compile", joined)
         self.assertIn("python src/run_operator_suites.py wisdom --cover 1000", joined)
+        self.assertIn("python src/run_operator_suites.py sources", joined)
 
     def test_prompt_runs_cover_agent_flows(self):
         from run_operator_suites import list_prompt_runs
@@ -1044,6 +1393,7 @@ class TestOperatorSuites(unittest.TestCase):
             "BOOK ONLY",
             "DETERMINISTIC FOCUS",
             "WISDOM",
+            "PLAYBOOK",
         ):
             self.assertIn(needed, prompts)
         cmds = "\n".join(item["command"] for item in rows)
@@ -1053,9 +1403,54 @@ class TestOperatorSuites(unittest.TestCase):
         self.assertIn("python src/run_operator_suites.py risk", cmds)
         self.assertIn("python src/run_operator_suites.py forward --cover 1000", cmds)
         self.assertIn("python src/run_operator_suites.py wisdom --cover 1000", cmds)
+        self.assertIn("python src/run_operator_suites.py playbook --weeks 25", cmds)
+        catalog = Path("src/research_prompt/run_catalog.txt").read_text(encoding="utf-8")
+        self.assertIn("FIND THE LATEST FOLDER", catalog)
+        self.assertIn("example_entry.py compile", catalog)
+        self.assertIn("queries.txt", catalog)
+        self.assertIn("wisdom --cover 1000", catalog)
+        self.assertIn("run_operator_suites.py sources", catalog)
+        self.assertIn("value projection", catalog)
+        self.assertIn("family_metrics", catalog)
         for item in rows:
             self.assertTrue(item["usage"])
             self.assertTrue(item["output"])
+
+    def test_dataset_lock_lists_six_sources(self):
+        from tempfile import TemporaryDirectory
+
+        from generic_utils.dataset_lock import export_dataset_lock
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            metrics = root / "backtests_demo" / "family_metrics.csv"
+            metrics.parent.mkdir()
+            metrics.write_text(
+                "signal_name,family,spearman_ic\nedge_score,edge,0.21\n",
+                encoding="utf-8",
+            )
+            pack = {
+                "sources": {
+                    "prediction_db": "pred.duckdb",
+                    "prediction_run_id": "pred-1",
+                    "all_fields_db": "af.duckdb",
+                    "all_fields_run_id": "af-1",
+                    "edge_opportunity_csv": "edge.csv",
+                    "edge_parent_dir": "edge-parent",
+                    "mtp_policy_csv": "mtp.csv",
+                    "mtp_dir": "mtp-run",
+                }
+            }
+            exported = export_dataset_lock(
+                root / "datasets",
+                pack,
+                finproj_db=root / "finproj.duckdb",
+                fingrowth_db=None,
+                backtest_root=root,
+            )
+            self.assertEqual(exported["tables"]["datasets"], 6)
+            self.assertEqual(exported["tables"]["family_metrics"], 1)
+            self.assertTrue((root / "datasets" / "datasets.duckdb").exists())
 
     def test_default_pack_raw_dir(self):
         from run_operator_suites import _default_pack_raw_dir

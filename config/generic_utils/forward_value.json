@@ -1,6 +1,6 @@
 {
   "name": "forward_value",
-  "description": "Street / TradingView leftover targets plus optional financial_projection terminals and growth CAGRs. Field attach only — not a 0-100 and not an eligibility screen. Empty pe_fwd is a data gap; do not fill with EV/Rev.",
+  "description": "Street / TradingView leftover targets plus financial_projection terminals, growth CAGRs, and forward PE / EV/EBITDA / debt / FCF for year 1 and up to year 5. Field attach only — not a 0-100 and not an eligibility screen. pe_fwd_tv stays empty when TradingView forward PE is empty. Do not fill pe_fwd with EV/Rev.",
   "id_field": "symbol",
   "close_field": "close",
   "pt_field": "pt",

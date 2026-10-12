@@ -4,6 +4,7 @@ from operator_briefing.continuity import (
     continuity_action,
     is_polar_flip,
     map_mix_to_naive_book_action,
+    prior_action_for,
 )
 from operator_briefing.sleeves import (
     attach_punished_classes,
@@ -350,6 +351,20 @@ class TestPunishedTape(unittest.TestCase):
 
 
 class TestContinuity(unittest.TestCase):
+    def test_prior_action_respects_qualified_exchange(self):
+        priors = {
+            "actions": {
+                "ASX:MMS": {"action": "WAIT"},
+                "NYSE:MMS": {"action": "ADD"},
+            }
+        }
+        self.assertEqual(
+            prior_action_for(priors, "NYSE:MMS"),
+            {"action": "ADD"},
+        )
+        self.assertIsNone(prior_action_for(priors, "NASDAQ:MMS"))
+        self.assertIsNone(prior_action_for(priors, "MMS"))
+
     def test_polar_is_add_to_exit(self):
         self.assertTrue(is_polar_flip("ADD", "EXIT"))
         self.assertFalse(is_polar_flip("HOLD", "EXIT"))
@@ -636,6 +651,33 @@ class TestLeftoverFlagsAndStance(unittest.TestCase):
 
 
 class TestCompareSummary(unittest.TestCase):
+    def test_compare_consensus_fallback_respects_exchange(self):
+        from operator_briefing.compare import build_compare_rows
+
+        rows = build_compare_rows(
+            {"NYSE:MMS": {"bo": 1.0}},
+            {},
+            {},
+            {},
+            consensus_a={
+                "ASX:MMS": {"manager_action_signal": "WAIT"},
+                "NYSE:MMS": {"manager_action_signal": "ADD"},
+            },
+        )
+        self.assertEqual(rows[0]["mix_a"], "ADD")
+
+        rows = build_compare_rows(
+            {"NASDAQ:MMS": {"bo": 1.0}},
+            {},
+            {},
+            {},
+            consensus_a={
+                "ASX:MMS": {"manager_action_signal": "WAIT"},
+                "NYSE:MMS": {"manager_action_signal": "ADD"},
+            },
+        )
+        self.assertIsNone(rows[0]["mix_a"])
+
     def test_new_dropped_and_gainers(self):
         from operator_briefing.compare import summarize_run_compare
 
@@ -728,6 +770,30 @@ class TestLookupResolve(unittest.TestCase):
         payload = lookup_symbols(["mu"], pack=pack)
         self.assertEqual(payload["dossiers"][0]["symbol"], "NASDAQ:MU")
         self.assertEqual(payload["dossiers"][0]["stance"]["stance"], "ADD")
+
+    def test_exchange_qualified_lookup_never_falls_to_other_listing(self):
+        from operator_briefing.lookup import resolve_symbols
+
+        duplicate_pack = {
+            "names": {
+                "NYSE:MMS": {"symbol": "NYSE:MMS"},
+                "ASX:MMS": {"symbol": "ASX:MMS"},
+            },
+            "book": [],
+            "stances": {},
+        }
+        resolved, missing = resolve_symbols(["NYSE:MMS", "MMS"], duplicate_pack)
+        self.assertEqual(resolved, ["NYSE:MMS"])
+        self.assertEqual(missing, ["MMS"])
+
+        other_exchange_only = {
+            "names": {"ASX:MMS": {"symbol": "ASX:MMS"}},
+            "book": [],
+            "stances": {},
+        }
+        resolved, missing = resolve_symbols(["NYSE:MMS"], other_exchange_only)
+        self.assertEqual(resolved, [])
+        self.assertEqual(missing, ["NYSE:MMS"])
 
 
 class TestEventPlay(unittest.TestCase):

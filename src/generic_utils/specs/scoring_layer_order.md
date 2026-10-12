@@ -58,7 +58,11 @@ This layer does **not** decide buy/sell.
 Compile copies a compact row onto every name: returns (day, w, d5, m1, m3),
 RSI, SMAs, 52w high/low, street PT, next earnings date, PE / PEG / EV/Rev /
 EV/EBITDA / EV/FCF / P/B, operating margin, ADX, relative volume, then
-`generic_utils.setup` stamps `val_field` / `val_vs_ind` / `peer` / `tech_sma`.
+`generic_utils.setup` stamps `val_field` / `val` / `val_vs_ind` / `val_ind_med` / `val_vs_avg` / `val_ind_avg` / `peer` / `tech_sma` / `vs50`.
+Each relative field also has `FIELD_vs_ind`, `FIELD_ind_med`, `FIELD_vs_avg`, and `FIELD_ind_avg`.
+`peer` is a bin on the median only: DISCOUNT is `val_vs_ind` ≤ −5, PREMIUM is ≥ 5, INLINE is between.
+`val_vs_avg` is the percent versus the industry average and stays a separate column.
+`tech_sma` is ABOVE when `vs50` ≥ 0. `vs50` is versus that name's own 50-day average, not versus peers.
 
 **What it is:** current price, multiples, and calendar.
 **What it is not:** leftover (that is layer 5), weeks “goodness” (layer 2).

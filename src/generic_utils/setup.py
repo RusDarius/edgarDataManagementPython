@@ -7,8 +7,8 @@ cash / book multiples are missing. A cheap EV/Rev on a bank, insurer,
 health-care name, or profitable software line is not a discount.
 
 Street leftover (`fwd_street_*`) and pack leftover (`fwd_pack_*`) are attached
-on every row. financial_projection terminals live on ``forward_value`` /
-``tv_scan_cli.py forward`` / ``setup --forward``.
+on every row. Quoted `pe_fwd` is the projection next-year PE when that
+column was attached. financial_projection terminals live on ``forward_value``.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from generic_utils.derive import attach_vs_group, pct_vs
+from generic_utils.derive import RELATIVE_SUFFIXES, attach_vs_group, pct_vs
 from generic_utils.ranking import to_float
 
 DEFAULT_RECIPE_PATH = (
@@ -29,6 +29,7 @@ VAL_LABELS = {
     "pe_fwd": "PE fwd",
     "peg": "PEG",
     "evebitda": "EV/EBITDA",
+    "evebitda_fwd": "EV/EBITDA fwd",
     "pb": "P/B",
     "evfcf": "EV/FCF",
     "opm": "opm",
@@ -40,12 +41,17 @@ SETUP_KEEP = (
     "val",
     "val_vs_ind",
     "val_ind_med",
+    "val_vs_avg",
+    "val_ind_avg",
     "val_n",
     "val_family",
     "eff_field",
     "eff_label",
     "eff",
     "eff_vs_ind",
+    "eff_ind_med",
+    "eff_vs_avg",
+    "eff_ind_avg",
     "peer",
     "tech_sma",
     "tech_sma200",
@@ -58,11 +64,25 @@ SETUP_KEEP = (
     "fwd_pack_pct",
     "fwd_pack_px",
     "fwd_pe",
+    "fwd_pe_source",
+    "fwd_evebitda",
     "fwd_peg",
+    "pe_peer",
+    "evebitda_peer",
+    "pb_peer",
+    "evfcf_peer",
+    "pe_fwd_peer",
+    "evebitda_fwd_peer",
 )
 
+# TradingView multiples copied as published. The bin is on that field's own
+# industry median. It is not the projection.
+TV_AS_IS_PEER_FIELDS = ("pe", "evebitda", "pb", "evfcf")
+# Projection derivatives. Same bins, separate columns, because the path can be off.
+FORWARD_PEER_FIELDS = ("pe_fwd", "evebitda_fwd")
+
 _POSITIVE_MULTS = frozenset(
-    {"pe", "pe_fwd", "peg", "evrev", "evebitda", "pb", "evfcf"}
+    {"pe", "pe_fwd", "peg", "evrev", "evebitda", "evebitda_fwd", "pb", "evfcf"}
 )
 
 
@@ -82,6 +102,7 @@ _UNUSABLE_HIGH = {
     "peg": 15.0,
     "evrev": 80.0,
     "evebitda": 80.0,
+    "evebitda_fwd": 80.0,
     "evfcf": 80.0,
     "pb": 25.0,
 }
@@ -225,14 +246,19 @@ def pick_tech(row: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+# val_vs_ind is a percent versus the industry median, not a fraction.
+# Inside this band the gap is too small for DISCOUNT or PREMIUM.
+PEER_INLINE_BAND_PCT = 5.0
+
+
 def _peer_label(val_vs_ind: float | None, *, has_field: bool, thin: bool) -> str:
     if not has_field:
         return "NA"
     if thin or val_vs_ind is None:
         return "THIN"
-    if val_vs_ind <= -0.05:
+    if val_vs_ind <= -PEER_INLINE_BAND_PCT:
         return "DISCOUNT"
-    if val_vs_ind >= 0.05:
+    if val_vs_ind >= PEER_INLINE_BAND_PCT:
         return "PREMIUM"
     return "INLINE"
 
@@ -260,6 +286,7 @@ def attach_setup(
         )
 
     medians: dict[tuple[str, str], float | None] = {}
+    means: dict[tuple[str, str], float | None] = {}
     group_n: dict[str, int] = {}
     for rec in universe:
         key = str(rec.get(group_field) or "")
@@ -267,6 +294,7 @@ def attach_setup(
             group_n[key] = group_n.get(key, 0) + 1
         for field in vs_fields:
             medians[(key, field)] = rec.get(f"{field}_ind_med")
+            means[(key, field)] = rec.get(f"{field}_ind_avg")
 
     by_symbol = {str(r.get("symbol") or ""): r for r in universe}
     out: list[dict[str, Any]] = []
@@ -276,17 +304,21 @@ def attach_setup(
         peer = by_symbol.get(symbol)
         if peer:
             for field in vs_fields:
-                if rec.get(f"{field}_vs_ind") is None:
-                    rec[f"{field}_vs_ind"] = peer.get(f"{field}_vs_ind")
-                if rec.get(f"{field}_ind_med") is None:
-                    rec[f"{field}_ind_med"] = peer.get(f"{field}_ind_med")
+                for suffix in RELATIVE_SUFFIXES:
+                    col = f"{field}{suffix}"
+                    if rec.get(col) is None:
+                        rec[col] = peer.get(col)
         else:
             key = str(rec.get(group_field) or rec.get("industry") or "")
             for field in vs_fields:
                 med = medians.get((key, field))
+                avg = means.get((key, field))
                 rec[f"{field}_ind_med"] = med
-                rel = pct_vs(rec.get(field), med) if med is not None else None
-                rec[f"{field}_vs_ind"] = round(rel, 1) if rel is not None else None
+                rel_med = pct_vs(rec.get(field), med) if med is not None else None
+                rec[f"{field}_vs_ind"] = round(rel_med, 1) if rel_med is not None else None
+                rec[f"{field}_ind_avg"] = avg
+                rel_avg = pct_vs(rec.get(field), avg) if avg is not None else None
+                rec[f"{field}_vs_avg"] = round(rel_avg, 1) if rel_avg is not None else None
 
         picked = pick_value_field(rec, cfg)
         rec.update(picked)
@@ -298,10 +330,14 @@ def attach_setup(
         val_vs = rec.get(f"{field}_vs_ind") if field else None
         rec["val_vs_ind"] = val_vs
         rec["val_ind_med"] = rec.get(f"{field}_ind_med") if field else None
+        rec["val_vs_avg"] = rec.get(f"{field}_vs_avg") if field else None
+        rec["val_ind_avg"] = rec.get(f"{field}_ind_avg") if field else None
         rec["val_n"] = group_n.get(key)
-        rec["eff_vs_ind"] = (
-            rec.get(f"{rec['eff_field']}_vs_ind") if rec.get("eff_field") else None
-        )
+        eff_field = rec.get("eff_field")
+        rec["eff_vs_ind"] = rec.get(f"{eff_field}_vs_ind") if eff_field else None
+        rec["eff_ind_med"] = rec.get(f"{eff_field}_ind_med") if eff_field else None
+        rec["eff_vs_avg"] = rec.get(f"{eff_field}_vs_avg") if eff_field else None
+        rec["eff_ind_avg"] = rec.get(f"{eff_field}_ind_avg") if eff_field else None
         thin = bool(field) and (
             rec.get("val_ind_med") is None
             or (rec.get("val_n") is not None and int(rec["val_n"] or 0) < min_n)
@@ -309,6 +345,7 @@ def attach_setup(
         rec["peer"] = _peer_label(
             to_float(val_vs), has_field=bool(field), thin=thin
         )
+        _stamp_valuation_peers(rec, min_n=min_n, group_n=rec.get("val_n"))
         if rec.get("val") is not None:
             rec["val"] = round(float(rec["val"]), 2)
         if rec.get("eff") is not None:
@@ -317,6 +354,32 @@ def attach_setup(
     from generic_utils.forward_value import attach_street_forward
 
     return attach_street_forward(out)
+
+
+def _stamp_valuation_peers(
+    rec: dict[str, Any],
+    *,
+    min_n: int,
+    group_n: Any,
+) -> None:
+    """One DISCOUNT / PREMIUM / INLINE per trailing TV field and per forward field."""
+    n = to_float(group_n)
+    thin_n = n is not None and n < min_n
+    for field in (*TV_AS_IS_PEER_FIELDS, *FORWARD_PEER_FIELDS):
+        has = _usable(rec, field) is not None
+        thin = thin_n or rec.get(f"{field}_ind_med") is None
+        rec[f"{field}_peer"] = _peer_label(
+            to_float(rec.get(f"{field}_vs_ind")),
+            has_field=has,
+            thin=thin,
+        )
+
+
+def recipe_relative_columns(recipe: Mapping[str, Any] | None = None) -> list[str]:
+    """Every vs-field as percent and level, once for the median and once for the average."""
+    cfg = recipe or load_setup_recipe()
+    fields = [str(item) for item in (cfg.get("vs_fields") or ()) if item]
+    return [f"{field}{suffix}" for field in fields for suffix in RELATIVE_SUFFIXES]
 
 
 def keep_with_setup(keep: Sequence[str]) -> list[str]:

@@ -32,6 +32,25 @@ def leftover_pct(
     return max(candidates)
 
 
+def leftover_carrier(street_left: Any, pack_left: Any) -> str:
+    """Who is carrying pack leftover. A label, not a buy cutoff.
+
+    edge_only: street leftover is negative and pack leftover is positive.
+    both: both are positive and the edge number is higher than the street quote.
+    street: street leftover is positive and the pack number does not sit above it.
+    none: pack leftover is missing or not positive, or the street quote is missing.
+    """
+    street = to_float(street_left)
+    pack = to_float(pack_left)
+    if pack is None or pack <= 0 or street is None:
+        return "none"
+    if street < 0:
+        return "edge_only"
+    if pack > street + 0.05:
+        return "both"
+    return "street"
+
+
 def implied_price(close: Any, leftover_pct_value: Any, *, digits: int = 2) -> float | None:
     """Close * (1 + leftover%/100). Street leftover -> street_px; pack leftover -> target_px."""
     close_f = to_float(close)
@@ -124,6 +143,7 @@ def apply_derived(
             )
         if refresh or rec.get("target_px") is None:
             rec["target_px"] = implied_price(close, rec.get("left"))
+        rec["left_carrier"] = leftover_carrier(rec.get("street_left"), rec.get("left"))
         out.append(rec)
     return out
 
@@ -138,6 +158,17 @@ def _median(values: list[float]) -> float | None:
     return (ordered[mid - 1] + ordered[mid]) / 2.0
 
 
+def _mean(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
+# Percent versus the group median, the median level, percent versus the
+# group average, and the average level. Four columns. Never one blended gap.
+RELATIVE_SUFFIXES = ("_vs_ind", "_ind_med", "_vs_avg", "_ind_avg")
+
+
 def attach_vs_group(
     rows: list[dict[str, Any]],
     *,
@@ -146,14 +177,17 @@ def attach_vs_group(
     min_n: int = 6,
     suffix: str = "_vs_ind",
     median_suffix: str = "_ind_med",
+    avg_suffix: str = "_vs_avg",
+    mean_suffix: str = "_ind_avg",
     digits: int = 1,
 ) -> list[dict[str, Any]]:
-    """Attach pct vs group median for each field. No eligibility cutoff.
+    """Attach percent versus the group median and the group average.
 
-    For multiples (EV/Rev, PE), a negative `{field}_vs_ind` is cheaper than
-    the industry median (a discount). For leftover / returns, positive means
-    more leftover / more move than peers. Groups smaller than `min_n` (or
-    with fewer than `min_n` clean values) get null relatives.
+    Median and average are different columns. For multiples, a negative
+    percent is cheaper than that reference. For leftover or returns, a
+    positive percent is more than peers. Groups smaller than `min_n` (or
+    with fewer than `min_n` clean values) get null relatives. No cutoff
+    drops a name from the row.
     """
     groups: dict[str, list[int]] = defaultdict(list)
     for index, row in enumerate(rows):
@@ -162,6 +196,7 @@ def attach_vs_group(
             groups[key].append(index)
 
     medians: dict[tuple[str, str], float | None] = {}
+    means: dict[tuple[str, str], float | None] = {}
     for key, indexes in groups.items():
         members = [rows[i] for i in indexes]
         n = len(members)
@@ -169,8 +204,10 @@ def attach_vs_group(
             clean = [v for v in (to_float(m.get(field)) for m in members) if v is not None]
             if n < min_n or len(clean) < min_n:
                 medians[(key, field)] = None
+                means[(key, field)] = None
             else:
                 medians[(key, field)] = _median(clean)
+                means[(key, field)] = _mean(clean)
 
     out: list[dict[str, Any]] = []
     for row in rows:
@@ -178,11 +215,21 @@ def attach_vs_group(
         key = str(rec.get(group_field) or "")
         for field in fields:
             med = medians.get((key, field))
+            avg = means.get((key, field))
             rec[f"{field}{median_suffix}"] = (
                 round(med, digits) if med is not None else None
             )
-            rel = pct_vs(rec.get(field), med) if med is not None else None
-            rec[f"{field}{suffix}"] = round(rel, digits) if rel is not None else None
+            rel_med = pct_vs(rec.get(field), med) if med is not None else None
+            rec[f"{field}{suffix}"] = (
+                round(rel_med, digits) if rel_med is not None else None
+            )
+            rec[f"{field}{mean_suffix}"] = (
+                round(avg, digits) if avg is not None else None
+            )
+            rel_avg = pct_vs(rec.get(field), avg) if avg is not None else None
+            rec[f"{field}{avg_suffix}"] = (
+                round(rel_avg, digits) if rel_avg is not None else None
+            )
         out.append(rec)
     return out
 
@@ -255,12 +302,12 @@ def attach_implied_targets(
 def keep_with_vs_group(
     keep: Sequence[str], recipe: Mapping[str, Any] | None = None
 ) -> list[str]:
-    """Union recipe keep with `{field}_vs_ind` / `{field}_ind_med` columns."""
+    """Union recipe keep with median and average relative columns."""
     out = list(keep)
     parsed = vs_group_from_recipe(recipe)
     if parsed:
         for field in parsed["fields"]:
-            for suffix in ("_vs_ind", "_ind_med"):
+            for suffix in RELATIVE_SUFFIXES:
                 key = f"{field}{suffix}"
                 if key not in out:
                     out.append(key)

@@ -3,7 +3,9 @@
 Field attach only. No eligibility cutoff and no 0–100 composite.
 
 Street leftover, pack leftover, and model terminals stay separate columns.
-Empty ``pe_fwd`` is a data gap — do not fill it with EV/Rev.
+Quoted ``pe_fwd`` / ``fwd_pe`` is the projection next-year PE when that
+path or CAGR exists. ``pe_fwd_tv`` keeps the TradingView forward PE, which
+stays empty when the scan is empty. Do not fill either with EV/Rev.
 """
 
 from __future__ import annotations
@@ -12,7 +14,8 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from generic_utils.derive import attach_implied_targets
-from generic_utils.ranking import ticker_of, to_float
+from generic_utils.ranking import to_float
+from generic_utils.symbol_identity import parse_symbol
 
 DEFAULT_RECIPE_PATH = (
     Path(__file__).resolve().parents[2]
@@ -30,6 +33,8 @@ FORWARD_KEEP = (
     "fwd_pack_pct",
     "fwd_pack_px",
     "fwd_pe",
+    "fwd_pe_source",
+    "fwd_evebitda",
     "fwd_peg",
     "fp_terminal_px",
     "fp_terminal_upside_pct",
@@ -162,21 +167,32 @@ def index_projection_by_ticker(
     *,
     id_field: str = "symbol",
 ) -> dict[str, dict[str, Any]]:
-    """One row per bare ticker. Later duplicates do not replace a valid row."""
+    """One preferred row per source symbol, preserving exchange identity."""
     out: dict[str, dict[str, Any]] = {}
     for row in rows:
-        ticker = ticker_of(row.get(id_field))
-        if not ticker:
+        symbol = parse_symbol(row.get(id_field)).normalized
+        if not symbol:
             continue
-        current = out.get(ticker)
+        current = out.get(symbol)
         if current is None:
-            out[ticker] = dict(row)
+            out[symbol] = dict(row)
             continue
         current_valid = bool(current.get("valid"))
         incoming_valid = bool(row.get("valid"))
         if incoming_valid and not current_valid:
-            out[ticker] = dict(row)
+            out[symbol] = dict(row)
     return out
+
+
+def _projection_for_symbol(
+    index: Mapping[str, Mapping[str, Any]],
+    symbol: Any,
+    catalog: Any = None,
+) -> Mapping[str, Any] | None:
+    from generic_utils.symbol_identity import lookup_mapping
+
+    found = lookup_mapping(index, symbol, catalog)
+    return found if isinstance(found, Mapping) else None
 
 
 def _copy_mapped(
@@ -220,6 +236,8 @@ def attach_street_forward(
         rec["fwd_pack_pct"] = _round(rec.get("left"))
         rec["fwd_pack_px"] = _round(rec.get("target_px"))
         rec["fwd_pe"] = _round(rec.get("pe_fwd"))
+        rec["fwd_pe_source"] = rec.get("pe_fwd_source")
+        rec["fwd_evebitda"] = _round(rec.get("evebitda_fwd"))
         rec["fwd_peg"] = _round(rec.get("peg"), 3)
         out.append(rec)
     return out
@@ -244,16 +262,20 @@ def attach_forward_value(
     growth_map = dict(cfg.get("growth_map") or {})
     price_by = index_projection_by_ticker(price_rows or (), id_field=id_field)
     growth_by = index_projection_by_ticker(growth_rows or (), id_field=id_field)
+    from generic_utils.symbol_identity import SymbolCatalog
+
+    price_catalog = SymbolCatalog.build(price_by.keys())
+    growth_catalog = SymbolCatalog.build(growth_by.keys())
     out: list[dict[str, Any]] = []
     for rec in attach_street_forward(
         rows, close_field=close_field, pt_field=pt_field
     ):
-        ticker = ticker_of(rec.get(id_field))
+        symbol = rec.get(id_field)
         joined: list[str] = ["street_tv"]
-        if _copy_mapped(rec, price_by.get(ticker), price_map):
+        if _copy_mapped(rec, _projection_for_symbol(price_by, symbol, price_catalog), price_map):
             joined.append("price")
             rec["fp_price_run"] = price_run
-        if _copy_mapped(rec, growth_by.get(ticker), growth_map):
+        if _copy_mapped(rec, _projection_for_symbol(growth_by, symbol, growth_catalog), growth_map):
             joined.append("growth")
             rec["fp_growth_run"] = growth_run
         rec["fp_joined"] = "+".join(joined)
@@ -297,13 +319,28 @@ def build_forward_suite_rows(
     price_run: str | None = None,
     growth_run: str | None = None,
     with_setup: bool = True,
+    load_projection: bool = True,
+    projection_context: Any = None,
     recipe_path: str | Path | None = None,
     setup_recipe_path: str | Path | None = None,
 ) -> list[dict[str, Any]]:
-    """Value/tech (optional) plus street/TV/finproj forward columns."""
+    """Projection forward multiples, then value/tech, then street/model prices."""
+    from generic_utils.forward_fundamentals import (
+        attach_forward_fundamentals,
+        load_projection_context,
+    )
     from generic_utils.setup import attach_setup, load_setup_recipe
 
-    work: Sequence[Mapping[str, Any]] = rows
+    projection = projection_context
+    if load_projection and projection is None:
+        projection = load_projection_context(
+            growth_db=growth_run,
+            price_db=price_run,
+        )
+    work: Sequence[Mapping[str, Any]] = attach_forward_fundamentals(
+        rows,
+        context=projection if load_projection else None,
+    )
     if with_setup:
         setup_cfg = setup_recipe
         if setup_cfg is None and setup_recipe_path is not None:

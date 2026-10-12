@@ -133,6 +133,46 @@ class TestRegimeContextOverlay(unittest.TestCase):
             self.assertEqual(adrp.source, "all_fields")
             self.assertEqual(adrp.value, 12.0)
 
+    def test_all_fields_backfill_respects_qualified_exchange(self):
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "all_fields.duckdb"
+            con = duckdb.connect(str(db_path))
+            con.execute(
+                "CREATE TABLE run_metadata (run_id VARCHAR, created_at_utc TIMESTAMP)"
+            )
+            con.execute(
+                """
+                CREATE TABLE all_fields_rows (
+                    run_id VARCHAR,
+                    symbol VARCHAR,
+                    "ADRP|15" DOUBLE
+                )
+                """
+            )
+            con.execute("INSERT INTO run_metadata VALUES ('run1', CURRENT_TIMESTAMP)")
+            con.execute(
+                """
+                INSERT INTO all_fields_rows VALUES
+                    ('run1', 'ASX:MMS', 2.0),
+                    ('run1', 'NYSE:MMS', 53.0)
+                """
+            )
+            con.close()
+
+            config = _test_config(
+                bullish_predictors=("ADRP|15",),
+                warning_predictors=(),
+            )
+            frame = build_symbol_feature_frame(
+                [{"symbol": "NYSE:MMS"}, {"symbol": "NASDAQ:MMS"}],
+                all_fields_db=db_path,
+                config=config,
+            )
+            self.assertEqual(frame["NYSE:MMS"]["ADRP|15"].value, 53.0)
+            self.assertEqual(frame["NYSE:MMS"]["ADRP|15"].source, "all_fields")
+            self.assertIsNone(frame["NASDAQ:MMS"]["ADRP|15"].value)
+            self.assertEqual(frame["NASDAQ:MMS"]["ADRP|15"].source, "missing")
+
     def test_playbook_a_requires_relative_volume(self):
         scan_rows = [
             {"symbol": "NASDAQ:A", "ATRP": 30.0, "relative_volume_10d_calc": 2.0},
@@ -249,6 +289,24 @@ class TestRegimeContextOverlay(unittest.TestCase):
         found = get_regime_record_for_row({"symbol": "ABUS"}, regime_by_symbol)
         self.assertIs(found, record)
 
+    def test_get_regime_record_never_crosses_qualified_exchanges(self):
+        nyse_record = object()
+        asx_record = object()
+        regime_by_symbol = {
+            "NYSE:MMS": nyse_record,
+            "ASX:MMS": asx_record,
+        }
+        self.assertIs(
+            get_regime_record_for_row({"symbol": "NYSE:MMS"}, regime_by_symbol),
+            nyse_record,
+        )
+        self.assertIsNone(
+            get_regime_record_for_row({"symbol": "NASDAQ:MMS"}, regime_by_symbol)
+        )
+        self.assertIsNone(
+            get_regime_record_for_row({"symbol": "MMS"}, regime_by_symbol)
+        )
+
     def test_per_profile_conviction_section(self):
         with TemporaryDirectory() as temp_dir:
             config = _test_config(top_n_focus=3)
@@ -344,7 +402,7 @@ class TestRegimeContextOverlay(unittest.TestCase):
             self.assertIn("symbols: ['NASDAQ:AAA']", content)
             lookup = build_conviction_lookup(conviction_records)
             self.assertIn("NASDAQ:AAA", lookup)
-            self.assertIn("AAA", lookup)
+            self.assertNotIn("AAA", lookup)
 
 
 if __name__ == "__main__":

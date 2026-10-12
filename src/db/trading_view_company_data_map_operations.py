@@ -4,6 +4,7 @@ from typing import Any
 
 from db.connection_credentials import BASE_DB_CONFIG
 from db.connection_provider import get_mysql_connection
+from generic_utils.symbol_identity import parse_symbol
 
 
 COMPANY_LOOKUP_FIELDS = """
@@ -47,33 +48,52 @@ def get_trading_view_company_by_internal_id(internal_id: int) -> dict[str, Any] 
 
 
 def get_trading_view_company_by_symbol(symbol: str) -> dict[str, Any] | None:
-    normalized_symbol = symbol.strip()
+    identity = parse_symbol(symbol)
     conn = get_mysql_connection(**BASE_DB_CONFIG)
     try:
         with conn.cursor(dictionary=True) as cursor:
-            cursor.execute(
-                f"""
-                SELECT {COMPANY_LOOKUP_FIELDS}
-                FROM trading_view_company_data_map
-                WHERE symbol = %s
-                   OR symbol = SUBSTRING_INDEX(%s, ':', -1)
-                ORDER BY
-                    CASE
-                        WHEN symbol = %s THEN 0
-                        WHEN symbol = SUBSTRING_INDEX(%s, ':', -1) THEN 1
-                        ELSE 2
-                    END,
-                    market_cap_basic DESC,
-                    symbol ASC
-                LIMIT 1
-                """,
-                (
-                    normalized_symbol,
-                    normalized_symbol,
-                    normalized_symbol,
-                    normalized_symbol,
-                ),
-            )
+            if identity.qualified:
+                cursor.execute(
+                    f"""
+                    SELECT {COMPANY_LOOKUP_FIELDS}
+                    FROM trading_view_company_data_map
+                    WHERE UPPER(symbol) = %s
+                       OR (
+                            UPPER(symbol) = %s
+                            AND UPPER(COALESCE(exchange, '')) = %s
+                       )
+                    ORDER BY
+                        CASE WHEN UPPER(symbol) = %s THEN 0 ELSE 1 END,
+                        market_cap_basic DESC,
+                        symbol ASC
+                    LIMIT 1
+                    """,
+                    (
+                        identity.normalized,
+                        identity.ticker,
+                        identity.exchange,
+                        identity.normalized,
+                    ),
+                )
+            else:
+                cursor.execute(
+                    f"""
+                    SELECT {COMPANY_LOOKUP_FIELDS}
+                    FROM trading_view_company_data_map
+                    WHERE UPPER(symbol) = %s
+                       OR UPPER(SUBSTRING_INDEX(symbol, ':', -1)) = %s
+                    ORDER BY
+                        CASE WHEN UPPER(symbol) = %s THEN 0 ELSE 1 END,
+                        market_cap_basic DESC,
+                        symbol ASC
+                    LIMIT 1
+                    """,
+                    (
+                        identity.ticker,
+                        identity.ticker,
+                        identity.ticker,
+                    ),
+                )
             return cursor.fetchone()
     finally:
         conn.close()

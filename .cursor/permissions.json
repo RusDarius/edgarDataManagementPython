@@ -1,44 +1,31 @@
 {
-  // Project allowlist + Auto-review steering for the operator scan loop.
-  // Takes effect when Run Mode is on (Settings → Agents → Approvals & Execution).
-  // In-repo file creates and edits are already in-workspace. This file stops
-  // repeat prompts for the generic commands that write those files.
-  // Concatenates with ~/.cursor/permissions.json if that file exists.
-  "terminalAllowlist": [
-    "python src/run_operator_suites.py",
-    "python src/operator_briefing/example_entry.py",
-    "python src/generic_utils/tv_scan_cli.py",
-    "python src/generic_utils/rank_cli.py",
-    "python src/main.py",
-    "python src/run_financial_projection.py",
-    "python src/run_upside_opportunity_scan.py",
-    "python src/run_market_timing_policy.py",
-    "$env:PYTHONPATH='src;.'; python src/run_operator_suites.py",
-    "$env:PYTHONPATH='src;.'; python src/operator_briefing/example_entry.py",
-    "$env:PYTHONPATH='src;.'; python src/generic_utils/tv_scan_cli.py",
-    "$env:PYTHONPATH='src;.'; python src/generic_utils/rank_cli.py",
-    "$env:PYTHONPATH='src;.'; python src/main.py",
-    "$env:PYTHONPATH='src;.'; python src/run_financial_projection.py",
-    "$env:PYTHONPATH='src;.'; python src/run_upside_opportunity_scan.py",
-    "$env:PYTHONPATH='src;.'; python src/run_market_timing_policy.py",
-    "git status",
-    "git diff",
-    "git log",
-    "git show"
-  ],
+  // Auto-review is the run mode for this repo.
+  // Settings → Agents → Approvals & Execution → Auto-review.
+  // A terminalAllowlist in this file forces Allowlist mode and ignores the
+  // sentences below, so the known commands live here as instructions instead.
+  // Concatenates with ~/.cursor/permissions.json when that file exists.
   "autoRun": {
     "allow_instructions": [
-      "Allow setting PYTHONPATH to src;. and running python under src/run_operator_suites.py, src/operator_briefing/example_entry.py, src/generic_utils/tv_scan_cli.py, src/generic_utils/rank_cli.py, src/main.py, src/run_financial_projection.py, src/run_upside_opportunity_scan.py, and src/run_market_timing_policy.py.",
-      "Allow those commands to create and overwrite scan outputs inside the repo: logs/tradingview_analysis/, logs/AI_ANALYSIS_UTILS/priors/, config/generic_utils/, and CSV, DuckDB, markdown, and overview.log files next to a briefing pack.",
-      "Allow reading and editing project source, tests, config JSON, focus-pool prompts, and .cursor/skills and .cursor/rules when the change is the generic scan, a suite wrapper, or the ledger/prompt that drives it.",
-      "Allow read-only git status, git diff, git log, and git show."
+      "Allow the operator suite and generic-prompt commands, including a leading PYTHONPATH=src;. or $env:PYTHONPATH='src;.'. Entry points: src/main.py, src/run_operator_suites.py (inspect, compile, wisdom, forward, value-tech, movers, movers-3m, risk, capture, capture-replay, pack-focus, weeks-progression, playbook, finproj-growth, finproj-price, all, list, gitbash), src/operator_briefing/example_entry.py (inspect, compile, lookup, compare, stance), src/generic_utils/tv_scan_cli.py, src/generic_utils/rank_cli.py, src/run_financial_projection.py, src/run_market_timing_policy.py, src/run_upside_opportunity_scan.py, src/run_edge_research_tools.py, src/run_backtests.py, src/run_edge_historical_backtest.py, and src/run_upside_opportunity_backtest.py.",
+      "Allow the two tape producers invoked as python -c: export_all_tradingview_fields_duckdb and daily_prediction_move_analysis_suite.",
+      "Allow those commands to create and overwrite outputs inside the repo under logs/tradingview_analysis/, logs/AI_ANALYSIS_UTILS/priors/, and config/generic_utils/, including CSV, DuckDB, markdown, overview.log, and queries.txt next to a briefing pack or a suites folder.",
+      "Allow a python -c whose only write is queries.txt beside an existing DuckDB under logs/tradingview_analysis/operator_briefing/runs, including a PowerShell here-string that calls generic_utils.run_export.write_query_guide.",
+      "Allow reading and editing project source, tests, config JSON, src/research_prompt, and .cursor/skills, .cursor/rules, and .cursor/permissions.json when the change is a generic scan, a suite wrapper, a prompt, or a move of those prompts.",
+      "Allow python -m pytest and python -m unittest on src/tests or src.tests, with or without a leading PYTHONPATH, after a generic code change or a prompt-catalog edit.",
+      "Allow New-Item -ItemType Directory under logs/tradingview_analysis (scan folders such as suites_*/analysis_scans) and under src/ or .cursor/ when creating a folder the user asked to add.",
+      "Allow Get-ChildItem and dir when they only list paths inside this repo, including the newest briefing_pack_* or suites_* folder.",
+      "Allow tv_scan_cli.py history and span on logs/tradingview_analysis/trading_view_all_fields_data for the analysis-style rank. Write the history CSV and span CSV under the current suites_*/analysis_scans folder. Ids are the payoff shortlist, not the whole tape.",
+      "Allow a stdout-only python -c that reads an existing briefing_pack.json or a CSV already written under logs/tradingview_analysis and prints a summary. It must not start a scan producer or open a network call.",
+      "Allow read-only git status, git diff, git log, git show, and git ls-files.",
+      "Allow git mv, and Move-Item of untracked files, when both paths stay inside this repo and the command only renames or relocates project files such as src/research_prompt.",
+      "Allow writing operator .canvas.tsx files for this workspace (daily-focus, movers, book-risk, capture, playbook, horizon-plan, analysis-style, wisdom) in the Cursor canvases directory."
     ],
     "block_instructions": [
-      "Ask before git commit, git push, git reset, git clean, or any change to git config.",
-      "Ask before deleting a logs tree, a DuckDB, or more than the one output file the command is rewriting.",
+      "Ask before git commit, git push, git reset, git clean, git rebase, or any change to git config.",
+      "Ask before deleting a logs tree, a DuckDB that is not the output of the command just run, or a recursive Remove-Item / rm. Removing one directory only after a move has left it empty is fine.",
       "Ask before reading or writing .env, credentials, tokens, or SSH config.",
-      "Ask before pip install, package publishes, or downloads that are not the scan commands above.",
-      "Ask before writing outside this repository. Canvas files under the Cursor project canvases folder still need the external-file approval."
+      "Ask before pip install, package publishes, or downloads that are not the scan producers listed above.",
+      "Ask before python -c that starts a scan, opens a network call, or writes anywhere other than queries.txt under logs/tradingview_analysis/operator_briefing/runs. A stdout read of an existing pack or CSV is fine."
     ]
   }
 }

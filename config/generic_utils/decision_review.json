@@ -1,0 +1,9 @@
+{
+  "top": 100,
+  "head": 20,
+  "tail": 20,
+  "min_n": 12,
+  "gap_pct": 1.0,
+  "rank_good_pct": 3.0,
+  "rank_bad_pct": -8.0
+}

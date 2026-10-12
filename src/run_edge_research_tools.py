@@ -61,6 +61,7 @@ from edge_research_tools.foundation_base import (
     resolve_ongoing_foundation_base_dir,
 )
 from edge_research_tools import run_resolution as _run_resolution
+from generic_utils.symbol_identity import resolve_symbol
 
 OUTPUT_ROOT = (
     PROJECT_ROOT / "logs" / "tradingview_analysis" / "edge_research_tools" / "runs"
@@ -303,16 +304,6 @@ def _normalize_symbol_token(value: str | None) -> str:
     return str(value or "").strip().upper()
 
 
-def _split_exchange_symbol(value: str | None) -> tuple[str | None, str]:
-    normalized = _normalize_symbol_token(value)
-    if not normalized:
-        return None, ""
-    if ":" not in normalized:
-        return None, normalized
-    exchange, bare_ticker = normalized.split(":", 1)
-    return exchange or None, bare_ticker
-
-
 def _build_historical_validation_fields(
     row: Mapping[str, Any],
     *,
@@ -407,39 +398,23 @@ def _resolve_requested_symbol(
     if not normalized_requested:
         raise ValueError("requested_symbol must be non-empty.")
 
-    exact_map = {
-        _normalize_symbol_token(symbol): str(symbol)
-        for symbol in available_symbols
-        if _normalize_symbol_token(symbol)
-    }
-    if normalized_requested in exact_map:
-        return exact_map[normalized_requested], "exact"
-
-    requested_exchange, requested_bare_ticker = _split_exchange_symbol(
-        normalized_requested
+    matched, mode, candidates = resolve_symbol(
+        available_symbols, normalized_requested
     )
-    bare_matches = [
-        str(symbol)
-        for symbol in available_symbols
-        if _split_exchange_symbol(symbol)[1] == requested_bare_ticker
-    ]
-    if requested_exchange is not None:
-        exchange_matches = [
-            symbol
-            for symbol in bare_matches
-            if _split_exchange_symbol(symbol)[0] == requested_exchange
-        ]
-        if len(exchange_matches) == 1:
-            return exchange_matches[0], "exchange-qualified"
-    if len(bare_matches) == 1:
-        return bare_matches[0], "unique-bare-ticker"
-    if not bare_matches:
+    if matched is not None:
+        mode_label = {
+            "exact": "exact",
+            "legacy-bare": "legacy-bare-ticker",
+            "unique-bare": "unique-bare-ticker",
+        }.get(mode, mode)
+        return matched, mode_label
+    if mode == "not-found":
         raise KeyError(
             f"Requested symbol was not found in aggregate outputs: {requested_symbol}"
         )
     raise ValueError(
         "Requested symbol is ambiguous across aggregate outputs. "
-        f"Pass EXCHANGE:TICKER instead: {requested_symbol}"
+        f"Pass EXCHANGE:TICKER instead: {requested_symbol}; candidates={list(candidates)}"
     )
 
 

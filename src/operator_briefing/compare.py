@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from db.trading_view_move_prediction_duckdb import query_move_prediction_duckdb
+from generic_utils.symbol_identity import SymbolCatalog, lookup_mapping
 
 from .discovery import lock_sources
 
@@ -143,6 +144,15 @@ def _delta(a: float | None, b: float | None) -> float | None:
     return round(b - a, 3)
 
 
+def _lookup_symbol_row(
+    rows_by_symbol: dict[str, dict[str, Any]],
+    symbol: str,
+    catalog: SymbolCatalog | None = None,
+) -> dict[str, Any]:
+    row = lookup_mapping(rows_by_symbol, symbol, catalog)
+    return row if isinstance(row, dict) else {}
+
+
 def build_compare_rows(
     profiles_a: dict[str, dict[str, Any]],
     profiles_b: dict[str, dict[str, Any]],
@@ -152,6 +162,14 @@ def build_compare_rows(
     consensus_b: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     symbols = set(profiles_a) | set(profiles_b) | set(conv_a) | set(conv_b)
+    consensus_a_rows = consensus_a or {}
+    consensus_b_rows = consensus_b or {}
+    consensus_a_catalog = (
+        SymbolCatalog.build(consensus_a_rows) if consensus_a_rows else None
+    )
+    consensus_b_catalog = (
+        SymbolCatalog.build(consensus_b_rows) if consensus_b_rows else None
+    )
     rows: list[dict[str, Any]] = []
     for symbol in symbols:
         pa = profiles_a.get(symbol) or {}
@@ -159,8 +177,8 @@ def build_compare_rows(
         ca = conv_a.get(symbol) or {}
         cb = conv_b.get(symbol) or {}
         ticker = symbol.split(":")[-1].upper()
-        cons_a = (consensus_a or {}).get(ticker) or {}
-        cons_b = (consensus_b or {}).get(ticker) or {}
+        cons_a = _lookup_symbol_row(consensus_a_rows, symbol, consensus_a_catalog)
+        cons_b = _lookup_symbol_row(consensus_b_rows, symbol, consensus_b_catalog)
         bo_a = _f(pa.get("bo"))
         bo_b = _f(pb.get("bo"))
         mix_a = ca.get("manager_action_signal") or cons_a.get("manager_action_signal")

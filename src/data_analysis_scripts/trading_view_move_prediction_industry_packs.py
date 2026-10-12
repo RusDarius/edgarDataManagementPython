@@ -30,6 +30,7 @@ from data_analysis_scripts.trading_view_move_prediction_analysis import (
     _sanitize_industry_folder_name,
 )
 from generic_utils.log_to_files_util import log_to_file
+from generic_utils.symbol_identity import SymbolCatalog, lookup_mapping
 
 INDUSTRY_PACK_TOP_N = TOP_SECTION_ROWS
 DEFAULT_SCORE_HORIZON = "weeks"
@@ -101,24 +102,21 @@ def _resolve_regime_by_symbol(
     by_symbol: dict[str, Any] = {}
     for symbol, record in getattr(overlay, "by_symbol", {}).items():
         by_symbol[str(symbol)] = record
-        bare = str(symbol).split(":", 1)[-1]
-        by_symbol.setdefault(bare, record)
     return by_symbol
 
 
 def _lookup_regime_record(
     row: Mapping[str, Any],
     regime_by_symbol: Mapping[str, Any],
+    catalog: SymbolCatalog | None = None,
 ) -> Any | None:
     if not regime_by_symbol:
         return None
     symbol = str(row.get("symbol") or "").strip()
-    bare = _bare_symbol_from_row(row)
-    return (
-        regime_by_symbol.get(symbol)
-        or regime_by_symbol.get(bare)
-        or regime_by_symbol.get(_get_symbol_name(row))
-    )
+    request = symbol or _get_symbol_name(row)
+    if not request:
+        return None
+    return lookup_mapping(regime_by_symbol, request, catalog)
 
 
 def _safety_gate_summary(
@@ -309,6 +307,7 @@ def _build_group_overview_meta(
     score_horizon: str,
     score_sorted: Sequence[Mapping[str, Any]],
     regime_by_symbol: Mapping[str, Any],
+    regime_catalog: SymbolCatalog | None = None,
 ) -> dict[str, Any]:
     row_dicts = [row.get("row") or {} for row in group_rows]
     score_stats = _collect_score_pack_stats(group_rows, score_horizon)
@@ -350,7 +349,9 @@ def _build_group_overview_meta(
     gate_failures = 0
     for consensus_row in group_rows:
         row = consensus_row.get("row") or {}
-        regime_record = _lookup_regime_record(row, regime_by_symbol)
+        regime_record = _lookup_regime_record(
+            row, regime_by_symbol, regime_catalog
+        )
         if _safety_gate_summary(row, consensus_row, regime_record) != "ok":
             gate_failures += 1
 
@@ -454,10 +455,11 @@ def _log_ranked_row(
     *,
     score_horizon: str,
     regime_by_symbol: Mapping[str, Any],
+    regime_catalog: SymbolCatalog | None = None,
 ) -> None:
     row = consensus_row.get("row") or {}
     horizon_data = consensus_row.get("horizons", {}).get(score_horizon, {})
-    regime_record = _lookup_regime_record(row, regime_by_symbol)
+    regime_record = _lookup_regime_record(row, regime_by_symbol, regime_catalog)
     st_ratio = _short_term_cash_coverage(row)
     safety = coerce_numeric((consensus_row.get("components") or {}).get("safety"))
     warn_count = int(getattr(regime_record, "warning_flag_count", 0) or 0)
@@ -488,6 +490,7 @@ def _write_group_ranked_by_score_log(
     top_n: int,
     peer_rescored: bool,
     regime_by_symbol: Mapping[str, Any],
+    regime_catalog: SymbolCatalog | None = None,
 ) -> None:
     reset_log_file(log_file)
     log_to_file(
@@ -515,6 +518,7 @@ def _write_group_ranked_by_score_log(
             consensus_row,
             score_horizon=score_horizon,
             regime_by_symbol=regime_by_symbol,
+            regime_catalog=regime_catalog,
         )
     _log_top_profile_detail_block(
         log_file, ranked_rows[:top_n], score_horizon=score_horizon
@@ -552,6 +556,7 @@ def _write_group_ranked_by_perf_log(
     score_horizon: str,
     top_n: int,
     regime_by_symbol: Mapping[str, Any],
+    regime_catalog: SymbolCatalog | None = None,
 ) -> None:
     perf_label = {
         "Perf.W": "1-week trailing return",
@@ -588,6 +593,7 @@ def _write_group_ranked_by_perf_log(
             consensus_row,
             score_horizon=score_horizon,
             regime_by_symbol=regime_by_symbol,
+            regime_catalog=regime_catalog,
         )
     _log_top_profile_detail_block(
         log_file, ranked[:top_n], score_horizon=score_horizon
@@ -606,6 +612,7 @@ def _write_group_summary_log(
     peer_rescored: bool,
     run_id: str | None,
     regime_by_symbol: Mapping[str, Any],
+    regime_catalog: SymbolCatalog | None = None,
 ) -> None:
     reset_log_file(log_file)
     log_to_file(
@@ -676,7 +683,9 @@ def _write_group_summary_log(
     stsafe_missing = 0
     for consensus_row in group_rows:
         row = consensus_row.get("row") or {}
-        regime_record = _lookup_regime_record(row, regime_by_symbol)
+        regime_record = _lookup_regime_record(
+            row, regime_by_symbol, regime_catalog
+        )
         if _safety_gate_summary(row, consensus_row, regime_record) != "ok":
             gate_failures += 1
         if _short_term_cash_coverage(row) is None:
@@ -748,7 +757,9 @@ def _write_group_summary_log(
     for rank, consensus_row in enumerate(score_sorted[: min(5, top_n)], 1):
         row = consensus_row.get("row") or {}
         score = _horizon_score(consensus_row, score_horizon)
-        regime_record = _lookup_regime_record(row, regime_by_symbol)
+        regime_record = _lookup_regime_record(
+            row, regime_by_symbol, regime_catalog
+        )
         log_to_file(
             log_file,
             f"  {rank}. {_search_name(row):<15} {_full_qualified_symbol(row):<18} "
@@ -1036,6 +1047,9 @@ def write_industry_packs_from_duckdb_run(
 
     run_id = duckdb_run_result.get("_duckdb_run_id")
     regime_by_symbol = _resolve_regime_by_symbol(duckdb_run_result)
+    regime_catalog = (
+        SymbolCatalog.build(regime_by_symbol) if regime_by_symbol else None
+    )
     industry_outputs: dict[str, dict[str, Any]] = {}
 
     for group_label in sorted(grouped, key=lambda key: (-len(grouped[key]), key)):
@@ -1074,6 +1088,7 @@ def write_industry_packs_from_duckdb_run(
             peer_rescored=peer_rescored,
             run_id=str(run_id) if run_id else None,
             regime_by_symbol=regime_by_symbol,
+            regime_catalog=regime_catalog,
         )
         _write_group_ranked_by_score_log(
             score_log,
@@ -1083,6 +1098,7 @@ def write_industry_packs_from_duckdb_run(
             top_n=top_n,
             peer_rescored=peer_rescored,
             regime_by_symbol=regime_by_symbol,
+            regime_catalog=regime_catalog,
         )
         _write_group_ranked_by_perf_log(
             perf_log,
@@ -1092,6 +1108,7 @@ def write_industry_packs_from_duckdb_run(
             score_horizon=score_horizon,
             top_n=top_n,
             regime_by_symbol=regime_by_symbol,
+            regime_catalog=regime_catalog,
         )
 
 
@@ -1100,6 +1117,7 @@ def write_industry_packs_from_duckdb_run(
             score_horizon=score_horizon,
             score_sorted=score_sorted,
             regime_by_symbol=regime_by_symbol,
+            regime_catalog=regime_catalog,
         )
 
         industry_outputs[group_label] = {

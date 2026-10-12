@@ -15,7 +15,7 @@ python src/operator_briefing/example_entry.py compare
 python src/operator_briefing/example_entry.py stance MU SNDK PGY JD
 ```
 
-Compile first if there is no current `briefing_pack.json`: `python src/operator_briefing/example_entry.py compile`. Copy-paste blocks: `src/focus_pool_screening/prompts/agent_copy_paste.txt`.
+Compile first if there is no current `briefing_pack.json`: `python src/operator_briefing/example_entry.py compile`. Copy-paste blocks: `src/research_prompt/agent_copy_paste.txt`.
 
 ## What each command is for
 

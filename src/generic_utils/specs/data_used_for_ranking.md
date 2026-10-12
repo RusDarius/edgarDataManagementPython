@@ -28,7 +28,7 @@ Compile compact (`_compact_name`) is what Radar / Build-50 / Book tables see.
 | dte | 4 | calendar | Days to next earnings |
 | mtp | 4 | timing | ENTER_SMALL / WATCH / AVOID_CHASE |
 
-Peer columns on **movers** and pack names: `val_field`, `val`, `val_vs_ind`, `peer`
+Peer columns on **movers** and pack names: `val_field`, `val`, `val_vs_ind`, `val_ind_med`, `val_vs_avg`, `val_ind_avg`, `peer`. The label uses the median percent. `val_vs_avg` is the percent versus the industry average and is a different column. Each recipe field also has `FIELD_vs_ind`, `FIELD_ind_med`, `FIELD_vs_avg`, and `FIELD_ind_avg`.
 (generic `setup.attach_setup` after `derive.attach_vs_group`, US $2B industry
 median, min n=6). `evrev_vs_ind` remains on the row but is **not** the Peer
 quote unless `val_field` is `evrev`. Street/TV forward columns: `fwd_street_pct`,
@@ -49,7 +49,7 @@ Whitelist: `extract.AF_CANDIDATES`.
 | Street PT | `price_target_average`, `price_target_1y` | pt, street_px | Street leftover |
 | Earnings calendar | `earnings_release_next_date` (+ fallbacks) | dte | Catalyst lanes |
 | Trailing PE | `price_earnings_ttm` | pe | Current value |
-| Forward PE | `price_earnings_forward_fy`, `non_gaap_price_to_earnings_per_share_forecast_next_fy` | pe_fwd | Often **null** — then leftover + PEG |
+| Forward PE | projection `fp_pe_y1` / `fp_pe_y5` (path, else CAGR). TradingView `price_earnings_forward_fy` is `pe_fwd_tv` | pe_fwd | Quoted forward PE is the projection. `pe_fwd_tv` is empty on recent scans |
 | PEG | `price_earnings_growth_ttm` | peg | Growth-adjusted PE |
 | EV / sales | `enterprise_value_to_revenue_ttm` | evrev | Quote **only** when `val_field` is evrev |
 | EV / EBITDA | `enterprise_value_ebitda_ttm` | evebitda | Current cash-earnings multiple |
@@ -57,7 +57,8 @@ Whitelist: `extract.AF_CANDIDATES`.
 | Book | `price_book_ratio` | pb | Current |
 | Margin | `operating_margin` | opm | Quality snapshot |
 
-**Empty pe_fwd is a data gap**, not a reason to skip the Value tab. Do not
+**`pe_fwd_tv` is empty** on recent all-fields scans. Quoted `pe_fwd` is
+`fp_pe_y1` (next year). `fp_pe_y5` is the far year, at most 5. Do not
 substitute EV/Rev. Use pack `val_field`.
 
 ### Move-prediction **quality** family (layer 2, inside profile JSON)
@@ -145,9 +146,9 @@ Keep list: `config/generic_utils/movers_day.json` / `movers_3m.json`.
 | Column group | Fields |
 |---|---|
 | Val | `val_label`, `val` (`generic_utils.setup`). Not always EV/Rev. |
-| Peer | `val_vs_ind`, `peer` (DISCOUNT / PREMIUM / THIN / NA) |
+| Peer | `peer` plus `val_vs_ind` / `val_ind_med` and `val_vs_avg` / `val_ind_avg`. DISCOUNT is ≤ −5% versus the median, PREMIUM is ≥ 5%, INLINE is between. The average percent does not change the label. THIN / NA have no percent. |
 | Proj | left, bo, cont, fwd, street_px, target_px |
-| Tech | tech_sma, tech_rng, rsi, vs50, adx |
+| Tech | `tech_sma` with `vs50` (percent versus the 50-day average), `tech_rng` with `rng`, rsi, adx. `tech_sma200` uses `vs200`. |
 | down_class | BOUNCE / CONTINUE_DOWN / MIXED on laggards (`sleeves.classify_punished_tape`; cheap uses `val_vs_ind`, not leftover EV/Rev) |
 
 Up tail is price rank (best → least), not leftover. Down tail is the punished

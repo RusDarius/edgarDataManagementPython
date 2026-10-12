@@ -1,0 +1,14 @@
+{
+  "max_names": 40,
+  "note_chars": 0,
+  "add_good_pct": 3,
+  "add_bad_pct": -8,
+  "hold_good_pct": 8,
+  "hold_bad_pct": -12,
+  "reduce_good_pct": -3,
+  "reduce_bad_pct": 8,
+  "pass_miss_pct": 15,
+  "pass_good_pct": 0,
+  "short_good_pct": -5,
+  "short_bad_pct": 5
+}
