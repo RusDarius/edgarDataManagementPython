@@ -1,0 +1,240 @@
+{
+ "name": "playbook-{DAY}",
+ "page_key": "playbook",
+ "title": "Playbook {DAY}",
+ "subtitle": "",
+ "tabs": [
+  {
+   "label": "Play",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "update.banner"
+    },
+    {
+     "type": "stats",
+     "from": "pages.playbook.blocks.play_0"
+    },
+    {
+     "type": "callout",
+     "from": "pages.playbook.blocks.play_1"
+    },
+    {
+     "type": "callout",
+     "from": "pages.playbook.blocks.play_2"
+    },
+    {
+     "type": "list",
+     "from": "pages.playbook.blocks.play_3"
+    }
+   ]
+  },
+  {
+   "label": "Base 100",
+   "blocks": [
+    {
+     "type": "table",
+     "title": "Base 100 (radar_upside_100, uncapped) with Mesh and band",
+     "source": {
+      "duckdb": "{PACK}/playbook/mesh_band/mesh.duckdb",
+      "sql": "SELECT symbol, ind, mesh, nmesh, \"left\", street_left, rr, bo, bo_chg, span_n, rsi, rng, vs50, tech_sma, peer, val_vs_ind, dte, mix, sleeve_count, close, entry_low, entry_high, kill_px, mark_vs_band FROM mesh"
+     },
+     "derive": [
+      "left_carrier"
+     ],
+     "sort": "-nmesh,-rr"
+    }
+   ]
+  },
+  {
+   "label": "Best 25",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.playbook.blocks.best_25_0"
+    },
+    {
+     "type": "table",
+     "title": "Best 25",
+     "source": {
+      "duckdb": "{PACK}/playbook/mesh_band/mesh.duckdb",
+      "sql": "SELECT symbol, ind, mesh, nmesh, \"left\", street_left, rr, bo, bo_chg, rsi, rng, vs50, tech_sma, peer, val_vs_ind, pe_peer, pe_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_peer, evebitda_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, dte, mix, close, entry_low, entry_high, trim_px, trim_state, kill_px, exit_target, mark_vs_band FROM mesh"
+     },
+     "derive": [
+      "left_carrier"
+     ],
+     "extra_columns": [
+      "Course",
+      "Horizon",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "sort": "-nmesh,-rr",
+     "extra_from": "courses",
+     "ids_from": "pages.playbook.best_25",
+     "limit": 25
+    }
+   ]
+  },
+  {
+   "label": "Payoff 10",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.playbook.blocks.payoff_10_0"
+    },
+    {
+     "type": "table",
+     "title": "Payoff focus (upside 100)",
+     "source": {
+      "duckdb": "{PACK}/playbook/payoff_focus/payoff_focus.duckdb",
+      "sql": "SELECT focus_order, symbol, ind, alloc_sleeve, band_payoff, band_payoff_source, close, entry_low, entry_high, trim_px, trim_state, kill_px, exit_target, value_px, up_from_entry_pct, stake_per_1k_usd, profit_on_5k_usd, \"left\", street_left, bo, val_vs_ind, val_label, rsi, rng, dte, mix FROM payoff_focus ORDER BY focus_order"
+     },
+     "derive": [
+      "left_carrier"
+     ],
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    }
+   ]
+  },
+  {
+   "label": "Forming x catalyst",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.playbook.blocks.forming_x_catalyst_0"
+    },
+    {
+     "type": "table",
+     "title": "Forming (entry-book band) by days to earnings",
+     "source": {
+      "duckdb": "{PACK}/playbook/entry_book_forming/entry_book.duckdb",
+      "sql": "SELECT symbol, ind, close, \"left\", street_left, rng, rsi, bo, early, recov, vs50, dte, entry_low, entry_high, sma_role, kill_px, exit_target, mark_vs_band, mix FROM entry_book"
+     },
+     "derive": [
+      "left_carrier"
+     ],
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "sort": "dte",
+     "extra_from": "courses"
+    }
+   ]
+  },
+  {
+   "label": "Shorts",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.playbook.blocks.shorts_0"
+    },
+    {
+     "type": "table",
+     "headers": [
+      "#",
+      "Symbol",
+      "Course",
+      "Grade",
+      "close",
+      "Trigger",
+      "Cover / invalidation",
+      "Reason"
+     ],
+     "from": "pages.playbook.blocks.shorts_1"
+    },
+    {
+     "type": "table",
+     "title": "Short book 15 (playbook)",
+     "source": {
+      "duckdb": "{PACK}/playbook/playbook.duckdb",
+      "sql": "SELECT symbol, ind, close, sma50, \"left\", street_left, d5, m1, rsi, rng, vs50, bo, frag, exh, weeks_ras, dte, mix FROM short_book_15"
+     },
+     "derive": []
+    }
+   ]
+  },
+  {
+   "label": "Peers / tech",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.playbook.blocks.peers_tech_0"
+    },
+    {
+     "type": "table",
+     "title": "Base 100 peers and tech",
+     "source": {
+      "duckdb": "{PACK}/playbook/mesh_band/mesh.duckdb",
+      "sql": "SELECT symbol, ind, val_label, val, peer, val_vs_ind, val_ind_med, val_vs_avg, val_ind_avg, opm, pe, pe_peer, pe_vs_ind, evebitda, evebitda_peer, evebitda_vs_ind, pe_fwd, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd, evebitda_fwd_peer, evebitda_fwd_vs_ind, peg, eff_vs_ind, eff_vs_avg, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200 FROM mesh"
+     },
+     "derive": [],
+     "sort": "val_vs_ind"
+    }
+   ]
+  },
+  {
+   "label": "25 weeks",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.playbook.blocks.25_weeks_0"
+    },
+    {
+     "type": "table",
+     "title": "Best 25 + Book: 25-week span",
+     "source": {
+      "duckdb": "{PACK}/playbook/weeks_progression/weeks_progression.duckdb",
+      "sql": "SELECT symbol, n, first_as_of, last_as_of, bo_first, bo_last, bo_chg, bo_min, bo_max, cont_first, cont_last, cont_chg, fwd_first, fwd_last, fwd_chg, early_last, recov_last, frag_last, exh_last FROM weeks_span"
+     },
+     "derive": [],
+     "sort": "-bo_chg",
+     "ids_from": "pages.playbook.span_ids"
+    },
+    {
+     "type": "table",
+     "title": "Weekly breadth of the sleeve",
+     "source": {
+      "duckdb": "{PACK}/playbook/weeks_progression/weeks_progression.duckdb",
+      "sql": "SELECT as_of, universe, n, bo, cont, fwd, early, recov FROM weeks_breadth ORDER BY as_of"
+     },
+     "derive": []
+    }
+   ]
+  }
+ ],
+ "ledger": {
+  "auto": true
+ },
+ "tone_map": {
+  "NEW": "good",
+  "ADD": "good",
+  "BUY_PRE": "good",
+  "EXIT": "bad",
+  "TRIM": "warning",
+  "DERISK": "warning",
+  "DERISK_INTO_PRINT": "warning",
+  "SHORT_WAIT": "bad",
+  "SHORT_PRE": "bad",
+  "PASS": "neutral",
+  "HOLD_NO_ADD": "warning",
+  "HOLD": "info",
+  "HOLD_THROUGH": "info",
+  "WAIT": "info",
+  "WATCH": "neutral",
+  "WATCH_CATALYST": "neutral",
+  "SELL_THE_NEWS": "warning"
+ },
+ "description": "Operator page template. Data comes from {PACK} tables; judgment comes from logs/canvases/{DAY}/judgment.json (courses map + pages.<page_key>.blocks). Render: tv_scan_cli.py page --template playbook --day YYYYMMDD --judgment J (agent) or --manual (data only).",
+ "sources_extra": [
+  "`playbook --weeks 25` dump",
+  "`tv_scan_cli.py mesh` + `entry-book` on the base 100"
+ ]
+}

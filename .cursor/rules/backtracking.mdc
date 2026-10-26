@@ -7,7 +7,7 @@ alwaysApply: false
 
 When the user asks for backtracking, retrospective investing runs, or weekly point-in-time pick/score loops:
 
-1. Read `.cursor/skills/backtracking/SKILL.md`.
+1. Read `.claude/skills/backtracking/SKILL.md`.
 2. Run `python src/run_backtracking.py prepare ...` first, then pick selection, then `score`.
 3. Keep prediction, edge, and raw-field reasons separate. Do not invent a blended 0-100 score.
 4. During selection, read only `panel_rows` from `backtracking.duckdb` and write `picks_*.csv`.

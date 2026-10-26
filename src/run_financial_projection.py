@@ -9,6 +9,11 @@ Flow (short):
   3) Run growth lanes (default), full EV/Rev price projections, or a single-ticker
      overview scan (--mode overview).
 
+Trading movement (sibling dump, not a 5-year path):
+  python src/run_movement_opportunity.py
+  python src/run_financial_projection.py --mode movement
+  documentation/movement_opportunity_usage.md
+
 Growth-first callables (this iteration):
   - run_growth_projection_from_latest_all_fields
   - run_growth_projection_from_latest_prediction_analysis
@@ -527,12 +532,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--mode",
-        choices=("growth", "price", "overview"),
+        choices=("growth", "price", "overview", "movement"),
         default="growth",
         help=(
             "growth=revenue/EBIT/EBITDA/margin lanes (default); "
             "price=EV/Rev suite; "
-            "overview=single-ticker ~100-field projection scan"
+            "overview=single-ticker ~100-field projection scan; "
+            "movement=trading 1-10 upside/downside (delegates to run_movement_opportunity.py)"
         ),
     )
     parser.add_argument(
@@ -653,6 +659,21 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
     mode = str(args.mode).lower()
+
+    if mode == "movement":
+        from run_movement_opportunity import run_movement_opportunity_method
+
+        result = run_movement_opportunity_method(
+            min_market_cap_usd=args.min_market_cap_usd,
+            all_fields_db=args.all_fields_db,
+        )
+        print(f"Project root: {PROJECT_ROOT.as_posix()}")
+        print(f"Mode: {mode}")
+        print(f"Run dir: {result['run_dir']}")
+        print(f"DuckDB: {result['database_path']}")
+        print(f"Queries: {result['queries']}")
+        print(f"Highlights: {result['highlights_log']}")
+        return result
 
     if mode == "overview":
         ticker = (

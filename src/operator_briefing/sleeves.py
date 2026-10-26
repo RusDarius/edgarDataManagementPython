@@ -304,12 +304,44 @@ def classify_punished_tape(row: Mapping[str, Any]) -> str:
     return "MIXED"
 
 
+def classify_up_tape(row: Mapping[str, Any]) -> str:
+    """First-pass class for a price leader. Not a 0–100 score.
+
+    CHASE = range already paid with leftover gone or a stretched RSI, or a
+    peer premium with leftover gone. IS_SUPPORTED = leftover still live,
+    weeks profile live, range not paid. UNSUPPORTED = price moved with no
+    leftover, no live weeks profile, and no peer discount. MIXED otherwise.
+    Operator may override with Val / Peer / Proj / Tech.
+    """
+    leftover = _f(row.get("left"))
+    rsi = _f(row.get("rsi"))
+    rng = _f(row.get("rng"))
+    from generic_utils.setup import peer_discount_pct
+
+    peer_vs = peer_discount_pct(row)
+    weeks = [v for v in (_f(row.get("bo")), _f(row.get("cont")), _f(row.get("fwd"))) if v is not None]
+    weeks_live = any(v >= 0.5 for v in weeks)
+    weeks_flat = not weeks or all(v < 0.3 for v in weeks)
+    gone = leftover is None or leftover <= 8
+    paid = rng is not None and rng >= 85
+
+    if paid and (gone or (rsi is not None and rsi >= 70)):
+        return "CHASE"
+    if gone and peer_vs is not None and peer_vs >= 5:
+        return "CHASE"
+    if leftover is not None and leftover >= 18 and weeks_live and not paid:
+        return "IS_SUPPORTED"
+    if gone and weeks_flat and (peer_vs is None or peer_vs > -5):
+        return "UNSUPPORTED"
+    return "MIXED"
+
+
 def attach_punished_classes(
     rows: Sequence[Mapping[str, Any]],
     *,
     treat_as: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Stamp `down_class` on movers laggard rows. Leaders stay None.
+    """Stamp `down_class` on movers laggards and `up_class` on leaders.
 
     `treat_as` stamps nested horizon lists that do not yet have `tail`.
     """
@@ -319,8 +351,13 @@ def attach_punished_classes(
         tail = treat_as or str(rec.get("tail") or "")
         if tail == "laggards":
             rec["down_class"] = classify_punished_tape(rec)
+            rec.setdefault("up_class", None)
         else:
             rec.setdefault("down_class", None)
+            if tail == "leaders":
+                rec["up_class"] = classify_up_tape(rec)
+            else:
+                rec.setdefault("up_class", None)
         out.append(rec)
     return out
 

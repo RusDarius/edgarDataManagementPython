@@ -1,0 +1,9 @@
+{
+  "name": "safety_band",
+  "description": "Buy-in-red band, kill, add trigger and trim zone for a named catalog. ATR multiples are the knobs; nothing here is a buy or sell choice.",
+  "bounce_high_atr": 0.5,
+  "bounce_low_atr": 1.5,
+  "kill_atr": 0.75,
+  "support_snap_atr": 1.0,
+  "split_guard": {"max_gap_days": 5, "jump_ratio": 1.8, "day_change_max_pct": 25.0}
+}

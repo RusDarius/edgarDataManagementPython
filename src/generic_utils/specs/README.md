@@ -19,10 +19,10 @@ become daily advice. It is documentation, not executable ranking.
    build on.” It is **not** the movers tape (day/week/5D/1M groovers).
 4. DuckDB leftover column is `"left"` (reserved word). Prefer `named` / `--csv`.
 5. **Book NAV / loss ladders** live in `generic_utils.risk` (not a 0–100).
-   Standalone: `tv_scan_cli.py risk`. Skill: `.cursor/skills/book-risk/SKILL.md`.
+   Standalone: `tv_scan_cli.py risk`. Skill: `.claude/skills/book-risk/SKILL.md`.
 
 Daily agent task: `src/research_prompt/agent_copy_paste.txt`
-(`--- DAILY (full) ---`). Skill: `.cursor/skills/daily-operator-scan/SKILL.md`.
+(`--- DAILY (full) ---`). Skill: `.claude/skills/daily-operator-scan/SKILL.md`.
 
 Longer module playbooks (do not duplicate here):
 

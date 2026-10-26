@@ -2250,6 +2250,9 @@ def export_focused_tradingview_fields_duckdb(
     Columns outside the focused set are simply left NULL for this run's rows: the store
     only ever adds columns via ``ALTER TABLE ... ADD COLUMN`` and inserts rows through an
     explicit column list, so a narrower field set never drops or corrupts existing columns.
+    Consumers must use ``run_metadata.api_request_columns_json`` to distinguish these
+    structural NULLs from fields that were requested but returned NULL. Same-day fallback
+    should fill only the former; requested NULLs represent current provider/source coverage.
 
     Suggested usage: run ``export_all_tradingview_fields_duckdb`` once per day for full
     catalog coverage, and this focused export for the remaining intraday refreshes.

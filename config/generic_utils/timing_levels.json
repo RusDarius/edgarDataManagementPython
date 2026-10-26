@@ -1,0 +1,20 @@
+{
+  "name": "timing_levels",
+  "stop_atr_units": 1.0,
+  "band_atr": 0.5,
+  "drawdown_min_pct": 10.0,
+  "chase_day_pct": 5.0,
+  "downside_atr_units": 1.5,
+  "close_fields": ["close", "current_close", "price"],
+  "vs50_fields": ["vs50"],
+  "sma_fields": ["sma50", "SMA50"],
+  "atrp_fields": ["atrp", "atrp_last"],
+  "atr_fields": ["atr"],
+  "stop_fields": ["stop_atr_units", "kill_atr_units"],
+  "street_pct_fields": ["street_up_pct", "street_left", "fwd_street_pct"],
+  "street_px_fields": ["street_px", "fwd_street_px", "pt"],
+  "drawdown_fields": ["drawdown_from_high_pct", "drawdown_pct"],
+  "high_fields": ["high_px", "close_max"],
+  "day_fields": ["current_day_pct", "day", "change"],
+  "prior_close_fields": ["prior_close"]
+}

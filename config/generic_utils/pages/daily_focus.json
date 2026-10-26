@@ -1,0 +1,469 @@
+{
+ "name": "daily-focus-{DAY}",
+ "page_key": "daily",
+ "title": "Daily Focus {DAY}",
+ "subtitle": "",
+ "tabs": [
+  {
+   "label": "Plan",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "update.banner"
+    },
+    {
+     "type": "stats",
+     "from": "pages.daily.blocks.plan_0"
+    },
+    {
+     "type": "callout",
+     "from": "pages.daily.blocks.plan_1"
+    },
+    {
+     "type": "callout",
+     "from": "pages.daily.blocks.plan_2"
+    },
+    {
+     "type": "callout",
+     "from": "pages.daily.blocks.plan_3"
+    },
+    {
+     "type": "table",
+     "headers": [
+      "#",
+      "Symbol",
+      "Course",
+      "Grade",
+      "Size",
+      "Entry band",
+      "kill_px",
+      "exit_target",
+      "Reason"
+     ],
+     "from": "pages.daily.blocks.plan_4"
+    },
+    {
+     "type": "h2",
+     "text": "Capital and recycle (tv_scan_cli.py capital-plan)"
+    },
+    {
+     "type": "table",
+     "title": "Today's plan",
+     "source": {
+      "duckdb": "{PACK}/capital_plan/capital_plan.duckdb",
+      "sql": "SELECT symbol, course, shares, px, cash_in_usd, cash_out_usd, value_now_usd, value_after_usd, nav_pct_now, nav_pct_after, size_note, note FROM plan"
+     },
+     "derive": [],
+     "judgment_only": true
+    },
+    {
+     "type": "table",
+     "title": "Cash after today",
+     "source": {
+      "duckdb": "{PACK}/capital_plan/capital_plan.duckdb",
+      "sql": "SELECT cash_start_usd, cash_start_pct, cash_from_sells_usd, cash_to_buys_usd, cash_end_usd, cash_end_pct, starters_left_at_hint FROM summary"
+     },
+     "derive": [],
+     "judgment_only": true
+    },
+    {
+     "type": "table",
+     "title": "Industry NAV if the full queue fills",
+     "source": {
+      "duckdb": "{PACK}/capital_plan_queue/capital_plan.duckdb",
+      "sql": "SELECT ind, value_now_usd, value_after_usd, nav_pct_now, nav_pct_after FROM industry"
+     },
+     "derive": [],
+     "limit": 10,
+     "judgment_only": true
+    },
+    {
+     "type": "table",
+     "headers": [
+      "Symbol",
+      "Course",
+      "Entry band",
+      "kill_px",
+      "exit_target",
+      "Reason"
+     ],
+     "from": "pages.daily.blocks.plan_9"
+    },
+    {
+     "type": "h2",
+     "text": "Week map"
+    },
+    {
+     "type": "list",
+     "from": "pages.daily.blocks.plan_11"
+    },
+    {
+     "type": "h2",
+     "text": "Generic vs domain"
+    },
+    {
+     "type": "list",
+     "from": "pages.daily.blocks.plan_13"
+    }
+   ]
+  },
+  {
+   "label": "Book",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.daily.blocks.book_0"
+    },
+    {
+     "type": "table",
+     "title": "Book",
+     "source": {
+      "duckdb": "{PACK}/playbook/entry_book_book/entry_book.duckdb",
+      "sql": "SELECT symbol, ind, wt_nav, value_usd, vs_cost, \"left\", rr, bo, rsi, rng, tech_rng, vs50, tech_sma, peer, val_vs_ind, val_label, dte, mix, close, sma50, m10_nav, c15_px, entry_low, entry_high, kill_px, cost_kill_px FROM entry_book"
+     },
+     "derive": [],
+     "extra_columns": [
+      "Course",
+      "Grade",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "sort": "-wt_nav",
+     "extra_from": "courses"
+    },
+    {
+     "type": "table",
+     "title": "Industry exposure",
+     "source": {
+      "duckdb": "{PACK}/briefing_pack.duckdb",
+      "sql": "SELECT ind, n, nav_pct, vs_cost, \"left\", rsi FROM industry_exposure"
+     },
+     "derive": []
+    }
+   ]
+  },
+  {
+   "label": "Radar",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.daily.blocks.radar_0"
+    },
+    {
+     "type": "table",
+     "title": "Build-50",
+     "source": {
+      "duckdb": "{PACK}/briefing_pack.duckdb",
+      "sql": "SELECT symbol, ind, \"left\", street_left, rr, bo, cont, fwd, sleeve_count, rsi, rng, tech_rng, vs50, tech_sma, vs200, peer, val_vs_ind, val_ind_med, val_vs_avg, val_ind_avg, val_label, val, eff_vs_ind, eff_vs_avg, opm, pe, pe_peer, pe_vs_ind, evebitda, evebitda_peer, evebitda_vs_ind, pe_fwd, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd, evebitda_fwd_peer, evebitda_fwd_vs_ind, peg, dte, mix, mtp, close, entry_low, entry_high, trim_px, trim_state, kill_px, mark_vs_band, street_px, target_px FROM radar_curated_50"
+     },
+     "derive": [
+      "left_carrier"
+     ],
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    }
+   ]
+  },
+  {
+   "label": "Payoff 10",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.daily.blocks.payoff_10_0"
+    },
+    {
+     "type": "table",
+     "title": "Payoff focus",
+     "source": {
+      "duckdb": "{PACK}/payoff_focus/payoff_focus.duckdb",
+      "sql": "SELECT focus_order, symbol, ind, alloc_sleeve, band_payoff, band_payoff_source, close, entry_low, entry_high, trim_px, trim_state, kill_px, exit_target, value_px, up_from_entry_pct, stake_per_1k_usd, profit_on_5k_usd, \"left\", street_left, bo, val_vs_ind, val_label, rsi, rng, dte, mix FROM payoff_focus ORDER BY focus_order"
+     },
+     "derive": [
+      "left_carrier"
+     ],
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    }
+   ]
+  },
+  {
+   "label": "Earnings",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.daily.blocks.earnings_0"
+    },
+    {
+     "type": "table",
+     "title": "Upside lane",
+     "source": {
+      "duckdb": "{PACK}/briefing_pack.duckdb",
+      "sql": "SELECT symbol, ind, dte, \"left\", street_left, rr, bo, rsi, rng, vs50, tech_sma, peer, val_vs_ind, mix FROM earnings_upside_curated"
+     },
+     "derive": [
+      "left_carrier"
+     ],
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    },
+    {
+     "type": "table",
+     "title": "Downside lane",
+     "source": {
+      "duckdb": "{PACK}/briefing_pack.duckdb",
+      "sql": "SELECT symbol, ind, dte, \"left\", street_left, rr, bo, rsi, rng, vs50, tech_sma, peer, val_vs_ind, mix FROM earnings_downside_curated"
+     },
+     "derive": [
+      "left_carrier"
+     ],
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    }
+   ]
+  },
+  {
+   "label": "Shorts",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.daily.blocks.shorts_0"
+    },
+    {
+     "type": "table",
+     "headers": [
+      "#",
+      "Symbol",
+      "Course",
+      "Grade",
+      "close",
+      "Trigger",
+      "Cover / invalidation",
+      "Reason"
+     ],
+     "from": "pages.daily.blocks.shorts_1"
+    },
+    {
+     "type": "table",
+     "title": "Short book 15 (pack, curated)",
+     "source": {
+      "duckdb": "{PACK}/briefing_pack.duckdb",
+      "sql": "SELECT symbol, ind, close, sma50, \"left\", street_left, day, d5, m1, rsi, rng, vs50, bo, frag, exh, weeks_ras, dte, mix FROM short_book_15_curated"
+     },
+     "derive": []
+    },
+    {
+     "type": "table",
+     "title": "Breakdown screen (judgment scan `short_breakdown`; filter recorded in the judgment file)",
+     "source": {
+      "csv": "{PACK}/analysis_scans/short_breakdown.csv"
+     },
+     "columns": [
+      "symbol",
+      "ind",
+      "close",
+      "day",
+      "d5",
+      "m1",
+      "left",
+      "street_left",
+      "bo",
+      "cont",
+      "rsi",
+      "rng",
+      "vs50",
+      "dte",
+      "mix",
+      "mtp"
+     ],
+     "judgment_only": true
+    }
+   ]
+  },
+  {
+   "label": "Tape",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.daily.blocks.tape_0"
+    },
+    {
+     "type": "h3",
+     "text": "Day: ranked Top 25 up (best to least)"
+    },
+    {
+     "type": "table",
+     "title": "Day up 25",
+     "source": {
+      "duckdb": "{PACK}/movers/movers.duckdb",
+      "sql": "SELECT rank, symbol, ind, day, up_class, \"left\", street_left, rr, bo, cont, fwd, rsi, rng, vs50, tech_sma, peer, val_vs_ind, val_label, val, pe_fwd_peer, pe_fwd_vs_ind, dte, street_px, target_px FROM movers_tails WHERE horizon='day' AND tail='leaders' ORDER BY rank"
+     },
+     "derive": []
+    },
+    {
+     "type": "table",
+     "title": "Day punished: BOUNCE",
+     "source": {
+      "duckdb": "{PACK}/movers/movers.duckdb",
+      "sql": "SELECT rank, symbol, ind, day, down_class, \"left\", street_left, rr, bo, cont, fwd, rsi, rng, vs50, tech_sma, peer, val_vs_ind, val_label, val, pe_fwd_peer, pe_fwd_vs_ind, dte, street_px, target_px FROM movers_tails WHERE horizon='day' AND tail='laggards' AND down_class='BOUNCE' ORDER BY rank"
+     },
+     "derive": []
+    },
+    {
+     "type": "table",
+     "title": "Day punished: CONTINUE_DOWN / MIXED",
+     "source": {
+      "duckdb": "{PACK}/movers/movers.duckdb",
+      "sql": "SELECT rank, symbol, ind, day, down_class, \"left\", street_left, rr, bo, cont, fwd, rsi, rng, vs50, tech_sma, peer, val_vs_ind, val_label, val, pe_fwd_peer, pe_fwd_vs_ind, dte, street_px, target_px FROM movers_tails WHERE horizon='day' AND tail='laggards' AND down_class<>'BOUNCE' ORDER BY rank"
+     },
+     "derive": []
+    },
+    {
+     "type": "h3",
+     "text": "Week: ranked Top 25 up (best to least)"
+    },
+    {
+     "type": "table",
+     "title": "Week up 25",
+     "source": {
+      "duckdb": "{PACK}/movers/movers.duckdb",
+      "sql": "SELECT rank, symbol, ind, w, up_class, \"left\", street_left, rr, bo, cont, fwd, rsi, rng, vs50, tech_sma, peer, val_vs_ind, val_label, val, pe_fwd_peer, pe_fwd_vs_ind, dte, street_px, target_px FROM movers_tails WHERE horizon='w' AND tail='leaders' ORDER BY rank"
+     },
+     "derive": []
+    },
+    {
+     "type": "table",
+     "title": "Week punished: BOUNCE",
+     "source": {
+      "duckdb": "{PACK}/movers/movers.duckdb",
+      "sql": "SELECT rank, symbol, ind, w, down_class, \"left\", street_left, rr, bo, cont, fwd, rsi, rng, vs50, tech_sma, peer, val_vs_ind, val_label, val, pe_fwd_peer, pe_fwd_vs_ind, dte, street_px, target_px FROM movers_tails WHERE horizon='w' AND tail='laggards' AND down_class='BOUNCE' ORDER BY rank"
+     },
+     "derive": []
+    },
+    {
+     "type": "table",
+     "title": "Week punished: CONTINUE_DOWN / MIXED",
+     "source": {
+      "duckdb": "{PACK}/movers/movers.duckdb",
+      "sql": "SELECT rank, symbol, ind, w, down_class, \"left\", street_left, rr, bo, cont, fwd, rsi, rng, vs50, tech_sma, peer, val_vs_ind, val_label, val, pe_fwd_peer, pe_fwd_vs_ind, dte, street_px, target_px FROM movers_tails WHERE horizon='w' AND tail='laggards' AND down_class<>'BOUNCE' ORDER BY rank"
+     },
+     "derive": []
+    },
+    {
+     "type": "h3",
+     "text": "5D: ranked Top 25 up (best to least)"
+    },
+    {
+     "type": "table",
+     "title": "5D up 25",
+     "source": {
+      "duckdb": "{PACK}/movers/movers.duckdb",
+      "sql": "SELECT rank, symbol, ind, d5, up_class, \"left\", street_left, rr, bo, cont, fwd, rsi, rng, vs50, tech_sma, peer, val_vs_ind, val_label, val, pe_fwd_peer, pe_fwd_vs_ind, dte, street_px, target_px FROM movers_tails WHERE horizon='d5' AND tail='leaders' ORDER BY rank"
+     },
+     "derive": []
+    },
+    {
+     "type": "table",
+     "title": "5D punished: BOUNCE",
+     "source": {
+      "duckdb": "{PACK}/movers/movers.duckdb",
+      "sql": "SELECT rank, symbol, ind, d5, down_class, \"left\", street_left, rr, bo, cont, fwd, rsi, rng, vs50, tech_sma, peer, val_vs_ind, val_label, val, pe_fwd_peer, pe_fwd_vs_ind, dte, street_px, target_px FROM movers_tails WHERE horizon='d5' AND tail='laggards' AND down_class='BOUNCE' ORDER BY rank"
+     },
+     "derive": []
+    },
+    {
+     "type": "table",
+     "title": "5D punished: CONTINUE_DOWN / MIXED",
+     "source": {
+      "duckdb": "{PACK}/movers/movers.duckdb",
+      "sql": "SELECT rank, symbol, ind, d5, down_class, \"left\", street_left, rr, bo, cont, fwd, rsi, rng, vs50, tech_sma, peer, val_vs_ind, val_label, val, pe_fwd_peer, pe_fwd_vs_ind, dte, street_px, target_px FROM movers_tails WHERE horizon='d5' AND tail='laggards' AND down_class<>'BOUNCE' ORDER BY rank"
+     },
+     "derive": []
+    },
+    {
+     "type": "h3",
+     "text": "1M: ranked Top 25 up (best to least)"
+    },
+    {
+     "type": "table",
+     "title": "1M up 25",
+     "source": {
+      "duckdb": "{PACK}/movers/movers.duckdb",
+      "sql": "SELECT rank, symbol, ind, m1, up_class, \"left\", street_left, rr, bo, cont, fwd, rsi, rng, vs50, tech_sma, peer, val_vs_ind, val_label, val, pe_fwd_peer, pe_fwd_vs_ind, dte, street_px, target_px FROM movers_tails WHERE horizon='m1' AND tail='leaders' ORDER BY rank"
+     },
+     "derive": []
+    },
+    {
+     "type": "table",
+     "title": "1M punished: BOUNCE",
+     "source": {
+      "duckdb": "{PACK}/movers/movers.duckdb",
+      "sql": "SELECT rank, symbol, ind, m1, down_class, \"left\", street_left, rr, bo, cont, fwd, rsi, rng, vs50, tech_sma, peer, val_vs_ind, val_label, val, pe_fwd_peer, pe_fwd_vs_ind, dte, street_px, target_px FROM movers_tails WHERE horizon='m1' AND tail='laggards' AND down_class='BOUNCE' ORDER BY rank"
+     },
+     "derive": []
+    },
+    {
+     "type": "table",
+     "title": "1M punished: CONTINUE_DOWN / MIXED",
+     "source": {
+      "duckdb": "{PACK}/movers/movers.duckdb",
+      "sql": "SELECT rank, symbol, ind, m1, down_class, \"left\", street_left, rr, bo, cont, fwd, rsi, rng, vs50, tech_sma, peer, val_vs_ind, val_label, val, pe_fwd_peer, pe_fwd_vs_ind, dte, street_px, target_px FROM movers_tails WHERE horizon='m1' AND tail='laggards' AND down_class<>'BOUNCE' ORDER BY rank"
+     },
+     "derive": []
+    }
+   ]
+  },
+  {
+   "label": "News",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.daily.blocks.news_0"
+    },
+    {
+     "type": "list",
+     "from": "pages.daily.blocks.news_1"
+    }
+   ]
+  }
+ ],
+ "ledger": {
+  "auto": true
+ },
+ "tone_map": {
+  "NEW": "good",
+  "ADD": "good",
+  "BUY_PRE": "good",
+  "EXIT": "bad",
+  "TRIM": "warning",
+  "DERISK": "warning",
+  "DERISK_INTO_PRINT": "warning",
+  "SHORT_WAIT": "bad",
+  "SHORT_PRE": "bad",
+  "PASS": "neutral",
+  "HOLD_NO_ADD": "warning",
+  "HOLD": "info",
+  "HOLD_THROUGH": "info",
+  "WAIT": "info",
+  "WATCH": "neutral",
+  "WATCH_CATALYST": "neutral",
+  "SELL_THE_NEWS": "warning"
+ },
+ "description": "Operator page template. Data comes from {PACK} tables; judgment comes from logs/canvases/{DAY}/judgment.json (courses map + pages.<page_key>.blocks). Render: tv_scan_cli.py page --template daily_focus --day YYYYMMDD --judgment J (agent) or --manual (data only).",
+ "sources_extra": []
+}

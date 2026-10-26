@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from generic_utils.derive import implied_price
+from generic_utils.symbol_identity import display_id
 
 from .continuity import (
     continuity_action,
@@ -89,6 +90,9 @@ TAPE_FIELDS = (
     "sector",
     "vs200",
     "dte",
+    "atr",
+    "atrp",
+    "pt",
 )
 
 GOTCHAS = [
@@ -617,6 +621,7 @@ def _attach_sleeve_tags(
 def _tape_for_movers(
     af_rows: list[dict[str, Any]], names: Mapping[str, Mapping[str, Any]]
 ) -> list[dict[str, Any]]:
+    from generic_utils.derive import attach_implied_targets
     from generic_utils.forward_fundamentals import PACK_FORWARD_KEYS
 
     tape: list[dict[str, Any]] = []
@@ -652,7 +657,8 @@ def _tape_for_movers(
             if rec.get(key) is None and extra.get(key) is not None:
                 rec[key] = extra.get(key)
         tape.append(rec)
-    return tape
+    # street_px / target_px price levels so entry-book can band and kill any tape row, not only pack names.
+    return attach_implied_targets(tape)
 
 
 def _build_movers(
@@ -709,6 +715,8 @@ def _write_pack_duckdb(
     from generic_utils.risk import slim_position_row
     from generic_utils.run_export import write_run_export
 
+    from generic_utils.entry_book import attach_entry_book
+
     sleeves = pack.get("sleeves") or {}
     lanes = pack.get("earnings_lanes") or {}
     src = pack.get("sources") or {}
@@ -717,8 +725,8 @@ def _write_pack_duckdb(
         "capital": [pack["capital"]] if pack.get("capital") else [],
         "industry_exposure": list(pack.get("industry_exposure") or []),
         "risk_levels": list(pack.get("risk_levels") or []),
-        "radar_curated_50": list(sleeves.get("radar_curated_50") or []),
-        "radar_curated_25": list(sleeves.get("radar_curated_25") or []),
+        "radar_curated_50": attach_entry_book(list(sleeves.get("radar_curated_50") or [])),
+        "radar_curated_25": attach_entry_book(list(sleeves.get("radar_curated_25") or [])),
         "short_book_15_curated": list(sleeves.get("short_book_15_curated") or []),
         "earnings_upside_curated": list(lanes.get("upside_curated") or []),
         "earnings_downside_curated": list(lanes.get("downside_curated") or []),
@@ -746,6 +754,7 @@ def _write_pack_duckdb(
         notes=[
             "SQL this folder instead of all_fields_rows SELECT *",
             "Tape section = movers_tails (day/w/d5/m1). 3M = movers_3m.json",
+            "radar_curated_50 and radar_curated_25 include entry_low, entry_high, trim_px, trim_state, kill_px, and mark_vs_band from generic_utils.entry_book. tech_sma and vs50 stay on the row.",
         ],
         extra={"pack_json": "briefing_pack.json"},
         duckdb_name="briefing_pack.duckdb",
@@ -983,6 +992,7 @@ def render_markdown(pack: dict[str, Any]) -> str:
             if r.get("down_class") == "CONTINUE_DOWN"
         )
         if leaders or lag_rows:
+            lines.append(f"- {field} classes: {_class_counts(block)}")
             lines.append(f"- {field} leaders (best→least): {leaders}")
             if bounce:
                 lines.append(f"- {field} bounce: {bounce}")
@@ -1007,7 +1017,7 @@ def render_markdown(pack: dict[str, Any]) -> str:
     for row in pack.get("book") or []:
         cont = row.get("continuity") or {}
         lines.append(
-            f"- {row.get('ticker')} wt_nav {row.get('wt_nav')} vs-cost {row.get('vs_cost')}% "
+            f"- {display_id(row)} wt_nav {row.get('wt_nav')} vs-cost {row.get('vs_cost')}% "
             f"wipe {row.get('wipe_nav_pct')}% NAV m15_nav {row.get('m15_nav')} "
             f"-> {cont.get('action')} (prior {cont.get('prior_action')}, naive {cont.get('naive_action')}"
             f"{', POLAR BLOCKED' if cont.get('polar_blocked') else ''})"
@@ -1118,3 +1128,13 @@ def render_markdown(pack: dict[str, Any]) -> str:
         lines.append(f"- {item}")
     lines.append("")
     return "\n".join(lines)
+
+
+def _class_counts(block: Mapping[str, Any]) -> str:
+    """Leader up_class and punished down_class counts for one horizon, plus the IS_SUPPORTED names."""
+    up = Counter(str(r.get("up_class") or "-") for r in (block.get("leaders") or [])[:25])
+    down = Counter(str(r.get("down_class") or "-") for r in block.get("laggards") or [])
+    supported = [str(r.get("symbol") or "") for r in (block.get("leaders") or [])[:25] if r.get("up_class") == "IS_SUPPORTED"]
+    text = "up " + " / ".join(f"{k} {v}" for k, v in up.most_common()) + "; punished " + " / ".join(f"{k} {v}" for k, v in down.most_common())
+    return text + (f"; IS_SUPPORTED: {', '.join(supported)}" if supported else "")
+

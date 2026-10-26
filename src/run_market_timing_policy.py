@@ -451,8 +451,16 @@ def _build_all_fields_snapshot(
             if checkpoint == "premarket"
             else _number(row.get("regular_gap_pct"))
         )
+        close = _number(row.get("current_close"))
+        sma50 = _number(row.get("sma50"))
+        vs50 = (
+            round((close / sma50 - 1.0) * 100.0, 4)
+            if close is not None and sma50 not in (None, 0)
+            else None
+        )
         output[symbol] = {
             **row,
+            "vs50": vs50,
             "gap_pct": gap,
             "industry_breadth_up_3pct": (
                 round(100.0 * up_count / total_count, 2) if total_count else None
@@ -532,6 +540,11 @@ def _load_current_all_fields(
                 f"TRY_CAST({_col('premarket_change')} AS DOUBLE) AS premarket_change_pct, "
                 f'TRY_CAST({_col("ADRP")} AS DOUBLE) AS adrp, '
                 f'TRY_CAST({_col("ATRP")} AS DOUBLE) AS atrp, '
+                + (
+                    f'TRY_CAST({_col("SMA50")} AS DOUBLE) AS sma50, '
+                    if "SMA50" in available_columns
+                    else "CAST(NULL AS DOUBLE) AS sma50, "
+                )
                 + (
                     f'TRY_CAST({_col("earnings_days_until")} AS DOUBLE) AS earnings_days_until, '
                     if "earnings_days_until" in available_columns

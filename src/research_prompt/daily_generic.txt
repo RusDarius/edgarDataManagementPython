@@ -1,5 +1,8 @@
 DAILY FOCUS — STANDING SPEC
 ===========================
+CANVAS = operator HTML page: JSON spec in logs/canvases/, rendered by
+tv_scan_cli.py page (.claude/skills/canvas-ledger/SKILL.md). Not a Cursor .canvas.tsx.
+IDS = every stock is EXCHANGE:TICKER (NASDAQ:MU) in tables, pages, judgment, priors and chat; a bare ticker is input only.
 Attach this file on DAILY (full). Do not attach daily_generic_reference.md
 unless you need earnings-lane, scoring-contract, or canvas-layout detail.
 
@@ -9,12 +12,12 @@ Canvas first; chat is a snapshot. One Ledger tab. One Tape/Support section
 
 SKILLS
 ------
-.cursor/skills/daily-operator-scan/SKILL.md
-.cursor/skills/scan-evidence/SKILL.md
-.cursor/skills/tv-dataset-analysis/SKILL.md
-.cursor/skills/generic-vs-domain/SKILL.md
-.cursor/skills/canvas-ledger/SKILL.md
-.cursor/skills/price-movers/SKILL.md   (Tape section only; do not @ movers_generic.txt)
+.claude/skills/daily-operator-scan/SKILL.md
+.claude/skills/scan-evidence/SKILL.md
+.claude/skills/tv-dataset-analysis/SKILL.md
+.claude/skills/generic-vs-domain/SKILL.md
+.claude/skills/canvas-ledger/SKILL.md
+.claude/skills/price-movers/SKILL.md   (Tape section only; do not @ movers_generic.txt)
 
 GOALS
 -----
@@ -35,7 +38,17 @@ GOALS
    include Val / Peer / Proj / Tech (same tab). Source pack.movers /
    movers_tails (down_class). CAN_PAY = unpaid unused-range that has not
    ripped. Do not steal the 0–2 NEW budget to chase a groover.
-6. Canvas daily-focus-YYYYMMDD. Budget 0–2 NEW / ADD / TRIM-EXIT / event, 0–1 short.
+6. Payoff focus, ten names. Run it on the pack Build-50 table. It is a capital
+   band, not a second ranking and not a second NEW budget.
+   python src/generic_utils/tv_scan_cli.py payoff-focus --db PACK.duckdb --table radar_curated_50 --out-dir PACK/payoff_focus
+   Read payoff_focus.csv. alloc_sleeve is discount_momentum or premium_strength.
+   band_payoff is the sort: upside from entry_high to the street target, divided
+   by the distance down to exit_stop. stake_per_1k_usd is the check that earns
+   $1,000 if that target prints (10% upside is $10,000; 50% upside is $2,000).
+   profit_on_10k_usd and profit_on_5k_usd are the dollar result of those two
+   checks. Show entry_low, entry_high, exit_stop, exit_target, bo, and val_vs_ind
+   beside the sleeve. A name here still needs a pack course before it is a NEW.
+7. Canvas daily-focus-YYYYMMDD. Budget 0–2 NEW / ADD / TRIM-EXIT / event, 0–1 short.
    Bear in mind about $5,000 for a new line and about $1,000 and up for an add
    to a line already held. Advice on the recommendation, not a hard target
    and not a ranking cutoff.
@@ -52,7 +65,7 @@ Prior briefs: run `python src/generic_utils/tv_scan_cli.py briefs` and read
 digest.md before the 0–2 NEW slots. It scores earlier calls against later
 closes and omits the note text. One name is table events. A BAD or MISSED
 label changes the grade. It does not reorder Build-50. Skill:
-.cursor/skills/brief-history/SKILL.md.
+.claude/skills/brief-history/SKILL.md.
 Layer map: src/generic_utils/specs/scoring_layer_order.md
 
 DATASETS
@@ -77,7 +90,7 @@ CANVAS (short)
 --------------
 Plan, week map, Book, breadth, value, tech
 (ABOVE/BELOW with vs50, UNUSED/MID/PAID with rng),
-radar (Build-50), omitted, earnings, shorts,
+radar (Build-50), payoff focus (the ten), omitted, earnings, shorts,
 Tape/Support (one section: day/w/5D/1M), Ledger once, roadmap on Plan.
 Value shows two reads. Trailing TV, taken as published: pe_peer beside pe_vs_ind
 and evebitda_peer beside evebitda_vs_ind. Forward derivative, which can be off:
@@ -102,6 +115,9 @@ QUALITY
 Decisions over description. Conservative wins on *new* risk. Polar ADD→EXIT
 does not. Mix avoid_value_trap on live leftover Book = HOLD_NO_ADD.
 Paid continuation (RSI≥70, leftover gone, rng≥85) = CHASE, do not add.
-MTP ENTER_SMALL is climate, not a buy list.
+MTP ENTER_SMALL is climate, not a buy list. The policy row still carries
+entry_low, entry_high, kill_px, thesis_drawdown_px, and thesis_chase_px.
+Those prices come from generic_utils.timing_levels. The kill is 0.75 or 1.0
+ATR, not the 1.5 ATR entry-book kill.
 
 Overrides: overrides_template.txt. Long-form: daily_generic_reference.md.

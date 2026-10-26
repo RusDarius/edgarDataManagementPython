@@ -3,7 +3,13 @@
 ## Purpose
 This document compiles verified TradingView screener payload combinations for building stock safety screens, activity and price-move screens, and peer comparison packs.
 
-The field names used below are limited to fields confirmed in `savedData/stock_fields.csv`.
+The field names used below are limited to fields confirmed in
+`savedData/trading_view_stock_fields.csv`.
+
+For full-versus-focused run semantics, null classification, income-field
+coverage, downstream fallback behavior, and a paid-session migration
+checklist, see
+[TradingView Scanner Field Availability, Run Fallbacks, and Authentication](./tradingview_scanner_field_availability_and_authentication.md).
 
 ## Correctness Notes
 - The payload structures below follow the query shape already used in this repository.
@@ -13,7 +19,7 @@ The field names used below are limited to fields confirmed in `savedData/stock_f
 - The standalone field `name` is not present in `stock_fields.csv`. If you want `name` in the output, derive it from `ticker-view` in the mapped response or from your custom response mapping.
 
 ## Important Data Gaps In Current CSV Inventory
-These are useful for real screening, but they are not confirmed in the current TradingView field inventory you shared:
+These are useful for real screening, but they are not confirmed in the current TradingView field inventory:
 - Short interest percent of float
 - Days to cover
 - Borrow fee / stock loan fee

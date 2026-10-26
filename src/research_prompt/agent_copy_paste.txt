@@ -17,6 +17,13 @@ Pins: overrides_template.txt. Do not @ briefing_pack.json or DuckDB folders.
 Shell once per session:
   $env:PYTHONPATH='src;.'
 
+GLOBAL IDS
+----------
+Every stock is written EXCHANGE:TICKER (NASDAQ:MU, XETR:VUAA) in tables, pages, judgment,
+priors, capital plans and chat. A bare ticker column may sit beside it, never alone.
+Bare tickers are input only; the CLIs resolve them (generic_utils.symbol_identity).
+Priors: tv_scan_cli.py priors --day YYYYMMDD (never a hand-written JSON).
+
 GLOBAL DATASETS
 ---------------
 Compile, wisdom, all, forward, and analysis style use six datasets:
@@ -48,12 +55,15 @@ Zoom handles the extra column. Do not blend them into a score.
 OUTPUT — one line in the block you paste
 -----------------------------------------
   duckdb output    Suite folder only. Query it. This is the default.
-  canvas output    Also write the .canvas.tsx. Use for a short decision page.
+  canvas output    Also write the page: logs/canvases/YYYYMMDD/NAME-YYYYMMDD.json, then
+                   tv_scan_cli.py page --spec it (HTML + one Ledger).
+                   Use for a short decision page.
   data lists       Put the name tables on that canvas. Without this line the
                    canvas is decisions plus one Ledger, not a row dump.
 
-A canvas is expensive: the agent writes each row into the page. A DuckDB
-file is the command writing the rows once. Prefer duckdb output, then:
+A hand-typed canvas row is expensive. A page table whose source is the
+suite CSV / DuckDB costs one line. A DuckDB file is the command writing
+the rows once. Prefer duckdb output, then:
 
   python src/generic_utils/tv_scan_cli.py summary --csv FILE.csv --fields opm,pe,pe_fwd,left,bo,rsi
   python src/generic_utils/tv_scan_cli.py focus --csv FILE.csv --field rr --top 40 --out pick.csv
@@ -76,37 +86,51 @@ canvas output.
 Dedicated folder: the suite --out-dir, or the default next to the pack
 (briefing_pack_*/NAME/ or suites_*/). overview.log names the DuckDB.
 queries.txt in that same folder lists every field, what it means, and the
-copy-paste queries for that run. Open queries.txt before writing SQL.
+copy-paste queries for that run. Grep queries.txt for the table or field before
+writing SQL. The pack file is ~130 KB: never read it whole.
 
 Locked data (compile joins these; inspect shows what is newest):
   move-prediction run_id, all-fields day + run_id, edge parent,
   holdings_scoring_*, current_holdings.json, MTP run, priors JSON.
 Pack freeze: logs/tradingview_analysis/operator_briefing/runs/briefing_pack_*/
-Skills: .cursor/skills/daily-operator-scan/SKILL.md
-        .cursor/skills/scan-evidence/SKILL.md
-        .cursor/skills/tv-dataset-analysis/SKILL.md
-        .cursor/skills/generic-vs-domain/SKILL.md
-        .cursor/skills/canvas-ledger/SKILL.md
-        .cursor/skills/price-movers/SKILL.md
-        .cursor/skills/book-risk/SKILL.md
-        .cursor/skills/capture-book/SKILL.md
-        .cursor/skills/forward-value/SKILL.md
-        .cursor/skills/backtest-horizon/SKILL.md
-        .cursor/skills/generic-ranking/SKILL.md
-        .cursor/skills/analysis-style/SKILL.md
-        .cursor/skills/brief-history/SKILL.md
-        .cursor/skills/decision-review/SKILL.md
-        .cursor/skills/backtracking/SKILL.md
+Skills: .claude/skills/daily-operator-scan/SKILL.md
+        .claude/skills/scan-evidence/SKILL.md
+        .claude/skills/tv-dataset-analysis/SKILL.md
+        .claude/skills/generic-vs-domain/SKILL.md
+        .claude/skills/canvas-ledger/SKILL.md
+        .claude/skills/price-movers/SKILL.md
+        .claude/skills/book-risk/SKILL.md
+        .claude/skills/capture-book/SKILL.md
+        .claude/skills/forward-value/SKILL.md
+        .claude/skills/backtest-horizon/SKILL.md
+        .claude/skills/generic-ranking/SKILL.md
+        .claude/skills/analysis-style/SKILL.md
+        .claude/skills/brief-history/SKILL.md
+        .claude/skills/decision-review/SKILL.md
+        .claude/skills/backtracking/SKILL.md
 Scoring layers: src/generic_utils/specs/
 Manual dumps (raw data the model uses, no canvas): python src/run_operator_suites.py --gitbash
   table: Prompt | Command | Usage / output
   src/generic_utils/specs/gitbash_agent_data_flows.md
 
 
+--- PREMARKET BOOK (not a compile) ---
+Book exposure before the cash open. Not a Daily ranking.
+
+python src/generic_utils/tv_scan_cli.py premarket-book
+Output: duckdb output
+Folder: logs/.../operator_briefing/runs/premarket_book_<stamp>/
+  premarket_book.duckdb tables premarket, tape_climate
+pre_repeat true: pre_px is empty. Do not call the cash close this morning's gap.
+Context list: config/generic_utils/premarket_book.json. Not a buy list.
+Canvas premarket-book-YYYYMMDD when this block says canvas output.
+No 0-100. No logs/_tmp_*.py.
+
+
 --- DAILY (full) ---
 Daily operator scan. Latest scoring + leftover/projections. Map today and the week.
 
-@.cursor/skills/daily-operator-scan/SKILL.md
+@.claude/skills/daily-operator-scan/SKILL.md
 @src/research_prompt/daily_generic.txt
 
 inspect, then compile only if pack sources differ (pred / all-fields / edge / holdings / MTP / Book / priors).
@@ -134,6 +158,15 @@ What to produce:
      Late-Sep rumour on a Book ADD is the same line — no second ticket.
   6. Wide analysis, tight capital. Quote pack suggested_conviction (support 0.15–0.90, not a probability).
      Assign High / Med / Low yourself after conflicts.
+  7. Payoff focus — ten names from radar_curated_50. Not a second Build-50 and not a NEW slot by itself.
+     python src/generic_utils/tv_scan_cli.py payoff-focus --db <pack>/briefing_pack.duckdb --table radar_curated_50 --out-dir <pack>/payoff_focus
+     Sleeve is discount_momentum (at least 5% cheaper, bo at least 0.15) or premium_strength (at least 5% richer, bo at least 0.5).
+     Order is band_payoff: percent up from entry_high to value_px, divided by percent down to exit_stop.
+     value_px is year-1 PE at the industry median. discount_px brings the quoted multiple inline. Street stays exit_target.
+     stake_per_1k_usd: 10% upside is a $10,000 check to make $1,000. 50% upside is a $2,000 check for that same $1,000.
+     profit_on_5k_usd at 50% is $2,500. profit_on_10k_usd at 10% is $1,000. Quote entry_low, entry_high, trim_px, trim_state, kill_px, exit_target.
+     trim_at_sma is the 50-day trim. through_average means the trim already printed. kill_px ends this entry. cost_kill_px is 15% under cost.
+     Knobs: config/generic_utils/payoff_focus.json. Empty sleeve stays off the ten.
 
 Budget 0-2 NEW, 0-2 ADD, 0-2 TRIM/EXIT, 0-2 event, 0-1 short.
 Bear in mind about $5,000 for a new line. An add to a line already held can be about $1,000 and up. Advice on the recommendation, not a hard target and not a ranking cutoff.
@@ -146,8 +179,20 @@ No DuckDB fishing. No logs/_tmp_*.py. No 0–100 mix.
 Manual: briefing_pack.duckdb + overview.log next to the pack JSON.
 
 
+--- BEST TRADES (DAILY + MOVERS + PLAYBOOK + GMV, short to mid term, canvas) ---
+Fresh data, all four pages, outside wisdom, best trades long and short.
+One command does the refresh, opens the run folder and fills the prompt:
+  python src/run_operator_day.py --agent --mode full                 # headless Claude run
+  python src/run_operator_day.py --agent --mode full --print-prompt  # refresh, then paste the printed prompt here
+Data already fresh: add --no-producers. The prompt is
+src/research_prompt/agent_runs/daily_full.txt ({DAY} {PACK} {RUN_DIR} {JUDGMENT} filled by the runner).
+Without the runner: tv_scan_cli.py page-run --day YYYYMMDD --mode full, then
+@src/research_prompt/agent_runs/daily_full.txt with Day = today, Pack = newest briefing_pack_*,
+Run folder = the printed run_dir, Judgment = logs/canvases/YYYYMMDD/judgment.json.
+
+
 --- DAILY (pack already good) ---
-@.cursor/skills/daily-operator-scan/SKILL.md
+@.claude/skills/daily-operator-scan/SKILL.md
 @logs/tradingview_analysis/operator_briefing/runs/<newest>/briefing_pack.md
 
 Same deliverable as DAILY (full): week map, Book, Build-50 ranking (radar_curated_50),
@@ -163,10 +208,26 @@ The Tape section contains the ranked Top 25 up and the punished-pool split BOUNC
 Do not @ movers_generic.txt.
 
 
+--- DAILY (update: latest data, same judgment) ---
+Refresh today's Daily / Movers / Playbook pages with the newest data. Review only what moved.
+
+@.claude/skills/daily-update/SKILL.md
+
+Day: YYYYMMDD (today if blank)
+python src/run_daily_refresh.py --update-day YYYYMMDD
+  (data already fresh: add --no-producers)
+Read update.md in the run folder it prints (logs/canvases/YYYYMMDD/HHMM_update/) only.
+Edit courses / page blocks in logs/canvases/YYYYMMDD/judgment.json for the flagged names,
+set reviewed_pack, re-render with tv_scan_cli.py page --template ... --judgment ... --out-dir RUN --strict,
+update priors for changed names only.
+Chat: what changed + cash after + the update.md path + page links.
+No hand-written spec JSON. No full pack / queries.txt reads. No second NEW budget.
+
+
 --- BRIEF HISTORY (prior briefs vs later closes) ---
 How earlier calls held up. Read the digest. Do not paste prior notes.
 
-@.cursor/skills/brief-history/SKILL.md
+@.claude/skills/brief-history/SKILL.md
 
 python src/generic_utils/tv_scan_cli.py briefs
 Output: duckdb output
@@ -181,18 +242,18 @@ No 0-100. No logs/_tmp_*.py.
 
 --- DECISION REVIEW (top 100 ranks vs later closes) ---
 Did the published upside 100 capture the later close, and what slice should change.
+The same run rolls every name on the briefing tape: runners, pumps that broke, and high ranks that faded.
 
-@.cursor/skills/decision-review/SKILL.md
+@.claude/skills/decision-review/SKILL.md
 
 python src/run_decision_review.py
 Output: duckdb output
 Folder: logs/.../operator_briefing/runs/decision_review_<stamp>/
-  highlights.log is the matrix. It does not paste the 100 names.
-  decision_review.duckdb tables coverage, quality, ranks, decisions, matrix, signal_support.
-One day: SELECT * FROM ranks WHERE day = 'YYYY-MM-DD'.
-min_n and gap_pct decide KEEP / CHANGE / THIN. They do not drop a name from the top 100.
-src/backtests family_metrics is support when a CSV already exists.
-Do not rerun python src/run_backtests.py for this review.
+  highlights.log lists every runner, every broken pump, and every high rank that faded.
+  decision_review.duckdb tables name_path, tape, coverage, quality, ranks, decisions, matrix, matrix_to_latest.
+One symbol: SELECT * FROM name_path WHERE ticker = 'MU'.
+min_n and gap_pct decide KEEP / CHANGE / THIN on the upside-100 matrix. They do not drop a tape name.
+Signal-family backtests are not attached unless --family-metrics is passed.
 No canvas unless this block also says canvas output.
 No 0-100. No logs/_tmp_*.py.
 
@@ -202,7 +263,7 @@ Tape-only rerun. One canvas movers-YYYYMMDD covering day / week / 5D / 1M.
 Do not split movers-day / movers-5d / movers-1m. Do not @ daily_generic.txt.
 If daily-focus exists this session, Daily Tape stays condensed and points here.
 
-@.cursor/skills/price-movers/SKILL.md
+@.claude/skills/price-movers/SKILL.md
 @src/research_prompt/movers_generic.txt
 
 inspect; compile only if pack sources differ. Prefer pack.movers / movers_tails.
@@ -232,7 +293,7 @@ One Ledger tab. No 0–100 supported score. No logs/_tmp_*.py.
 
 --- MOVERS (3M) ---
 Same skill. Recipe config/generic_utils/movers_3m.json. Not a Daily tab.
-@.cursor/skills/price-movers/SKILL.md
+@.claude/skills/price-movers/SKILL.md
 @src/research_prompt/movers_generic.txt
 Canvas movers-3m-YYYYMMDD (one Tape section): ranked Top 25 3M up; downside
 BOUNCE vs CONTINUE_DOWN from the punished 25. Do not @ daily_generic.txt.
@@ -251,7 +312,7 @@ Do not open DuckDB folders.
 
 
 --- POST-EARN (print day vs later close) ---
-@.cursor/skills/post-earn/SKILL.md
+@.claude/skills/post-earn/SKILL.md
 
 python src/generic_utils/tv_scan_cli.py session --prior-db PRIOR.duckdb --current-db CURRENT.duckdb --prior-run RUN --current-run RUN --earn-on YYYY-MM-DD --out-dir logs/tradingview_analysis/operator_briefing/runs/post_earn_<stamp>
 
@@ -262,7 +323,7 @@ No 0-100. No second NEW budget. No logs/_tmp_*.py.
 
 
 --- LOOKUP / PRUNE ---
-@.cursor/skills/scan-evidence/SKILL.md
+@.claude/skills/scan-evidence/SKILL.md
 
 python src/operator_briefing/example_entry.py lookup MU SNDK PGY JD PATH ZS BIDU
 
@@ -274,7 +335,7 @@ If missing from pack, say so — do not SQL.
 
 
 --- COMPARE (pred progression) ---
-@.cursor/skills/scan-evidence/SKILL.md
+@.claude/skills/scan-evidence/SKILL.md
 
 python src/operator_briefing/example_entry.py compare --session --exchanges NASDAQ,NYSE,AMEX
 python src/operator_briefing/example_entry.py compare --session --exchanges NASDAQ,NYSE,AMEX --ids MU,SNDK,PGY,JD,BIDU,ADBE,ZS,INTU,FSLR
@@ -285,7 +346,7 @@ Do not chase paid continuation. Do not short leftover-91 EXIT.
 
 
 --- BOOK ONLY ---
-@.cursor/skills/daily-operator-scan/SKILL.md
+@.claude/skills/daily-operator-scan/SKILL.md
 
 inspect; compile if holdings or pred/all-fields ids moved.
 One capital action per holding. Polar gate on. Mix avoid_value_trap on live leftover = HOLD_NO_ADD.
@@ -297,7 +358,7 @@ No radar, no canvas unless asked.
 How much loss to tolerate: position %, net $, % of NAV (equity + cash).
 Do not @ daily_generic.txt. Do not steal Daily tabs.
 
-@.cursor/skills/book-risk/SKILL.md
+@.claude/skills/book-risk/SKILL.md
 @src/research_prompt/risk_generic.txt
 
 inspect; compile if holdings or current_holdings.json moved.
@@ -326,7 +387,7 @@ No 0–100 risk score. No logs/_tmp_*.py. Polar still on.
 Deterministic whole-book path over existing data (default 90 days).
 Not DAILY, not MOVERS, not RISK, not HORIZON. Do not @ daily_generic.txt.
 
-@.cursor/skills/capture-book/SKILL.md
+@.claude/skills/capture-book/SKILL.md
 @src/research_prompt/capture_generic.txt
 
 inspect for source lock; compile only if pack ids moved.
@@ -352,7 +413,7 @@ Canvas Replay tab: PIT vs hindsight sleeves, ras = mean/stdev, tune grid, first-
 
 
 --- DELEGATE (child agent) ---
-Read .cursor/skills/scan-evidence/SKILL.md.
+Read .claude/skills/scan-evidence/SKILL.md.
 Pack already exists. Do not compile. Do not inspect unless lookup missing.
 
 python src/operator_briefing/example_entry.py lookup MU SNDK PGY JD PATH ZS
@@ -373,7 +434,7 @@ Leadership still from pack industries_5d, not a remembered list.
 
 
 --- DETERMINISTIC FOCUS (no agent judgment) ---
-@.cursor/skills/tv-dataset-analysis/SKILL.md
+@.claude/skills/tv-dataset-analysis/SKILL.md
 
 Export the compiled FOCUS set and scan it yourself.
 
@@ -388,8 +449,8 @@ Do not invent SQL. Do not write logs/_tmp_*.py. Empty --where means no filter.
 
 
 --- WISDOM / ALL SUITES ---
-@.cursor/skills/forward-value/SKILL.md
-@.cursor/skills/canvas-ledger/SKILL.md
+@.claude/skills/forward-value/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
 @src/run_operator_suites.py
 
 Output: canvas output
@@ -420,7 +481,7 @@ Optional refresh: python src/run_operator_suites.py wisdom --run-finproj --cover
 Best trades for the week and the next 1–2 months, plus long strong decisions.
 Risk-aware. On top of the algos, not a second Daily.
 
-@.cursor/skills/analysis-style/SKILL.md
+@.claude/skills/analysis-style/SKILL.md
 
 inspect; compile if pack sources differ. Wisdom dump is already a ledger canvas plus DuckDB.
 Cite datasets/ for all-fields, prediction, edge, MTP, backtest IC, and value projection.
@@ -437,6 +498,12 @@ Read pack courses + capital, wisdom value/forward/movers/risk, then:
   3. Two orders, not one score. ASYM = survivors sorted by rr.
      CONVICTION = the same names sorted by bo. Do not add rr and bo.
   4. Weeks scan and street-vs-model gap stay unsorted support.
+  4b. Payoff focus on the payoff shortlist CSV (or value_tech setup.csv). Ten names.
+      python src/generic_utils/tv_scan_cli.py payoff-focus --csv SHORTLIST.csv --out-dir SUITES/payoff_focus
+      discount_momentum or premium_strength, ordered by band_payoff.
+      That ratio is upside width over downside width. It is not rr and it is not added to bo.
+      stake_per_1k_usd: 10% upside is $10,000 to make $1,000. 50% upside is $2,000 for the same $1,000.
+      Entry and exit stay entry_low, entry_high, exit_stop, exit_target. The ten are support, not a third order.
   5. Outside news (dated, OUTSIDE) after the orders exist.
      News moves timing or grade. It is not a sort key.
 Tag each name ALGO / SUPPORT / BEYOND / CONFLICT and WEEK / MONTH / LONG.
@@ -452,13 +519,18 @@ Output: duckdb output
 Manual dump is the deliverable. Canvas playbook-YYYYMMDD only when this block says canvas output.
 
 @src/research_prompt/playbook_generic.txt
-@.cursor/skills/canvas-ledger/SKILL.md
-@.cursor/skills/generic-ranking/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
+@.claude/skills/generic-ranking/SKILL.md
 
 Manual dump first (files only, no canvas):
 python src/run_operator_suites.py playbook --weeks 25
 Output: briefing_pack_*/playbook/ — playbook.duckdb (upside 100, curated
 shorts, forming, book), weeks_progression/, playbook.json, overview.log.
+Then the ten-name band on that upside 100:
+python src/generic_utils/tv_scan_cli.py payoff-focus --db <playbook>/playbook.duckdb --table radar_upside_100 --out-dir <playbook>/payoff_focus
+discount_momentum or premium_strength, ordered by band_payoff. Entry and exit are entry_low, entry_high, trim_px, trim_state, kill_px, exit_target.
+Best 25 and Book courses use the same band. entry-book on that short list. Do not hand-write it.
+stake_per_1k_usd: 10% upside is $10,000 to make $1,000. 50% upside is $2,000 for the same $1,000. The ten do not replace Best 25.
 
 Then the canvas, from those files. Do not re-fish DuckDB.
 Mesh is F C P D T (canvas-ledger). nmesh is a count. D is DISCOUNT
@@ -467,16 +539,67 @@ Best 25 still reads both valuation bins: trailing TV pe_peer / evebitda_peer
 and forward pe_fwd_peer / evebitda_fwd_peer, each with its percent.
 Best 25 is judgment on the base 100: mesh, dte, 25-week bo change, those bins, leftover. Cite the
 reason on every Best 25 row. Shorts stay on the short sleeve.
-Canvas playbook-YYYYMMDD: Play, Base 100, Best 25, Forming x catalyst,
+Canvas playbook-YYYYMMDD: Play, Base 100, Best 25, Payoff 10, Forming x catalyst,
 Shorts, Peers/tech, 25 weeks, Ledger.
 One Ledger. Daily budget still binds. No mesh score. No logs/_tmp_*.py.
+
+
+--- ENTRY BOOK (buy band + this-entry kill) ---
+Where this catalog row is a buy, and where that entry dies.
+A later close can open a new band. It does not rewrite this kill.
+
+@.claude/skills/entry-book/SKILL.md
+
+python src/generic_utils/tv_scan_cli.py entry-book --csv CATALOG.csv --mark-csv LATER.csv --out-dir RUN/entry_book
+Output: duckdb output
+Folder: entry_book.csv, entry_book.duckdb, queries.txt, overview.log.
+entry_low to entry_high is the buy. trim_px is the 50-day when trim_state is trim_at_sma. kill_px is the stop for this row.
+kill_scope is this_entry. Street and pack targets stay separate.
+rr_at_band is a ratio, not a 0-100.
+Starter about $5,000. An add to a held line can be about $1,000.
+Advice on the row, not a filter.
+Do not buy a reclaim name at the mark. through_kill means this entry is finished.
+No ADD/WAIT column. No logs/_tmp_*.py.
+
+
+--- TIMING LEVELS (entry, kill, thesis change) ---
+Prices on a timing row or on any tape. Not a buy list.
+
+@.claude/skills/entry-book/SKILL.md
+
+python src/run_market_timing_policy.py
+python src/generic_utils/tv_scan_cli.py timing-levels --csv TAPE.csv --screen --out-dir RUN/timing_levels
+python src/generic_utils/tv_scan_cli.py group --csv TAPE.csv --by industry --metrics m1,m3,pre --min-n 6 --center median
+Output: duckdb output
+Folder: timing_levels.csv, timing_screen.csv, timing_levels.duckdb, queries.txt.
+The MTP run writes the same prices on action_policy_recommendations.
+entry_low to entry_high is the buy. reclaim waits for the 50-day.
+kill_px is 0.75 or 1.0 ATR under the band. entry-book kill_px stays 1.5 ATR.
+thesis_drawdown_px is 10% under the recent high. in_drawdown means price is already through it.
+thesis_chase_px is a 5% day. through_chase can become AVOID_CHASE next session if breadth is not expanding.
+--screen applies config/generic_utils/low_downside.json. Edit that where. It is not a score.
+Industry path is the median. Do not hand-average the tape.
+ENTER_SMALL is climate. No logs/_tmp_*.py.
+
+
+--- BOOK SESSIONS (6 months + brief labels) ---
+Holdings membership over the window. Optional brief-history join.
+Not the all-fields fund path. That is CAPTURE.
+
+@.claude/skills/capture-book/SKILL.md
+
+python src/generic_utils/tv_scan_cli.py book-sessions --lookback-days 180 --briefs-db logs/tradingview_analysis/operator_briefing/runs/brief_history_<stamp>/brief_history.duckdb
+Output: duckdb output
+Folder: book_sessions_<stamp>/ book_sessions.duckdb queries.txt
+still_held is the last as-of. brief_label does not reorder a ranking.
+No 0-100. No logs/_tmp_*.py.
 
 
 --- HORIZON (weeks / month) ---
 Backtest IC × current leftover pack. Not Daily radar, not MOVERS, not RISK.
 Do not @ daily_generic.txt. Canvas horizon-plan-YYYYMMDD.
 
-@.cursor/skills/backtest-horizon/SKILL.md
+@.claude/skills/backtest-horizon/SKILL.md
 @src/research_prompt/backtest_horizon.txt
 
 inspect; compile only if pack sources differ.
@@ -500,7 +623,7 @@ One Ledger. No 0–100 horizon score. No logs/_tmp_*.py.
 Build a weekly investing run from point-in-time rows, then score it.
 No Daily tabs, no Movers tape page, no Book-risk ladders.
 
-@.cursor/skills/backtracking/SKILL.md
+@.claude/skills/backtracking/SKILL.md
 @src/research_prompt/backtracking_generic.txt
 
 Output: duckdb output
@@ -525,14 +648,14 @@ Chat output:
 --- GROWTH RADAR (revenue + earnings) ---
 Growth scan. Not Daily leftover, not movers, not a 0-100.
 
-@.cursor/skills/growth-radar/SKILL.md
+@.claude/skills/growth-radar/SKILL.md
 
 python src/run_growth_radar.py
 Output: duckdb output
 Folder: logs/tradingview_analysis/growth_radar/runs/growth_radar_<stamp>/
   growth_radar.duckdb, queries.txt, overview.log, highlights.log, spec.json
 
-Open queries.txt before SQL. Two thresholds are in spec.json
+Read the top of queries.txt (line limit) before SQL. Two thresholds are in spec.json
 (min market cap, min growth percent). They are edited in
 run_growth_radar_local_main when the file is run with no arguments.
 
@@ -544,6 +667,103 @@ pe_hist_pct is the shortlist trailing-PE span. CHEAPER is <= -5.
 Industry overflow stays in revenue_overflow and earnings_overflow.
 No canvas unless this block also says canvas output.
 No logs/_tmp_*.py. No blended growth score.
+
+
+--- MOVEMENT OPPORTUNITY (trading 1-10, day-to-day) ---
+Trading movement scan. Not Daily leftover, not movers, not a 0-100.
+
+@.claude/skills/movement-opportunity/SKILL.md
+@.claude/skills/generic-vs-domain/SKILL.md
+@.claude/skills/tv-dataset-analysis/SKILL.md
+
+python src/run_movement_opportunity.py
+Output: duckdb output
+Folder: logs/tradingview_analysis/movement_opportunity/runs/movement_opportunity_<stamp>/
+  movement_opportunity.duckdb, queries.txt, overview.log, highlights.log, spec.json
+
+Read the top of queries.txt (task blocks, line limit) before SQL. Grep the rest.
+Floor and history_days are in spec.json. Edit them in
+run_movement_opportunity_local_main, or pass --min-mcap and --history-days.
+Same dump: python src/run_financial_projection.py --mode movement
+
+upside_10 and downside_10 are 1-10 heuristics from named up_* / dn_*
+components. Cite the components. Thin coverage cannot print above 6.
+path_class is OPENING, DYING, CHEAPER, FLAT, or THIN_HIST. exp_move_20d is
+ATRP times sqrt(20). Size, not quality. MTP ENTER_SMALL is climate.
+Table evidence is how well this can be done. Do not claim a 20d hit rate.
+No canvas unless this block also says canvas output.
+No logs/_tmp_*.py. No blended 0-100.
+
+
+--- GMV LENS (growth / estimates / momentum / volume / value) ---
+Growth and movement names on the day history. Not a Daily budget, not a 0-100.
+
+Output: canvas output
+
+@.claude/skills/gmv-lens/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
+
+Data (the daily refresh already wrote it; rerun only when PACK/gmv/ is missing):
+  python src/run_gmv_lens.py --pack PACK --out-dir PACK/gmv
+  (fresh inputs first: python src/run_gmv_lens.py --full-flow; a filled prompt for this block:
+  python src/run_gmv_lens.py --print-prompt)
+Read PACK/gmv/highlights.log, then the Evidence rows (queries.txt task 4).
+Say which lenses and profiles led later closes lately (ic_mean, ic_recent3) and lean on
+those profiles; a lens with negative IC is shown, not trusted.
+Per name that could take capital: example_entry.py stance SYM ... --line, then entry-book.
+Short term = BREAKOUT / VALUE_TURN / FADE with a trigger and a kill; mid term = COMPOUNDER /
+RERATE / ALL5 with an entry band. tape_state PULLBACK on a COMPOUNDER is the rebound case;
+EXTENDED waits for a band. Earnings inside 10 sessions (dte) is an event, not a NEW.
+Write courses and pages.gmv blocks (focus_0 stats, focus_1 callout, focus_2 table rows
+[Symbol, Profile, Course, Horizon, Trigger, Reason], growth_0, movement_0, fade_0, book_0,
+evidence_0) into the day judgment, then:
+  python src/generic_utils/tv_scan_cli.py page --template gmv --day YYYYMMDD --judgment JUDGMENT --out-dir RUN_DIR --strict
+EXCHANGE:TICKER everywhere. Daily budget still binds. No logs/_tmp_*.py.
+
+
+--- DEEP DIVE (named themes / tickers: discount, bounce band, kill, add, trim) ---
+Custom page on a named set. Not a Daily budget, not a 0-100.
+
+Output: canvas output
+
+@.claude/skills/watchlist-deep-dive/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
+
+Names / themes: <tickers and/or theme names from config/generic_utils/themes.json>
+1. python src/generic_utils/tv_scan_cli.py page-run --day YYYYMMDD --mode ide   (RUN_DIR)
+2. python src/generic_utils/tv_scan_cli.py deep-dive --day YYYYMMDD --theme ... --ids ... --out-dir RUN_DIR
+3. Read RUN_DIR/name_levels with named --line (no ad-hoc SQL); add OUTSIDE context (dated, linked).
+4. Write RUN_DIR/judgment.json (courses + pages.deepdive blocks; shapes in the skill), then rerun step 2
+   with --levels-dir RUN_DIR/name_levels --judgment RUN_DIR/judgment.json --strict.
+EXCHANGE:TICKER everywhere. The Daily budget still binds. No logs/_tmp_*.py.
+
+
+--- DISCOUNT PATH (history + peer gap + balance sheet) ---
+Discount scan. Not Daily leftover, not movers, not a 0-100.
+
+@.claude/skills/generic-vs-domain/SKILL.md
+@.claude/skills/tv-dataset-analysis/SKILL.md
+
+python src/run_discount_path.py
+Output: duckdb output
+Folder: logs/tradingview_analysis/discount_path/runs/discount_path_<stamp>/
+  discount_path.duckdb, queries.txt, overview.log, spec.json
+
+Read the top of queries.txt (task blocks, line limit) before SQL. Grep the rest.
+months and the market-cap floor are in spec.json. Edit them in
+run_discount_path_local_main, or pass --months and --min-mcap.
+--months 0 keeps every dated all-fields file.
+
+discount_tape is every loaded name. reading is the where in query 1.
+FIELD_up_pct is the gap if that multiple went to the industry median.
+Do not add those percents. widest_up_pct is the largest one.
+FIELD_pct negative means the last print is below the first.
+FIELD_path CHEAPER needs both ends positive and a drop of 5 percent or more.
+strength_read is net_cash, covered, levered, open, or thin.
+street_left is the street target versus close. It is not FIELD_up_pct.
+pe_fwd and evebitda_fwd are the projection. They are not on the history span.
+No canvas unless this block also says canvas output.
+No logs/_tmp_*.py. No blended discount score.
 
 
 --- OVERRIDES (append, keep blank lines unused) ---

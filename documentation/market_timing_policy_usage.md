@@ -127,6 +127,39 @@ invalidation. Pullback and continuation setups use a five-day maximum hold and
 1.0 ATR invalidation. Risk units are normalized sleeve units, not account-dollar
 position sizes.
 
+Those ATR widths are also prices on `action_policy_recommendations`. The same
+function is `generic_utils.timing_levels`, so a tape that is not in the timing
+universe can be priced without a second formula.
+
+| Column | Meaning |
+|---|---|
+| `entry_low` / `entry_high` | The buy band. Above the 50-day it runs from the average to the close. Under it, the band starts at the 50-day. |
+| `sma_role` | `stop_below` or `reclaim`. A reclaim row is not a buy at the close. |
+| `trim_px` / `trim_state` | First trim. `trim_at_sma` is the 50-day. `through_average` leaves `trim_px` empty. |
+| `kill_px` | `stop_atr_units` times ATR under the band. This is the timing invalidation, not the 1.5 ATR book kill from `entry-book`. |
+| `thesis_drawdown_px` | Recent high times 0.90. `in_drawdown` means the close is already through it. A close back above it ends that drawdown leg. |
+| `thesis_chase_px` | A 5% day off the prior close. `through_chase` is the print that can become `AVOID_CHASE` next session if breadth is not expanding. |
+| `street_up_pct` / `downside_atr_pct` / `up_down_ratio` | Street upside, 1.5 times ATRP, and the ratio. The ratio is not a score. |
+
+`ENTER_SMALL` remains climate. The prices do not authorize a new line.
+
+Any CSV, manual:
+
+```powershell
+python src/generic_utils/tv_scan_cli.py timing-levels --csv TAPE.csv --out-dir RUN/timing_levels
+python src/generic_utils/tv_scan_cli.py timing-levels --csv TAPE.csv --screen --out-dir RUN/timing_levels
+```
+
+`--screen` applies `config/generic_utils/low_downside.json` after the prices.
+That where-string is the caller's filter. Edit the JSON. It is not inside
+`ranking.py`.
+
+Industry path, median so one large name does not set the group:
+
+```powershell
+python src/generic_utils/tv_scan_cli.py group --csv TAPE.csv --by industry --metrics m1,m3,pre --min-n 6 --center median
+```
+
 ## Same-Day Scans
 
 Same-day scan history is optional evidence, not a requirement.

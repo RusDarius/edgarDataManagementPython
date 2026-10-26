@@ -191,6 +191,26 @@ FIELD_MEANINGS: dict[str, str] = {
     "pre_repeat": "True when pre_chg on the later file matches the prior file. The later file did not refresh premarket.",
     "left": "Unused upside %, max(street PT, edge forward upside). Not mix.",
     "rr": "leftover / max(52-week range used, 15). High means unused upside versus range already paid.",
+    "alloc_sleeve": "discount_momentum or premium_strength. Empty means the row is not on the payoff focus.",
+    "discount_momentum": "alloc_sleeve. Quoted multiple at least 5% cheaper than the industry median, and weeks bo at least the recipe momentum floor.",
+    "premium_strength": "alloc_sleeve. Quoted multiple at least 5% richer than the industry median, and weeks bo at least the recipe strength floor.",
+    "up_from_entry_pct": "Percent from entry_high up to exit_target. The upside width of the band.",
+    "down_from_entry_pct": "Percent from entry_high down to exit_stop. Negative. The downside width of the band.",
+    "band_payoff": "Upside distance from entry_high to exit_target, divided by the distance down to exit_stop. Sort key for the ten-name focus. Not rr and not a 0-100.",
+    "stake_per_1k_usd": "Dollars that earn 1000 if exit_target prints. 10% upside is 10000. 50% upside is 2000.",
+    "profit_on_10k_usd": "Dollar profit on a 10000 check if the upside percent prints. 10% upside is 1000.",
+    "profit_on_5k_usd": "Dollar profit on a 5000 check if the upside percent prints. 50% upside is 2500.",
+    "focus_order": "Reading order inside the payoff focus. Not a Daily rank and not a 0-100.",
+    "cycle_read": "peak_margin, earn_leads, rev_carries, or thin. A label for whether earnings are carrying a cycle, not a rank.",
+    "peak_margin": "cycle_read. Net margin is at or above the recipe peak floor, default 40 percent.",
+    "earn_leads": "cycle_read. Earnings growth beats revenue growth by the recipe gap. Revenue is not the carrier.",
+    "rev_carries": "cycle_read. Revenue growth and net margin clear their floors, and peak_margin and earn_leads are off.",
+    "pb_read": "DISCOUNT, PREMIUM, or INLINE on pb_vs_ind. DISCOUNT is at or below -5. The percent is pb_vs_ind.",
+    "seat_pct": "Where the close sits in the window from close_min to close_max. 0 is the low. 100 is the high.",
+    "dd_from_high_pct": "Close versus the window high, percent. Negative when the close is under that high.",
+    "up_from_low_pct": "Close versus the window low, percent.",
+    "resilient": "True when cycle_read is rev_carries, pb_read is DISCOUNT, seat_pct is at or under the recipe seat max, and base_effect is false. A label, not a 0-100.",
+    "base_effect": "True when revenue or earnings growth is at or above 300 percent. A tiny starting base, not a growth rate to underwrite.",
     "bo": "Weeks breakout_long_v1. Strength, not a blend with leftover.",
     "cont": "Weeks quality_continuation_v1.",
     "fwd": "Weeks forward_edge_active_v2.",
@@ -209,6 +229,13 @@ FIELD_MEANINGS: dict[str, str] = {
     "eff_vs_avg": "Percent versus the industry average of the efficiency field. Separate from eff_vs_ind.",
     "eff_ind_avg": "Industry average of the efficiency field.",
     "tech_sma": "ABOVE or BELOW the 50-day average. ABOVE is vs50 >= 0. The percent gap is vs50.",
+    "entry_low": "Bottom of the buy band from generic_utils.entry_book. Not a score.",
+    "entry_high": "Top of the buy band. The buy is entry_low to entry_high. Do not buy a reclaim at the close.",
+    "trim_px": "First trim. The 50-day when trim_state is trim_at_sma. Empty when through_average. Not the kill.",
+    "trim_state": "trim_at_sma, through_average, at_average, or unknown.",
+    "kill_px": "Same price as exit_stop. 1.5 ATR under the band. A print there ends this entry.",
+    "mark_vs_band": "inside, above_band, below_band, or unknown versus today's close. Not a course.",
+    "sma_role": "reclaim, stop_below, or at_average. How the 50-day sits versus the band.",
     "tech_sma200": "ABOVE or BELOW the 200-day average. The percent gap is vs200.",
     "tech_rng": "UNUSED (rng under 40), MID, or PAID (rng at least 85). The position is rng, not this label.",
     "fwd_street_px": "Street analyst target in dollars.",
@@ -237,6 +264,36 @@ FIELD_MEANINGS: dict[str, str] = {
     "bo_chg": "bo_last minus bo_first. Not a 0-100.",
     "n": "Number of observations in a span.",
     "as_of": "Date label of that history row.",
+    "upside_10": "1-10 trading-upside heuristic from named up_* components. Not leftover, not mix, not a probability. Thin coverage cannot print above 6.",
+    "downside_10": "1-10 trading-downside heuristic from named dn_* components. Not a 0-100. Thin coverage cannot print above 6.",
+    "up_minus_dn": "upside_10 minus downside_10. A gap, not a score.",
+    "up_asymmetric_payoff": "0-1 upside part: leftover, rr, unused range, OPENING/CHEAPER. Not a 0-100.",
+    "up_structure_conviction": "0-1 upside part: live bo/cont/fwd, recov, mix. Mix avoid cuts this. Not leftover.",
+    "up_valuation_growth": "0-1 upside part: peer DISCOUNT, val_vs_ind, fp_rev_cagr_own, cheaper PE span.",
+    "up_timing_catalyst": "0-1 upside part: MTP climate, dte 8-21, punished BOUNCE. ENTER_SMALL is not a buy list.",
+    "up_move_fuel": "0-1 upside part: expected-move size, coiled leftover, relvol. ATRP is size, not quality.",
+    "dn_fragility_trend": "0-1 downside part: frag, vs50 down, DYING, CONTINUE_DOWN, drawdown.",
+    "dn_valuation_ceiling": "0-1 downside part: PREMIUM, paid rng, leftover gone.",
+    "dn_exhaustion_reversal": "0-1 downside part: RSI stretch, exh, giveback from the window high.",
+    "dn_edge_risk": "0-1 downside part: lean AVOID/downside, mix avoid.",
+    "dn_vol_amplification": "0-1 downside part: high velocity with negative tilt. ATRP has negative IC as a rank.",
+    "up_cover_frac": "Share of upside recipe weights that had a value. Under 0.4 is thin_up.",
+    "dn_cover_frac": "Share of downside recipe weights that had a value. Under 0.4 is thin_dn.",
+    "thin_up": "True when up_cover_frac is under 0.4. upside_10 cannot print above 6.",
+    "thin_dn": "True when dn_cover_frac is under 0.4. downside_10 cannot print above 6.",
+    "path_class": "OPENING, DYING, CHEAPER, FLAT, or THIN_HIST. OPENING/DYING/CHEAPER match analysis-style. DYING wins. Enough history that is none of those is FLAT. First-iteration CHEAPER uses pe_pct.",
+    "vol_class": "coiled, active_swing, high_velocity, extreme, or thin. Realized close_step_abs_mean_pct, else ATRP.",
+    "exp_move_20d": "Expected-move envelope, percent, over 20 trading days: ATRP times sqrt(20). Size, not leftover quality.",
+    "exp_move_primary_d": "Expected-move envelope at the recipe primary horizon (default 20d).",
+    "close_step_abs_mean_pct": "Mean absolute day-to-day close change, percent, on the history span.",
+    "close_step_stdev_pct": "Stdev of day-to-day close changes, percent.",
+    "close_step_up_rate": "Share of close steps that were up. 0-1, not a 0-100.",
+    "close_max_drawdown_pct": "Worst peak-to-trough close drawdown on the span, percent. Negative.",
+    "close_giveback_from_max_pct": "Last close versus the span high, percent. Negative when off the high.",
+    "close_rebound_from_min_pct": "Last close versus the span low, percent.",
+    "close_seat_pct": "Where the last close sits between span low and high. 0 is the low. 100 is the high.",
+    "ic_cited": "Spearman IC quoted from the first-iteration research backtest. Not a leftover gate.",
+    "ic_live": "Spearman IC from the newest family_metrics.csv when that family is on disk.",
 }
 
 SELECTION_FIELDS: tuple[str, ...] = (
@@ -276,6 +333,13 @@ SELECTION_FIELDS: tuple[str, ...] = (
     "tech_sma",
     "tech_sma200",
     "tech_rng",
+    "entry_low",
+    "entry_high",
+    "trim_px",
+    "trim_state",
+    "kill_px",
+    "mark_vs_band",
+    "sma_role",
     "peer",
     "val_vs_ind",
     "val_ind_med",
@@ -368,6 +432,16 @@ def _field_line(name: str) -> str:
         meaning = f"Industry median of {name[: -len('_ind_med')]}."
     if meaning is None and name.endswith("_ind_avg"):
         meaning = f"Industry average of {name[: -len('_ind_avg')]}."
+    if meaning is None and "_step_" in name:
+        meaning = (
+            "Day-to-day step statistic from series_span(include_steps=True). "
+            "Not a 0-100 and not leftover."
+        )
+    if meaning is None and name.startswith("exp_move_") and name.endswith("d"):
+        meaning = (
+            "Expected-move envelope, percent, over that many trading days: "
+            "ATRP times sqrt(horizon). Size, not quality."
+        )
     if meaning:
         return f"  {name} — {meaning}"
     return f"  {name} — On this table. Not blended into a score."
@@ -401,6 +475,7 @@ def write_query_guide(
         "In SQL the leftover column must be quoted as \"left\".",
         "A label is a bin. The percent beside it is the coverage, so a 1% gap and a 40% gap are not the same word.",
         "  tech_sma ABOVE/BELOW — read vs50 (percent versus the 50-day average). tech_sma200 uses vs200.",
+        "  entry_low to entry_high is the buy band. kill_px ends that entry. tech_sma and vs50 stay on the row.",
         "  tech_rng UNUSED/MID/PAID — read rng (0-100 in the 52-week range).",
         "  peer DISCOUNT/PREMIUM/INLINE uses val_vs_ind only (percent versus the industry median on val_field).",
         "  Trailing TV bins are separate columns: pe_peer, evebitda_peer, pb_peer, evfcf_peer. Each uses that field's own _vs_ind. The multiple is the TradingView field as published.",

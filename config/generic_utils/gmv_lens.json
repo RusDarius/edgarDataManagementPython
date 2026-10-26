@@ -1,0 +1,73 @@
+{
+  "name": "gmv_lens",
+  "description": "Growth / revisions / momentum / participation / value lenses on the all-fields day history. Each lens is the median percentile of its visible parts; lenses are never added. A profile orders names by its weakest lens. Volatility is a denominator and an envelope size, never a lens.",
+  "min_market_cap_usd": 1000000000,
+  "history_mcap_frac": 0.5,
+  "exchanges": ["NASDAQ", "NYSE", "AMEX"],
+  "types": ["stock", "dr"],
+  "history_newest": 200,
+  "group_field": "ind",
+  "peer_min_n": 6,
+  "windows": {
+    "short_days": 30,
+    "trend_days": 91,
+    "volume_days": 30,
+    "base_tolerance_days": 10,
+    "trend_min_points": 20,
+    "volume_min_points": 8
+  },
+  "split_guard": {
+    "max_gap_days": 5,
+    "jump_ratio": 1.8,
+    "day_change_max_pct": 25.0
+  },
+  "revision_step_max_pct": 25.0,
+  "growth_quote_max_pct": 300.0,
+  "min_parts": 2,
+  "lenses": {
+    "G": {
+      "label": "Growth",
+      "parts": {"fwd_rev_g": 1, "fwd_eps_g": 1, "rev_yoy": 1, "earn_yoy": 1}
+    },
+    "E": {
+      "label": "Estimates",
+      "parts": {"eps_rev_3m": 1, "eps_rev_breadth": 1, "rev_rev_3m": 1, "pt_drift_3m": 1, "eps_surprise": 1}
+    },
+    "M": {
+      "label": "Momentum",
+      "parts": {"r_3m": 1, "trend_q": 1, "r_3m_per_vol": 1, "hi_prox": 1}
+    },
+    "P": {
+      "label": "Participation",
+      "parts": {"updown_vol": 1, "accum_3m": 1, "vol_trend": 1}
+    },
+    "V": {
+      "label": "Value",
+      "parts": {"pe_nfy_vs_ind": -1, "evebitda_vs_ind": -1, "peg_fwd": -1, "pt_left": 1}
+    }
+  },
+  "profiles": {
+    "COMPOUNDER": {"lenses": ["G", "E", "M"], "horizon": "mid", "top": 12, "read": "Growth that estimates and the tape both confirm. Value is shown, not used."},
+    "RERATE": {"lenses": ["G", "E", "V"], "horizon": "mid", "top": 12, "read": "Growth with rising estimates that still trades cheap to peers. Momentum is not needed: often early."},
+    "BREAKOUT": {"lenses": ["M", "P", "E"], "horizon": "short", "top": 12, "read": "Trend with volume behind it and estimates moving up. A short-term trade, not a valuation call."},
+    "VALUE_TURN": {"lenses": ["V", "E", "P"], "horizon": "short-mid", "top": 10, "read": "Cheap names where estimates turn up and buyers return. The rebound case with evidence."},
+    "ALL5": {"lenses": ["G", "E", "M", "P", "V"], "horizon": "mid", "top": 10, "read": "No weak lens of the five."},
+    "FADE": {"lenses": ["M", "E", "P"], "invert": true, "horizon": "short", "top": 12, "read": "Weak trend, falling estimates, and sellers in control together. Short candidates, not an automatic short."}
+  },
+  "industry_cap": 2,
+  "focus_max": 50,
+  "tape_state": {
+    "trend_q_up": 0.35,
+    "trend_q_down": -0.35,
+    "pullback_r_1m_max": -4.0,
+    "extended_hi_prox_min": -2.0,
+    "extended_r_1m_min": 15.0
+  },
+  "evidence": {
+    "step_days": 7,
+    "horizons_days": [14, 28],
+    "forward_tolerance_days": 6,
+    "min_names": 200,
+    "top_frac": 0.2
+  }
+}

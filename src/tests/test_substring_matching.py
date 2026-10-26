@@ -5,6 +5,10 @@ This test demonstrates that the function now finds all tags containing the searc
 # AI-GENERATED: Code created by AI assistant for testing substring matching functionality
 """
 
+import pytest
+
+pytestmark = pytest.mark.network  # downloads live SEC/EDGAR filings
+
 import sys
 import os
 

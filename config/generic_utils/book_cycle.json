@@ -1,0 +1,30 @@
+{
+  "name": "book_cycle",
+  "industries": [
+    "Semiconductors",
+    "Computer Peripherals",
+    "Computer Processing Hardware",
+    "Electronic Production Equipment",
+    "Electronic Components",
+    "Electronic Equipment/Instruments",
+    "Data Processing Services",
+    "Telecommunications Equipment",
+    "Electrical Products"
+  ],
+  "min_rev_growth": 10,
+  "min_net_margin": 8,
+  "peak_net_margin": 40,
+  "earn_lead_gap": 25,
+  "growth_quote_max": 300,
+  "pb_discount_max": -5,
+  "seat_max": 85,
+  "symbol_fields": ["symbol"],
+  "close_fields": ["close", "close_last"],
+  "pb_fields": ["pb", "price_book_fq", "price_book_ratio"],
+  "pb_vs_fields": ["pb_vs_ind"],
+  "rev_fields": ["rev_yoy", "total_revenue_yoy_growth_ttm", "rev_growth"],
+  "earn_fields": ["earn_yoy", "net_income_yoy_growth_ttm", "earn_growth"],
+  "margin_fields": ["net_margin", "net_margin_ttm"],
+  "low_fields": ["close_min"],
+  "high_fields": ["close_max"]
+}

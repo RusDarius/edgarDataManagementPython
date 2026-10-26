@@ -1,3 +1,6 @@
+# Manual network script (run with __main__), not a pytest module: its functions take real CIKs.
+__test__ = False
+
 from data_loaders.api_client import ApiClient
 
 from generic_utils.accept_utf8_encoding import accept_utf8_encoding

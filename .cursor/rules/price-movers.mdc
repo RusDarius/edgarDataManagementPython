@@ -7,7 +7,7 @@ alwaysApply: false
 
 When the user wants movers, groovers, or whether tape is supported:
 
-1. Read `.cursor/skills/price-movers/SKILL.md`.
+1. Read `.claude/skills/price-movers/SKILL.md`.
 2. On DAILY (full), update the **Tape** section on `daily-focus-YYYYMMDD` — condensed clusters, not four Daily tabs.
 3. Tape-only / --- MOVERS (day / 5D / 1M) ---: one canvas `movers-YYYYMMDD`. All those horizons on that file. Do not split `movers-day-*` / `movers-5d-*` / `movers-1m-*`.
 4. 3M: `src/research_prompt/movers_generic.txt` + `config/generic_utils/movers_3m.json` → `movers-3m-YYYYMMDD`. Do not @ `src/research_prompt/daily_generic.txt`.

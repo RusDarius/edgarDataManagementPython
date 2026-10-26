@@ -26,7 +26,7 @@ from data_analysis_scripts._shared_analysis_utils import (
     slugify as _slugify,
     sort_key_desc as _sort_key_desc,
 )
-from generic_utils.log_to_files_util import log_to_file, log_rows_to_csv
+from generic_utils.log_to_files_util import buffer_log_writes, log_to_file, log_rows_to_csv
 from data_loaders.api_tradingview_client import ApiTradingViewClient
 
 LOG_DIR = Path(
@@ -8864,6 +8864,7 @@ def _flatten_earnings_priority_entries(
     return ordered_entries
 
 
+@buffer_log_writes
 def _log_earnings_priority_report(
     log_file: Path,
     entries: list[dict[str, Any]],
@@ -9030,6 +9031,7 @@ def _log_earnings_priority_report(
     log_to_file(log_file, "")
 
 
+@buffer_log_writes
 def _log_earnings_priority_report_for_profile(
     log_file: Path,
     entries: list[dict[str, Any]],

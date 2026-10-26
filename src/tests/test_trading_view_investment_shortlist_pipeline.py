@@ -165,7 +165,7 @@ class TestTradingViewInvestmentShortlistPipeline(unittest.TestCase):
             "q_early_inflection_aroon_flip",
         )
         self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["symbol"], "FLIP")
+        self.assertEqual(rows[0]["symbol"], "NASDAQ:FLIP")  # ids stay EXCHANGE:TICKER (symbol_identity output contract)
         self.assertGreater(rows[0]["aroon_spread_raw"], 0)
 
     def test_run_profile_raw_validation_report_returns_leader_rows(self):

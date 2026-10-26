@@ -15,6 +15,10 @@ Example ADSH values from FDX missing filings report:
 """
 
 
+import pytest
+
+pytestmark = pytest.mark.network  # downloads live SEC/EDGAR filings
+
 from data_loaders.sec_api_loaders.fetch_and_parse_submission_for_financial_concept_by_cik_and_adsh import (
     fetch_and_parse_submission_for_financial_concept_by_cik_and_adsh,
 )

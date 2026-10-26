@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -17,7 +18,9 @@ def _repo_root() -> Path:
 
 
 def plots_root() -> Path:
-    return _repo_root() / "plots"
+    """Repo `plots/`, or $TV_PLOTS_ROOT when set (tests point it at a temp dir)."""
+    override = os.environ.get("TV_PLOTS_ROOT")
+    return Path(override) if override else _repo_root() / "plots"
 
 
 def backwards_plots_root() -> Path:

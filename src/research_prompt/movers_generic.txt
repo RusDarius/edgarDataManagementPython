@@ -1,5 +1,8 @@
 MOVERS — TAPE-ONLY / 3M
 =======================
+CANVAS = operator HTML page: JSON spec in logs/canvases/, rendered by
+tv_scan_cli.py page (.claude/skills/canvas-ledger/SKILL.md). Not a Cursor .canvas.tsx.
+IDS = every stock is EXCHANGE:TICKER (NASDAQ:MU) in tables, pages, judgment, priors and chat; a bare ticker is input only.
 Do not attach this file on DAILY (full). DAILY already has one Tape section
 (day / week / 5D / 1M) on daily-focus-YYYYMMDD.
 
@@ -10,7 +13,7 @@ stacked H2s on Tape). Do not split movers-day / movers-5d / movers-1m.
 3M = movers-3m-YYYYMMDD. A new horizon = another JSON under
 config/generic_utils/, not another canvas per period and not a new skill.
 
-@.cursor/skills/price-movers/SKILL.md
+@.claude/skills/price-movers/SKILL.md
 Recipe: config/generic_utils/movers_day.json  (3M: movers_3m.json)
 Cover: top 25 up by that horizon’s return (best → least, no industry cap)
 and bottom 25 punished names as a pool. Downside is not leftover-first:

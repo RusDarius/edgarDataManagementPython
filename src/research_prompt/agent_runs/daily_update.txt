@@ -1,0 +1,16 @@
+DAILY (update: latest data, same judgment). Day {DAY}.
+
+The runner (src/run_operator_day.py) already refreshed the scans, compiled the pack,
+wrote the dumps, replayed today's capital plans and scans, re-rendered the pages with
+the existing judgment, and wrote the delta report. Pack: {PACK}.
+Refresh record: {REFRESH_JSON}
+Run folder: {RUN_DIR} (update.md, judgment.prev.json and the re-rendered pages are there).
+
+@.claude/skills/daily-update/SKILL.md
+
+Start at step 2 of that skill: read {RUN_DIR}/update.md only.
+Edit courses / page blocks for the flagged names in {JUDGMENT},
+set reviewed_pack, re-render every page in one call (tv_scan_cli.py page-all --day {DAY} --judgment {JUDGMENT} --out-dir {RUN_DIR} --strict), run tv_scan_cli.py priors --day {DAY} for the
+changed names only. One OUTSIDE search on the session / after-hours for flagged names is
+allowed. A new line still means about $5,000; adds about $1,000.
+Final message: changed names and course flips, cash after, the update.md path, page links.

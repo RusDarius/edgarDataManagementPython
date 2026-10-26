@@ -55,6 +55,8 @@ leftover gate.
   prediction          prediction_analysis. Weeks bo / cont / fwd on the pack tape.
   edge                edge_research upside. Pack leftover is max(street PT, edge).
   market timing       market_timing_policy. On the pack row. Not a buy list.
+                      action_policy_recommendations also has entry_low,
+                      kill_px, thesis_drawdown_px, thesis_chase_px.
   backtest            backtests/runs/*/family_metrics.csv. Rank spearman_ic.
   value projection    finproj_* and fingrowth_*. Joined as fp_* on forward_value.
 
@@ -89,6 +91,18 @@ movers_3m, risk). datasets/ names the six sources and, when a backtest
 run exists, family_metrics.
 
 
+--- PREMARKET BOOK (not a compile) ---
+What: Book plus a caller context list, marked with this morning's premarket
+      when the percent was refreshed. Not the Daily ranking.
+Manual:
+  python src/generic_utils/tv_scan_cli.py premarket-book
+Folder: logs/.../operator_briefing/runs/premarket_book_<stamp>/
+  premarket_book.duckdb, queries.txt, overview.log
+pre_repeat true means premarket_change was not refreshed. pre_px is empty then.
+Context names live in config/generic_utils/premarket_book.json. They are not a buy list.
+Agent: paste --- PREMARKET BOOK --- . Skill note: .claude/skills/book-risk/SKILL.md
+
+
 --- DAILY ---
 What: Lock today's leftover, Build-50, Book, shorts, earnings, tape tails.
 Manual:
@@ -98,6 +112,17 @@ Folder: logs/.../operator_briefing/runs/briefing_pack_<stamp>/
   briefing_pack.duckdb, queries.txt, overview.log, briefing_pack.md
 Agent: paste --- DAILY (full) --- . Output line is duckdb output.
   Add canvas output on that block only when you want daily-focus-YYYYMMDD.
+  The ten-name band is payoff-focus on radar_curated_50. See --- PAYOFF FOCUS ---.
+
+
+--- BEST TRADES (DAILY + MOVERS + PLAYBOOK + GMV + outside wisdom, one run) ---
+What: Fresh scans + compile + dumps, then the agent run for all four pages, short-term
+  and mid-term trade cards, shorts, capital recycle, outside news, and closing scan /
+  backtest suggestions.
+Manual:
+  python src/run_operator_day.py --agent --mode full [--print-prompt] [--no-producers]
+Folder: logs/canvases/YYYYMMDD/HHMM_full/ (pages, prompt.txt, agent.log, judgment.json).
+Agent: paste --- BEST TRADES --- . Prompt: src/research_prompt/agent_runs/daily_full.txt
 
 
 --- DAILY (reuse the pack) ---
@@ -108,6 +133,44 @@ Folder: the newest briefing_pack_*/ from FIND THE LATEST FOLDER.
 Agent: paste --- DAILY (pack already good) --- . Do not recompile.
 
 
+--- OPERATOR DAY (one command: manual brief or agent run) ---
+What: Everything above in one call.
+Manual:
+  python src/run_operator_day.py                    # manual: scans + compile + dumps + *-manual.html
+  python src/run_operator_day.py --agent            # + headless Claude: full Daily, or UPDATE if today's judgment exists
+  python src/run_operator_day.py --agent --mode full|update
+  python src/run_operator_day.py --agent --print-prompt   # print the prompt to paste in the IDE
+  python src/run_operator_day.py --no-producers ... # reuse newest scans
+Agent prompts: src/research_prompt/agent_runs/daily_full.txt, daily_update.txt
+Folder per run: logs/canvases/<day>/<HHMM>_<full|update|manual>/ (pages, run.json, prompt.txt,
+  agent.log, judgment snapshots, update.md). Live judgment: logs/canvases/<day>/judgment.json.
+  Index of every day and run: logs/canvases/index.html.
+Claude CLI: $CLAUDE_CLI, PATH, or the IDE extension binary.
+
+
+--- REFRESH (manual brief: scans + compile + all dumps) ---
+What: A fresh briefing from the latest data, no agent. Producers run as a
+  dependency graph (prediction || all-fields, then holdings / edge, then MTP),
+  then compile, then every suite dump in parallel.
+Manual:
+  python src/run_daily_refresh.py                 # full: scans + compile + dumps
+  python src/run_daily_refresh.py --pages         # + data-only pages -> logs/canvases/<day>/<HHMM>_manual/
+  python src/run_daily_refresh.py --no-producers  # reuse newest scans
+  python src/run_daily_refresh.py --serial        # one step at a time
+Folder: newest briefing_pack_*/ (movers/, playbook/, payoff_focus/, book_risk/,
+  entry_book_*, mesh_band/) and runs/refresh_<stamp>/refresh.json (step timings, logs).
+Steps: config/generic_utils/daily_refresh.json.
+
+
+--- DAILY UPDATE (agent: latest data, same judgment) ---
+What: Same refresh, then today's agent pages re-rendered with the existing
+  judgment, plus a delta report of what moved.
+Manual part:
+  python src/run_daily_refresh.py --update-day YYYYMMDD
+Folder: logs/canvases/YYYYMMDD/HHMM_update/ (update.md, update.json, judgment.prev.json, re-rendered pages).
+Agent: paste --- DAILY (update: latest data, same judgment) --- .
+
+
 --- BRIEF HISTORY (prior briefs vs later closes) ---
 What: One page on how earlier recommendations moved. Notes stay in the prior files.
 Manual:
@@ -116,21 +179,21 @@ Folder: logs/.../operator_briefing/runs/brief_history_<stamp>/
   digest.md, brief_history.duckdb, queries.txt, overview.log
 Read digest.md. One name: SELECT * FROM events WHERE ticker = 'MU'.
 Bands live in config/generic_utils/brief_history.json. Not a 0-100.
-Agent: paste --- BRIEF HISTORY --- . Skill: .cursor/skills/brief-history/SKILL.md
+Agent: paste --- BRIEF HISTORY --- . Skill: .claude/skills/brief-history/SKILL.md
 
 
 --- DECISION REVIEW (top 100 ranks vs later closes) ---
-What: One top-100 list per briefing day, later close, and a KEEP / CHANGE matrix.
-      Covers the published upside 100. A short day is filled from that pack's tape by rr.
+What: Upside-100 matrix, plus every name on the briefing tape.
+      highlights.log is the judgment. queries.txt items 1-10 pull every class.
+      name_path is one row per symbol. tape is every name every day.
 Manual:
   python src/run_decision_review.py
   python src/run_decision_review.py --top 100 --head 20 --tail 20 --min-n 12 --gap-pct 1
 Folder: logs/.../operator_briefing/runs/decision_review_<stamp>/
   highlights.log, decision_review.duckdb, queries.txt, overview.log, spec.json
-Read highlights.log. One day: SELECT * FROM ranks WHERE day = 'YYYY-MM-DD'.
-Backtests family_metrics is attached when a run already exists. Do not rerun
-python src/run_backtests.py for this review.
-Agent: paste --- DECISION REVIEW --- . Skill: .cursor/skills/decision-review/SKILL.md
+Read highlights.log, then queries.txt. One symbol: SELECT * FROM tape WHERE ticker = 'MU' ORDER BY day.
+Signal-family backtests are not attached unless --family-metrics is passed.
+Agent: paste --- DECISION REVIEW --- . Skill: .claude/skills/decision-review/SKILL.md
 
 
 --- STALE CHECK ---
@@ -149,7 +212,7 @@ Manual:
 Folder: that --out-dir. session.duckdb, post_earn.csv, queries.txt.
 pre_repeat true means premarket_change was not refreshed. Do not call it this morning.
 Agent: paste --- POST-EARN --- . Canvas post-earn-YYYYMMDD when the block says canvas output.
-Skill: .cursor/skills/post-earn/SKILL.md
+Skill: .claude/skills/post-earn/SKILL.md
 
 
 --- MOVERS (day / week / 5D / 1M) ---
@@ -224,7 +287,149 @@ Manual:
 Folder: logs/tradingview_analysis/growth_radar/runs/growth_radar_<stamp>/
   growth_radar.duckdb, queries.txt, overview.log, highlights.log, spec.json
 Agent: paste --- GROWTH RADAR --- . Not a Daily leftover ranking.
-Skill: .cursor/skills/growth-radar/SKILL.md
+Skill: .claude/skills/growth-radar/SKILL.md
+
+
+--- MOVEMENT OPPORTUNITY (trading 1-10, day-to-day) ---
+What: Day-to-day variation, expected-move envelope, and auditable 1-10
+      upside (focus) plus 1-10 downside across all project datasets.
+      Not Daily leftover, not movers tape, not a 0-100.
+      Floor and window are edited in run_movement_opportunity_local_main.
+Manual:
+  python src/run_movement_opportunity.py
+  python src/run_financial_projection.py --mode movement
+  python src/run_movement_opportunity.py --min-mcap 500000000 --history-days 30
+Folder: logs/tradingview_analysis/movement_opportunity/runs/movement_opportunity_<stamp>/
+  movement_opportunity.duckdb, queries.txt, overview.log, highlights.log, spec.json
+  Tables: movement_tape, upside_50, downside_30, bounce, evidence
+Agent: paste --- MOVEMENT OPPORTUNITY --- . Open queries.txt. The task SQL is at the top.
+Skill: .claude/skills/movement-opportunity/SKILL.md
+
+
+--- GMV LENS (growth / estimates / momentum / volume / value, day history) ---
+What: Five lenses on the all-fields day history (about 140 snapshots): G growth, E estimate
+      revisions, M trend, P up/down volume, V value vs industry. Each lens is the median
+      percentile of its parts; lenses are never added. Profiles (COMPOUNDER, RERATE,
+      BREAKOUT, VALUE_TURN, ALL5, FADE) order names by their weakest lens, so no hard
+      filter drops a name. A walk-forward check says which lens led later closes lately.
+      Runs in the daily refresh suites (about 35 s); knobs: config/generic_utils/gmv_lens.json.
+Manual:
+  python src/run_gmv_lens.py                          # data only, newest pack -> PACK/gmv
+  python src/run_gmv_lens.py --full-flow              # all-fields export + compile + pack dumps, then GMV
+  python src/run_gmv_lens.py --full-flow --no-export  # same without the TradingView export
+  python src/run_gmv_lens.py --page                   # + data-only page (logs/canvases/<day>/<HHMM>_gmv/)
+  python src/run_gmv_lens.py --print-prompt           # + page + prompt to paste (prompt mode)
+  python src/run_gmv_lens.py --agent                  # + page + headless Claude fills the page
+  python src/run_gmv_lens.py --no-evidence            # skip the walk-forward check
+Folder: PACK/gmv/ (or logs/tradingview_analysis/gmv_lens/runs/gmv_lens_<stamp>/ without a pack)
+  gmv_lens.duckdb, queries.txt (task SQL first), overview.log, highlights.log, spec.json
+  Tables: focus, profile_top, profile_overflow, book_lens, lens_tape, evidence, evidence_days
+Page: python src/generic_utils/tv_scan_cli.py page --template gmv --day YYYYMMDD --manual (or --judgment)
+In the day: run_daily_refresh.py and run_operator_day.py [--agent] already run and render GMV.
+Prompt: src/research_prompt/agent_runs/gmv.txt (filled by --print-prompt / --agent).
+Agent: paste --- GMV LENS --- . Not a Daily budget of its own.
+Skill: .claude/skills/gmv-lens/SKILL.md
+
+
+--- DEEP DIVE (named themes / tickers: discount, bounce band, kill, add, trim) ---
+What: name-levels (tape -> entry book -> GMV lens -> day history -> safety band) for themes in
+      config/generic_utils/themes.json and/or ids, then one page with a tab per theme.
+Manual:
+  python src/generic_utils/tv_scan_cli.py name-levels --pack PACK --theme ai_core,cyber --ids A,B --quiet
+  python src/generic_utils/tv_scan_cli.py theme-slice --theme ai_buildout --line
+  python src/generic_utils/tv_scan_cli.py deep-dive --day YYYYMMDD --theme ai_core,ai_peers,cyber --out-dir RUN_DIR
+Folder: PACK/analysis_scans/name_levels/ (or RUN_DIR/name_levels): names.csv, entry_book/, gmv_names.csv,
+  history.csv, safety_band/ (safety_band.duckdb); deep_dive_template.json + the page in RUN_DIR.
+Agent: paste --- DEEP DIVE --- . Skill: .claude/skills/watchlist-deep-dive/SKILL.md
+
+
+--- DISCOUNT PATH (history + peer gap + balance sheet) ---
+What: Which multiples got cheaper on a window, how far each sits from the
+      industry median, and whether the balance sheet is net cash, covered,
+      levered, open, or thin. Not a 0-100. Not Daily leftover.
+      months 3 is about 91 days. months 0 is every dated all-fields file.
+Manual:
+  python src/run_discount_path.py
+  python src/run_discount_path.py --months 0
+  python src/run_discount_path.py --months 3 --min-mcap 2000000000
+Folder: logs/tradingview_analysis/discount_path/runs/discount_path_<stamp>/
+  discount_path.duckdb, queries.txt, overview.log, spec.json
+  Tables: discount_tape, reading, pe_path, evrev_path, evebitda_path, pb_path, pb_fq_path, evfcf_path
+Agent: paste --- DISCOUNT PATH --- . Open queries.txt. The task SQL is at the top.
+Skill: .claude/skills/generic-vs-domain/SKILL.md (discount path row)
+
+
+--- ENTRY BOOK (buy band + thesis kill) ---
+What: Prices for where this row is a buy, where a held line trims, and where that entry dies.
+      A later close can open a new band. It does not move this kill.
+      Focus mode quotes entry_low to entry_high, trim_px / trim_state, and kill_px.
+Manual:
+  python src/generic_utils/tv_scan_cli.py entry-book --csv CATALOG.csv --out-dir RUN/entry_book
+  python src/generic_utils/tv_scan_cli.py entry-book --csv CATALOG.csv --mark-csv LATER.csv --out-dir RUN/entry_book
+Folder: that --out-dir. entry_book.csv, entry_book.duckdb, queries.txt.
+Starter about $5,000 and an add about $1,000 are advice columns, not a filter.
+Agent: paste --- ENTRY BOOK --- . Skill: .claude/skills/entry-book/SKILL.md
+
+
+--- TIMING LEVELS (entry, kill, thesis-change prices) ---
+What: The buy band, the timing kill, and two thesis-change prices.
+      kill_px uses 0.75 ATR on a two-day setup and 1.0 ATR otherwise.
+      The entry-book kill stays 1.5 ATR. They are different prices.
+      thesis_drawdown_px is 10% under the recent high.
+      thesis_chase_px is a 5% day off the prior close.
+      up_down_ratio is street upside divided by 1.5 ATR percent. Not a 0-100.
+      The MTP run writes the same prices on action_policy_recommendations.
+Manual:
+  python src/run_market_timing_policy.py
+  python src/generic_utils/tv_scan_cli.py timing-levels --csv TAPE.csv --out-dir RUN/timing_levels
+  python src/generic_utils/tv_scan_cli.py timing-levels --csv TAPE.csv --screen --out-dir RUN/timing_levels
+  python src/generic_utils/tv_scan_cli.py group --csv TAPE.csv --by industry --metrics m1,m3,pre --min-n 6 --center median
+Folder: timing_levels.csv, timing_screen.csv when --screen is set, timing_levels.duckdb, queries.txt.
+--screen reads config/generic_utils/low_downside.json. Edit that where. It is not a rank.
+Industry path uses the median. Mean is the default of group and is a different number.
+Agent: paste --- TIMING LEVELS --- . ENTER_SMALL stays climate.
+Skill: .claude/skills/entry-book/SKILL.md
+
+
+--- PAYOFF FOCUS (ten names, capital band) ---
+What: Discount with momentum, or strength at a premium. Ten names.
+      Order is band_payoff: upside from the buy band to value_px (year-1 PE
+      at the peer median), divided by the distance down to the stop.
+      discount_px brings the quoted multiple inline. Street stays separate.
+      Not a 0-100 and not rr.
+      stake_per_1k_usd is the check that earns $1,000. 10% upside is $10,000.
+      50% upside is $2,000. profit_on_5k_usd at 50% is $2,500.
+      profit_on_10k_usd at 10% is $1,000.
+Manual:
+  python src/generic_utils/tv_scan_cli.py payoff-focus --db PACK.duckdb --table radar_curated_50 --out-dir RUN/payoff_focus
+  python src/generic_utils/tv_scan_cli.py payoff-focus --csv TAPE.csv --top 10 --out-dir RUN/payoff_focus
+Folder: that --out-dir. payoff_focus.csv, payoff_qualified.csv, payoff_focus.duckdb, queries.txt.
+Knobs: config/generic_utils/payoff_focus.json
+Daily uses radar_curated_50. Playbook uses playbook.duckdb table radar_upside_100.
+The ten are not a NEW budget.
+
+
+--- BOOK CYCLE (P/B, margin, six-month high and low) ---
+What: Datacenter, semiconductor, and electronics infrastructure names.
+      Revenue growth versus earnings growth, net margin, and price to book.
+      The six-month low and high come from series_span.
+Manual:
+  python src/generic_utils/tv_scan_cli.py book-cycle --tape TAPE.csv --fund FUND.csv --span SPAN.csv --peer PEER.csv --out-dir RUN/book_cycle
+Folder: that --out-dir. book_cycle.csv, book_cycle_resilient.csv, book_cycle.duckdb, queries.txt.
+pb_vs_ind has to be computed on the full tape, not on this industry list alone.
+Pack pb was empty on 12 Oct. The fill is all-fields price_book_fq.
+Knobs: config/generic_utils/book_cycle.json
+Skill note: .claude/skills/growth-radar/SKILL.md and .claude/skills/generic-vs-domain/SKILL.md
+
+
+--- BOOK SESSIONS (holdings window + brief labels) ---
+What: Which names were held across a window, and the brief label if a digest exists.
+      Not the all-fields path. That stays CAPTURE.
+Manual:
+  python src/generic_utils/tv_scan_cli.py book-sessions --lookback-days 180 --briefs-db BRIEF_HISTORY.duckdb
+Folder: logs/.../operator_briefing/runs/book_sessions_<stamp>/
+  book_sessions.duckdb, queries.txt, overview.log
+Agent: part of a book review. Skill note: .claude/skills/capture-book/SKILL.md
 
 
 --- PLAYBOOK (100 + shorts + 25 weeks) ---
@@ -235,6 +440,7 @@ Folder: <newest briefing_pack>/playbook/
   playbook.duckdb, queries.txt, playbook.json, overview.log
   weeks_progression/weeks_progression.duckdb and its queries.txt
 Mesh letters and Best 25 are judgment. They are not in the dump.
+The ten-name band is payoff-focus on playbook.duckdb table radar_upside_100.
 Agent: paste --- PLAYBOOK (100 + best 25 + shorts + 25w) --- .
   Canvas playbook-YYYYMMDD only when that block says canvas output.
 
@@ -259,10 +465,11 @@ Agent: paste --- WISDOM / ALL SUITES --- .
 --- ANALYSIS STYLE ---
 What: Two orders on a payoff shortlist. ASYM sorted by rr. CONVICTION
   sorted by bo. Path class from a short all-fields span. News after that.
+  The ten-name band is support on that shortlist. It does not replace either order.
 Manual data: the wisdom command above. The rank step is the agent.
 Agent: paste --- ANALYSIS STYLE (active management) --- .
   Canvas analysis-style-YYYYMMDD only when that block says canvas output.
-Skill: .cursor/skills/analysis-style/SKILL.md
+Skill: .claude/skills/analysis-style/SKILL.md
 
 
 --- CAPTURE (whole book path) ---

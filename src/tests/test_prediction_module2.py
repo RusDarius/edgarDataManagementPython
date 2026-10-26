@@ -221,12 +221,15 @@ class TestModule2LeaderDisjointness(unittest.TestCase):
         self.assertLess(overlap, 0.25)
 
     def test_run_module2_profile_suite_writes_overlap_report(self):
+        from tempfile import TemporaryDirectory
+
         suite_path = CONFIG_ROOT / "suites" / "active_manager_module2_v1.json"
-        result = run_module2_profile_suite(
-            [_extended_momentum_row(), _oversold_repair_row()],
-            profile_suite_path=suite_path,
-            output_dir=Path(__file__).resolve().parent / "_tmp_module2_run",
-        )
+        with TemporaryDirectory() as tmp:
+            result = run_module2_profile_suite(
+                [_extended_momentum_row(), _oversold_repair_row()],
+                profile_suite_path=suite_path,
+                output_dir=Path(tmp) / "module2_run",
+            )
         self.assertIn("overlap_report", result)
         self.assertIn("profiles", result)
         swing_overlap = next(

@@ -273,6 +273,11 @@ def evaluate_timing_policy_row(
         "audit_trail_json": audit_trail_json,
         **evidence,
     }
+    from generic_utils.timing_levels import attach_timing_levels
+
+    policy_row.update(
+        attach_timing_levels({**row, "stop_atr_units": stop_atr_units})
+    )
     return timing_row, policy_row
 
 

@@ -19,6 +19,7 @@ from generic_utils.derive import leftover_pct
 from generic_utils.aggregations import weighted_group_stats
 from generic_utils.ranking import to_float
 from generic_utils.scan_sources import rows_from_csv
+from generic_utils.symbol_identity import display_id
 
 _PROJECT = Path(__file__).resolve().parents[2]
 DEFAULT_RECIPE = _PROJECT / "config" / "generic_utils" / "book_risk.json"
@@ -86,6 +87,92 @@ def atr_stop_price(
     if atr_f is not None:
         return round(close_f - float(mult) * atr_f, digits)
     return None
+
+
+def entry_levels(
+    close: Any,
+    vs50: Any,
+    *,
+    atr: Any = None,
+    atrp: Any = None,
+    cost: Any = None,
+    mult: float = 1.5,
+    digits: int = 2,
+) -> dict[str, Any]:
+    """Prices for a buy, an add, and a stop. No eligibility cutoff.
+
+    ``sma_role`` is ``stop_below`` when the close is above the 50-day, and
+    ``reclaim`` when the 50-day is overhead. The ATR print is the further stop.
+    ``c15`` is present only when a cost is passed.
+    """
+    sma = sma50_price(close, vs50, digits=digits)
+    stop = atr_stop_price(close, atr=atr, atrp=atrp, mult=mult, digits=digits)
+    vs = _f(vs50)
+    if sma is None or vs is None:
+        role = "unknown"
+    elif vs > 0:
+        role = "stop_below"
+    elif vs < 0:
+        role = "reclaim"
+    else:
+        role = "at_average"
+    return {
+        "sma50": sma,
+        "atr_stop": stop,
+        "c15": price_at_return(cost, -15.0, digits=digits) if _f(cost) is not None else None,
+        "sma_role": role,
+    }
+
+
+def entry_exit_band(
+    close: Any,
+    vs50: Any,
+    *,
+    atr: Any = None,
+    atrp: Any = None,
+    target: Any = None,
+    mult: float = 1.5,
+    band_atr: float = 0.5,
+    digits: int = 2,
+) -> dict[str, Any]:
+    """Entry band and two exit prices. No eligibility cutoff.
+
+    Above the 50-day, the band runs from that average up to the close.
+    Under it, the band starts at the 50-day and extends ``band_atr`` times ATR.
+    ``exit_stop`` is 1.5 ATR under the low of the band. ``exit_target`` is the
+    caller-supplied target, usually the street price. The two exits stay separate.
+    """
+    levels = entry_levels(close, vs50, atr=atr, atrp=atrp, mult=mult, digits=digits)
+    mark = _f(close)
+    sma = levels["sma50"]
+    role = levels["sma_role"]
+    atr_points = None
+    if mark is not None and _f(atrp) is not None:
+        atr_points = mark * float(_f(atrp)) / 100.0
+    elif _f(atr) is not None:
+        atr_points = float(_f(atr))
+    pad = (atr_points or 0.0) * float(band_atr)
+    if role == "reclaim" and sma is not None:
+        entry_low = sma
+        entry_high = round(sma + pad, digits)
+        exit_stop = atr_stop_price(sma, atr=atr, atrp=atrp, mult=mult, digits=digits)
+    elif sma is not None and mark is not None:
+        entry_low = min(sma, mark)
+        entry_high = max(sma, mark)
+        exit_stop = levels["atr_stop"]
+        if exit_stop is not None and entry_low is not None and exit_stop > entry_low:
+            exit_stop = entry_low
+    else:
+        entry_low = sma
+        entry_high = mark if mark is None else round(mark, digits)
+        exit_stop = levels["atr_stop"]
+    return {
+        "entry_low": None if entry_low is None else round(float(entry_low), digits),
+        "entry_high": None if entry_high is None else round(float(entry_high), digits),
+        "exit_stop": exit_stop,
+        "exit_target": None if _f(target) is None else round(float(_f(target)), digits),
+        "sma_role": role,
+    }
 
 
 def capital_snapshot(
@@ -560,11 +647,11 @@ def format_book_risk_md(payload: Mapping[str, Any]) -> str:
         "",
         "## Positions (USD close / USD cost)",
         "",
-        "| ticker | wt_nav | value | vs_cost | left | rsi | rng | vs50 | m10_usd | m10_nav | c15_usd | c15_nav | sma50_nav | atr_nav | trim33_cash | trim33_remain |",
+        "| symbol | wt_nav | value | vs_cost | left | rsi | rng | vs50 | m10_usd | m10_nav | c15_usd | c15_nav | sma50_nav | atr_nav | trim33_cash | trim33_remain |",
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for rec in positions:
-        ticker = rec.get("ticker") or rec.get("symbol") or ""
+        ticker = display_id(rec)
         lines.append(
             "| "
             + " | ".join(

@@ -1,0 +1,175 @@
+{
+ "name": "gmv-{DAY}",
+ "page_key": "gmv",
+ "requires": "{PACK}/gmv/gmv_lens.duckdb",
+ "title": "GMV lens {DAY}",
+ "subtitle": "Growth, estimates, momentum, participation and value on the all-fields day history. Five lenses stay five columns; a profile orders names by its weakest lens.",
+ "sources_extra": ["gmv lens {PACK}/gmv (python src/run_gmv_lens.py --pack {PACK} --out-dir {PACK}/gmv)"],
+ "tabs": [
+  {
+   "label": "Focus",
+   "blocks": [
+    {"type": "callout", "from": "update.banner"},
+    {"type": "stats", "from": "pages.gmv.blocks.focus_0"},
+    {"type": "callout", "from": "pages.gmv.blocks.focus_1"},
+    {"type": "table", "headers": ["Symbol", "Profile", "Course", "Horizon", "Trigger", "Reason"], "from": "pages.gmv.blocks.focus_2"},
+    {"type": "text", "tone": "secondary", "text": "lenses reads G E M P V as percentiles 0-99 in today's universe (-- means fewer than two parts present). Focus takes rank 1 of every long profile, then rank 2, and so on; profiles lists every profile the name ranked in. Nothing here is a sum of lenses. The Evidence tab says which lenses led later closes on this history."},
+    {
+     "type": "table",
+     "title": "Focus (profile round-robin, industry cap per profile)",
+     "source": {
+      "duckdb": "{PACK}/gmv/gmv_lens.duckdb",
+      "sql": "SELECT focus_order, symbol, ind, lenses, best_profile, profiles, horizon, tape_state, r_1m, r_3m, trend_q, eps_rev_3m, fwd_eps_g, fwd_rev_g, pe_nfy, pe_nfy_vs_ind, peg_fwd, pt_left, \"left\", rr, bo, mix, mtp, dte, exp_move_20d, book FROM focus ORDER BY focus_order"
+     },
+     "extra_columns": ["Course", "Reason"],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    }
+   ]
+  },
+  {
+   "label": "Growth",
+   "blocks": [
+    {"type": "text", "from": "pages.gmv.blocks.growth_0"},
+    {
+     "type": "table",
+     "title": "COMPOUNDER: growth, estimates and trend (weakest of G E M)",
+     "source": {
+      "duckdb": "{PACK}/gmv/gmv_lens.duckdb",
+      "sql": "SELECT rank, symbol, ind, floor, lenses, fwd_rev_g, fwd_eps_g, rev_yoy, earn_yoy, eps_rev_3m, eps_rev_breadth, rev_rev_3m, eps_surprise, r_3m, trend_q, tape_state, pe_nfy, pe_nfy_vs_ind, peg_fwd, \"left\", dte, book FROM profile_top WHERE profile = 'COMPOUNDER' ORDER BY rank"
+     },
+     "extra_columns": ["Course", "Reason"],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    },
+    {
+     "type": "table",
+     "title": "RERATE: growth and estimates still cheap to peers (weakest of G E V)",
+     "source": {
+      "duckdb": "{PACK}/gmv/gmv_lens.duckdb",
+      "sql": "SELECT rank, symbol, ind, floor, lenses, fwd_rev_g, fwd_eps_g, rev_yoy, earn_yoy, eps_rev_3m, eps_rev_breadth, pe_nfy, pe_nfy_vs_ind, evebitda_vs_ind, peg_fwd, pt_left, r_3m, tape_state, \"left\", dte, book FROM profile_top WHERE profile = 'RERATE' ORDER BY rank"
+     },
+     "extra_columns": ["Course", "Reason"],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    }
+   ]
+  },
+  {
+   "label": "Movement",
+   "blocks": [
+    {"type": "text", "from": "pages.gmv.blocks.movement_0"},
+    {
+     "type": "table",
+     "title": "BREAKOUT: trend with volume and rising estimates (weakest of M P E)",
+     "source": {
+      "duckdb": "{PACK}/gmv/gmv_lens.duckdb",
+      "sql": "SELECT rank, symbol, ind, floor, lenses, tape_state, r_1m, r_3m, trend_slope_ann, trend_q, r_3m_per_vol, hi_prox, updown_vol, accum_3m, vol_trend, vol_d, exp_move_20d, eps_rev_3m, pe_nfy_vs_ind, \"left\", dte, book FROM profile_top WHERE profile = 'BREAKOUT' ORDER BY rank"
+     },
+     "extra_columns": ["Course", "Reason"],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    },
+    {
+     "type": "table",
+     "title": "VALUE_TURN: cheap, estimates turning, buyers back (weakest of V E P)",
+     "source": {
+      "duckdb": "{PACK}/gmv/gmv_lens.duckdb",
+      "sql": "SELECT rank, symbol, ind, floor, lenses, tape_state, r_1m, r_3m, trend_q, updown_vol, accum_3m, vol_trend, eps_rev_3m, eps_rev_breadth, pe_nfy, pe_nfy_vs_ind, evebitda_vs_ind, peg_fwd, pt_left, \"left\", dte, book FROM profile_top WHERE profile = 'VALUE_TURN' ORDER BY rank"
+     },
+     "extra_columns": ["Course", "Reason"],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    }
+   ]
+  },
+  {
+   "label": "All five",
+   "blocks": [
+    {
+     "type": "table",
+     "title": "ALL5: no weak lens of the five",
+     "source": {
+      "duckdb": "{PACK}/gmv/gmv_lens.duckdb",
+      "sql": "SELECT rank, symbol, ind, floor, lenses, weak_lens, tape_state, fwd_eps_g, eps_rev_3m, r_3m, trend_q, updown_vol, pe_nfy_vs_ind, peg_fwd, \"left\", rr, dte, book FROM profile_top WHERE profile = 'ALL5' ORDER BY rank"
+     },
+     "extra_columns": ["Course", "Reason"],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    }
+   ]
+  },
+  {
+   "label": "Fade",
+   "blocks": [
+    {"type": "text", "from": "pages.gmv.blocks.fade_0"},
+    {
+     "type": "table",
+     "title": "FADE: weak trend, falling estimates, sellers in control (weakest of inverted M E P)",
+     "source": {
+      "duckdb": "{PACK}/gmv/gmv_lens.duckdb",
+      "sql": "SELECT rank, symbol, ind, floor, lenses, tape_state, r_1m, r_3m, trend_q, accum_3m, updown_vol, eps_rev_3m, eps_rev_breadth, pt_drift_3m, pe_nfy_vs_ind, vol_d, exp_move_20d, \"left\", mix, dte, book FROM profile_top WHERE profile = 'FADE' ORDER BY rank"
+     },
+     "extra_columns": ["Course", "Reason"],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    }
+   ]
+  },
+  {
+   "label": "Book",
+   "blocks": [
+    {"type": "text", "from": "pages.gmv.blocks.book_0"},
+    {
+     "type": "table",
+     "title": "Book through the five lenses",
+     "source": {
+      "duckdb": "{PACK}/gmv/gmv_lens.duckdb",
+      "sql": "SELECT symbol, ind, lenses, weak_lens, strong_lens, tape_state, r_1m, r_3m, trend_q, eps_rev_3m, eps_rev_breadth, fwd_eps_g, pe_nfy_vs_ind, peg_fwd, updown_vol, \"left\", mix, mtp, dte FROM book_lens"
+     },
+     "extra_columns": ["Course", "Reason"],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    }
+   ]
+  },
+  {
+   "label": "Overflow",
+   "blocks": [
+    {"type": "text", "tone": "secondary", "text": "Names the industry cap held out of a profile list, in profile order. Not dropped: the full universe is lens_tape in the same DuckDB."},
+    {
+     "type": "table",
+     "title": "Industry-cap overflow by profile",
+     "source": {
+      "duckdb": "{PACK}/gmv/gmv_lens.duckdb",
+      "sql": "SELECT profile, symbol, ind, lenses, mcap FROM profile_overflow"
+     }
+    }
+   ]
+  },
+  {
+   "label": "Evidence",
+   "blocks": [
+    {"type": "text", "from": "pages.gmv.blocks.evidence_0"},
+    {"type": "text", "tone": "secondary", "text": "Walk-forward check on this project's own all-fields day files: each evaluation day rebuilds every part, lens and profile from snapshots up to that day, then ranks against the close 14 and 28 calendar days later. Horizons overlap from one day to the next, so ic_t is a size check, not a significance test. It is not a hit rate."},
+    {
+     "type": "table",
+     "title": "Lenses and profiles",
+     "source": {
+      "duckdb": "{PACK}/gmv/gmv_lens.duckdb",
+      "sql": "SELECT kind, name, horizon_days, n_days, ic_mean, ic_t, ic_pos_rate, ic_recent3, ic_last, top_excess_mean_pct, first_day, last_day FROM evidence WHERE kind <> 'part' ORDER BY horizon_days, kind, ic_mean DESC"
+     }
+    },
+    {
+     "type": "table",
+     "title": "Parts (which metric carried each lens)",
+     "source": {
+      "duckdb": "{PACK}/gmv/gmv_lens.duckdb",
+      "sql": "SELECT name, horizon_days, n_days, ic_mean, ic_t, ic_pos_rate, ic_recent3, ic_last, top_excess_mean_pct FROM evidence WHERE kind = 'part' ORDER BY horizon_days, ic_mean DESC"
+     }
+    }
+   ]
+  }
+ ],
+ "ledger": {"auto": true}
+}

@@ -73,8 +73,12 @@ def group_stats(
     pct_positive_field: str | None = None,
     pct_positive_denom: str = "clean",
     digits: int | None = 2,
+    center: str = "mean",
 ) -> list[dict[str, Any]]:
-    """Mean of `metrics` per distinct `group_field` value.
+    """Center of `metrics` per distinct `group_field` value.
+
+    ``center`` is ``mean`` or ``median``. Industry path reads use median so one
+    large name does not set the group. Default stays mean.
 
     `pct_positive_field` (often `day` or `d5`) adds `pct_positive` when set.
     `pct_positive_denom` is `"clean"` (non-null values) or `"n"` (group size,
@@ -83,6 +87,9 @@ def group_stats(
     """
     if pct_positive_denom not in {"clean", "n"}:
         raise ValueError("pct_positive_denom must be 'clean' or 'n'")
+    if center not in {"mean", "median"}:
+        raise ValueError("center must be 'mean' or 'median'")
+    reducer = _median if center == "median" else _mean
     groups: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
     for row in rows:
         key = str(row.get(group_field) or "")
@@ -98,7 +105,7 @@ def group_stats(
         rec: dict[str, Any] = {group_field: key, "n": n}
         for metric in metrics:
             rec[metric] = _round(
-                _mean(to_float(m.get(metric)) for m in members), digits
+                reducer(to_float(m.get(metric)) for m in members), digits
             )
         if pct_positive_field:
             values = [to_float(m.get(pct_positive_field)) for m in members]

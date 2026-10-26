@@ -1,0 +1,39 @@
+GMV LENS: growth, estimates, momentum, participation and value, canvas output. Day {DAY}.
+Goal: the growth and movement names worth capital or a short, short term (1-10 sessions)
+and mid term (3-12 weeks), read through five lenses that stay separate.
+
+The runner (src/run_gmv_lens.py) already wrote the data. Pack: {PACK}. GMV folder: {PACK}/gmv.
+Do not rerun producers, compile, or the GMV scan.
+Run folder: {RUN_DIR} (the data-only page gmv-{DAY}-manual.html is already there).
+Judgment: {JUDGMENT}. {JUDGMENT_MODE}
+
+@.claude/skills/gmv-lens/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
+
+1. EVIDENCE FIRST: {PACK}/gmv/highlights.log, then queries.txt task 4 (Evidence rows).
+   Name the lenses and profiles that led later closes (ic_mean, ic_t) and the ones that
+   turned lately (ic_recent3, ic_last). Lean on the profiles that are working and say so;
+   a lens with a negative IC is shown, not trusted.
+2. NAMES: Focus, then each profile table (queries.txt tasks 1-3). For every name that could
+   take capital or a short: python src/operator_briefing/example_entry.py stance SYM ... --line,
+   then entry-book on a CSV of those names for band, kill and street target
+   (tv_scan_cli.py named --csv {PACK}/movers/us2b_tape.csv --ids A,B --fields ... --out {RUN_DIR}/gmv_candidates.csv;
+   entry-book --csv {RUN_DIR}/gmv_candidates.csv --out-dir {RUN_DIR}/gmv_entry_book).
+   Short term = BREAKOUT / VALUE_TURN / FADE (trigger, kill, first target).
+   Mid term = COMPOUNDER / RERATE / ALL5 (entry band). PULLBACK on a COMPOUNDER is the
+   rebound case; EXTENDED waits for a band; a RERATE name in DOWNTREND needs its reason.
+   Earnings inside 10 sessions (dte) is an event line, not a NEW. Outside news is tagged OUTSIDE
+   and changes timing or Grade only.
+3. WRITE the judgment: courses {Course, Grade, Horizon, Reason} for every name you rule on, and
+   pages.gmv.blocks: focus_0 (stats items), focus_1 (callout: what is working and the plan),
+   focus_2 (table rows [Symbol, Profile, Course, Horizon, Trigger, Reason]), growth_0, movement_0,
+   fade_0, book_0, evidence_0 (text). Record any extra scan in `scans` (argv with {{PACK}}).
+4. RENDER and fix every Ledger warning:
+     python src/generic_utils/tv_scan_cli.py page --template gmv --day {DAY} --judgment {JUDGMENT} --out-dir {RUN_DIR} --strict
+5. {PRIORS_STEP}
+6. FINAL MESSAGE, short: what is working (lens / profile IC), the short-term and mid-term cards
+   (bands and kills), the shorts, the Book's weakest lenses, the page link.
+
+Every stock id is EXCHANGE:TICKER (NASDAQ:MU). The Daily budget still binds (0-2 NEW, 0-2 ADD,
+0-1 short); this page proposes, the Daily spends. No lens sums, no 0-100, no logs/_tmp_*.py,
+never read a whole queries.txt.

@@ -3,6 +3,10 @@
 Simple test to verify the date parsing fix works with the FDX extraction.
 """
 
+import pytest
+
+pytestmark = pytest.mark.network  # downloads live SEC/EDGAR filings
+
 import sys
 import os
 

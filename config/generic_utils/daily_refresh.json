@@ -1,0 +1,414 @@
+{
+  "name": "daily_refresh",
+  "description": "Scan-day producers, compile, and the post-compile suite dumps as two dependency graphs. Placeholders: {PACK} is the new briefing pack folder, {PLAYBOOK} is {PACK}/playbook. Independent steps run in parallel; after lists the data each step reads.",
+  "max_workers": 4,
+  "producers": [
+    {
+      "name": "prediction",
+      "after": [],
+      "argv": [
+        "python",
+        "-c",
+        "from main import daily_prediction_move_analysis_suite; daily_prediction_move_analysis_suite()"
+      ]
+    },
+    {
+      "name": "allfields",
+      "after": [],
+      "argv": [
+        "python",
+        "-c",
+        "from data_analysis_scripts.trading_view_export_all_tdfields import export_focused_tradingview_fields_duckdb; export_focused_tradingview_fields_duckdb()"
+      ]
+    },
+    {
+      "name": "holdings",
+      "after": [
+        "prediction"
+      ],
+      "argv": [
+        "python",
+        "-c",
+        "from main import run_holdings_scoring_analysis, PROJECT_ROOT; run_holdings_scoring_analysis(holdings_config_path=PROJECT_ROOT/'config'/'holdings_scoring'/'current_holdings.json')"
+      ]
+    },
+    {
+      "name": "edge",
+      "after": [
+        "allfields"
+      ],
+      "argv": [
+        "python",
+        "src/run_upside_opportunity_scan.py",
+        "--full-flow"
+      ]
+    },
+    {
+      "name": "mtp",
+      "after": [
+        "edge",
+        "prediction"
+      ],
+      "argv": [
+        "python",
+        "src/run_market_timing_policy.py"
+      ]
+    }
+  ],
+  "compile": {
+    "name": "compile",
+    "argv": [
+      "python",
+      "src/operator_briefing/example_entry.py",
+      "compile"
+    ]
+  },
+  "suites": [
+    {
+      "name": "movers",
+      "after": [],
+      "argv": [
+        "python",
+        "src/run_operator_suites.py",
+        "movers"
+      ]
+    },
+    {
+      "name": "playbook",
+      "after": [],
+      "argv": [
+        "python",
+        "src/run_operator_suites.py",
+        "playbook",
+        "--weeks",
+        "25"
+      ]
+    },
+    {
+      "name": "payoff_focus",
+      "after": [],
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "payoff-focus",
+        "--db",
+        "{PACK}/briefing_pack.duckdb",
+        "--table",
+        "radar_curated_50",
+        "--out-dir",
+        "{PACK}/payoff_focus"
+      ]
+    },
+    {
+      "name": "gmv",
+      "after": [],
+      "argv": [
+        "python",
+        "src/run_gmv_lens.py",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/gmv"
+      ]
+    },
+    {
+      "name": "intraday",
+      "after": [],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "intraday",
+        "--min-mcap",
+        "2000000000",
+        "--out-dir",
+        "{PACK}/intraday",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "book_risk",
+      "after": [],
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "risk",
+        "--run",
+        "latest",
+        "--pack",
+        "{PACK}/briefing_pack.json",
+        "--out-dir",
+        "{PACK}/book_risk"
+      ]
+    },
+    {
+      "name": "briefs",
+      "after": [],
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "briefs"
+      ]
+    },
+    {
+      "name": "compare",
+      "after": [],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/operator_briefing/example_entry.py",
+        "compare",
+        "--session",
+        "--exchanges",
+        "NASDAQ,NYSE,AMEX",
+        "--brief"
+      ]
+    },
+    {
+      "name": "payoff_playbook",
+      "after": [
+        "playbook"
+      ],
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "payoff-focus",
+        "--db",
+        "{PLAYBOOK}/playbook.duckdb",
+        "--table",
+        "radar_upside_100",
+        "--out-dir",
+        "{PLAYBOOK}/payoff_focus"
+      ]
+    },
+    {
+      "name": "entry_book_book",
+      "after": [
+        "playbook"
+      ],
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "entry-book",
+        "--csv",
+        "{PLAYBOOK}/book.csv",
+        "--out-dir",
+        "{PLAYBOOK}/entry_book_book",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "entry_book_upside",
+      "after": [
+        "playbook"
+      ],
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "entry-book",
+        "--csv",
+        "{PLAYBOOK}/radar_upside_100.csv",
+        "--out-dir",
+        "{PLAYBOOK}/entry_book_radar_upside_100",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "entry_book_forming",
+      "after": [
+        "playbook"
+      ],
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "entry-book",
+        "--csv",
+        "{PLAYBOOK}/forming.csv",
+        "--out-dir",
+        "{PLAYBOOK}/entry_book_forming",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "entry_book_shorts",
+      "after": [
+        "playbook"
+      ],
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "entry-book",
+        "--csv",
+        "{PLAYBOOK}/short_book_15.csv",
+        "--out-dir",
+        "{PLAYBOOK}/entry_book_short_book_15",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "entry_book_movers",
+      "after": [
+        "movers"
+      ],
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "entry-book",
+        "--csv",
+        "{PACK}/movers/movers_tails.csv",
+        "--out-dir",
+        "{PACK}/movers/entry_book",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "mesh_band",
+      "after": [
+        "entry_book_upside",
+        "playbook"
+      ],
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "mesh",
+        "--db",
+        "{PLAYBOOK}/entry_book_radar_upside_100/entry_book.duckdb",
+        "--table",
+        "entry_book",
+        "--span-db",
+        "{PLAYBOOK}/weeks_progression/weeks_progression.duckdb",
+        "--forming-db",
+        "{PLAYBOOK}/playbook.duckdb",
+        "--out-dir",
+        "{PLAYBOOK}/mesh_band",
+        "--quiet"
+      ]
+    }
+  ],
+  "diff_fields": [
+    "close",
+    "left",
+    "street_left",
+    "rr",
+    "bo",
+    "rsi",
+    "rng",
+    "vs50",
+    "peer",
+    "val_vs_ind",
+    "dte",
+    "mix",
+    "mtp",
+    "up_class",
+    "down_class",
+    "mesh"
+  ],
+  "diff_thresholds": {
+    "close_pct": 2.0,
+    "left": 5.0,
+    "rr": 0.5,
+    "bo": 0.15,
+    "rsi": 5.0,
+    "rng": 10.0,
+    "vs50": 3.0,
+    "val_vs_ind": 10.0
+  },
+  "index_sources": [
+    {
+      "db": "{PACK}/briefing_pack.duckdb",
+      "table": "book"
+    },
+    {
+      "db": "{PLAYBOOK}/mesh_band/mesh.duckdb",
+      "table": "mesh"
+    },
+    {
+      "db": "{PACK}/briefing_pack.duckdb",
+      "table": "radar_curated_50"
+    },
+    {
+      "db": "{PACK}/movers/movers.duckdb",
+      "table": "movers_tails"
+    },
+    {
+      "db": "{PLAYBOOK}/entry_book_forming/entry_book.duckdb",
+      "table": "entry_book"
+    },
+    {
+      "db": "{PLAYBOOK}/entry_book_short_book_15/entry_book.duckdb",
+      "table": "entry_book"
+    },
+    {
+      "db": "{PACK}/briefing_pack.duckdb",
+      "table": "earnings_upside_curated"
+    },
+    {
+      "db": "{PACK}/briefing_pack.duckdb",
+      "table": "earnings_downside_curated"
+    },
+    {
+      "db": "{PACK}/briefing_pack.duckdb",
+      "table": "names"
+    },
+    {
+      "csv": "{PACK}/analysis_scans/short_breakdown.csv"
+    },
+    {
+      "csv": "{PACK}/movers/us2b_tape.csv"
+    },
+    {
+      "db": "{PACK}/gmv/gmv_lens.duckdb",
+      "table": "focus"
+    }
+  ],
+  "watch_lists": [
+    {
+      "name": "Build-50",
+      "db": "{PACK}/briefing_pack.duckdb",
+      "sql": "SELECT symbol FROM radar_curated_50"
+    },
+    {
+      "name": "Book",
+      "db": "{PACK}/briefing_pack.duckdb",
+      "sql": "SELECT symbol FROM book"
+    },
+    {
+      "name": "Short book 15",
+      "db": "{PACK}/briefing_pack.duckdb",
+      "sql": "SELECT symbol FROM short_book_15_curated"
+    },
+    {
+      "name": "Day up 25",
+      "db": "{PACK}/movers/movers.duckdb",
+      "sql": "SELECT symbol FROM movers_tails WHERE horizon='day' AND tail='leaders'"
+    },
+    {
+      "name": "Payoff 10",
+      "db": "{PACK}/payoff_focus/payoff_focus.duckdb",
+      "sql": "SELECT symbol FROM payoff_focus"
+    }
+  ],
+  "templates": [
+    "daily_focus",
+    "movers",
+    "playbook",
+    "gmv",
+    "wisdom"
+  ],
+  "review_courses": [
+    "NEW",
+    "ADD",
+    "TRIM",
+    "EXIT",
+    "DERISK",
+    "DERISK_INTO_PRINT",
+    "HOLD",
+    "HOLD_NO_ADD",
+    "HOLD_THROUGH",
+    "SHORT_WAIT",
+    "SHORT_PRE",
+    "BUY_PRE",
+    "SELL_THE_NEWS"
+  ],
+  "minor_flag_multiplier": 2.0
+}

@@ -76,3 +76,20 @@ class TestSessionTape(unittest.TestCase):
         ]
         self.assertEqual(len(join_post_earn(rows, rows, date(2026, 10, 6), exchanges=None)), 1)
         self.assertEqual(len(join_post_earn(rows, rows, date(2026, 10, 6), exchanges=["NASDAQ"])), 0)
+
+    def test_named_premarket_skips_a_copied_percent(self):
+        from generic_utils.session_tape import join_named_premarket
+
+        prior = [{"symbol": "NASDAQ:MU", "close": 100.0, "premarket_change": -2.6, "industry": "Semiconductors"}]
+        current = [
+            {"symbol": "NASDAQ:MU", "close": 100.0, "premarket_change": -3.0, "change": -4.0, "SMA50": 99.0, "industry": "Semiconductors"},
+            {"symbol": "NASDAQ:PGY", "close": 17.4, "premarket_change": -0.90, "industry": "Packaged Software"},
+        ]
+        prior.append({"symbol": "NASDAQ:PGY", "close": 17.4, "premarket_change": -0.88})
+        rows = {row["symbol"]: row for row in join_named_premarket(prior, current, ["NASDAQ:MU", "NASDAQ:PGY", "NASDAQ:MISSING"])}
+        self.assertFalse(rows["NASDAQ:MU"]["pre_repeat"])
+        self.assertEqual(rows["NASDAQ:MU"]["pre_px"], 97.0)
+        self.assertTrue(rows["NASDAQ:PGY"]["pre_repeat"])
+        self.assertIsNone(rows["NASDAQ:PGY"]["pre_px"])
+        self.assertIsNone(rows["NASDAQ:MISSING"]["pre_px"])
+        self.assertTrue(rows["NASDAQ:MISSING"]["pre_repeat"] is False)

@@ -7,7 +7,7 @@ alwaysApply: false
 
 When the user asks how earlier recommendations held up, or a Daily / Movers / Playbook brief should use prior sessions:
 
-1. Read `.cursor/skills/brief-history/SKILL.md`.
+1. Read `.claude/skills/brief-history/SKILL.md`.
 2. Run `python src/generic_utils/tv_scan_cli.py briefs` and read `digest.md`.
 3. Do not paste prior JSON notes into the chat. Query `events` for one ticker when a BAD or MISSED name needs its reason.
 4. Labels are bands. They do not reorder Build-50, mover 25s, or Best 25, and they are not a 0–100.

@@ -28,10 +28,10 @@ from generic_utils.decision_review import (
     actions_from_priors,
     build_decision_review,
     format_highlights,
-    latest_family_metrics,
     load_briefing_rank_sessions,
     load_signal_support,
     load_spec,
+    performance_queries,
 )
 from generic_utils.run_export import write_run_export
 
@@ -40,7 +40,6 @@ DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "logs" / "tradingview_analysis" / "operator
 DEFAULT_PACK_ROOT = DEFAULT_OUTPUT_ROOT
 DEFAULT_PRIORS = PROJECT_ROOT / "logs" / "AI_ANALYSIS_UTILS" / "priors"
 DEFAULT_RECIPE = PROJECT_ROOT / "config" / "generic_utils" / "decision_review.json"
-DEFAULT_BACKTESTS = PROJECT_ROOT / "logs" / "tradingview_analysis" / "backtests" / "runs"
 
 
 def run_decision_review_method(
@@ -64,13 +63,11 @@ def run_decision_review_method(
     spec["min_n"] = float(min_n)
     spec["gap_pct"] = float(gap_pct)
     packs = Path(runs_root) if runs_root else DEFAULT_PACK_ROOT
-    sessions, marks, notes = load_briefing_rank_sessions(packs, top=int(spec["top"]))
+    sessions, marks, sightings, notes = load_briefing_rank_sessions(packs, top=int(spec["top"]))
     latest_day = sessions[-1]["day"] if sessions else ""
-    metrics_path = Path(family_metrics) if family_metrics else latest_family_metrics(DEFAULT_BACKTESTS)
-    support = load_signal_support(metrics_path)
-    if metrics_path is None:
-        notes.append("no family_metrics.csv; signal IC not attached")
-    else:
+    metrics_path = Path(family_metrics) if family_metrics else None
+    support = load_signal_support(metrics_path) if metrics_path else []
+    if metrics_path is not None:
         notes.append(f"signal support {metrics_path.as_posix()}")
     payload = build_decision_review(
         sessions,
@@ -79,6 +76,7 @@ def run_decision_review_method(
         actions_by_day=actions_from_priors(priors_dir or DEFAULT_PRIORS),
         latest_day=latest_day,
         signal_support=support,
+        tape_sightings=sightings,
     )
     created = datetime.now(tz=timezone.utc)
     run_id = f"decision_review_{created.strftime('%Y%m%d_%H%M')}_utc_{uuid.uuid4().hex[:8]}"
@@ -89,8 +87,9 @@ def run_decision_review_method(
             "Top list is sleeves.radar_upside_100 in published order.",
             "A day short of --top is filled from that pack's us2b tape by rr. rank_source names the fill.",
             "min_n and gap_pct decide KEEP versus CHANGE. They do not drop a name from the top list.",
-            "src/backtests family_metrics is support. It is not a briefing decision score. Do not rerun it for this review.",
-            "Edge and prediction profile ranks can use the same scorer later. They are not a second module.",
+            "highlights.log is the performance judgment. queries.txt items 1-10 pull every row of each class.",
+            "Path percent is first tape close to last tape close. The recommendation stack is the first capital call to the latest close.",
+            "Signal-family accuracy is src/backtests. Pass --family-metrics only to attach an existing CSV.",
         ]
     )
     exported = write_run_export(
@@ -103,6 +102,8 @@ def run_decision_review_method(
             "decisions": payload["decisions"],
             "matrix": payload["matrix"],
             "matrix_to_latest": payload["matrix_to_latest"],
+            "name_path": payload["name_path"],
+            "tape": payload["tape"],
             "signal_support": payload["signal_support"],
         },
         sources={
@@ -122,6 +123,11 @@ def run_decision_review_method(
     )
     highlights_path = out_dir / "highlights.log"
     highlights_path.write_text(format_highlights(payload), encoding="utf-8")
+    guide_path = Path(exported["query_guide"])
+    guide_path.write_text(
+        performance_queries(exported["duckdb"]) + "\n" + guide_path.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
     (out_dir / "spec.json").write_text(
         json.dumps({"run_id": run_id, **payload["spec"]}, indent=2, default=str),
         encoding="utf-8",
@@ -147,8 +153,12 @@ def _print_result(result: dict[str, Any]) -> None:
     print(
         "Coverage: "
         f"sessions={result['spec']['n_sessions']} "
-        f"ranks={result['spec']['n_ranks']} "
-        f"days_at_top={result['spec']['days_at_top']}"
+        f"tape={result['spec'].get('n_tape')} "
+        f"names={result['spec'].get('n_names')} "
+        f"runners={result['spec'].get('n_runners')} "
+        f"tape_run={result['spec'].get('n_tape_run')} "
+        f"broke={result['spec'].get('n_pump_broke')} "
+        f"high_rank_bad={result['spec'].get('n_high_rank_bad')}"
     )
     for row in result["matrix"]:
         print(f"  next {row['call']:<6} {row['lever']}")

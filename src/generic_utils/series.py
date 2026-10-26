@@ -314,6 +314,44 @@ def fetch_named(
     }
 
 
+def select_named_rows(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    columns: Sequence[str],
+    id_field: str | None = None,
+    ids: Sequence[str] | None = None,
+    source: str = "",
+) -> dict[str, Any]:
+    """`fetch_named` for rows already in memory (a CSV). Same id matching, same payload shape.
+
+    Ids come back in the caller's order; ids with no row are listed in `missing_ids`.
+    """
+    available = set(rows[0]) if rows else set()
+    wanted_ids = expand_ids(ids or [])
+    id_fields = [f for f in [id_field, "symbol", "ticker"] if f and f in available]
+    picked: list[dict[str, Any]] = []
+    found: set[str] = set()
+    for wanted in wanted_ids or [None]:
+        for row in rows:
+            if wanted is None or row_id_matches(row, [wanted], id_fields):
+                picked.append({c: row.get(c) for c in columns if c in available})
+                if wanted is not None:
+                    found.add(wanted)
+                    break
+    return {
+        "spec": {
+            "csv": source,
+            "columns": list(columns),
+            "missing_columns": [c for c in columns if c not in available],
+            "id_field": id_field,
+            "n_ids": len(wanted_ids),
+            "missing_ids": [w for w in wanted_ids if w not in found],
+            "n": len(picked),
+        },
+        "rows": picked,
+    }
+
+
 def alias_fields(
     rows: Sequence[Mapping[str, Any]],
     mapping: Mapping[str, str],
@@ -483,6 +521,126 @@ def group_history(
     return out
 
 
+def _compute_field_step_stats(
+    points: Sequence[Mapping[str, Any]],
+    field: str,
+) -> dict[str, Any]:
+    """Day-to-day (step-to-step) movement stats for one field on an ordered series."""
+    values = [
+        to_float(point.get(field))
+        for point in points
+        if to_float(point.get(field)) is not None
+    ]
+    step_pcts: list[float] = []
+    for idx in range(1, len(values)):
+        prev_v = values[idx - 1]
+        curr_v = values[idx]
+        if prev_v is None or curr_v is None or prev_v <= 0:
+            continue
+        step_pcts.append((curr_v / prev_v - 1.0) * 100.0)
+
+    step_n = len(step_pcts)
+    if step_n == 0:
+        step_mean = None
+        step_abs_mean = None
+        step_stdev = None
+        step_max_up = None
+        step_max_down = None
+        step_up_rate = None
+        streak_up = 0
+        streak_down = 0
+    else:
+        step_mean = round(sum(step_pcts) / step_n, 3)
+        step_abs_mean = round(sum(abs(x) for x in step_pcts) / step_n, 3)
+        if step_n >= 2:
+            mean_raw = sum(step_pcts) / step_n
+            var = sum((x - mean_raw) ** 2 for x in step_pcts) / (step_n - 1)
+            step_stdev = round(var ** 0.5, 3)
+        else:
+            step_stdev = 0.0
+        step_max_up = round(max(step_pcts), 2)
+        step_max_down = round(min(step_pcts), 2)
+        step_up_rate = round(sum(1 for x in step_pcts if x > 0) / step_n, 3)
+        streak_up = 0
+        for x in reversed(step_pcts):
+            if x > 0:
+                streak_up += 1
+            else:
+                break
+        streak_down = 0
+        for x in reversed(step_pcts):
+            if x < 0:
+                streak_down += 1
+            else:
+                break
+
+    # Peak-to-trough drawdown, giveback from max, rebound from min, seat in [min, max]
+    positive_vals = [v for v in values if v is not None and v > 0]
+    if not positive_vals:
+        max_dd = None
+        giveback = None
+        rebound = None
+        seat = None
+    else:
+        running_peak = positive_vals[0]
+        worst_dd = 0.0
+        for v in positive_vals:
+            if v > running_peak:
+                running_peak = v
+            dd = (v / running_peak - 1.0) * 100.0
+            if dd < worst_dd:
+                worst_dd = dd
+        max_dd = round(worst_dd, 2)
+        lo_val = min(positive_vals)
+        hi_val = max(positive_vals)
+        last_val = positive_vals[-1]
+        giveback = round((last_val / hi_val - 1.0) * 100.0, 2) if hi_val > 0 else None
+        rebound = round((last_val / lo_val - 1.0) * 100.0, 2) if lo_val > 0 else None
+        seat = (
+            round((last_val - lo_val) / (hi_val - lo_val) * 100.0, 1)
+            if hi_val > lo_val
+            else None
+        )
+
+    return {
+        f"{field}_step_n": step_n,
+        f"{field}_step_mean_pct": step_mean,
+        f"{field}_step_abs_mean_pct": step_abs_mean,
+        f"{field}_step_stdev_pct": step_stdev,
+        f"{field}_step_max_up_pct": step_max_up,
+        f"{field}_step_max_down_pct": step_max_down,
+        f"{field}_step_up_rate": step_up_rate,
+        f"{field}_streak_up": streak_up,
+        f"{field}_streak_down": streak_down,
+        f"{field}_max_drawdown_pct": max_dd,
+        f"{field}_giveback_from_max_pct": giveback,
+        f"{field}_rebound_from_min_pct": rebound,
+        f"{field}_seat_pct": seat,
+    }
+
+
+def series_step_stats(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    id_field: str = "symbol",
+    fields: Sequence[str] = ("close",),
+    as_of_field: str = "as_of",
+    normalize: bool = False,
+) -> list[dict[str, Any]]:
+    """Span plus day-to-day (step-to-step) movement statistics per id.
+
+    Rows must already be ordered oldest-to-latest. Zero eligibility cutoffs.
+    """
+    return series_span(
+        rows,
+        id_field=id_field,
+        fields=fields,
+        as_of_field=as_of_field,
+        normalize=normalize,
+        include_steps=True,
+    )
+
+
 def series_span(
     rows: Sequence[Mapping[str, Any]],
     *,
@@ -490,11 +648,18 @@ def series_span(
     fields: Sequence[str],
     as_of_field: str = "as_of",
     normalize: bool = False,
+    include_steps: bool = False,
 ) -> list[dict[str, Any]]:
-    """First and last observation per id (rows must already be oldest-to-latest).
+    """First, last, low, and high per id (rows must already be oldest-to-latest).
+
+    ``field_min`` / ``field_max`` are the lowest and highest prints in the
+    window, with ``field_min_as_of`` and ``field_max_as_of``. First and last
+    stay the window ends. A tie keeps the earlier print.
 
     `normalize=True` groups NASDAQ:MU with MU. Leave it off when dual listings
     exist (TSXV:MRVL vs NASDAQ:MRVL).
+    `include_steps=True` also attaches day-to-day step stats (`{field}_step_*`,
+    `{field}_max_drawdown_pct`, `{field}_giveback_from_max_pct`, `{field}_seat_pct`).
     """
     grouped: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
     order: list[str] = []
@@ -526,6 +691,25 @@ def series_span(
             rec[f"{field}_pct"] = (
                 None if a is None or b is None else round(pct_vs(b, a) or 0.0, 2)
             )
+            observed = [
+                (to_float(point.get(field)), point.get(as_of_field))
+                for point in points
+                if to_float(point.get(field)) is not None
+            ]
+            if not observed:
+                rec[f"{field}_min"] = None
+                rec[f"{field}_min_as_of"] = None
+                rec[f"{field}_max"] = None
+                rec[f"{field}_max_as_of"] = None
+            else:
+                lo = min(observed, key=lambda item: (item[0], str(item[1] or "")))
+                hi = min(observed, key=lambda item: (-item[0], str(item[1] or "")))
+                rec[f"{field}_min"] = lo[0]
+                rec[f"{field}_min_as_of"] = lo[1]
+                rec[f"{field}_max"] = hi[0]
+                rec[f"{field}_max_as_of"] = hi[1]
+            if include_steps:
+                rec.update(_compute_field_step_stats(points, field))
         out.append(rec)
     return out
 

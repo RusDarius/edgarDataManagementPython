@@ -1,0 +1,23 @@
+{
+  "_note": "Named watch themes for tv_scan_cli.py name-levels --theme and theme-slice. ids are input (bare or EXCHANGE:TICKER; the CLIs qualify them). industries are the GMV lens `ind` values a theme-slice reads. A theme is a list to look at, not a buy list.",
+  "ai_core": {
+    "label": "AI buildout core",
+    "ids": ["VICR", "PENG", "MU", "SIMO", "WDC", "SNDK", "BE", "TTMI", "SANM"]
+  },
+  "ai_peers": {
+    "label": "AI infra, energy, construction and semis peers",
+    "ids": ["NVDA", "AVGO", "AMD", "STX", "ANET", "VRT", "ETN", "PWR", "EME", "FIX", "GEV", "CEG", "VST", "MRVL", "SMCI", "DELL", "HPE", "CSCO", "CRDO", "ALAB", "LITE", "AEIS", "DIOD", "MCHP"]
+  },
+  "cyber": {
+    "label": "Cybersecurity",
+    "ids": ["CRWD", "ZS", "NET", "PANW", "FTNT", "S", "OKTA", "QLYS", "TENB", "CHKP", "VRNS", "AKAM", "GEN"]
+  },
+  "hyperscalers": {
+    "label": "Hyperscalers and AI capex buyers",
+    "ids": ["MSFT", "GOOGL", "AMZN", "META", "ORCL"]
+  },
+  "ai_buildout": {
+    "label": "AI buildout industries (theme-slice)",
+    "industries": ["Semiconductors", "Electronic Components", "Computer Peripherals", "Electronic Production Equipment", "Electrical Products", "Engineering & Construction", "Data Processing Services", "Telecommunications Equipment", "Computer Processing Hardware", "Electronic Equipment/Instruments", "Computer Communications", "Alternative Power Generation", "Electric Utilities"]
+  }
+}

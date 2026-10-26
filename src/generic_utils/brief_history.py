@@ -16,7 +16,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from generic_utils.symbol_identity import SymbolCatalog, lookup_mapping, parse_symbol
+from generic_utils.symbol_identity import SymbolCatalog, lookup_mapping, parse_symbol, qualify
 
 DEFAULT_BANDS: dict[str, float] = {
     "add_good_pct": 3.0,
@@ -161,7 +161,8 @@ def compress_path(steps: Sequence[Mapping[str, str]], *, limit: int = 8) -> str:
 
 
 def _action_row(key: str, value: Any) -> dict[str, Any] | None:
-    ticker = parse_symbol(key).ticker
+    identity = parse_symbol(key)
+    ticker = identity.ticker
     if not ticker:
         return None
     if isinstance(value, str):
@@ -173,6 +174,7 @@ def _action_row(key: str, value: Any) -> dict[str, Any] | None:
         return None
     note = str(value.get("note") or "").replace("\n", " ").strip()
     return {
+        "symbol": identity.normalized if identity.qualified else "",
         "ticker": ticker,
         "action": action,
         "grade": str(value.get("grade") or "").strip(),
@@ -248,7 +250,10 @@ def _table_exists(connection: Any, name: str) -> bool:
 
 
 def closes_from_pack_db(db_path: str | Path) -> dict[str, float]:
-    """Tape close from ``names``. Book close fills symbols the tape does not have."""
+    """Close from ``names``; ``book`` fills names it lacks, then the US $2B ``us2b_tape`` fills the rest.
+
+    The tape also gives every tape name an EXCHANGE:TICKER, so a bare prior key qualifies.
+    """
     import duckdb
 
     path = Path(db_path)
@@ -256,6 +261,11 @@ def closes_from_pack_db(db_path: str | Path) -> dict[str, float]:
     try:
         name_pairs: list[tuple[Any, Any]] = []
         book_pairs: list[tuple[Any, Any]] = []
+        tape_pairs: list[tuple[Any, Any]] = []
+        if _table_exists(connection, "us2b_tape"):
+            tape_pairs = connection.execute(
+                "SELECT symbol, close FROM us2b_tape WHERE close IS NOT NULL"
+            ).fetchall()
         if _table_exists(connection, "names"):
             name_pairs = connection.execute(
                 "SELECT symbol, close FROM names WHERE close IS NOT NULL"
@@ -266,7 +276,8 @@ def closes_from_pack_db(db_path: str | Path) -> dict[str, float]:
             ).fetchall()
     finally:
         connection.close()
-    merged = index_closes(book_pairs)
+    merged = index_closes(tape_pairs)
+    merged.update(index_closes(book_pairs))
     merged.update(index_closes(name_pairs))
     return merged
 
@@ -323,7 +334,13 @@ def _later_close(
     return None, None
 
 
-def _collapse(sessions: Sequence[Mapping[str, Any]]) -> tuple[list[str], dict[str, dict[str, dict[str, Any]]]]:
+def _collapse(
+    sessions: Sequence[Mapping[str, Any]],
+    catalogs: Mapping[str, SymbolCatalog] | None = None,
+    latest_day: str | None = None,
+) -> tuple[list[str], dict[str, dict[str, dict[str, Any]]]]:
+    """Group actions by EXCHANGE:TICKER. A bare legacy key is qualified from that day's pack, then the latest pack."""
+    catalogs = catalogs or {}
     order: list[str] = []
     by_day: dict[str, dict[str, dict[str, Any]]] = {}
     for session in sessions:
@@ -332,9 +349,11 @@ def _collapse(sessions: Sequence[Mapping[str, Any]]) -> tuple[list[str], dict[st
             order.append(day)
             by_day[day] = {}
         for action in session.get("actions") or []:
-            ticker = str(action.get("ticker") or "")
-            if ticker:
-                by_day[day][ticker] = dict(action)
+            key = str(action.get("symbol") or "") or qualify(
+                action.get("ticker"), catalogs.get(day), catalogs.get(latest_day or "")
+            )
+            if key:
+                by_day[day][key] = {**action, "symbol": key}
     return order, by_day
 
 
@@ -365,8 +384,8 @@ def build_brief_history(
     used = dict(DEFAULT_BANDS)
     if bands:
         used.update({key: float(bands[key]) for key in DEFAULT_BANDS if key in bands})
-    order, by_day = _collapse(sessions)
     catalogs = {day: SymbolCatalog.build(marks.keys()) for day, marks in marks_by_day.items()}
+    order, by_day = _collapse(sessions, catalogs, latest_day)
     tickers: list[str] = []
     seen: set[str] = set()
     for day in order:
@@ -412,7 +431,8 @@ def build_brief_history(
         last = steps[-1]
         names.append(
             {
-                "ticker": ticker,
+                "symbol": ticker,
+                "ticker": parse_symbol(ticker).ticker,
                 "path": compress_path(steps),
                 "first_action": first["action"],
                 "last_action": last["action"],
@@ -442,7 +462,8 @@ def build_brief_history(
             events.append(
                 {
                     "day": step["day"],
-                    "ticker": ticker,
+                    "symbol": ticker,
+                    "ticker": parse_symbol(ticker).ticker,
                     "action": step["action"],
                     "family": step_family,
                     "grade": step.get("grade") or "",
@@ -460,7 +481,7 @@ def build_brief_history(
         key=lambda row: (
             _LABEL_RANK.get(str(row["label"]), 9),
             -(abs(row["ret_pct"]) if row["ret_pct"] is not None else -1),
-            row["ticker"],
+            row["symbol"],
         )
     )
     buckets = dict(Counter(str(row["label"]) for row in names))
@@ -504,7 +525,7 @@ def build_brief_history(
 
 
 def _examples(names: Sequence[Mapping[str, Any]], family: str, label: str, limit: int = 5) -> str:
-    found = [str(row["ticker"]) for row in names if row.get("family") == family and row.get("label") == label]
+    found = [str(row["symbol"]) for row in names if row.get("family") == family and row.get("label") == label]
     if not found:
         return ""
     return ", ".join(found[:limit])
@@ -557,7 +578,7 @@ def adapt_lines(names: Sequence[Mapping[str, Any]], bands: Mapping[str, float]) 
         "BAD",
         f"Holds fell at or below {bands['hold_bad_pct']:.0f}%. The hold did not survive the band.",
     )
-    flipped = [str(row["ticker"]) for row in names if row.get("flipped")]
+    flipped = [str(row["symbol"]) for row in names if row.get("flipped")]
     if flipped:
         lines.append(
             "Add-like then later trim, exit, or short: " + ", ".join(flipped[:5]) + "."
@@ -583,7 +604,7 @@ def format_digest_md(payload: Mapping[str, Any]) -> str:
             f"Names {spec.get('n_names', 0)}. Events {spec.get('n_events', 0)}."
         ),
         "The return is the close on the first session that has a price to the latest later close. The label uses the action in the From column.",
-        "Notes are not in this file. One name: SELECT * FROM events WHERE ticker = 'MU'.",
+        "Notes are not in this file. One name: SELECT * FROM events WHERE symbol = 'NASDAQ:MU'.",
         "",
         "## Bands",
         "",
@@ -617,7 +638,7 @@ def format_digest_md(payload: Mapping[str, Any]) -> str:
             "",
             "## Names",
             "",
-            "| Ticker | Path | From | To | Ret % | Label | Flip |",
+            "| Symbol | Path | From | To | Ret % | Label | Flip |",
             "|---|---|---|---|---:|---|---|",
         ]
     )
@@ -633,8 +654,8 @@ def format_digest_md(payload: Mapping[str, Any]) -> str:
             latest = f"{_mmdd(str(row['latest_day']))} {row['latest_close']}"
         ret = "—" if row.get("ret_pct") is None else f"{row['ret_pct']:.1f}"
         lines.append(
-            "| {ticker} | {path} | {entry} | {latest} | {ret} | {label} | {flip} |".format(
-                ticker=row.get("ticker"),
+            "| {symbol} | {path} | {entry} | {latest} | {ret} | {label} | {flip} |".format(
+                symbol=row.get("symbol") or row.get("ticker"),
                 path=row.get("path") or "",
                 entry=entry,
                 latest=latest,

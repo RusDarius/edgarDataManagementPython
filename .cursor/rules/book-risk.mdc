@@ -7,9 +7,9 @@ alwaysApply: false
 
 When the user asks how much loss to tolerate, trim vs add, cut-and-reenter, or NAV risk on holdings:
 
-1. Read `.cursor/skills/book-risk/SKILL.md`.
+1. Read `.claude/skills/book-risk/SKILL.md`.
 2. Prefer pack `capital` / `book[].wt_nav` after compile. Else `tv_scan_cli.py risk --run latest --pack PACK.json --out-dir`.
 3. `--config-only` on `current_holdings.json` is USD-naive for FX names — use the latest holdings scan for marks.
 4. Quote three frames per name: position %, net $, % of NAV. No 0–100 risk score.
 5. Polar and mix-avoid rules still apply. Do not publish a second NEW/ADD budget.
-6. Canvas first: write `book-risk-YYYYMMDD.canvas.tsx` in the project canvases folder (same pattern as daily-focus / movers-3m). Scan fallback is `--out-dir/book_risk.md`. Do not end the turn before the canvas (or the md fallback) exists.
+6. Canvas first: write `logs/canvases/YYYYMMDD/book-risk-YYYYMMDD.json` and render it with `tv_scan_cli.py page` (same pattern as daily-focus / movers-3m). Scan fallback is `--out-dir/book_risk.md`. Do not end the turn before the canvas (or the md fallback) exists.

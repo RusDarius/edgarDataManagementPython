@@ -1399,6 +1399,7 @@ class TestAllFieldsPatternAnalyzerCore(unittest.TestCase):
                 estimated_run_memory_gb=4.0,
                 field_catalog_csv=catalog_path,
                 write_exports=False,
+                output_dir=temp_path / "batch_output",  # keep the batch overview out of the real logs tree
             )
             overview = json.loads(Path(result["overview_json"]).read_text(encoding="utf-8"))
             self.assertEqual(1, int(overview["effective_parallel_runs"]))

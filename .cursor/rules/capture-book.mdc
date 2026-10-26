@@ -8,7 +8,7 @@ alwaysApply: false
 When the user asks for whole-book opportunity capture, buy-in-red refinement,
 or deterministic momentum/recovery path evidence:
 
-1. Read `.cursor/skills/capture-book/SKILL.md`.
+1. Read `.claude/skills/capture-book/SKILL.md`.
 2. Run `python src/run_operator_suites.py capture` (default 90-day existing data).
 3. Produce a capture canvas with one Ledger and concise best-moves section.
 4. Keep output deterministic (no 0-100 composite, no ad-hoc SQL scripts).

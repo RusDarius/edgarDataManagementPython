@@ -81,7 +81,7 @@ OUTPUT CONTRACT
 ---------------
 1. Chat: a short executive snapshot only (bias, breadth, 5–8 actions). No giant
    markdown tables in chat.
-2. Primary deliverable: a Cursor canvas (.canvas.tsx) the operator can reopen daily.
+2. Primary deliverable: an operator page (logs/canvases/, tv_scan_cli.py page) the operator can reopen daily.
    Title it with the scan day. Embed real numbers from the attached runs. Omit empty
    sections. No emoji, no gradients, no invented placeholders.
 3. If canvas cannot be written, use the same section order in structured text.
@@ -368,7 +368,7 @@ CANVAS LAYOUT (when producing the canvas)
    Other radar names can stay table-only.
 9. Ledger menu (required, once): one tab that explains every abbreviation
    and symbol used anywhere on the canvas. Do not put a ledger on other
-   sections. See `.cursor/skills/canvas-ledger/SKILL.md`.
+   sections. See `.claude/skills/canvas-ledger/SKILL.md`.
 
 QUALITY BAR
 -----------

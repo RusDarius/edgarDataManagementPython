@@ -12,6 +12,10 @@ Usage:
     python test_fdx_revenue_equity_contexts.py
 """
 
+import pytest
+
+pytestmark = pytest.mark.network  # downloads live SEC/EDGAR filings
+
 import sys
 import os
 import requests

@@ -1,0 +1,68 @@
+{
+ "name": "wisdom-{DAY}",
+ "page_key": "wisdom",
+ "requires": "{PACK}/analysis_scans/name_levels/safety_band/safety_band.duckdb",
+ "title": "Wisdom {DAY}",
+ "subtitle": "Market context (OUTSIDE), the book's issues, capital and cash reserve, and the session path of the day's theme. Levels from tv_scan_cli.py name-levels, session path from intraday.",
+ "sources_extra": ["name_levels {PACK}/analysis_scans/name_levels (tv_scan_cli.py name-levels --pack {PACK} ...)", "intraday {PACK}/intraday (suite intraday)"],
+ "tone_map": {"HOLD": "info", "HOLD_NO_ADD": "warning", "DERISK_INTO_PRINT": "warning", "DERISK": "warning", "TRIM": "warning", "EXIT": "bad", "WAIT": "neutral", "WATCH": "neutral", "PASS": "bad", "NEW": "good", "ADD": "good"},
+ "tabs": [
+  {
+   "label": "Wisdom",
+   "blocks": [
+    {"type": "callout", "from": "update.banner"},
+    {"type": "stats", "from": "pages.wisdom.blocks.stats"},
+    {"type": "callout", "from": "pages.wisdom.blocks.market"},
+    {"type": "callout", "from": "pages.wisdom.blocks.capital"},
+    {"type": "callout", "from": "pages.wisdom.blocks.theme"},
+    {"type": "list", "from": "pages.wisdom.blocks.rules"},
+    {"type": "table", "title": "Cash after today (capital-plan)", "optional": true,
+     "source": {"duckdb": "{PACK}/capital_plan/capital_plan.duckdb", "sql": "SELECT cash_start_usd, cash_start_pct, cash_from_sells_usd, cash_to_buys_usd, cash_end_usd, cash_end_pct, starters_left_at_hint FROM summary"}},
+    {"type": "table", "title": "Cash if the whole queue fills (capital-plan)", "optional": true,
+     "source": {"duckdb": "{PACK}/capital_plan_queue/capital_plan.duckdb", "sql": "SELECT cash_start_usd, cash_from_sells_usd, cash_to_buys_usd, cash_end_usd, cash_end_pct, starters_left_at_hint FROM summary"}}
+   ]
+  },
+  {
+   "label": "Book issues",
+   "blocks": [
+    {"type": "callout", "from": "pages.wisdom.blocks.book_1"},
+    {"type": "callout", "from": "pages.wisdom.blocks.book_2"},
+    {"type": "callout", "from": "pages.wisdom.blocks.book_3"},
+    {"type": "table", "title": "Book: levels on today's data (safety-band)", "ids_from": "pages.wisdom.book_ids",
+     "source": {"duckdb": "{PACK}/analysis_scans/name_levels/safety_band/safety_band.duckdb", "sql": "SELECT symbol, ind, close, day, bounce_low, bounce_high, bounce_kill, bounce_kill_pct, add_trigger_low, add_trigger_high, trim_zone, trim_zone_state, street_px, street_left, dte FROM safety_band"},
+     "extra_columns": ["Course", "Grade", "Reason"], "tone_field": "Course", "extra_from": "courses"}
+   ]
+  },
+  {
+   "label": "Session path",
+   "blocks": [
+    {"type": "text", "text": "Two all-fields runs of the day: drift_pct is the move from the early run to the later one; session_path says whether the morning move built or faded. Absent on a day with one run."},
+    {"type": "table", "title": "Industries by median drift (5+ names)", "optional": true,
+     "source": {"duckdb": "{PACK}/intraday/intraday.duckdb", "sql": "SELECT ind, n, change_a_med, drift_med, drift_up_pct, change_b_med FROM drift_by_ind WHERE n >= 5 ORDER BY drift_med DESC"}},
+    {"type": "table", "title": "Named names: early vs later session", "optional": true, "ids_from": "pages.wisdom.session_ids", "sort": "-change_b", "limit": 40,
+     "source": {"duckdb": "{PACK}/intraday/intraday.duckdb", "sql": "SELECT symbol, ind, change_a, drift_pct, change_b, relvol_b, session_path FROM drift"},
+     "extra_columns": ["Course", "Grade", "Reason"], "tone_field": "Course", "extra_from": "courses"}
+   ]
+  },
+  {
+   "label": "Theme levels",
+   "blocks": [
+    {"type": "text", "from": "pages.wisdom.blocks.levels_0"},
+    {"type": "table", "title": "Buy-in-red band, kill, reclaim add, trim zone", "ids_from": "pages.wisdom.focus_ids", "sort": "-street_left",
+     "source": {"duckdb": "{PACK}/analysis_scans/name_levels/safety_band/safety_band.duckdb", "sql": "SELECT symbol, ind, close, day, bounce_low, bounce_high, bounce_kill, bounce_kill_pct, add_trigger_low, add_trigger_high, trim_zone, trim_zone_state, street_px, street_left, dte FROM safety_band"},
+     "extra_columns": ["Course", "Grade", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+    {"type": "table", "title": "Margin of safety on next-FY EPS and the 7-month path", "ids_from": "pages.wisdom.focus_ids", "sort": "-mos_peer_pct",
+     "source": {"duckdb": "{PACK}/analysis_scans/name_levels/safety_band/safety_band.duckdb", "sql": "SELECT symbol, close, pe_nfy, pe_nfy_ind_med, pe_nfy_vs_ind, pe_nfy_seat, mos_peer_pct, mos_own_med_pct, eps_fc_pct, derate_pct, giveback_pct, window_high, window_low FROM safety_band"}},
+    {"type": "table", "title": "Theme slice (GMV lens, industry cap)", "optional": true,
+     "source": {"csv": "{PACK}/analysis_scans/theme_slice.csv"},
+     "columns": ["symbol", "ind", "lenses", "tape_state", "rerate_floor", "r_1m", "eps_rev_3m", "fwd_eps_g", "pe_nfy", "pe_nfy_vs_ind", "peg_fwd", "street_left", "dte"],
+     "extra_columns": ["Course", "Grade", "Reason"], "tone_field": "Course", "extra_from": "courses"}
+   ]
+  },
+  {
+   "label": "Sources",
+   "blocks": [{"type": "text", "from": "pages.wisdom.blocks.sources"}]
+  }
+ ],
+ "ledger": {"auto": true}
+}

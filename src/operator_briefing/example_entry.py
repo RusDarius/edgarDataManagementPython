@@ -26,6 +26,18 @@ if str(SRC_ROOT) not in sys.path:
 
 COMMANDS = ("compile", "inspect", "lookup", "compare", "stance")
 
+# --brief keeps the fields a course decision reads. Full dossiers stay one flag away.
+BRIEF_RAW_FIELDS = (
+    "close", "left", "street_left", "rr", "bo", "cont", "fwd", "rsi", "rng", "vs50", "peer",
+    "val_vs_ind", "val_label", "dte", "mix", "mtp", "weeks_ras", "opm", "pe", "pe_fwd", "mcap", "ind",
+)
+BRIEF_COMPARE_FIELDS = ("symbol", "d_bo", "d_cont", "d_fwd", "bo_b", "mix_a", "mix_b", "rank_a", "rank_b")
+
+
+def _slim(row: dict[str, object] | None, fields: tuple[str, ...]) -> dict[str, object]:
+    row = row or {}
+    return {key: row.get(key) for key in fields if row.get(key) is not None}
+
 
 def _dumps(payload: dict[str, object]) -> str:
     return json.dumps(payload, indent=2, default=str)
@@ -76,11 +88,15 @@ def _cmd_inspect(argv: list[str]) -> dict[str, object]:
     parser = argparse.ArgumentParser(description="Describe locked DuckDB sources, tables, and columns.")
     parser.add_argument("--pred-run", default=None)
     parser.add_argument("--af-run", default=None)
+    parser.add_argument("--sources", action="store_true", help="Print only source paths, run ids, and the latest pack.")
     args = parser.parse_args(argv)
     payload = inspect_locked_sources(
         prediction_run_id=args.pred_run,
         all_fields_run_id=args.af_run,
     )
+    if args.sources:
+        print(_dumps({"sources": payload.get("sources"), "latest_briefing_pack": payload.get("latest_briefing_pack")}))
+        return payload
     print(_dumps(payload))
     return payload
 
@@ -91,10 +107,64 @@ def _cmd_lookup(argv: list[str]) -> dict[str, object]:
     parser = argparse.ArgumentParser(description="Dossier: raw + progression + stance for named symbols.")
     parser.add_argument("symbols", nargs="+", help="Tickers or EXCHANGE:TICKER")
     parser.add_argument("--pack", default=None, help="Path to briefing_pack.json")
+    parser.add_argument("--brief", action="store_true", help="Course fields only (stance, support, conflicts, raw subset).")
+    parser.add_argument("--line", action="store_true", help="--brief as one text line per name.")
     args = parser.parse_args(argv)
     payload = lookup_symbols(args.symbols, pack_path=args.pack)
+    if args.brief or args.line:
+        brief = _brief_dossiers(payload)
+        print(_brief_lines(brief) if args.line else _dumps(brief))
+        return payload
     print(_dumps(payload))
     return payload
+
+
+def _bo_path(prog: object) -> dict[str, object] | None:
+    """First / last weeks bo over the dossier's progression path (oldest to newest)."""
+    path = prog.get("path") if isinstance(prog, dict) else None
+    points = [p for p in (path or []) if isinstance(p, dict) and p.get("bo") is not None]
+    if not points:
+        return None
+    first, last = float(points[0]["bo"]), float(points[-1]["bo"])
+    return {"n": len(points), "bo_first": round(first, 3), "bo_last": round(last, 3), "d_bo": round(last - first, 3)}
+
+
+def _brief_dossiers(lookup: dict[str, object]) -> dict[str, object]:
+    rows = []
+    for row in lookup.get("dossiers") or []:
+        stance = row.get("stance") or {}
+        prog = row.get("progression") or {}
+        rows.append({
+            "symbol": row.get("symbol"),
+            "in_book": bool(row.get("book")),
+            "stance": stance.get("stance"),
+            "support": stance.get("suggested_conviction"),
+            "conflicts": stance.get("conflicts") or [],
+            "invalidation": stance.get("invalidation"),
+            "next_check": stance.get("next_check"),
+            "sleeves": stance.get("sleeves"),
+            "raw": _slim(row.get("raw"), BRIEF_RAW_FIELDS),
+            "bo_path": _bo_path(prog),
+            "d_prior_run": prog.get("delta_vs_prior_run") if isinstance(prog, dict) else None,
+        })
+    return {"pack_id": lookup.get("pack_id"), "missing": lookup.get("missing"), "rows": rows}
+
+
+def _brief_lines(brief: dict[str, object]) -> str:
+    """One text line per --brief row (about 250 bytes vs 1 KB of JSON). Same fields, nothing added."""
+    lines = [f"pack {brief.get('pack_id')}"]
+    for row in brief.get("rows") or []:
+        raw = row.get("raw") or {}
+        cells = [f"{k}={round(v, 2) if isinstance(v, float) else v}" for k, v in raw.items() if k != "mcap"]
+        bo = row.get("bo_path") or {}
+        tail = [f"d_bo={bo['d_bo']}"] if bo.get("d_bo") is not None else []
+        tail += [f"conflicts={'; '.join(row['conflicts'])}"] if row.get("conflicts") else []
+        lines.append(f"{row.get('symbol')} {'BOOK ' if row.get('in_book') else ''}{row.get('stance')} "
+                     f"support={row.get('support')} " + " ".join(cells + tail))
+    if brief.get("missing"):
+        lines.append("missing (not a pack name; try tv_scan_cli.py named --csv PACK/movers/us2b_tape.csv): "
+                     + ", ".join(map(str, brief["missing"])))
+    return "\n".join(lines)
 
 
 def _cmd_compare(argv: list[str]) -> dict[str, object]:
@@ -115,6 +185,8 @@ def _cmd_compare(argv: list[str]) -> dict[str, object]:
         help="Comma exchanges to keep (DAILY: NASDAQ,NYSE,AMEX).",
     )
     parser.add_argument("--ids", default=None, help="Comma symbols or tickers to keep.")
+    parser.add_argument("--brief", action="store_true", help="Delta fields only, lists cut to --brief-n rows.")
+    parser.add_argument("--brief-n", type=int, default=8)
     args = parser.parse_args(argv)
     exchanges = [item.strip() for item in (args.exchanges or "").split(",") if item.strip()] or None
     ids = [item.strip() for item in (args.ids or "").split(",") if item.strip()] or None
@@ -126,6 +198,14 @@ def _cmd_compare(argv: list[str]) -> dict[str, object]:
         exchanges=exchanges,
         ids=ids,
     )
+    if args.brief:
+        brief: dict[str, object] = {k: payload.get(k) for k in ("run_a", "run_b", "session", "n")}
+        for key in ("gainers", "losers", "new_in_top", "dropped_from_top", "mix_flips", "rising_actionable"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                brief[key] = [_slim(r, BRIEF_COMPARE_FIELDS) if isinstance(r, dict) else r for r in value[: args.brief_n]]
+        print(_dumps(brief))
+        return payload
     print(_dumps(payload))
     return payload
 
@@ -136,8 +216,15 @@ def _cmd_stance(argv: list[str]) -> dict[str, object]:
     parser = argparse.ArgumentParser(description="Suggested course + support for named symbols.")
     parser.add_argument("symbols", nargs="+")
     parser.add_argument("--pack", default=None)
+    parser.add_argument("--brief", action="store_true", help="Course fields only (stance, support, conflicts, raw subset).")
+    parser.add_argument("--line", action="store_true", help="--brief as one text line per name.")
     args = parser.parse_args(argv)
     lookup = lookup_symbols(args.symbols, pack_path=args.pack)
+    if args.brief or args.line:
+        brief = _brief_dossiers(lookup)
+        brief["primary_course"] = {k: (lookup.get("primary_course") or {}).get(k) for k in ("bias",)}
+        print(_brief_lines(brief) if args.line else _dumps(brief))
+        return brief
     payload = {
         "pack_id": lookup.get("pack_id"),
         "missing": lookup.get("missing"),

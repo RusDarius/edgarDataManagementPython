@@ -3,6 +3,7 @@ from generic_utils.decision_review import (
     complete_top,
     format_highlights,
     load_signal_support,
+    performance_queries,
     spearman,
     suggestion_matrix,
     DEFAULT_SPEC,
@@ -79,7 +80,12 @@ def test_head_that_lags_the_tail_is_a_change() -> None:
     assert rho is not None and rho > 0
     page = format_highlights(payload)
     assert "CHANGE" in page
+    assert "Path runners" in page
+    assert "Recommendation stack" in page
     assert "NASDAQ:H1" not in page
+    guide = performance_queries("D:/example/decision_review.duckdb")
+    assert "FROM name_path WHERE path_class = 'RUNNER'" in guide
+    assert "FROM decisions" in guide
 
 
 def test_live_street_quote_that_beats_edge_only_is_a_keep() -> None:
@@ -124,6 +130,34 @@ def test_a_thin_slice_does_not_invent_a_change() -> None:
         {**DEFAULT_SPEC, "min_n": 12},
     )
     assert all(row["call"] == "THIN" for row in matrix)
+
+
+def test_rollup_keeps_a_runner_a_broken_pump_and_a_high_rank_that_faded() -> None:
+    from generic_utils.decision_review import rollup_names
+
+    rows = rollup_names(
+        [
+            {"day": "2026-09-02", "symbol": "NASDAQ:RUN", "close": 100, "m1": 5, "rank": 40},
+            {"day": "2026-10-12", "symbol": "NASDAQ:RUN", "close": 130, "m1": 10, "rank": 30},
+            {"day": "2026-09-02", "symbol": "NASDAQ:PUMP", "close": 100, "w": 4},
+            {"day": "2026-09-21", "symbol": "NASDAQ:PUMP", "close": 160, "w": 30},
+            {"day": "2026-10-12", "symbol": "NASDAQ:PUMP", "close": 110, "w": 2},
+            {"day": "2026-09-02", "symbol": "NASDAQ:BAD", "close": 100, "rank": 4, "m1": 1},
+            {"day": "2026-10-12", "symbol": "NASDAQ:BAD", "close": 80, "rank": 12, "m1": -5},
+            {"day": "2026-10-12", "symbol": "NASDAQ:MOON", "close": 10, "m1": 80, "w": 20},
+        ],
+        DEFAULT_SPEC,
+    )
+    by = {row["ticker"]: row for row in rows}
+    assert by["RUN"]["path_class"] == "RUNNER"
+    assert by["RUN"]["ret_pct"] == 30.0
+    assert by["PUMP"]["pump_broke"] is True
+    assert by["PUMP"]["peak_ret_pct"] == 60.0
+    assert by["PUMP"]["ret_pct"] == 10.0
+    assert by["BAD"]["high_rank_bad"] is True
+    assert by["BAD"]["best_rank"] == 4
+    assert by["MOON"]["tape_runner"] is True
+    assert by["MOON"]["path_class"] == "TAPE_RUN"
 
 
 def test_spearman_is_negative_when_rank_one_earns_the_higher_return() -> None:

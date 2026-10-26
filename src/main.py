@@ -578,6 +578,13 @@ def run_capture_replay_dump(**kwargs):
     return run_capture_replay_suite(**kwargs)
 
 
+def run_movement_opportunity_dump(**kwargs):
+    """Trading 1-10 upside/downside from day-to-day movement. See run_movement_opportunity."""
+    from run_movement_opportunity import run_movement_opportunity_method
+
+    return run_movement_opportunity_method(**kwargs)
+
+
 def daily_prediction_move_analysis_suite() -> dict[str, object]:
     # Model Analysis scan with duckdb storage solution
     move_prediction_scan_response = (
@@ -687,7 +694,10 @@ def main():
     #     / "current_holdings.json",
     # )
     # ── Single Stock report ─────────────────────────────────────────────
-    # run_symbol_intelligence_report_example("NYSE:MMS")
+    # run_symbol_intelligence_report_example("NASDAQ:ALGM")
+    # run_symbol_intelligence_report_example("NYSE:MOH")
+    # run_symbol_intelligence_report_example("NYSE:BE")
+    # run_symbol_intelligence_report_example("NASDAQ:WDC")
 
     # ── ETF analysis (world primary listings) ─────────────────────────────
     # Fetch + v1 composite + active-management book + persist. Output:

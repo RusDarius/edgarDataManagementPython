@@ -1,0 +1,11 @@
+{
+  "name": "mesh",
+  "description": "Mesh letters F C P D T for a playbook base list. Same numbers as the canvas Ledger. Labels, not a score and not a filter.",
+  "early_min": 0.4,
+  "forming_rng_max": 55,
+  "catalyst_dte_max": 45,
+  "progression_bo_min": 0.15,
+  "progression_min_weeks": 8,
+  "discount_max": -5,
+  "trend_rng_max": 85
+}

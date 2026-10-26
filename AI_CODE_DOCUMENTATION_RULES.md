@@ -1,5 +1,7 @@
 # AI Code Documentation Rules
 
+> **Retired (2026-10-22).** Claude Code does not add these markers (owner decision). Existing markers in legacy modules stay as history. See `CLAUDE.md`.
+
 ## Overview
 
 This document establishes universal rules for documenting AI-generated code in this project to maintain clear provenance and transparency. These rules apply to **ALL AI models** including Claude, GPT, Gemini, Copilot, and any other AI systems used in development.

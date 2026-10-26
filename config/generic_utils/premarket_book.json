@@ -1,0 +1,23 @@
+{
+  "name": "premarket_book",
+  "description": "Premarket mark for the current book plus a caller context list. Not a briefing compile, not a ranking, and not a buy list. The book comes from the newest pack. context_symbols are names to read beside the book when the session is still premarket.",
+  "mcap_min": 2000000000,
+  "context_symbols": [
+    "NASDAQ:SNDK",
+    "NASDAQ:NVDA",
+    "NASDAQ:AVGO",
+    "NASDAQ:AMD",
+    "NASDAQ:ARM",
+    "NYSE:TSM",
+    "NASDAQ:ASML",
+    "NASDAQ:AMAT",
+    "NASDAQ:LRCX",
+    "NASDAQ:KLAC",
+    "NYSE:VRT",
+    "NASDAQ:ANET",
+    "NASDAQ:CRDO",
+    "NASDAQ:SMCI",
+    "NASDAQ:STX",
+    "NYSE:ORCL"
+  ]
+}

@@ -7,7 +7,7 @@ alwaysApply: false
 
 When the user wants street vs model price, PE fwd / PEG vs leftover, or financial_projection terminals/CAGRs:
 
-1. Read `.cursor/skills/forward-value/SKILL.md`.
+1. Read `.claude/skills/forward-value/SKILL.md`.
 2. Prefer `python src/run_operator_suites.py forward --cover 1000` or `tv_scan_cli.py forward`. Cover is a size (max 1000), not a screen, and not an industry cap.
 3. Quote street leftover, pack leftover, and `fp_*` separately. `pe_fwd` is `fp_pe_y1`. `pe_fwd_tv` stays empty. Do not fill with EV/Rev.
 4. Value/tech (`setup`) already has street/TV `fwd_*`. `--forward` or the forward command joins `finproj_*` / `fingrowth_*`.

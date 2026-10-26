@@ -109,7 +109,14 @@ GITBASH_FLOWS: tuple[dict[str, str], ...] = (
         "prompt": "DAILY",
         "command": "python src/run_market_timing_policy.py",
         "skill": "daily-operator-scan (MTP)",
-        "feeds": "market_timing_policy/runs/",
+        "feeds": "market_timing_policy/runs/. action_policy_recommendations includes entry_low, kill_px, thesis_drawdown_px, thesis_chase_px.",
+    },
+    {
+        "stage": "5 skill dumps",
+        "prompt": "TIMING LEVELS",
+        "command": "python src/generic_utils/tv_scan_cli.py timing-levels --csv TAPE.csv --screen --out-dir RUN/timing_levels",
+        "skill": "entry-book",
+        "feeds": "timing_levels.duckdb tables timing_levels and timing_screen. Prices only. MTP ENTER_* stays climate.",
     },
     {
         "stage": "2 overlays",
@@ -124,6 +131,13 @@ GITBASH_FLOWS: tuple[dict[str, str], ...] = (
         "command": "python src/run_financial_projection.py --mode price --top-n 1000",
         "skill": "forward-value",
         "feeds": "finproj_*.duckdb (terminals)",
+    },
+    {
+        "stage": "5 skill dumps",
+        "prompt": "MOVEMENT",
+        "command": "python src/run_movement_opportunity.py",
+        "skill": "movement-opportunity",
+        "feeds": "movement_opportunity.duckdb (tape + upside_50 + downside_30 + bounce + evidence). Same dump: python src/run_financial_projection.py --mode movement",
     },
     {
         "stage": "3 pack",
@@ -215,6 +229,27 @@ GITBASH_FLOWS: tuple[dict[str, str], ...] = (
         "command": "python src/run_operator_suites.py playbook --weeks 25",
         "skill": "manual dump; agent canvas is src/research_prompt/playbook_generic.txt",
         "feeds": "briefing_pack_*/playbook/ playbook.duckdb + weeks_progression/ (no mesh, no canvas)",
+    },
+    {
+        "stage": "5 skill dumps",
+        "prompt": "ENTRY BOOK",
+        "command": "python src/generic_utils/tv_scan_cli.py entry-book --csv CATALOG.csv --mark-csv LATER.csv --out-dir RUN/entry_book",
+        "skill": "entry-book",
+        "feeds": "entry_book.duckdb buy band + kill_px for this row; later close does not move the band",
+    },
+    {
+        "stage": "5 skill dumps",
+        "prompt": "PAYOFF FOCUS",
+        "command": "python src/generic_utils/tv_scan_cli.py payoff-focus --db PACK.duckdb --table radar_curated_50 --out-dir RUN/payoff_focus",
+        "skill": "daily-operator-scan / playbook / analysis-style",
+        "feeds": "payoff_focus.duckdb ten names; band_payoff sort; stake_per_1k_usd; not a NEW budget",
+    },
+    {
+        "stage": "5 skill dumps",
+        "prompt": "BOOK SESSIONS",
+        "command": "python src/generic_utils/tv_scan_cli.py book-sessions --lookback-days 180 --briefs-db BRIEF.duckdb",
+        "skill": "capture-book",
+        "feeds": "book_sessions.duckdb membership over the window; brief_label when a digest duckdb is passed",
     },
     {
         "stage": "5 skill dumps",
@@ -378,6 +413,24 @@ PROMPT_RUNS: tuple[dict[str, str], ...] = (
         "output": "fingrowth_* + finproj_* under financial_projection/ plus suites_*/ as above",
     },
     {
+        "prompt": "ENTRY BOOK",
+        "command": "python src/generic_utils/tv_scan_cli.py entry-book --csv CATALOG.csv --mark-csv LATER.csv --out-dir RUN/entry_book",
+        "usage": "Buy band and this-entry kill from any catalog CSV. A later close does not move the band. Starter and add dollars are advice columns.",
+        "output": "RUN/entry_book/ entry_book.csv entry_book.duckdb queries.txt overview.log",
+    },
+    {
+        "prompt": "PAYOFF FOCUS",
+        "command": "python src/generic_utils/tv_scan_cli.py payoff-focus --db PACK.duckdb --table radar_curated_50 --out-dir RUN/payoff_focus",
+        "usage": "Ten names. Discount with momentum, or strength at a premium. Sort is band_payoff, not a 0-100. stake_per_1k_usd is the check that earns 1000 dollars.",
+        "output": "RUN/payoff_focus/ payoff_focus.csv payoff_qualified.csv payoff_focus.duckdb queries.txt overview.log",
+    },
+    {
+        "prompt": "BOOK SESSIONS",
+        "command": "python src/generic_utils/tv_scan_cli.py book-sessions --lookback-days 180 --briefs-db BRIEF.duckdb",
+        "usage": "Holdings membership over a window, optional brief labels. Not the all-fields fund path.",
+        "output": "logs/.../operator_briefing/runs/book_sessions_*/ book_sessions.duckdb queries.txt overview.log",
+    },
+    {
         "prompt": "PLAYBOOK (manual dump)",
         "command": "python src/run_operator_suites.py playbook --weeks 25",
         "usage": "Raw inputs for the playbook canvas. Upside 100, curated shorts, forming, Book, and 25-week score path. No mesh, no Best 25, no canvas.",
@@ -394,6 +447,12 @@ PROMPT_RUNS: tuple[dict[str, str], ...] = (
         "command": "python src/run_operator_suites.py wisdom --cover 1000",
         "usage": "After a fresh pack: wisdom dumps, then an rr rank and a bo rank on names whose all-fields span is OPENING or CHEAPER. Skill analysis-style. Canvas only if the paste says canvas output.",
         "output": "suites_*/ child duckdbs and queries.txt. Rank files under analysis_scans/ when the agent runs the payoff focus. Canvas analysis-style-YYYYMMDD only on canvas output.",
+    },
+    {
+        "prompt": "MOVEMENT OPPORTUNITY",
+        "command": "python src/run_movement_opportunity.py",
+        "usage": "Day-to-day variation, expected-move envelope, auditable 1-10 upside and 1-10 downside. Same dump: python src/run_financial_projection.py --mode movement. Open queries.txt. Not Daily leftover.",
+        "output": "logs/.../movement_opportunity/runs/movement_opportunity_*/ highlights.log queries.txt movement_opportunity.duckdb overview.log spec.json",
     },
 )
 
@@ -497,6 +556,13 @@ SUITES: tuple[dict[str, str], ...] = (
         "python": "run_finproj_price_suite(cover=1000)",
         "skill": "forward-value (join after)",
         "out": "logs/.../financial_projection/*/finproj_*.duckdb (projection_summary)",
+    },
+    {
+        "id": "movement",
+        "cli": "python src/run_movement_opportunity.py",
+        "python": "run_movement_opportunity_method()",
+        "skill": "movement-opportunity",
+        "out": "logs/.../movement_opportunity/runs/movement_opportunity_*/ movement_opportunity.duckdb (tape + 1-10 upside/downside + evidence)",
     },
     {
         "id": "sources",

@@ -1,0 +1,2706 @@
+{
+  "_note": "Standing Ledger meanings for operator pages (source of truth for the canvas-ledger skill). tv_scan_cli.py page pulls entries from here; pages add only their own new codes. plain_headers need no Ledger row. free_text_headers are not scanned for coded values (tickers, industries, reasons). letter_coded_headers maps a column to its allowed letters; each cell is explained by the field row plus one row per letter.",
+  "plain_headers": [
+    "symbol",
+    "ticker",
+    "name",
+    "industry",
+    "ind",
+    "sector",
+    "reason",
+    "why",
+    "note",
+    "notes",
+    "order",
+    "rank",
+    "#",
+    "n",
+    "course",
+    "action",
+    "lane",
+    "horizon",
+    "date",
+    "session",
+    "source",
+    "sources",
+    "field",
+    "meaning",
+    "count",
+    "comment",
+    "evidence",
+    "conflicts",
+    "invalidation",
+    "next_check",
+    "size",
+    "trigger",
+    "cover_/_invalidation",
+    "cover",
+    "horizon_tag",
+    "class"
+  ],
+  "free_text_headers": [
+    "symbol",
+    "ticker",
+    "name",
+    "industry",
+    "ind",
+    "sector",
+    "reason",
+    "why",
+    "note",
+    "notes",
+    "comment",
+    "evidence",
+    "conflicts",
+    "invalidation",
+    "next_check",
+    "date",
+    "session",
+    "source",
+    "sources",
+    "field",
+    "field_or_value",
+    "meaning"
+  ],
+  "letter_coded_headers": {
+    "mesh": "FCPDT"
+  },
+  "entries": [
+    {
+      "key": "Mesh",
+      "aliases": [
+        "Mesh"
+      ],
+      "group": "Mesh",
+      "meaning": "Letters written in order F C P D T, only the ones that are on. Example FCPD means F, C, P, and D are on and T is off. - means none of the five are on."
+    },
+    {
+      "key": "F",
+      "aliases": [
+        "F"
+      ],
+      "group": "Mesh",
+      "meaning": "On: pack forming sleeve, or weeks early ≥ 0.4 with rng under 55. Off: neither."
+    },
+    {
+      "key": "C",
+      "aliases": [
+        "C"
+      ],
+      "group": "Mesh",
+      "meaning": "On: earnings dte ≤ 45. Off: no print inside 45 days, or dte missing."
+    },
+    {
+      "key": "P",
+      "aliases": [
+        "P"
+      ],
+      "group": "Mesh",
+      "meaning": "On: 25-week Δbo ≥ 0.15 and at least 8 weeks in the span. Off: breakout flat, down, or too few weeks."
+    },
+    {
+      "key": "D",
+      "aliases": [
+        "D"
+      ],
+      "group": "Mesh",
+      "meaning": "On: setup Peer is DISCOUNT (val_vs_ind ≤ −5). Off: PREMIUM, INLINE, THIN, NA, or no peer. pe_peer and pe_fwd_peer do not turn D on."
+    },
+    {
+      "key": "T",
+      "aliases": [
+        "T"
+      ],
+      "group": "Mesh",
+      "meaning": "On: tech_sma is ABOVE and rng < 85. Off: below the 50-day, or range already paid."
+    },
+    {
+      "key": "nmesh / Mesh 3+",
+      "aliases": [
+        "nmesh",
+        "Mesh 3+"
+      ],
+      "group": "Mesh",
+      "meaning": "Count of letters in Mesh (0–5). Mesh 3+ is the filter nmesh ≥ 3."
+    },
+    {
+      "key": "opm",
+      "aliases": [
+        "opm"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Operating margin, %. Quality of the current business. Not a score."
+    },
+    {
+      "key": "pe / pe_fwd / peg",
+      "aliases": [
+        "pe",
+        "pe_fwd",
+        "peg"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Trailing TradingView PE (pe), projection forward PE (pe_fwd / fp_pe_y1), PE versus growth. pe_fwd_tv stays empty. pe_fwd is a derivative and can be off."
+    },
+    {
+      "key": "fp_terminal_px / fp_primary_upside_pct / fp_rev_cagr_own",
+      "aliases": [
+        "fp_terminal_px",
+        "fp_primary_upside_pct",
+        "fp_rev_cagr_own"
+      ],
+      "group": "Leftover / targets",
+      "meaning": "Model terminal price, model upside %, own-lane revenue CAGR. Separate from street and pack."
+    },
+    {
+      "key": "left / leftover",
+      "aliases": [
+        "left",
+        "leftover"
+      ],
+      "group": "Leftover / targets",
+      "meaning": "Unused upside %, max(street PT / close − 1, edge forward upside). Not mix."
+    },
+    {
+      "key": "street_left",
+      "aliases": [
+        "street_left"
+      ],
+      "group": "Leftover / targets",
+      "meaning": "Street target versus close, %. Separate from left."
+    },
+    {
+      "key": "edge_only",
+      "aliases": [
+        "edge_only"
+      ],
+      "group": "Leftover / targets",
+      "meaning": "leftover_carrier: street_left < 0 and left > 0. Pack leftover is the edge number. The street target is below the price."
+    },
+    {
+      "key": "both",
+      "aliases": [
+        "both"
+      ],
+      "group": "Leftover / targets",
+      "meaning": "leftover_carrier: street_left > 0 and left is above it. Edge lifted the pack number."
+    },
+    {
+      "key": "street",
+      "aliases": [
+        "street"
+      ],
+      "group": "Leftover / targets",
+      "meaning": "leftover_carrier: street_left > 0 and left is not above it."
+    },
+    {
+      "key": "none",
+      "aliases": [
+        "none"
+      ],
+      "group": "Leftover / targets",
+      "meaning": "leftover_carrier: left is missing or not positive, or street_left is missing."
+    },
+    {
+      "key": "street_px",
+      "aliases": [
+        "street_px"
+      ],
+      "group": "Leftover / targets",
+      "meaning": "Analyst PT in dollars, or close × (1 + street leftover %)."
+    },
+    {
+      "key": "target_px",
+      "aliases": [
+        "target_px"
+      ],
+      "group": "Leftover / targets",
+      "meaning": "Pack leftover in dollars: close × (1 + leftover %). Edge leftover can sit above street."
+    },
+    {
+      "key": "rr",
+      "aliases": [
+        "rr",
+        "rr_at_band"
+      ],
+      "group": "Leftover / targets",
+      "meaning": "leftover / max(52w range used, 15). High = unused upside vs already-paid range. Not a 0–100 score."
+    },
+    {
+      "key": "alloc_sleeve",
+      "aliases": [
+        "alloc_sleeve"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "discount_momentum or premium_strength. Empty means the name is off the ten-name payoff focus."
+    },
+    {
+      "key": "discount_momentum",
+      "aliases": [
+        "discount_momentum"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Quoted multiple at least 5% cheaper than the industry median (val_vs_ind ≤ −5), and weeks bo at least 0.15."
+    },
+    {
+      "key": "premium_strength",
+      "aliases": [
+        "premium_strength"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Quoted multiple at least 5% richer (val_vs_ind ≥ 5), and weeks bo at least 0.5."
+    },
+    {
+      "key": "band_payoff",
+      "aliases": [
+        "band_payoff"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Upside from entry_high to the value target, divided by the distance down to exit_stop. The order of the ten. Not rr and not a 0–100."
+    },
+    {
+      "key": "band_payoff_source",
+      "aliases": [
+        "band_payoff_source"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "value when year-1 inline upside is positive. value_below when that price is already under the band, so street does not take over. discount when year-1 is missing and the quoted inline price is above the band. street only when neither value price was computed."
+    },
+    {
+      "key": "value_y1_px",
+      "aliases": [
+        "value_y1_px"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Year-1 PE capitalized at the industry median forward PE. The only horizon priced."
+    },
+    {
+      "key": "value_px",
+      "aliases": [
+        "value_px"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "value_y1_px when that PE is usable. Otherwise trailing PE, then EV/EBIT, then EV/Rev. EBITDA is not used."
+    },
+    {
+      "key": "discount_px",
+      "aliases": [
+        "discount_px"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "The other peer price. EV/EBIT when that multiple and its median are on the row. Otherwise EV/Rev. Not EV/EBITDA."
+    },
+    {
+      "key": "discount_source",
+      "aliases": [
+        "discount_source"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "evebit or evrev. missing when neither is on the row."
+    },
+    {
+      "key": "value_source",
+      "aliases": [
+        "value_source"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "pe_y1, pe_trail, evebit, evrev, or missing."
+    },
+    {
+      "key": "strength_state",
+      "aliases": [
+        "strength_state"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "above_oldest, below_oldest, at_oldest, or unknown, versus close_first / oldest_close when that column is on the row. Not a sort key."
+    },
+    {
+      "key": "px_vs_oldest_pct",
+      "aliases": [
+        "px_vs_oldest_pct"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Percent from that oldest close to today's close."
+    },
+    {
+      "key": "up_from_entry_pct",
+      "aliases": [
+        "up_from_entry_pct"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Percent from entry_high up to exit_target."
+    },
+    {
+      "key": "down_from_entry_pct",
+      "aliases": [
+        "down_from_entry_pct"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Percent from entry_high down to exit_stop. Negative."
+    },
+    {
+      "key": "stake_per_1k_usd",
+      "aliases": [
+        "stake_per_1k_usd"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Dollars that earn $1,000 if exit_target prints. 10% upside is $10,000. 50% upside is $2,000."
+    },
+    {
+      "key": "profit_on_10k_usd",
+      "aliases": [
+        "profit_on_10k_usd"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Dollar profit on a $10,000 check at up_from_entry_pct. 10% upside is $1,000."
+    },
+    {
+      "key": "profit_on_5k_usd",
+      "aliases": [
+        "profit_on_5k_usd"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Dollar profit on a $5,000 check at up_from_entry_pct. 50% upside is $2,500."
+    },
+    {
+      "key": "entry_low / entry_high",
+      "aliases": [
+        "entry_low",
+        "entry_high",
+        "Entry band"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "The buy band. Above the 50-day it runs from the average to the close. Under it, it starts at the 50-day."
+    },
+    {
+      "key": "trim_px",
+      "aliases": [
+        "trim_px"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "First trim. The 50-day when trim_state is trim_at_sma. Empty when through_average. Not the kill."
+    },
+    {
+      "key": "trim_state",
+      "aliases": [
+        "trim_state"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "trim_at_sma: close is above the 50-day and trim_px is that average. through_average: close is already under the 50-day, so the trim has printed and trim_px is empty. at_average: close is on the average. unknown: the 50-day gap is missing."
+    },
+    {
+      "key": "exit_stop",
+      "aliases": [
+        "exit_stop"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Price under the band that ends this entry. 1.5 times ATR under the band."
+    },
+    {
+      "key": "kill_px",
+      "aliases": [
+        "kill_px"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Same price as exit_stop. A print there ends this entry. kill_scope is this_entry. On an entry-book row the width is 1.5 ATR. On a timing-policy row the width is kill_atr_units (0.75 or 1.0)."
+    },
+    {
+      "key": "kill_atr_units",
+      "aliases": [
+        "kill_atr_units"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "ATR multiple under the band that produced kill_px. 1.5 on the entry book. 0.75 or 1.0 on the timing policy."
+    },
+    {
+      "key": "thesis_drawdown_px",
+      "aliases": [
+        "thesis_drawdown_px"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Recent high times 0.90. The price where the 10% drawdown leg turns on or off."
+    },
+    {
+      "key": "thesis_drawdown_state",
+      "aliases": [
+        "thesis_drawdown_state"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "in_drawdown: close is at or under thesis_drawdown_px. above_drawdown: close is above it. unknown: the high is missing."
+    },
+    {
+      "key": "thesis_chase_px",
+      "aliases": [
+        "thesis_chase_px"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Prior close times 1.05. A print there is a 5% day."
+    },
+    {
+      "key": "thesis_chase_state",
+      "aliases": [
+        "thesis_chase_state"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "through_chase: close is at or above thesis_chase_px. under_chase: close is below it. unknown: no price."
+    },
+    {
+      "key": "thesis_chase_from",
+      "aliases": [
+        "thesis_chase_from"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "prior_close, session_open (backed out of the day's percent), or this_close when the day percent is missing."
+    },
+    {
+      "key": "downside_atr_pct",
+      "aliases": [
+        "downside_atr_pct"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "downside_atr_units times ATRP. The timing-levels file uses 1.5. Not the timing kill."
+    },
+    {
+      "key": "up_down_ratio",
+      "aliases": [
+        "up_down_ratio"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "street_up_pct divided by downside_atr_pct. The order key of the low-downside screen. Not a 0–100."
+    },
+    {
+      "key": "cost_kill_px",
+      "aliases": [
+        "cost_kill_px"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "15% under average cost when cost is on the row. Book thesis-kill zone. Separate from kill_px."
+    },
+    {
+      "key": "exit_target",
+      "aliases": [
+        "exit_target"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Street price when the row has one. Separate from the pack leftover price."
+    },
+    {
+      "key": "focus_order",
+      "aliases": [
+        "focus_order"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Reading order inside the ten. Not a Daily rank."
+    },
+    {
+      "key": "rng",
+      "aliases": [
+        "rng"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Position in the 52-week range, 0–100. High (~85+) = paid. Low = unused range."
+    },
+    {
+      "key": "RSI",
+      "aliases": [
+        "RSI"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Relative strength index, 0–100."
+    },
+    {
+      "key": "bo",
+      "aliases": [
+        "bo"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Weeks breakout_long_v1 score. Δbo = change vs the prior pred run."
+    },
+    {
+      "key": "cont",
+      "aliases": [
+        "cont"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Weeks quality_continuation_v1."
+    },
+    {
+      "key": "fwd",
+      "aliases": [
+        "fwd"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Weeks forward_edge_active_v2."
+    },
+    {
+      "key": "vs50",
+      "aliases": [
+        "vs50"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Close vs the 50-day average, %. Required next to ABOVE / BELOW."
+    },
+    {
+      "key": "vs200",
+      "aliases": [
+        "vs200"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Close vs the 200-day average, %. Required next to the 200-day ABOVE / BELOW label."
+    },
+    {
+      "key": "5D / 1M / day",
+      "aliases": [
+        "5D",
+        "1M",
+        "day",
+        "d5",
+        "m1"
+      ],
+      "group": "Tape / scores",
+      "meaning": "5-day / 1-month / session price return, %."
+    },
+    {
+      "key": "w",
+      "aliases": [
+        "w"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Week return (Perf.W)."
+    },
+    {
+      "key": "m3",
+      "aliases": [
+        "m3"
+      ],
+      "group": "Tape / scores",
+      "meaning": "3-month return (Perf.3M). Dedicated MOVERS (3M) suite, not the DAILY Tape section."
+    },
+    {
+      "key": "relvol",
+      "aliases": [
+        "relvol"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Relative volume vs 10-day average."
+    },
+    {
+      "key": "dte",
+      "aliases": [
+        "dte"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Calendar days until next earnings (from the all-fields day folder)."
+    },
+    {
+      "key": "mix",
+      "aliases": [
+        "mix"
+      ],
+      "group": "Tape / scores",
+      "meaning": "manager_action_signal (e.g. add_long_breakout, avoid_value_trap). Not operator conviction."
+    },
+    {
+      "key": "MTP",
+      "aliases": [
+        "MTP",
+        "mtp",
+        "ENTER_SMALL",
+        "ENTER_PROBE",
+        "AVOID_CHASE"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Market-timing-policy action: ENTER_SMALL / ENTER_PROBE / WATCH / AVOID_CHASE. Climate, not a buy list."
+    },
+    {
+      "key": "Support",
+      "aliases": [
+        "Support"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Pack suggested_conviction 0.15–0.90 for a named course. Not a probability."
+    },
+    {
+      "key": "Grade",
+      "aliases": [
+        "Grade"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Operator High / Med / Low after reading conflicts."
+    },
+    {
+      "key": "sleeves",
+      "aliases": [
+        "sleeves",
+        "sleeve_count",
+        "sleeve_tags"
+      ],
+      "group": "Tape / scores",
+      "meaning": "How many pack sleeves confirm the name (unpaid, continuation, forming, …)."
+    },
+    {
+      "key": "EV/Rev",
+      "aliases": [
+        "EV",
+        "Rev",
+        "evrev"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Enterprise value / trailing revenue."
+    },
+    {
+      "key": "PE ttm",
+      "aliases": [
+        "PE ttm"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Trailing price / earnings."
+    },
+    {
+      "key": "pe_fwd",
+      "aliases": [
+        "pe_fwd"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Projection forward PE (fp_pe_y1). A derivative. Can be off. pe_fwd_tv is the empty TradingView forward PE."
+    },
+    {
+      "key": "PEG",
+      "aliases": [
+        "PEG"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "PE / earnings growth."
+    },
+    {
+      "key": "EV/EBITDA",
+      "aliases": [
+        "EV",
+        "EBITDA",
+        "evebitda"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Enterprise value / trailing EBITDA."
+    },
+    {
+      "key": "evrev_vs_ind / pe_vs_ind",
+      "aliases": [
+        "evrev_vs_ind",
+        "pe_vs_ind"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "% vs industry median multiple. Negative = cheaper (discount). Peer set is US $2B industry, min n=6."
+    },
+    {
+      "key": "left_vs_ind / d5_vs_ind",
+      "aliases": [
+        "left_vs_ind",
+        "d5_vs_ind"
+      ],
+      "group": "Leftover / targets",
+      "meaning": "Leftover or 5D vs industry median. Positive leftover = more unused upside than peers."
+    },
+    {
+      "key": "Val",
+      "aliases": [
+        "Val"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Tape column: pack val_label + val (generic_utils.setup). Not always EV/Rev."
+    },
+    {
+      "key": "Peer",
+      "aliases": [
+        "Peer"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Tape column: the bin on the one multiple setup quoted (val_field). Always show val_vs_ind beside it. Not a substitute for the trailing TV bins or the forward bins."
+    },
+    {
+      "key": "val_vs_ind",
+      "aliases": [
+        "val_vs_ind"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Percent versus the industry median of val_field. Negative = cheaper. The peer label uses this column."
+    },
+    {
+      "key": "val_ind_med",
+      "aliases": [
+        "val_ind_med"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "The industry median of val_field."
+    },
+    {
+      "key": "val_vs_avg",
+      "aliases": [
+        "val_vs_avg"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Percent versus the industry average of val_field. A different column from val_vs_ind. It does not change DISCOUNT / PREMIUM / INLINE."
+    },
+    {
+      "key": "val_ind_avg",
+      "aliases": [
+        "val_ind_avg"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "The industry average of val_field."
+    },
+    {
+      "key": "eff_vs_ind / eff_vs_avg",
+      "aliases": [
+        "eff_vs_ind",
+        "eff_vs_avg"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Percent versus the industry median, and versus the industry average, of the efficiency field. Two columns."
+    },
+    {
+      "key": "FIELD_vs_ind / FIELD_vs_avg",
+      "aliases": [
+        "FIELD_vs_ind",
+        "FIELD_vs_avg"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Same pair for each relative metric (pe, pe_fwd, peg, evrev, evebitda, pb, evfcf, opm, left, d5, and the rest on the row). Median percent and average percent stay separate."
+    },
+    {
+      "key": "Proj",
+      "aliases": [
+        "Proj"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Tape column: leftover + weeks bo / cont / fwd."
+    },
+    {
+      "key": "Tech",
+      "aliases": [
+        "Tech"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Tape column: tech_sma plus vs50, and tech_rng plus rng. RSI and ADX stay separate."
+    },
+    {
+      "key": "IS_SUPPORTED",
+      "aliases": [
+        "IS_SUPPORTED"
+      ],
+      "group": "Tape classes",
+      "meaning": "Up-tape: leftover / weeks / Val-Peer still justify the print."
+    },
+    {
+      "key": "CHASE",
+      "aliases": [
+        "CHASE"
+      ],
+      "group": "Tape classes",
+      "meaning": "Up-tape: paid range, leftover gone, premium vs peers. Do not add."
+    },
+    {
+      "key": "UNSUPPORTED",
+      "aliases": [
+        "UNSUPPORTED"
+      ],
+      "group": "Tape classes",
+      "meaning": "Up-tape: price moved without leftover / weeks / value support."
+    },
+    {
+      "key": "MIXED",
+      "aliases": [
+        "MIXED"
+      ],
+      "group": "Tape classes",
+      "meaning": "Neither clean case (up or down). Canvas may omit down-MIXED."
+    },
+    {
+      "key": "BOUNCE",
+      "aliases": [
+        "BOUNCE"
+      ],
+      "group": "Tape classes",
+      "meaning": "Down-tape: leftover / unused range / cheap vs industry / live profile can justify a bounce."
+    },
+    {
+      "key": "CONTINUE_DOWN",
+      "aliases": [
+        "CONTINUE_DOWN"
+      ],
+      "group": "Tape classes",
+      "meaning": "Down-tape: limited leftover + deterioration — likely to keep falling."
+    },
+    {
+      "key": "down_class",
+      "aliases": [
+        "down_class"
+      ],
+      "group": "Tape classes",
+      "meaning": "Pack/CLI field on movers laggards: BOUNCE / CONTINUE_DOWN / MIXED."
+    },
+    {
+      "key": "DISCOUNT",
+      "aliases": [
+        "DISCOUNT"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "That column's percent versus the industry median is ≤ −5. At least 5% cheaper."
+    },
+    {
+      "key": "PREMIUM",
+      "aliases": [
+        "PREMIUM"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "That column's percent versus the industry median is ≥ 5. At least 5% richer."
+    },
+    {
+      "key": "INLINE",
+      "aliases": [
+        "INLINE"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "That column's percent is between −5 and 5. Close to the median."
+    },
+    {
+      "key": "pe_peer",
+      "aliases": [
+        "pe_peer"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "DISCOUNT / PREMIUM / INLINE / THIN / NA on TradingView trailing PE (pe), taken as published. The percent beside it is pe_vs_ind."
+    },
+    {
+      "key": "evebitda_peer",
+      "aliases": [
+        "evebitda_peer"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Same bins on TradingView trailing EV/EBITDA (evebitda). The percent is evebitda_vs_ind."
+    },
+    {
+      "key": "pb_peer / evfcf_peer",
+      "aliases": [
+        "pb_peer",
+        "evfcf_peer"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Same bins on TradingView price/book and EV/FCF. Percents are pb_vs_ind and evfcf_vs_ind."
+    },
+    {
+      "key": "pe_fwd_peer",
+      "aliases": [
+        "pe_fwd_peer"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Same bins on the projection forward PE (pe_fwd). The percent is pe_fwd_vs_ind. Derivative. Can be off. Not the same word as pe_peer."
+    },
+    {
+      "key": "evebitda_fwd_peer",
+      "aliases": [
+        "evebitda_fwd_peer"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Same bins on the projection forward EV/EBITDA (evebitda_fwd). The percent is evebitda_fwd_vs_ind. Derivative. Can be off."
+    },
+    {
+      "key": "THIN / NA",
+      "aliases": [
+        "THIN",
+        "NA"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Peer skipped: industry n < 6, or no quoteable multiple (ETF, missing native field). No percent."
+    },
+    {
+      "key": "val_field / val",
+      "aliases": [
+        "val_field",
+        "val",
+        "val_label"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Multiple generic_utils.setup chose to quote. Not EV/Rev unless val_field is evrev."
+    },
+    {
+      "key": "ABOVE / BELOW",
+      "aliases": [
+        "ABOVE",
+        "BELOW",
+        "tech_sma",
+        "tech_sma200"
+      ],
+      "group": "Tape / scores",
+      "meaning": "tech_sma: close versus the 50-day average. ABOVE is vs50 ≥ 0. BELOW is vs50 < 0. The percent is vs50. tech_sma200 uses vs200 the same way."
+    },
+    {
+      "key": "UNUSED / MID / PAID",
+      "aliases": [
+        "UNUSED",
+        "MID",
+        "PAID",
+        "tech_rng"
+      ],
+      "group": "Tape / scores",
+      "meaning": "tech_rng. UNUSED is rng under 40. PAID is rng at least 85. MID is between. The position is rng."
+    },
+    {
+      "key": "SMA50",
+      "aliases": [
+        "SMA50"
+      ],
+      "group": "Book risk",
+      "meaning": "50-day simple moving average. If vs50 > 0, first stop below. If vs50 < 0, bounce above — stop is ATR or c15."
+    },
+    {
+      "key": "next below",
+      "aliases": [
+        "next below"
+      ],
+      "group": "Book risk",
+      "meaning": "Nearest structure print still under today's close (SMA50, ATR, or c15)."
+    },
+    {
+      "key": "Path 8w",
+      "aliases": [
+        "Path 8w"
+      ],
+      "group": "Path / history",
+      "meaning": "First→last all-fields span (close / EV/Rev / street PT / ATRP). Not a 0–100."
+    },
+    {
+      "key": "close_pct / pt_pct",
+      "aliases": [
+        "close_pct",
+        "pt_pct"
+      ],
+      "group": "Path / history",
+      "meaning": "First→last % change in close and street PT from series_span. Older notes say pt_chg for the same PT change."
+    },
+    {
+      "key": "OPENING",
+      "aliases": [
+        "OPENING"
+      ],
+      "group": "Path / history",
+      "meaning": "All-fields span: price did not consume the target (close_pct ≤ 5 and pt_pct ≥ −2, with pack leftover still live)."
+    },
+    {
+      "key": "DYING",
+      "aliases": [
+        "DYING"
+      ],
+      "group": "Path / history",
+      "meaning": "All-fields span: price ran and the target did not (close_pct ≥ 8 and pt_pct ≤ 2). Rank these below ASYM."
+    },
+    {
+      "key": "CHEAPER",
+      "aliases": [
+        "CHEAPER"
+      ],
+      "group": "Path / history",
+      "meaning": "That name's own val_field fell on the span (val_pct < −5). Not EV/Rev unless val_field is evrev."
+    },
+    {
+      "key": "THIN_HIST",
+      "aliases": [
+        "THIN_HIST"
+      ],
+      "group": "Path / history",
+      "meaning": "Span has fewer than 8 all-fields days. Not a rank."
+    },
+    {
+      "key": "ASYM",
+      "aliases": [
+        "ASYM"
+      ],
+      "group": "Path / history",
+      "meaning": "Order, not a 0–100. Payoff shortlist that is OPENING or CHEAPER, sorted by rr, tie-break bo."
+    },
+    {
+      "key": "CONVICTION",
+      "aliases": [
+        "CONVICTION"
+      ],
+      "group": "Path / history",
+      "meaning": "Same survivors sorted by weeks bo. A second order. Do not add it to rr."
+    },
+    {
+      "key": "RAS",
+      "aliases": [
+        "RAS",
+        "weeks_ras"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Risk-adjusted score (weeks / months)."
+    },
+    {
+      "key": "NAV",
+      "aliases": [
+        "NAV"
+      ],
+      "group": "Book risk",
+      "meaning": "Portfolio net asset value = equity mark + cash (capital.nav_usd)."
+    },
+    {
+      "key": "wt / wt_cost",
+      "aliases": [
+        "wt",
+        "wt_cost"
+      ],
+      "group": "Book risk",
+      "meaning": "Cost-basis weight of invested USD. Excludes cash. Not risk weight."
+    },
+    {
+      "key": "wt_nav / wipe_nav_pct",
+      "aliases": [
+        "wt_nav",
+        "wipe_nav_pct"
+      ],
+      "group": "Book risk",
+      "meaning": "Name as % of NAV. Ceiling if the position goes to zero."
+    },
+    {
+      "key": "m5 / m10 / m15 / m20",
+      "aliases": [
+        "m5",
+        "m10",
+        "m15",
+        "m20"
+      ],
+      "group": "Book risk",
+      "meaning": "Further drop from **today's mark** (USD and % NAV)."
+    },
+    {
+      "key": "c15",
+      "aliases": [
+        "c15"
+      ],
+      "group": "Book risk",
+      "meaning": "Price 15% below **cost** (continuity thesis-kill zone)."
+    },
+    {
+      "key": "atr / atrp",
+      "aliases": [
+        "atr",
+        "atrp"
+      ],
+      "group": "Book risk",
+      "meaning": "Average True Range ($ / %). Structure stop uses 1.5× ATRP."
+    },
+    {
+      "key": "stress_m10_nav",
+      "aliases": [
+        "stress_m10_nav"
+      ],
+      "group": "Book risk",
+      "meaning": "If every Book name is −10% from here, NAV change."
+    },
+    {
+      "key": "US $2B",
+      "aliases": [
+        "US $2B"
+      ],
+      "group": "Tape / scores",
+      "meaning": "US-listed names with market cap ≥ $2B (pack universe)."
+    },
+    {
+      "key": "Book",
+      "aliases": [
+        "Book",
+        "in_book"
+      ],
+      "group": "Book risk",
+      "meaning": "Currently held. New = not held."
+    },
+    {
+      "key": "NEW",
+      "aliases": [
+        "NEW"
+      ],
+      "group": "Actions",
+      "meaning": "Open a line not held today. Starter about $5,000. Daily budget 0–2. Not on edge_only."
+    },
+    {
+      "key": "ADD",
+      "aliases": [
+        "ADD"
+      ],
+      "group": "Actions",
+      "meaning": "Add to a held line. About $1,000, toward the 50-day, above atr_stop, leftover live, mix not avoid. Daily budget 0–2."
+    },
+    {
+      "key": "HOLD",
+      "aliases": [
+        "HOLD"
+      ],
+      "group": "Actions",
+      "meaning": "Keep the line as sized. No new dollars."
+    },
+    {
+      "key": "HOLD_NO_ADD",
+      "aliases": [
+        "HOLD_NO_ADD"
+      ],
+      "group": "Actions",
+      "meaning": "Keep the line, do not add. Default for avoid_value_trap on a live-leftover Book line. Does not silently become HOLD."
+    },
+    {
+      "key": "TRIM",
+      "aliases": [
+        "TRIM"
+      ],
+      "group": "Actions",
+      "meaning": "Sell part of the line (trim33 / trim50). Locks a win or de-risks size. Sticks until weeks RAS ≥ 0.25 and SMA50 held."
+    },
+    {
+      "key": "EXIT",
+      "aliases": [
+        "EXIT"
+      ],
+      "group": "Actions",
+      "meaning": "Sell the whole line. A prior ADD/NEW cannot become EXIT unless thesis_kill. Stays EXIT until tape repairs."
+    },
+    {
+      "key": "WAIT",
+      "aliases": [
+        "WAIT"
+      ],
+      "group": "Actions",
+      "meaning": "Named candidate, not filled. Waits for the band, the 50-day reclaim, or the print."
+    },
+    {
+      "key": "WATCH",
+      "aliases": [
+        "WATCH"
+      ],
+      "group": "Actions",
+      "meaning": "Track only. No order."
+    },
+    {
+      "key": "PASS / STAND_ASIDE",
+      "aliases": [
+        "PASS",
+        "STAND_ASIDE"
+      ],
+      "group": "Actions",
+      "meaning": "Not taken: binary lottery, AVOID_CHASE, severe extension, or a bounce-day short."
+    },
+    {
+      "key": "SHORT_WAIT",
+      "aliases": [
+        "SHORT_WAIT"
+      ],
+      "group": "Actions",
+      "meaning": "Limited-leftover short candidate from the shorts sleeve. Waits for a trigger. Not a leftover-rich EXIT."
+    },
+    {
+      "key": "DERISK / DERISK_INTO_PRINT",
+      "aliases": [
+        "DERISK",
+        "DERISK_INTO_PRINT"
+      ],
+      "group": "Actions",
+      "meaning": "Held, print near, move support weak or spent. Trim 30–50% before the print. Sticks while dte ≤ 7."
+    },
+    {
+      "key": "HOLD_THROUGH",
+      "aliases": [
+        "HOLD_THROUGH"
+      ],
+      "group": "Actions",
+      "meaning": "Hold through the print: quality entry state and move support intact. No add into extreme extension."
+    },
+    {
+      "key": "BUILD_TO_SELL",
+      "aliases": [
+        "BUILD_TO_SELL"
+      ],
+      "group": "Actions",
+      "meaning": "Drift unfinished. Hold or add into the run-up with a pre-committed sell into strength or into the print."
+    },
+    {
+      "key": "BUY_PRE",
+      "aliases": [
+        "BUY_PRE"
+      ],
+      "group": "Actions",
+      "meaning": "Starter into the event on a classified long setup (timing not AVOID_CHASE). Keep after the print only if the reaction confirms."
+    },
+    {
+      "key": "SHORT_PRE",
+      "aliases": [
+        "SHORT_PRE"
+      ],
+      "group": "Actions",
+      "meaning": "Short into the event on deterioration plus event risk. Invalidation above. Time stop 2–5 days after the print."
+    },
+    {
+      "key": "BUY_THE_RUMOUR",
+      "aliases": [
+        "BUY_THE_RUMOUR"
+      ],
+      "group": "Actions",
+      "meaning": "22–60d. Unpaid leftover plus a live weeks profile. Same capital as the leftover ADD, not a second event ticket."
+    },
+    {
+      "key": "SELL_THE_NEWS / WATCH_SELL_NEWS",
+      "aliases": [
+        "SELL_THE_NEWS",
+        "WATCH_SELL_NEWS"
+      ],
+      "group": "Actions",
+      "meaning": "Paid / extended into a dated print. Trim into strength (0–7d) or watch to sell the last two weeks (22–60d). Not a new short."
+    },
+    {
+      "key": "WATCH_SHORT",
+      "aliases": [
+        "WATCH_SHORT"
+      ],
+      "group": "Actions",
+      "meaning": "22–60d limited leftover plus deterioration. Candidate for a later SHORT_PRE. Not a short on a bounce tape."
+    },
+    {
+      "key": "WATCH_CATALYST",
+      "aliases": [
+        "WATCH_CATALYST"
+      ],
+      "group": "Actions",
+      "meaning": "Near earnings, no classified setup yet. No pre-print add."
+    },
+    {
+      "key": "thesis_kill",
+      "aliases": [
+        "thesis_kill"
+      ],
+      "group": "Actions",
+      "meaning": "Continuity flag: any one of the six kill rules fired (with numbers). The only path from a prior ADD/NEW to EXIT."
+    },
+    {
+      "key": "High / Med / Low",
+      "aliases": [
+        "High",
+        "Med",
+        "Low"
+      ],
+      "group": "Actions",
+      "meaning": "Operator Grade after reading support and conflicts. Not a probability."
+    },
+    {
+      "key": "vs_cost / nav_now_pct",
+      "aliases": [
+        "vs_cost",
+        "nav_now_pct"
+      ],
+      "group": "Book risk",
+      "meaning": "Already-booked P&L versus cost, %, and that dollar amount as % of NAV."
+    },
+    {
+      "key": "sma50_nav / atr_nav",
+      "aliases": [
+        "sma50_nav",
+        "atr_nav"
+      ],
+      "group": "Book risk",
+      "meaning": "$ and % NAV if the price prints the 50-day, or close − 1.5×ATR(P). Positive SMA50 means the average is above the mark (a bounce, not a stop)."
+    },
+    {
+      "key": "trim33_cash / trim33_remain_nav",
+      "aliases": [
+        "trim33_cash",
+        "trim33_remain_nav"
+      ],
+      "group": "Book risk",
+      "meaning": "Sell 33% at the mark: cash raised, and the NAV-at-risk that remains. trim25 / trim50 are the same at that size."
+    },
+    {
+      "key": "trim25_cash / trim25_remain_nav / trim50_cash / trim50_remain_nav",
+      "aliases": [
+        "trim25_cash",
+        "trim25_remain_nav",
+        "trim50_cash",
+        "trim50_remain_nav"
+      ],
+      "group": "Book risk",
+      "meaning": "Same as trim33 at 25% or 50%."
+    },
+    {
+      "key": "max_wipe_nav",
+      "aliases": [
+        "max_wipe_nav"
+      ],
+      "group": "Book risk",
+      "meaning": "Largest single-name wipe, % of NAV."
+    },
+    {
+      "key": "c10 / c20 / c25",
+      "aliases": [
+        "c10",
+        "c20",
+        "c25"
+      ],
+      "group": "Book risk",
+      "meaning": "Price 10 / 20 / 25% below cost. c15 is the continuity thesis-kill rung."
+    },
+    {
+      "key": "sma_role",
+      "aliases": [
+        "sma_role"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "stop_below: close is above the 50-day, so the 50-day is the first stop and the starter can be the mark. reclaim: the 50-day is overhead; do not buy the mark, the entry is a print through that average."
+    },
+    {
+      "key": "mark_vs_band",
+      "aliases": [
+        "mark_vs_band"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "inside, above_band, or below_band at the row's own close. Above the band is not a new fill. Below waits for the 50-day."
+    },
+    {
+      "key": "band_state_now",
+      "aliases": [
+        "band_state_now"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Same read at a later close. through_kill means this entry is already dead; the band prices do not move."
+    },
+    {
+      "key": "starter_hint_usd / add_hint_usd / advised_usd",
+      "aliases": [
+        "starter_hint_usd",
+        "add_hint_usd",
+        "advised_usd"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Advice columns: about $5,000 for a new line, about $1,000 for an add to a held line. Not a filter and not a hard cash target."
+    },
+    {
+      "key": "kill_scope",
+      "aliases": [
+        "kill_scope"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "this_entry: a print at kill_px ends this entry only. A later catalog row is a new band."
+    },
+    {
+      "key": "up_class",
+      "aliases": [
+        "up_class"
+      ],
+      "group": "Tape classes",
+      "meaning": "Pack/CLI field on movers leaders: IS_SUPPORTED / CHASE / UNSUPPORTED / MIXED (sleeves.classify_up_tape). First pass; the page may override with Val / Peer / Proj / Tech."
+    },
+    {
+      "key": "left_carrier",
+      "aliases": [
+        "left_carrier"
+      ],
+      "group": "Leftover / targets",
+      "meaning": "Who carries pack leftover: edge_only, both, street, or none (derive.leftover_carrier). A label, not a cutoff."
+    },
+    {
+      "key": "bo_chg",
+      "aliases": [
+        "bo_chg"
+      ],
+      "group": "Path / history",
+      "meaning": "25-week change in weeks bo (bo_last - bo_first) from weeks_progression. Mesh P uses it. Not a score."
+    },
+    {
+      "key": "span_n",
+      "aliases": [
+        "span_n"
+      ],
+      "group": "Path / history",
+      "meaning": "Weeks in the 25-week bo span. Mesh P needs at least 8."
+    },
+    {
+      "key": "early / recov / sms",
+      "aliases": [
+        "early",
+        "recov",
+        "sms"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Weeks early_momentum_inflection, recovery, and sustained_momentum_safety profile scores."
+    },
+    {
+      "key": "frag / exh",
+      "aliases": [
+        "frag",
+        "exh"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Weeks fragility_short and mean_reversion_exhaustion profile scores. Higher = more short-side support."
+    },
+    {
+      "key": "close",
+      "aliases": [
+        "close"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Last price in the locked all-fields / prediction tape (local currency for non-US lines)."
+    },
+    {
+      "key": "mcap",
+      "aliases": [
+        "mcap"
+      ],
+      "group": "Tape / scores",
+      "meaning": "Market capitalization, USD."
+    },
+    {
+      "key": "value_usd / value_now_usd / value_after_usd",
+      "aliases": [
+        "value_usd",
+        "value_now_usd",
+        "value_after_usd"
+      ],
+      "group": "Book risk",
+      "meaning": "Position mark in USD; before and after the capital plan."
+    },
+    {
+      "key": "shares",
+      "aliases": [
+        "shares"
+      ],
+      "group": "Book risk",
+      "meaning": "Whole shares. On a capital plan: floor(usd / px)."
+    },
+    {
+      "key": "px",
+      "aliases": [
+        "px"
+      ],
+      "group": "Entry band / kill",
+      "meaning": "Planned fill price on the capital plan (inside the entry band)."
+    },
+    {
+      "key": "frac",
+      "aliases": [
+        "frac"
+      ],
+      "group": "Book risk",
+      "meaning": "Fraction of the line sold on a TRIM / DERISK row (EXIT is 1.0)."
+    },
+    {
+      "key": "cash_in_usd / cash_out_usd",
+      "aliases": [
+        "cash_in_usd",
+        "cash_out_usd"
+      ],
+      "group": "Book risk",
+      "meaning": "Capital plan: cash raised by a sell row / spent by a buy row."
+    },
+    {
+      "key": "nav_pct_now / nav_pct_after",
+      "aliases": [
+        "nav_pct_now",
+        "nav_pct_after"
+      ],
+      "group": "Book risk",
+      "meaning": "Position or industry as % of NAV before and after the plan (NAV = equity mark + cash before the plan)."
+    },
+    {
+      "key": "size_note",
+      "aliases": [
+        "size_note"
+      ],
+      "group": "Book risk",
+      "meaning": "under_starter_hint when a NEW line is planned under about $5,000 (beyond one-share rounding). Advice, not a block."
+    },
+    {
+      "key": "cash_end_pct / starters_left_at_hint",
+      "aliases": [
+        "cash_end_pct",
+        "starters_left_at_hint",
+        "cash_start_usd",
+        "cash_start_pct",
+        "cash_from_sells_usd",
+        "cash_to_buys_usd",
+        "cash_end_usd"
+      ],
+      "group": "Book risk",
+      "meaning": "Capital plan summary: cash at the start (USD and % NAV), cash from sells, cash to buys, cash at the end (USD and % NAV), and how many ~$5,000 starters the end cash still covers. Not a budget."
+    },
+    {
+      "key": "pb / evfcf",
+      "aliases": [
+        "pb",
+        "evfcf"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "TradingView price/book and EV/free-cash-flow, trailing."
+    },
+    {
+      "key": "wipe_nav_pct",
+      "aliases": [
+        "wipe_nav_pct"
+      ],
+      "group": "Book risk",
+      "meaning": "Name as % of NAV: the ceiling if the price goes to zero."
+    },
+    {
+      "key": "evebitda_fwd",
+      "aliases": [
+        "evebitda_fwd",
+        "fwd_evebitda"
+      ],
+      "group": "Valuation / peer",
+      "meaning": "Projection forward EV/EBITDA (fp_evebitda_y1). A derivative; can be off. evebitda_fwd_peer bins it versus the industry median."
+    },
+    {
+      "key": "WEEK",
+      "aliases": [
+        "WEEK"
+      ],
+      "group": "Horizon",
+      "meaning": "Horizon 0-7 sessions: a trade on the tape, a print or a trigger."
+    },
+    {
+      "key": "MONTH",
+      "aliases": [
+        "MONTH"
+      ],
+      "group": "Horizon",
+      "meaning": "Horizon 8-60 sessions: a position built on leftover, weeks bo and the entry band."
+    },
+    {
+      "key": "LONG",
+      "aliases": [
+        "LONG"
+      ],
+      "group": "Horizon",
+      "meaning": "A hold beyond 60 sessions, or a held line that is not a NEW slot."
+    },
+    {
+      "key": "lenses",
+      "aliases": [
+        "lenses"
+      ],
+      "group": "GMV lens",
+      "meaning": "Five lens percentiles in order G E M P V, each 0-99 in today's GMV universe (NASDAQ / NYSE / AMEX, market cap at least $1B). G growth, E estimates, M momentum, P participation (volume), V value. Each lens is the median percentile of its own parts; -- means fewer than two parts were present. Lenses are never added together."
+    },
+    {
+      "key": "best_profile",
+      "aliases": [
+        "best_profile"
+      ],
+      "group": "GMV lens",
+      "meaning": "The profile that brought the name into Focus: its first place in the round-robin (rank 1 of every long profile, then rank 2, and so on)."
+    },
+    {
+      "key": "profiles",
+      "aliases": [
+        "profiles"
+      ],
+      "group": "GMV lens",
+      "meaning": "Every long profile (COMPOUNDER, RERATE, BREAKOUT, VALUE_TURN, ALL5) the name ranked in after the industry cap, comma-separated."
+    },
+    {
+      "key": "profile",
+      "aliases": [
+        "profile"
+      ],
+      "group": "GMV lens",
+      "meaning": "The GMV profile this row belongs to."
+    },
+    {
+      "key": "floor",
+      "aliases": [
+        "floor"
+      ],
+      "group": "GMV lens",
+      "meaning": "The profile's weakest lens percentile (0-1) for this name. The profile sorts on it, ties on the mean of the same lenses. For FADE it is the weakest of 1 - M, 1 - E and 1 - P."
+    },
+    {
+      "key": "weak_lens",
+      "aliases": [
+        "weak_lens"
+      ],
+      "group": "GMV lens",
+      "meaning": "Letter of the name's lowest lens percentile (G, E, M, P or V)."
+    },
+    {
+      "key": "strong_lens",
+      "aliases": [
+        "strong_lens"
+      ],
+      "group": "GMV lens",
+      "meaning": "Letter of the name's highest lens percentile."
+    },
+    {
+      "key": "tape_state",
+      "aliases": [
+        "tape_state"
+      ],
+      "group": "GMV lens",
+      "meaning": "Label from trend_q, r_1m and hi_prox (bands in config/generic_utils/gmv_lens.json). Not a rank."
+    },
+    {
+      "key": "TREND_UP",
+      "aliases": [
+        "TREND_UP"
+      ],
+      "group": "GMV lens",
+      "meaning": "tape_state: trend_q at least 0.35, not PULLBACK or EXTENDED."
+    },
+    {
+      "key": "PULLBACK",
+      "aliases": [
+        "PULLBACK"
+      ],
+      "group": "GMV lens",
+      "meaning": "tape_state: trend_q at least 0.35 and r_1m at most -4%. An uptrend that is giving back this month."
+    },
+    {
+      "key": "EXTENDED",
+      "aliases": [
+        "EXTENDED"
+      ],
+      "group": "GMV lens",
+      "meaning": "tape_state: trend_q at least 0.35, hi_prox at least -2% (at or near the 91-day high) and r_1m at least 15%."
+    },
+    {
+      "key": "BASE",
+      "aliases": [
+        "BASE"
+      ],
+      "group": "GMV lens",
+      "meaning": "tape_state: trend_q between -0.35 and 0.35. No clear trend."
+    },
+    {
+      "key": "DOWNTREND",
+      "aliases": [
+        "DOWNTREND"
+      ],
+      "group": "GMV lens",
+      "meaning": "tape_state: trend_q at most -0.35."
+    },
+    {
+      "key": "THIN_TAPE",
+      "aliases": [
+        "THIN_TAPE"
+      ],
+      "group": "GMV lens",
+      "meaning": "tape_state: fewer than 20 snapshots in the 91-day window, so no trend fit."
+    },
+    {
+      "key": "COMPOUNDER",
+      "aliases": [
+        "COMPOUNDER"
+      ],
+      "group": "GMV lens",
+      "meaning": "Profile, mid term: weakest of G, E and M. Growth that estimates and the tape both confirm. Value is shown, not used."
+    },
+    {
+      "key": "RERATE",
+      "aliases": [
+        "RERATE"
+      ],
+      "group": "GMV lens",
+      "meaning": "Profile, mid term: weakest of G, E and V. Growth with rising estimates that still trades cheap to peers. Momentum is not used, so many are early or still falling."
+    },
+    {
+      "key": "BREAKOUT",
+      "aliases": [
+        "BREAKOUT"
+      ],
+      "group": "GMV lens",
+      "meaning": "Profile, short term: weakest of M, P and E. Trend with volume behind it and estimates moving up. A trade, not a valuation call."
+    },
+    {
+      "key": "VALUE_TURN",
+      "aliases": [
+        "VALUE_TURN"
+      ],
+      "group": "GMV lens",
+      "meaning": "Profile, short to mid term: weakest of V, E and P. Cheap names where estimates turn up and buyers come back. The rebound case with evidence."
+    },
+    {
+      "key": "ALL5",
+      "aliases": [
+        "ALL5"
+      ],
+      "group": "GMV lens",
+      "meaning": "Profile, mid term: weakest of all five lenses. No weak lens."
+    },
+    {
+      "key": "FADE",
+      "aliases": [
+        "FADE"
+      ],
+      "group": "GMV lens",
+      "meaning": "Profile, short term, inverted: weakest of 1 - M, 1 - E and 1 - P. Weak trend, falling estimates and sellers in control together. Short candidates, not an automatic short."
+    },
+    {
+      "key": "r_1m",
+      "aliases": [
+        "r_1m"
+      ],
+      "group": "GMV lens",
+      "meaning": "Close versus the snapshot about 30 calendar days earlier, %. Split-adjusted all-fields snapshots."
+    },
+    {
+      "key": "r_3m",
+      "aliases": [
+        "r_3m"
+      ],
+      "group": "GMV lens",
+      "meaning": "Close versus the snapshot about 91 calendar days earlier, %."
+    },
+    {
+      "key": "trend_q",
+      "aliases": [
+        "trend_q"
+      ],
+      "group": "GMV lens",
+      "meaning": "Signed R squared of ln(close) on calendar day over the last 91 days: the sign of the slope times R squared. +1 is a straight rising line, -1 a straight falling one, near 0 no trend."
+    },
+    {
+      "key": "trend_slope_ann",
+      "aliases": [
+        "trend_slope_ann"
+      ],
+      "group": "GMV lens",
+      "meaning": "Annualized slope of the trend_q fit, %."
+    },
+    {
+      "key": "r_3m_per_vol",
+      "aliases": [
+        "r_3m_per_vol"
+      ],
+      "group": "GMV lens",
+      "meaning": "r_3m divided by (vol_d x square root of 63): the 3-month return in units of the name's own daily volatility. The only place volatility enters a lens, as a denominator."
+    },
+    {
+      "key": "hi_prox",
+      "aliases": [
+        "hi_prox"
+      ],
+      "group": "GMV lens",
+      "meaning": "Close versus the highest close of the last 91 days, %. 0 is at the high."
+    },
+    {
+      "key": "updown_vol",
+      "aliases": [
+        "updown_vol"
+      ],
+      "group": "GMV lens",
+      "meaning": "Last 30 days: summed relative volume on up days divided by summed relative volume on down days (day change field). Above 1 is heavier volume on up days. Relative volume is read at scan time, so intraday snapshots add noise."
+    },
+    {
+      "key": "accum_3m",
+      "aliases": [
+        "accum_3m"
+      ],
+      "group": "GMV lens",
+      "meaning": "Last 91 days: sum of sign(day change) x relative volume, divided by summed relative volume. -1 to 1; positive is accumulation."
+    },
+    {
+      "key": "vol_trend",
+      "aliases": [
+        "vol_trend"
+      ],
+      "group": "GMV lens",
+      "meaning": "10-day average volume versus 30-day average volume, %."
+    },
+    {
+      "key": "vol_d",
+      "aliases": [
+        "vol_d"
+      ],
+      "group": "GMV lens",
+      "meaning": "Standard deviation of the daily change field over 91 days, %. Size, not quality. Never a lens of its own."
+    },
+    {
+      "key": "exp_move_20d",
+      "aliases": [
+        "exp_move_20d"
+      ],
+      "group": "GMV lens",
+      "meaning": "ATRP x square root of 20, %. Size of a typical 20-day move. Not a direction."
+    },
+    {
+      "key": "fwd_rev_g",
+      "aliases": [
+        "fwd_rev_g"
+      ],
+      "group": "GMV lens",
+      "meaning": "Street revenue forecast for the next fiscal year versus trailing 12-month revenue, %."
+    },
+    {
+      "key": "fwd_eps_g",
+      "aliases": [
+        "fwd_eps_g"
+      ],
+      "group": "GMV lens",
+      "meaning": "Street EPS forecast for the next fiscal year versus trailing diluted EPS, %. Blank when either is at or under 0."
+    },
+    {
+      "key": "rev_yoy",
+      "aliases": [
+        "rev_yoy"
+      ],
+      "group": "GMV lens",
+      "meaning": "Trailing 12-month revenue growth year over year, %."
+    },
+    {
+      "key": "earn_yoy",
+      "aliases": [
+        "earn_yoy"
+      ],
+      "group": "GMV lens",
+      "meaning": "Trailing diluted EPS growth year over year, %."
+    },
+    {
+      "key": "eps_rev_3m",
+      "aliases": [
+        "eps_rev_3m"
+      ],
+      "group": "GMV lens",
+      "meaning": "Compounded change of the next-FY EPS forecast across snapshots over about 91 days, %. A single step beyond 25% is skipped as a fiscal-year roll."
+    },
+    {
+      "key": "eps_rev_breadth",
+      "aliases": [
+        "eps_rev_breadth"
+      ],
+      "group": "GMV lens",
+      "meaning": "Next-FY EPS forecast, same window: (up steps - down steps) divided by steps that moved. -1 to 1."
+    },
+    {
+      "key": "rev_rev_3m",
+      "aliases": [
+        "rev_rev_3m"
+      ],
+      "group": "GMV lens",
+      "meaning": "Compounded change of the next-FY revenue forecast over about 91 days, %. Same roll rule as eps_rev_3m."
+    },
+    {
+      "key": "pt_drift_3m",
+      "aliases": [
+        "pt_drift_3m"
+      ],
+      "group": "GMV lens",
+      "meaning": "Average price target now versus about 91 days ago, %."
+    },
+    {
+      "key": "eps_surprise",
+      "aliases": [
+        "eps_surprise"
+      ],
+      "group": "GMV lens",
+      "meaning": "Last reported quarter's EPS surprise, % (eps_surprise_percent_fq)."
+    },
+    {
+      "key": "pe_nfy",
+      "aliases": [
+        "pe_nfy"
+      ],
+      "group": "GMV lens",
+      "meaning": "Close divided by the street next-FY EPS forecast. Not pe_fwd, which is the projection PE."
+    },
+    {
+      "key": "peg_fwd",
+      "aliases": [
+        "peg_fwd"
+      ],
+      "group": "GMV lens",
+      "meaning": "pe_nfy divided by fwd_eps_g. Lower is cheaper growth. Blank when growth is at or under 0."
+    },
+    {
+      "key": "pt_left",
+      "aliases": [
+        "pt_left"
+      ],
+      "group": "GMV lens",
+      "meaning": "Average price target versus close, %, from today's all-fields scan. The pack's street_left is the same idea from the pack tape; it is an overlay here, not a lens part."
+    },
+    {
+      "key": "kind",
+      "aliases": [
+        "kind"
+      ],
+      "group": "GMV lens",
+      "meaning": "Evidence row type: part (one metric), lens (G E M P V), or profile."
+    },
+    {
+      "key": "horizon_days",
+      "aliases": [
+        "horizon_days"
+      ],
+      "group": "GMV lens",
+      "meaning": "Calendar days from the evaluation snapshot to the later close the rank is compared with."
+    },
+    {
+      "key": "n_days",
+      "aliases": [
+        "n_days"
+      ],
+      "group": "GMV lens",
+      "meaning": "Evaluation days with a usable rank correlation."
+    },
+    {
+      "key": "ic_mean",
+      "aliases": [
+        "ic_mean"
+      ],
+      "group": "GMV lens",
+      "meaning": "Mean Spearman rank correlation between the ordering and the later return across evaluation days. Positive means a higher place led a higher return."
+    },
+    {
+      "key": "ic_t",
+      "aliases": [
+        "ic_t"
+      ],
+      "group": "GMV lens",
+      "meaning": "ic_mean divided by its standard deviation, times the square root of n_days. A size check: horizons overlap, so it is not a significance test."
+    },
+    {
+      "key": "ic_pos_rate",
+      "aliases": [
+        "ic_pos_rate"
+      ],
+      "group": "GMV lens",
+      "meaning": "Share of evaluation days with a positive rank correlation."
+    },
+    {
+      "key": "ic_recent3",
+      "aliases": [
+        "ic_recent3"
+      ],
+      "group": "GMV lens",
+      "meaning": "Mean rank correlation of the last three evaluation days. Shows a lens that changed sign inside the window."
+    },
+    {
+      "key": "ic_last",
+      "aliases": [
+        "ic_last"
+      ],
+      "group": "GMV lens",
+      "meaning": "Rank correlation on the last evaluation day."
+    },
+    {
+      "key": "top_excess_mean_pct",
+      "aliases": [
+        "top_excess_mean_pct"
+      ],
+      "group": "GMV lens",
+      "meaning": "Mean later return of the top 20% by that ordering minus the universe mean, percentage points, averaged across days."
+    },
+    {
+      "key": "first_day",
+      "aliases": [
+        "first_day"
+      ],
+      "group": "GMV lens",
+      "meaning": "First evaluation day."
+    },
+    {
+      "key": "last_day",
+      "aliases": [
+        "last_day"
+      ],
+      "group": "GMV lens",
+      "meaning": "Last evaluation day (the latest day with the full horizon ahead)."
+    },
+    {
+      "key": "base_effect",
+      "aliases": [
+        "base_effect"
+      ],
+      "group": "GMV lens",
+      "meaning": "Growth parts left empty because the print was beyond 300% (growth_quote_max_pct): a tiny prior-year base, not a rate to rank. Same rule as the growth radar."
+    },
+    {
+      "key": "pe_nfy_ind_med",
+      "aliases": [
+        "pe_nfy_ind_med"
+      ],
+      "group": "Safety band",
+      "meaning": "Industry median of pe_nfy (close / street next-FY EPS) in the same day's GMV universe ($1B+, at least 6 names)."
+    },
+    {
+      "key": "pe_nfy_min",
+      "aliases": [
+        "pe_nfy_min"
+      ],
+      "group": "Safety band",
+      "meaning": "Lowest forward PE (close / next-FY EPS forecast) the name traded at across the history window (about 7 months of day files)."
+    },
+    {
+      "key": "pe_nfy_med",
+      "aliases": [
+        "pe_nfy_med"
+      ],
+      "group": "Safety band",
+      "meaning": "Median forward PE across the history window."
+    },
+    {
+      "key": "pe_nfy_max",
+      "aliases": [
+        "pe_nfy_max"
+      ],
+      "group": "Safety band",
+      "meaning": "Highest forward PE across the history window."
+    },
+    {
+      "key": "pe_nfy_seat",
+      "aliases": [
+        "pe_nfy_seat"
+      ],
+      "group": "Safety band",
+      "meaning": "Where today's forward PE sits in its window range, 0-100: 0 is the cheapest multiple of the window, 100 the richest."
+    },
+    {
+      "key": "px_own_low_pe",
+      "aliases": [
+        "px_own_low_pe"
+      ],
+      "group": "Safety band",
+      "meaning": "Today's next-FY EPS forecast x pe_nfy_min: the price if the market paid the window's cheapest multiple."
+    },
+    {
+      "key": "mos_own_low_pct",
+      "aliases": [
+        "mos_own_low_pct"
+      ],
+      "group": "Safety band",
+      "meaning": "px_own_low_pe versus the close, %. Near 0 means the price already sits on the window's cheapest multiple."
+    },
+    {
+      "key": "px_own_med_pe",
+      "aliases": [
+        "px_own_med_pe"
+      ],
+      "group": "Safety band",
+      "meaning": "Today's next-FY EPS forecast x pe_nfy_med: the price at the name's own median multiple."
+    },
+    {
+      "key": "mos_own_med_pct",
+      "aliases": [
+        "mos_own_med_pct"
+      ],
+      "group": "Safety band",
+      "meaning": "px_own_med_pe versus the close, %. Positive is room back to the name's own median multiple."
+    },
+    {
+      "key": "px_peer_pe",
+      "aliases": [
+        "px_peer_pe"
+      ],
+      "group": "Safety band",
+      "meaning": "Today's next-FY EPS forecast x pe_nfy_ind_med: the price at the industry median multiple."
+    },
+    {
+      "key": "mos_peer_pct",
+      "aliases": [
+        "mos_peer_pct"
+      ],
+      "group": "Safety band",
+      "meaning": "px_peer_pe versus the close, %. Positive is a discount to peers on forward earnings."
+    },
+    {
+      "key": "window_high",
+      "aliases": [
+        "window_high"
+      ],
+      "group": "Safety band",
+      "meaning": "Highest split-adjusted close in the history window."
+    },
+    {
+      "key": "window_high_as_of",
+      "aliases": [
+        "window_high_as_of"
+      ],
+      "group": "Safety band",
+      "meaning": "Day of window_high."
+    },
+    {
+      "key": "window_low",
+      "aliases": [
+        "window_low"
+      ],
+      "group": "Safety band",
+      "meaning": "Lowest split-adjusted close in the history window. The support the buy-in-red band anchors on."
+    },
+    {
+      "key": "window_low_as_of",
+      "aliases": [
+        "window_low_as_of"
+      ],
+      "group": "Safety band",
+      "meaning": "Day of window_low."
+    },
+    {
+      "key": "giveback_pct",
+      "aliases": [
+        "giveback_pct"
+      ],
+      "group": "Safety band",
+      "meaning": "Close versus window_high, %."
+    },
+    {
+      "key": "rebound_pct",
+      "aliases": [
+        "rebound_pct"
+      ],
+      "group": "Safety band",
+      "meaning": "Close versus window_low, %."
+    },
+    {
+      "key": "eps_fc_pct",
+      "aliases": [
+        "eps_fc_pct"
+      ],
+      "group": "Safety band",
+      "meaning": "Next-FY EPS forecast now versus the first day of the window, %, split-adjusted. A fiscal-year roll can lift it in one step."
+    },
+    {
+      "key": "pt_window_pct",
+      "aliases": [
+        "pt_window_pct"
+      ],
+      "group": "Safety band",
+      "meaning": "Average price target now versus the first day of the window, %, split-adjusted."
+    },
+    {
+      "key": "derate_pct",
+      "aliases": [
+        "derate_pct"
+      ],
+      "group": "Safety band",
+      "meaning": "Forward PE now versus the first day of the window, %. Negative: the price fell behind the estimate (de-rating); positive: the multiple expanded (re-rating)."
+    },
+    {
+      "key": "splits",
+      "aliases": [
+        "splits"
+      ],
+      "group": "Safety band",
+      "meaning": "Split-like jumps rescaled in the window (split guard: consecutive snapshots at most 5 days apart, a close ratio of 1.8 or more, and a day change under 25%)."
+    },
+    {
+      "key": "bounce_high",
+      "aliases": [
+        "bounce_high"
+      ],
+      "group": "Safety band",
+      "meaning": "Top of the buy-in-red band: close - 0.5 ATR. A fill on a red day, not at the mark."
+    },
+    {
+      "key": "bounce_low",
+      "aliases": [
+        "bounce_low"
+      ],
+      "group": "Safety band",
+      "meaning": "Bottom of the buy-in-red band: close - 1.5 ATR, or the window low when it sits inside the band."
+    },
+    {
+      "key": "bounce_anchor",
+      "aliases": [
+        "bounce_anchor"
+      ],
+      "group": "Safety band",
+      "meaning": "atr: the band is ATR multiples under the close. window_low: the band's low is the window low. +support_kill: the kill sits under the window low (support within 1 ATR under the band)."
+    },
+    {
+      "key": "bounce_kill",
+      "aliases": [
+        "bounce_kill"
+      ],
+      "group": "Safety band",
+      "meaning": "Price that ends a buy-in-red entry: 0.75 ATR under the band low (or under the window low when that support is just below). Not the entry book's kill_px."
+    },
+    {
+      "key": "bounce_kill_pct",
+      "aliases": [
+        "bounce_kill_pct"
+      ],
+      "group": "Safety band",
+      "meaning": "bounce_kill versus the close, %."
+    },
+    {
+      "key": "first_target",
+      "aliases": [
+        "first_target"
+      ],
+      "group": "Safety band",
+      "meaning": "First target of a bounce entry: the 50-day average when it is above the band, else the street target."
+    },
+    {
+      "key": "first_target_src",
+      "aliases": [
+        "first_target_src"
+      ],
+      "group": "Safety band",
+      "meaning": "sma50 or street_px: which price first_target is."
+    },
+    {
+      "key": "rr_bounce",
+      "aliases": [
+        "rr_bounce"
+      ],
+      "group": "Safety band",
+      "meaning": "(first_target - bounce_high) / (bounce_high - bounce_kill). A ratio, not a 0-100."
+    },
+    {
+      "key": "add_trigger_low",
+      "aliases": [
+        "add_trigger_low"
+      ],
+      "group": "Safety band",
+      "meaning": "Low of the entry book's 50-day reclaim band. A close back inside it is the confirmation add."
+    },
+    {
+      "key": "add_trigger_high",
+      "aliases": [
+        "add_trigger_high"
+      ],
+      "group": "Safety band",
+      "meaning": "High of the entry book's 50-day reclaim band."
+    },
+    {
+      "key": "trim_zone",
+      "aliases": [
+        "trim_zone"
+      ],
+      "group": "Safety band",
+      "meaning": "Lower of the street target and window_high, when it is above the close. Where a held line lightens."
+    },
+    {
+      "key": "trim_zone_state",
+      "aliases": [
+        "trim_zone_state"
+      ],
+      "group": "Safety band",
+      "meaning": "open: trim_zone is above the close. above_street: the close is already at or over the street target, so a held line is in its trim zone now."
+    },
+    {
+      "key": "eps_fc_now",
+      "aliases": [
+        "eps_fc_now"
+      ],
+      "group": "Safety band",
+      "meaning": "Today's next-FY EPS forecast (close / pe_nfy)."
+    },
+    {
+      "key": "close_window_pct",
+      "aliases": [
+        "close_window_pct"
+      ],
+      "group": "Safety band",
+      "meaning": "Split-adjusted close now versus the first day of the history window, %."
+    },
+    {
+      "key": "strength_read",
+      "aliases": [
+        "strength_read"
+      ],
+      "group": "Discount path",
+      "meaning": "Balance-sheet label (discount path): net_cash = net debt at or under 0; levered = net debt / EBITDA at least 4; covered = net debt / EBITDA at most 2 with operating margin at least 8% and FCF not negative; open = none of those; thin = no debt and no EBITDA field. A label, not a rank."
+    },
+    {
+      "key": "cash_to_debt",
+      "aliases": [
+        "cash_to_debt"
+      ],
+      "group": "Discount path",
+      "meaning": "Cash divided by total debt. Above 1 is more cash than debt."
+    },
+    {
+      "key": "nd_ebitda",
+      "aliases": [
+        "nd_ebitda"
+      ],
+      "group": "Discount path",
+      "meaning": "Net debt divided by trailing EBITDA (empty when EBITDA is at or under 0). Negative is net cash."
+    },
+    {
+      "key": "cheaper_count",
+      "aliases": [
+        "cheaper_count"
+      ],
+      "group": "Discount path",
+      "meaning": "How many of the name's multiple paths (PE, EV/Rev, EV/EBITDA, P/B, EV/FCF) are CHEAPER over the history window. A count, not a 0-100."
+    },
+    {
+      "key": "pe_path",
+      "aliases": [
+        "pe_path"
+      ],
+      "group": "Discount path",
+      "meaning": "Trailing PE path over the window: CHEAPER (change at most -5%), RICHER (at least +5%), FLAT (between), THIN_HIST (fewer than 4 prints). pe_pct beside it is the change."
+    },
+    {
+      "key": "evebitda_path",
+      "aliases": [
+        "evebitda_path"
+      ],
+      "group": "Discount path",
+      "meaning": "EV/EBITDA path over the window, same rule as pe_path; evebitda_pct is the change."
+    },
+    {
+      "key": "evfcf_path",
+      "aliases": [
+        "evfcf_path"
+      ],
+      "group": "Discount path",
+      "meaning": "EV/FCF path over the window, same rule as pe_path; evfcf_pct is the change."
+    },
+    {
+      "key": "widest_up_pct",
+      "aliases": [
+        "widest_up_pct"
+      ],
+      "group": "Discount path",
+      "meaning": "The largest gap to an industry median among the name's multiples, %. The widest single discount, not a sum."
+    },
+    {
+      "key": "hist_n",
+      "aliases": [
+        "hist_n"
+      ],
+      "group": "Discount path",
+      "meaning": "Number of day prints behind the multiple paths."
+    },
+    {
+      "key": "FLAT",
+      "aliases": [
+        "FLAT"
+      ],
+      "group": "Discount path",
+      "meaning": "A multiple path that changed between -5% and +5% over the window."
+    },
+    {
+      "key": "RICHER",
+      "aliases": [
+        "RICHER"
+      ],
+      "group": "Discount path",
+      "meaning": "A multiple path that rose at least 5% over the window: the market pays more per unit of earnings than at the start."
+    },
+    {
+      "key": "first_as_of",
+      "aliases": [
+        "first_as_of"
+      ],
+      "group": "Weeks span",
+      "meaning": "First weekly run in the span (weeks_progression)."
+    },
+    {
+      "key": "last_as_of",
+      "aliases": [
+        "last_as_of"
+      ],
+      "group": "Weeks span",
+      "meaning": "Last weekly run in the span."
+    },
+    {
+      "key": "bo_first",
+      "aliases": [
+        "bo_first"
+      ],
+      "group": "Weeks span",
+      "meaning": "Weeks bo at the start of the span."
+    },
+    {
+      "key": "bo_last",
+      "aliases": [
+        "bo_last"
+      ],
+      "group": "Weeks span",
+      "meaning": "Weeks bo at the end of the span."
+    },
+    {
+      "key": "bo_min",
+      "aliases": [
+        "bo_min"
+      ],
+      "group": "Weeks span",
+      "meaning": "Lowest weeks bo in the span."
+    },
+    {
+      "key": "bo_max",
+      "aliases": [
+        "bo_max"
+      ],
+      "group": "Weeks span",
+      "meaning": "Highest weeks bo in the span."
+    },
+    {
+      "key": "cont_first",
+      "aliases": [
+        "cont_first"
+      ],
+      "group": "Weeks span",
+      "meaning": "Weeks cont at the start of the span."
+    },
+    {
+      "key": "cont_last",
+      "aliases": [
+        "cont_last"
+      ],
+      "group": "Weeks span",
+      "meaning": "Weeks cont at the end of the span."
+    },
+    {
+      "key": "cont_chg",
+      "aliases": [
+        "cont_chg"
+      ],
+      "group": "Weeks span",
+      "meaning": "cont_last minus cont_first."
+    },
+    {
+      "key": "fwd_first",
+      "aliases": [
+        "fwd_first"
+      ],
+      "group": "Weeks span",
+      "meaning": "Weeks fwd at the start of the span."
+    },
+    {
+      "key": "fwd_last",
+      "aliases": [
+        "fwd_last"
+      ],
+      "group": "Weeks span",
+      "meaning": "Weeks fwd at the end of the span."
+    },
+    {
+      "key": "fwd_chg",
+      "aliases": [
+        "fwd_chg"
+      ],
+      "group": "Weeks span",
+      "meaning": "fwd_last minus fwd_first."
+    },
+    {
+      "key": "early_last",
+      "aliases": [
+        "early_last"
+      ],
+      "group": "Weeks span",
+      "meaning": "Latest weekly early score."
+    },
+    {
+      "key": "recov_last",
+      "aliases": [
+        "recov_last"
+      ],
+      "group": "Weeks span",
+      "meaning": "Latest weekly recovery score."
+    },
+    {
+      "key": "frag_last",
+      "aliases": [
+        "frag_last"
+      ],
+      "group": "Weeks span",
+      "meaning": "Latest weekly fragility score."
+    },
+    {
+      "key": "exh_last",
+      "aliases": [
+        "exh_last"
+      ],
+      "group": "Weeks span",
+      "meaning": "Latest weekly exhaustion score."
+    },
+    {
+      "key": "as_of",
+      "aliases": [
+        "as_of"
+      ],
+      "group": "Weeks span",
+      "meaning": "Week (or day) the row describes."
+    },
+    {
+      "key": "universe",
+      "aliases": [
+        "universe"
+      ],
+      "group": "Weeks span",
+      "meaning": "Which list a breadth row averages (the playbook sleeve)."
+    },
+    {
+      "key": "close_a",
+      "aliases": [
+        "close_a"
+      ],
+      "group": "Intraday",
+      "meaning": "Price at the early all-fields run of the day (run_a)."
+    },
+    {
+      "key": "close_b",
+      "aliases": [
+        "close_b"
+      ],
+      "group": "Intraday",
+      "meaning": "Price at the later run (run_b)."
+    },
+    {
+      "key": "change_a",
+      "aliases": [
+        "change_a"
+      ],
+      "group": "Intraday",
+      "meaning": "The scan's day change at the early run, %."
+    },
+    {
+      "key": "change_b",
+      "aliases": [
+        "change_b"
+      ],
+      "group": "Intraday",
+      "meaning": "The scan's day change at the later run, %."
+    },
+    {
+      "key": "drift_pct",
+      "aliases": [
+        "drift_pct"
+      ],
+      "group": "Intraday",
+      "meaning": "close_b versus close_a, %: how the name moved between the two runs."
+    },
+    {
+      "key": "relvol_a",
+      "aliases": [
+        "relvol_a"
+      ],
+      "group": "Intraday",
+      "meaning": "Relative volume (10-day) at the early run; intraday values are partial-day."
+    },
+    {
+      "key": "relvol_b",
+      "aliases": [
+        "relvol_b"
+      ],
+      "group": "Intraday",
+      "meaning": "Relative volume (10-day) at the later run; intraday values are partial-day."
+    },
+    {
+      "key": "session_path",
+      "aliases": [
+        "session_path"
+      ],
+      "group": "Intraday",
+      "meaning": "EXTENDING, FADING, REVERSING_UP, REVERSING_DOWN or FLAT, from the sign of the early day change and the later drift."
+    },
+    {
+      "key": "EXTENDING",
+      "aliases": [
+        "EXTENDING"
+      ],
+      "group": "Intraday",
+      "meaning": "session_path: the later run adds to the early move (up and up, or down and down)."
+    },
+    {
+      "key": "FADING",
+      "aliases": [
+        "FADING"
+      ],
+      "group": "Intraday",
+      "meaning": "session_path: the later run gives some of the early move back without flipping the day's sign."
+    },
+    {
+      "key": "REVERSING_UP",
+      "aliases": [
+        "REVERSING_UP"
+      ],
+      "group": "Intraday",
+      "meaning": "session_path: red at the early run, green by the later run."
+    },
+    {
+      "key": "REVERSING_DOWN",
+      "aliases": [
+        "REVERSING_DOWN"
+      ],
+      "group": "Intraday",
+      "meaning": "session_path: green at the early run, red by the later run."
+    },
+    {
+      "key": "change_a_med",
+      "aliases": [
+        "change_a_med"
+      ],
+      "group": "Intraday",
+      "meaning": "Industry median of change_a."
+    },
+    {
+      "key": "change_b_med",
+      "aliases": [
+        "change_b_med"
+      ],
+      "group": "Intraday",
+      "meaning": "Industry median of change_b."
+    },
+    {
+      "key": "drift_med",
+      "aliases": [
+        "drift_med"
+      ],
+      "group": "Intraday",
+      "meaning": "Industry median of drift_pct."
+    },
+    {
+      "key": "drift_up_pct",
+      "aliases": [
+        "drift_up_pct"
+      ],
+      "group": "Intraday",
+      "meaning": "Share of the industry's names with drift_pct above 0, %."
+    },
+    {
+      "key": "compounder_floor",
+      "aliases": [
+        "compounder_floor"
+      ],
+      "group": "GMV lens",
+      "meaning": "COMPOUNDER floor: the weakest of G, E and M for this name (0-1). That profile sorts on it."
+    },
+    {
+      "key": "rerate_floor",
+      "aliases": [
+        "rerate_floor"
+      ],
+      "group": "GMV lens",
+      "meaning": "RERATE floor: the weakest of G, E and V for this name (0-1). That profile sorts on it."
+    },
+    {
+      "key": "breakout_floor",
+      "aliases": [
+        "breakout_floor"
+      ],
+      "group": "GMV lens",
+      "meaning": "BREAKOUT floor: the weakest of M, P and E for this name (0-1). That profile sorts on it."
+    },
+    {
+      "key": "value_turn_floor",
+      "aliases": [
+        "value_turn_floor"
+      ],
+      "group": "GMV lens",
+      "meaning": "VALUE_TURN floor: the weakest of V, E and P for this name (0-1). That profile sorts on it."
+    },
+    {
+      "key": "all5_floor",
+      "aliases": [
+        "all5_floor"
+      ],
+      "group": "GMV lens",
+      "meaning": "ALL5 floor: the weakest of all five lenses for this name (0-1). That profile sorts on it."
+    },
+    {
+      "key": "fade_floor",
+      "aliases": [
+        "fade_floor"
+      ],
+      "group": "GMV lens",
+      "meaning": "FADE floor: the weakest of 1 - M, 1 - E and 1 - P for this name (0-1). That profile sorts on it."
+    }
+  ]
+}

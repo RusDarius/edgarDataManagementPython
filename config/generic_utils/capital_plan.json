@@ -1,0 +1,9 @@
+{
+  "name": "capital_plan",
+  "description": "Recycle cash from sells into buys and show cash and industry NAV % after. Arithmetic only. Starter and add dollars are advice (about $5,000 for a new line, about $1,000 for an add), not cutoffs.",
+  "starter_hint_usd": 5000,
+  "add_hint_usd": 1000,
+  "trim_frac": 0.33,
+  "derisk_frac": 0.4,
+  "group_field": "ind"
+}

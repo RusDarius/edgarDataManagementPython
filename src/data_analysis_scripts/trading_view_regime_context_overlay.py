@@ -493,6 +493,9 @@ def score_regime_context(
     aligned_scores: dict[str, dict[str, float]] = {
         symbol: {} for symbol in feature_frame
     }
+    # Percentile ranks per predictor across the whole frame. Reused by the
+    # per-symbol field_ranks below (same values, computed once per field).
+    ranks_by_predictor: dict[str, dict[str, float]] = {}
     for predictor_field, (rss, weight) in weight_by_predictor.items():
         values = {
             symbol: predictor_map[predictor_field].value
@@ -503,6 +506,7 @@ def score_regime_context(
         if not values:
             continue
         pct_ranks = _percentile_ranks(values)
+        ranks_by_predictor[predictor_field] = pct_ranks
         for symbol, pct_rank in pct_ranks.items():
             aligned = pct_rank if rss >= 0 else 1.0 - pct_rank
             aligned_scores[symbol][predictor_field] = aligned * weight
@@ -552,13 +556,7 @@ def score_regime_context(
             predictor_value = predictor_values.get(predictor_field)
             if predictor_value is None or predictor_value.value is None:
                 continue
-            values = {
-                sym: predictor_map[predictor_field].value
-                for sym, predictor_map in feature_frame.items()
-                if predictor_field in predictor_map
-                and predictor_map[predictor_field].value is not None
-            }
-            pct = _percentile_ranks(values).get(symbol)
+            pct = ranks_by_predictor.get(predictor_field, {}).get(symbol)
             if pct is None:
                 continue
             field_ranks[predictor_field] = {

@@ -21,7 +21,7 @@ movers_generic.txt
 risk_generic.txt
   Book loss vs NAV (position %, $, % of equity+cash). Standalone check
   on current_holdings.json and/or latest holdings_scoring scan.
-  Canvas book-risk-YYYYMMDD (project canvases/). Scan folder --out-dir
+  Canvas book-risk-YYYYMMDD (logs/canvases/, tv_scan_cli.py page). Scan folder --out-dir
   (book_risk.md + duckdb). Do not attach on DAILY (full) unless asked
   for trim-size / loss tolerance.
 
@@ -62,6 +62,10 @@ run_catalog.txt
   newest folder lands, and which agent_copy_paste block to paste.
   DuckDB is the default. queries.txt sits in that folder.
 
+agent_runs/daily_full.txt, agent_runs/daily_update.txt
+  Prompts that src/run_operator_day.py --agent sends to a headless Claude run
+  (full DAILY + MOVERS + PLAYBOOK, or UPDATE). Also printable with --print-prompt.
+
 agent_copy_paste.txt
   Short chat blocks. Paste one. DAILY (full) is the operator's spoken scan:
   week map, Build-50 ranking (radar_curated_50), Top 100 unpaid ∪ continuation
@@ -74,8 +78,8 @@ agent_copy_paste.txt
   ANALYSIS STYLE (asymmetric rr rank and conviction rank on an all-fields span),
   and BACKTRACK (weekly investing run selection). Do not attach this index or the whole
   file. Pointer also at src/operator_briefing/COPY_PASTE_PROMPTS.txt.
-  Generic TV interrogation: .cursor/skills/tv-dataset-analysis/SKILL.md
-  Forward value + all-suite dumps: .cursor/skills/forward-value/SKILL.md
+  Generic TV interrogation: .claude/skills/tv-dataset-analysis/SKILL.md
+  Forward value + all-suite dumps: .claude/skills/forward-value/SKILL.md
   python src/run_operator_suites.py --list
   Git Bash Prompt | Command | Usage/output: python src/run_operator_suites.py --gitbash
   src/generic_utils/specs/gitbash_agent_data_flows.md

@@ -7,9 +7,9 @@ This suite turns the generic backtest IC tables into week/month
 position choices on the locked briefing pack. It is not a leftover
 radar, not a tape 25, and not NAV ladders.
 
-@.cursor/skills/backtest-horizon/SKILL.md
-@.cursor/skills/generic-ranking/SKILL.md
-@.cursor/skills/scan-evidence/SKILL.md
+@.claude/skills/backtest-horizon/SKILL.md
+@.claude/skills/generic-ranking/SKILL.md
+@.claude/skills/scan-evidence/SKILL.md
 
 inspect; compile only if pack sources differ (pred / all-fields / edge /
 holdings / MTP). Prefer the newest `backtests_*/family_metrics.csv`.

@@ -407,3 +407,27 @@ class TestRegimeContextOverlay(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_field_ranks_match_per_symbol_recompute():
+    """Cached per-field percentile ranks equal the old per-symbol re-sort."""
+    import json
+    import random
+
+    from data_analysis_scripts.trading_view_regime_context_overlay import PredictorValue, _percentile_ranks
+
+    rng = random.Random(7)
+    fields = ["ATRP|1W", "relative_volume", "ebitda_ttm", "Recommend.MA|1M"]
+    frame = {}
+    for i in range(60):
+        frame[f"NYSE:S{i}"] = {
+            f: PredictorValue(f, None if rng.random() < 0.2 else round(rng.uniform(-5, 5), 3), "test")
+            for f in fields if rng.random() < 0.9
+        }
+    weights = [(f, 1.0 if i % 2 == 0 else -1.0, 1.0) for i, f in enumerate(fields)]
+    records = score_regime_context(frame, weights, _test_config())
+    for symbol, record in records.items():
+        got = json.loads(record.promoted_field_ranks_json or "{}")
+        for field, info in got.items():
+            values = {s: m[field].value for s, m in frame.items() if field in m and m[field].value is not None}
+            assert info["percentile"] == round(_percentile_ranks(values)[symbol], 4)

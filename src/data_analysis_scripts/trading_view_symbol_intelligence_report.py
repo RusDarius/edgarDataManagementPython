@@ -83,6 +83,7 @@ from data_analysis_scripts.trading_view_move_prediction_pattern_discovery import
 from data_analysis_scripts.trading_view_field_semantic_classifier import (
     classify_semantic_bucket,
 )
+from db.trading_view_all_fields_duckdb import FULL_ALL_FIELDS_MIN_COLUMN_COUNT
 from db.trading_view_move_prediction_duckdb import query_move_prediction_duckdb
 from edge_research_tools.run_resolution import discover_latest_edge_parent_run_dir
 from generic_utils.log_to_files_util import log_to_file
@@ -720,6 +721,78 @@ def _select_populous_latest_run_id(
     return str(rows[0]["run_id"])
 
 
+def _parse_requested_columns(value: Any) -> frozenset[str] | None:
+    if value in (None, ""):
+        return None
+    try:
+        parsed = json.loads(value) if isinstance(value, str) else value
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(parsed, list):
+        return None
+    return frozenset(str(item) for item in parsed if str(item))
+
+
+def _resolve_all_fields_read_context(
+    all_fields_db: Path, *, preferred_run_id: str | None
+) -> dict[str, Any]:
+    """Resolve latest/full runs and the latest run's actual request catalog."""
+    context: dict[str, Any] = {
+        "run_id": preferred_run_id,
+        "full_run_id": preferred_run_id,
+        "requested_columns": None,
+        "has_full_run_fallback": False,
+    }
+    metadata_columns = _table_columns(all_fields_db, "run_metadata")
+    if "api_request_columns_json" not in metadata_columns:
+        return context
+
+    rows = query_move_prediction_duckdb(
+        all_fields_db,
+        """
+        SELECT run_id, api_request_columns_json
+        FROM run_metadata
+        ORDER BY created_at_utc DESC NULLS LAST, run_id DESC
+        """,
+    )
+    if not rows:
+        return context
+
+    run_id = preferred_run_id or str(rows[0].get("run_id") or "")
+    requested_by_run = {
+        str(row.get("run_id") or ""): _parse_requested_columns(
+            row.get("api_request_columns_json")
+        )
+        for row in rows
+    }
+    full_run_id = next(
+        (
+            str(row.get("run_id") or "")
+            for row in rows
+            if len(
+                _parse_requested_columns(row.get("api_request_columns_json"))
+                or ()
+            )
+            >= FULL_ALL_FIELDS_MIN_COLUMN_COUNT
+        ),
+        run_id,
+    )
+    requested_columns = requested_by_run.get(run_id)
+    context.update(
+        {
+            "run_id": run_id,
+            "full_run_id": full_run_id,
+            "requested_columns": requested_columns,
+            "has_full_run_fallback": bool(
+                requested_columns is not None
+                and full_run_id
+                and full_run_id != run_id
+            ),
+        }
+    )
+    return context
+
+
 def _query_all_fields_symbol_row(
     all_fields_db: Path,
     *,
@@ -755,21 +828,79 @@ def _query_all_fields_symbol_row(
     return _pick_symbol_row(rows, normalized)
 
 
-def _load_all_fields_snapshot(
+def _load_all_fields_snapshot_with_context(
     all_fields_db: Path, symbol: str, *, preferred_run_id: str | None = None
-) -> dict[str, Any] | None:
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     normalized, bare = _symbol_candidates(symbol)
+    row: dict[str, Any] | None = None
     if preferred_run_id is not None:
         row = _query_all_fields_symbol_row(
             all_fields_db, normalized=normalized, bare=bare, run_id=preferred_run_id
         )
-        if row is not None:
-            return row
+    if row is None:
         # Symbol missing from the resolved "good" run only -- fall back to the
         # most recent run of any size that actually has it.
-    return _query_all_fields_symbol_row(
-        all_fields_db, normalized=normalized, bare=bare, run_id=None
+        row = _query_all_fields_symbol_row(
+            all_fields_db, normalized=normalized, bare=bare, run_id=None
+        )
+    if row is None:
+        return None, {
+            "run_id": preferred_run_id,
+            "full_run_id": preferred_run_id,
+            "requested_columns": None,
+            "has_full_run_fallback": False,
+            "used_full_run_fallback": False,
+            "fallback_fields": [],
+        }
+
+    source_run_id = str(row.get("run_id") or preferred_run_id or "")
+    context = _resolve_all_fields_read_context(
+        all_fields_db, preferred_run_id=source_run_id
     )
+    fallback_fields: list[str] = []
+    requested_columns = context.get("requested_columns")
+    full_run_id = str(context.get("full_run_id") or "")
+    if (
+        context.get("has_full_run_fallback")
+        and isinstance(requested_columns, frozenset)
+        and full_run_id
+    ):
+        full_row = _query_all_fields_symbol_row(
+            all_fields_db,
+            normalized=normalized,
+            bare=bare,
+            run_id=full_run_id,
+        )
+        if full_row is not None:
+            merged_row = dict(row)
+            for field_name, value in full_row.items():
+                if (
+                    field_name in NON_METRIC_ALL_FIELDS_COLUMNS
+                    or field_name in requested_columns
+                ):
+                    continue
+                merged_row[field_name] = value
+                if value not in (None, ""):
+                    fallback_fields.append(field_name)
+            row = merged_row
+
+    context["used_full_run_fallback"] = bool(fallback_fields)
+    context["fallback_fields"] = sorted(fallback_fields)
+    context["requested_column_count"] = (
+        len(requested_columns)
+        if isinstance(requested_columns, frozenset)
+        else None
+    )
+    return row, context
+
+
+def _load_all_fields_snapshot(
+    all_fields_db: Path, symbol: str, *, preferred_run_id: str | None = None
+) -> dict[str, Any] | None:
+    row, _ = _load_all_fields_snapshot_with_context(
+        all_fields_db, symbol, preferred_run_id=preferred_run_id
+    )
+    return row
 
 
 def _table_columns(database_path: Path, table_name: str) -> set[str]:
@@ -817,18 +948,51 @@ def _load_relative_positioning(
     if resolved_run_id is None:
         return None
 
+    read_context = _resolve_all_fields_read_context(
+        all_fields_db, preferred_run_id=resolved_run_id
+    )
+    requested_columns = read_context.get("requested_columns")
+    full_run_id = str(read_context.get("full_run_id") or "")
+    uses_fallback = bool(
+        read_context.get("has_full_run_fallback")
+        and isinstance(requested_columns, frozenset)
+        and full_run_id
+    )
+    if uses_fallback:
+        source_sql = """
+            (SELECT * FROM all_fields_rows WHERE run_id = ?) AS latest
+            FULL OUTER JOIN
+            (SELECT * FROM all_fields_rows WHERE run_id = ?) AS full_run
+                ON latest.symbol = full_run.symbol
+        """
+        source_params: list[Any] = [resolved_run_id, full_run_id]
+
+        def _column_ref(column: str) -> str:
+            quoted = f'"{column}"'
+            if column == "symbol" or column not in requested_columns:
+                return f"COALESCE(latest.{quoted}, full_run.{quoted})"
+            return f"latest.{quoted}"
+
+    else:
+        source_sql = "(SELECT * FROM all_fields_rows WHERE run_id = ?) AS latest"
+        source_params = [resolved_run_id]
+
+        def _column_ref(column: str) -> str:
+            return f'latest."{column}"'
+
     select_parts = ", ".join(
-        f'TRY_CAST(r."{column}" AS DOUBLE) AS "{column}"' for column, *_ in metrics
+        f'TRY_CAST({_column_ref(column)} AS DOUBLE) AS "{column}"'
+        for column, *_ in metrics
     )
 
     def _query_scope(where_clause: str, params: list[Any]) -> list[dict[str, Any]]:
         sql = f"""
-            SELECT r.symbol, {select_parts}
-            FROM all_fields_rows AS r
-            WHERE r.run_id = ? AND {where_clause}
+            SELECT {_column_ref("symbol")} AS symbol, {select_parts}
+            FROM {source_sql}
+            WHERE {where_clause}
         """
         return query_move_prediction_duckdb(
-            all_fields_db, sql, [resolved_run_id, *params]
+            all_fields_db, sql, [*source_params, *params]
         )
 
     scopes: dict[str, dict[str, Any]] = {}
@@ -836,16 +1000,16 @@ def _load_relative_positioning(
         peer_rows: list[dict[str, Any]] = []
         scope_label = ""
         if industry:
-            peer_rows = _query_scope('r."industry" = ?', [industry])
+            peer_rows = _query_scope(f"{_column_ref('industry')} = ?", [industry])
             scope_label = f"industry '{industry}'"
         if len(peer_rows) < 5 and sector:
-            peer_rows = _query_scope('r."sector" = ?', [sector])
+            peer_rows = _query_scope(f"{_column_ref('sector')} = ?", [sector])
             scope_label = f"sector '{sector}' (industry peer count was too small)"
         if len(peer_rows) >= 2:
             scopes["industry"] = {"scope": scope_label, "rows": peer_rows}
 
     if "type" in available:
-        universe_rows = _query_scope("r.\"type\" = 'stock'", [])
+        universe_rows = _query_scope(f"{_column_ref('type')} = 'stock'", [])
         universe_label = "all stocks in scan"
     else:
         universe_rows = _query_scope("TRUE", [])
@@ -939,12 +1103,10 @@ def _load_weekly_history(
 
     selected = sorted(by_week.values(), key=lambda entry: entry["date"])[-weeks:]
     normalized, bare = _symbol_candidates(symbol)
-    predicate, symbol_params = _symbol_sql_predicate(
-        "r.symbol", normalized, bare
-    )
 
     history_rows: list[dict[str, Any]] = []
     weeks_with_symbol = 0
+    weeks_using_full_fallback = 0
     for entry in selected:
         iso = entry["date"].isocalendar()
         week_label = f"{iso[0]}-W{iso[1]:02d}"
@@ -961,25 +1123,68 @@ def _load_weekly_history(
             columns = [c for c, _, _ in HISTORY_COLUMNS if c in available]
             helper_columns = [c for c in HISTORY_HELPER_COLUMNS if c in available]
             if run_id is not None and columns:
+                read_context = _resolve_all_fields_read_context(
+                    entry["db"], preferred_run_id=run_id
+                )
+                requested_columns = read_context.get("requested_columns")
+                full_run_id = str(read_context.get("full_run_id") or "")
+                uses_fallback = bool(
+                    read_context.get("has_full_run_fallback")
+                    and isinstance(requested_columns, frozenset)
+                    and full_run_id
+                )
+                if uses_fallback:
+                    source_sql = """
+                        (SELECT * FROM all_fields_rows WHERE run_id = ?) AS latest
+                        FULL OUTER JOIN
+                        (SELECT * FROM all_fields_rows WHERE run_id = ?) AS full_run
+                            ON latest.symbol = full_run.symbol
+                    """
+                    query_params: list[Any] = [run_id, full_run_id]
+
+                    def _column_ref(column: str) -> str:
+                        quoted = f'"{column}"'
+                        if column == "symbol" or column not in requested_columns:
+                            return f"COALESCE(latest.{quoted}, full_run.{quoted})"
+                        return f"latest.{quoted}"
+
+                else:
+                    source_sql = (
+                        "(SELECT * FROM all_fields_rows WHERE run_id = ?) AS latest"
+                    )
+                    query_params = [run_id]
+
+                    def _column_ref(column: str) -> str:
+                        return f'latest."{column}"'
+
+                symbol_ref = _column_ref("symbol")
+                predicate, symbol_params = _symbol_sql_predicate(
+                    symbol_ref, normalized, bare
+                )
                 select_parts = ", ".join(
-                    f'TRY_CAST(r."{column}" AS DOUBLE) AS "{column}"'
+                    f'TRY_CAST({_column_ref(column)} AS DOUBLE) AS "{column}"'
                     for column in columns + helper_columns
                 )
-                sql = f"""
-                    SELECT r.symbol AS "_resolved_symbol", {select_parts}
-                    FROM all_fields_rows AS r
-                    WHERE r.run_id = ?
-                      AND {predicate}
-                """
                 rows = query_move_prediction_duckdb(
-                    entry["db"], sql, [run_id, *symbol_params]
+                    entry["db"],
+                    f"""
+                    SELECT {symbol_ref} AS "_resolved_symbol", {select_parts}
+                    FROM {source_sql}
+                    WHERE {predicate}
+                    """,
+                    [*query_params, *symbol_params],
                 )
                 selected_row = _pick_symbol_row(
                     rows, normalized, symbol_key="_resolved_symbol"
                 )
                 if selected_row:
-                    metrics = dict(selected_row)
-                    record["resolved_symbol"] = metrics.pop("_resolved_symbol", "")
+                    metrics = {
+                        column: _to_float(selected_row.get(column))
+                        for column in columns + helper_columns
+                    }
+                    record["resolved_symbol"] = selected_row.get(
+                        "_resolved_symbol", ""
+                    )
                     close = _to_float(metrics.get("close"))
                     sma200 = _to_float(metrics.pop("SMA200", None))
                     high_52w = _to_float(
@@ -989,6 +1194,20 @@ def _load_weekly_history(
                         metrics["dist_sma200_pct"] = (close / sma200 - 1) * 100
                     if close and high_52w:
                         metrics["dist_52w_high_pct"] = (close / high_52w - 1) * 100
+                    fallback_fields = sorted(
+                        column
+                        for column in columns + helper_columns
+                        if uses_fallback
+                        and column not in requested_columns
+                        and selected_row.get(column) not in (None, "")
+                    )
+                    record["run_id"] = run_id
+                    record["full_fallback_run_id"] = (
+                        read_context.get("full_run_id") if fallback_fields else None
+                    )
+                    record["fallback_fields"] = fallback_fields
+                    if fallback_fields:
+                        weeks_using_full_fallback += 1
                     record["found"] = True
                     record["metrics"] = metrics
                     weeks_with_symbol += 1
@@ -1001,6 +1220,7 @@ def _load_weekly_history(
         "weeks_requested": weeks,
         "weeks_available": len(selected),
         "weeks_with_symbol": weeks_with_symbol,
+        "weeks_using_full_fallback": weeks_using_full_fallback,
         "rows": history_rows,
     }
 
@@ -2395,6 +2615,7 @@ def build_symbol_intelligence_report(
     )
     all_fields_db = discover_latest_all_fields_db(resolved_all_fields_root)
     all_fields_row: dict[str, Any] | None = None
+    all_fields_read_context: dict[str, Any] = {}
     primary_all_fields_run_id: str | None = None
     if all_fields_db is None:
         result["warnings"].append(
@@ -2408,7 +2629,10 @@ def build_symbol_intelligence_report(
             primary_all_fields_run_id = None
             result["warnings"].append(f"Could not resolve latest all-fields run: {exc}")
         try:
-            all_fields_row = _load_all_fields_snapshot(
+            (
+                all_fields_row,
+                all_fields_read_context,
+            ) = _load_all_fields_snapshot_with_context(
                 all_fields_db,
                 requested_symbol,
                 preferred_run_id=primary_all_fields_run_id,
@@ -2431,6 +2655,18 @@ def build_symbol_intelligence_report(
         result["all_fields_run_context"] = {
             "run_id": all_fields_row.get("run_id"),
             "row_number": all_fields_row.get("row_number"),
+            "full_fallback_run_id": all_fields_read_context.get("full_run_id"),
+            "used_full_run_fallback": bool(
+                all_fields_read_context.get("used_full_run_fallback")
+            ),
+            "fallback_field_count": len(
+                all_fields_read_context.get("fallback_fields") or ()
+            ),
+            "fallback_fields": all_fields_read_context.get("fallback_fields") or [],
+            "latest_requested_column_count": all_fields_read_context.get(
+                "requested_column_count"
+            ),
+            "fallback_policy": "same-day full baseline for columns omitted from latest request",
         }
         if all_fields_db is not None and primary_all_fields_run_id is not None:
             try:
@@ -2681,9 +2917,15 @@ def _write_symbol_intelligence_log(
     if run_context.get("run_id"):
         created = str(run_context.get("created_at_utc") or "")[:16]
         row_count = run_context.get("run_row_count")
+        fallback_count = int(run_context.get("fallback_field_count") or 0)
         coverage_bits.append(
             f"all-fields OK (scan {created} UTC"
             + (f", {int(row_count):,} rows" if row_count else "")
+            + (
+                f", {fallback_count:,} omitted fields from same-day full baseline"
+                if fallback_count
+                else ""
+            )
             + ")"
         )
     elif result.get("sources", {}).get("all_fields_database"):
@@ -2849,6 +3091,12 @@ def _write_symbol_intelligence_log(
             f"/{weekly_history.get('weeks_available', 0)} weekly all-fields scans; "
             f"model scoring from {len(prediction_history)} weekly prediction databases."
         )
+        fallback_weeks = int(weekly_history.get("weeks_using_full_fallback") or 0)
+        if fallback_weeks:
+            write_line(
+                f"  Field provenance: {fallback_weeks} week(s) combine the latest "
+                "focused scan with that day's full baseline for omitted columns."
+            )
         write_line("")
         group_trends = {
             "Price & valuation": (

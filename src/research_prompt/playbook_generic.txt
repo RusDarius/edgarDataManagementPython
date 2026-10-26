@@ -1,5 +1,8 @@
 PLAYBOOK — BASE 100, BEST 25, SHORTS, 25 WEEKS
 =============================================
+CANVAS = operator HTML page: JSON spec in logs/canvases/, rendered by
+tv_scan_cli.py page (.claude/skills/canvas-ledger/SKILL.md). Not a Cursor .canvas.tsx.
+IDS = every stock is EXCHANGE:TICKER (NASDAQ:MU) in tables, pages, judgment, priors and chat; a bare ticker is input only.
 Do not attach daily_generic.txt. Not a second Daily radar.
 
 Two modes. The manual command writes files and stops. The agent canvas
@@ -20,14 +23,18 @@ No leftover/RSI cutoff inside the dump. No industry cap on the upside 100.
 
 AGENT CANVAS
 ------------
-@.cursor/skills/canvas-ledger/SKILL.md
-@.cursor/skills/generic-ranking/SKILL.md
-@.cursor/skills/tv-dataset-analysis/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
+@.claude/skills/generic-ranking/SKILL.md
+@.claude/skills/tv-dataset-analysis/SKILL.md
 
 Compile only if inspect sources differ. Do not re-fish DuckDB.
 Peers and street/model come from the latest wisdom value-tech and forward
 dumps when those folders exist. Quote them as separate columns.
 
+Mesh letters come from the tool, not by hand (after entry-book on the base 100):
+  python src/generic_utils/tv_scan_cli.py entry-book --csv PLAYBOOK/radar_upside_100.csv --out-dir PLAYBOOK/entry_book_radar_upside_100
+  python src/generic_utils/tv_scan_cli.py mesh --db PLAYBOOK/entry_book_radar_upside_100/entry_book.duckdb --table entry_book --span-db PLAYBOOK/weeks_progression/weeks_progression.duckdb --forming-db PLAYBOOK/playbook.duckdb --out-dir PLAYBOOK/mesh_band
+mesh_band/mesh.duckdb has mesh, nmesh, bo_chg, and the band on one row. Page tables point at it.
 Mesh is letters in order F C P D T, only the ones that are on. `-` means
 none. nmesh is the count of letters. Mesh 3+ is nmesh >= 3. It is not a score.
 Copy the on/off rules from the canvas Ledger skill. Do not invent a second rule.
@@ -48,8 +55,24 @@ A mesh of 5 with paid range is
 still a watch. Mix avoid_value_trap on a live leftover Book line stays
 HOLD_NO_ADD. Shorts stay on the short sleeve. Do not short a leftover-rich name.
 
-Canvas playbook-YYYYMMDD:
-  Play, Base 100, Best 25, Forming x catalyst, Shorts, Peers/tech, 25 weeks, Ledger.
+Payoff focus is ten names on the upside 100, after the dump exists.
+  python src/generic_utils/tv_scan_cli.py payoff-focus --db PLAYBOOK.duckdb --table radar_upside_100 --out-dir PLAYBOOK/payoff_focus
+discount_momentum is a discount (val_vs_ind <= -5) with bo at least 0.15.
+premium_strength is a premium (val_vs_ind >= 5) with bo at least 0.5.
+band_payoff sorts them: upside from entry_high to value_px, over the
+distance down to exit_stop. value_px is the year-1 PE at the industry median. discount_px is EV/EBIT,
+or EV/Rev when EBIT is missing. EBITDA is not used. Street stays
+exit_target and does not outrank a year-1 price. It is not mesh and not a 0-100.
+stake_per_1k_usd is the check that earns $1,000 at that upside. 10% is $10,000.
+50% is $2,000. profit_on_5k_usd at 50% is $2,500. profit_on_10k_usd at 10% is $1,000.
+Show entry_low, entry_high, trim_px, trim_state, kill_px, exit_target, bo, and val_vs_ind.
+trim_at_sma means a print at the 50-day trims a held line. through_average means that trim already printed. kill_px ends this entry. cost_kill_px is 15% under cost when cost is on the row.
+The ten do not replace Best 25 and do not add a NEW budget.
+Best 25 and Book rows that carry a course use the same three prices. Run entry-book on that short list. Do not hand-write the band.
+
+Canvas playbook-YYYYMMDD: tv_scan_cli.py page --template playbook --day YYYYMMDD --judgment logs/canvases/YYYYMMDD/judgment.json --out-dir RUN_DIR
+(Best 25 courses go in courses[symbol] with Horizon; page text in pages.playbook.blocks).
+  Play, Base 100, Best 25, Payoff 10, Forming x catalyst, Shorts, Peers/tech, 25 weeks, Ledger.
 One Ledger. No second NEW/ADD budget. No logs/_tmp_*.py.
 A Best 25 name that is not already held is sized with about $5,000 in mind.
 An add to a held name can be about $1,000. That is advice on the

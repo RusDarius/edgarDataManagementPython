@@ -1,0 +1,13 @@
+{
+  "name": "discount_path",
+  "description": "Own-history multiple path plus the current gap to the industry median, and raw balance-sheet strength. Not a 0-100. The market-cap floor is a load size. The reading table is a where, edited here, and the full tape stays in discount_tape.",
+  "months": 3,
+  "min_market_cap_usd": 2000000000,
+  "min_n": 6,
+  "hist_min_n": 4,
+  "cheap_pct": -5,
+  "rich_pct": 5,
+  "covered_nd_ebitda_max": 2,
+  "covered_opm_min": 8,
+  "levered_nd_ebitda_min": 4
+}

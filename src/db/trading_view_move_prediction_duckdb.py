@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import csv
+import functools
 import hashlib
 import json
 import math
+import os
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any, Callable, Iterable, Sequence
 
 DUCKDB_INSTALL_HINT = (
     "DuckDB support requires the 'duckdb' package. Install it with "
@@ -495,6 +497,42 @@ def _infer_sql_type(column_name: str, values: Sequence[Any]) -> str:
 
 
 def _coerce_value(value: Any, sql_type: str) -> Any:
+    return _coercer_for(sql_type)(value)
+
+
+def _coerce_double(value: Any) -> Any:
+    kind = value.__class__
+    if kind is float:  # exact float: same result as _parse_float, without the generic checks
+        return value if math.isfinite(value) else None
+    if value is None:
+        return None
+    if kind is int:
+        return float(value)
+    return None if _is_blank(value) else _parse_float(value)
+
+
+def _coerce_text(value: Any) -> Any:
+    if value.__class__ is str:
+        return value if value.strip() else None
+    if value is None:
+        return None
+    if isinstance(value, (dict, list)):
+        return _json_dump(value)
+    return None if _is_blank(value) else str(value)
+
+
+@functools.lru_cache(maxsize=64)
+def _coercer_for(sql_type: str) -> Callable[[Any], Any]:
+    """One coercion function per SQL type, resolved once per column (not per cell)."""
+    normalized_type = sql_type.upper()
+    if normalized_type in {"DOUBLE", "FLOAT", "REAL"}:
+        return _coerce_double
+    if normalized_type in {"VARCHAR", "TEXT", "STRING"}:
+        return _coerce_text
+    return functools.partial(_coerce_value_generic, sql_type=normalized_type)
+
+
+def _coerce_value_generic(value: Any, sql_type: str) -> Any:
     if _is_blank(value):
         return None
 
@@ -835,21 +873,30 @@ class MovePredictionDuckDBStore:
         sql_type_by_column = dict(actual_schema)
         insert_columns = [column for column, _ in actual_schema]
 
+        # Resolve each insert column once: a context constant (coerced once),
+        # the row number, a header position, or absent. Same values as the
+        # per-cell lookup it replaces.
+        header_position = {header: index for index, header in enumerate(deduped_headers)}
+        plan: list[tuple[str, Any, Callable[[Any], Any]]] = []
+        for column_name in insert_columns:
+            coerce = _coercer_for(sql_type_by_column[column_name])
+            if column_name in context:
+                plan.append(("const", coerce(context[column_name]), coerce))
+            elif column_name == "row_number":
+                plan.append(("row_number", None, coerce))
+            elif column_name in header_position:
+                plan.append(("cell", header_position[column_name], coerce))
+            else:
+                plan.append(("const", coerce(None), coerce))
+
         def _iter_record_values() -> Iterable[tuple[Any, ...]]:
             for row_number, row in enumerate(rows, start=1):
-                row_values_by_header = dict(zip(deduped_headers, row))
-                record_values: list[Any] = []
-                for column_name in insert_columns:
-                    if column_name in context:
-                        raw_value = context[column_name]
-                    elif column_name == "row_number":
-                        raw_value = row_number
-                    else:
-                        raw_value = row_values_by_header.get(column_name)
-                    record_values.append(
-                        _coerce_value(raw_value, sql_type_by_column[column_name])
-                    )
-                yield tuple(record_values)
+                yield tuple(
+                    value if kind == "const"
+                    else coerce(row_number) if kind == "row_number"
+                    else coerce(row[value])
+                    for kind, value, coerce in plan
+                )
 
         inserted_count = self._copy_rows_from_csv(
             table_name,
@@ -981,12 +1028,11 @@ class MovePredictionDuckDBStore:
         columns = [column for column, _ in schema]
         sql_type_by_column = dict(schema)
 
+        coercers = [(column, _coercer_for(sql_type_by_column[column])) for column in columns]
+
         def _iter_record_values() -> Iterable[tuple[Any, ...]]:
             for record in records:
-                yield tuple(
-                    _coerce_value(record.get(column), sql_type_by_column[column])
-                    for column in columns
-                )
+                yield tuple(coerce(record.get(column)) for column, coerce in coercers)
 
         inserted_count = self._copy_rows_from_csv(
             table_name,
@@ -1074,7 +1120,8 @@ class MovePredictionDuckDBStore:
         parquet_dir: str | Path | None = None,
         table_names: Sequence[str] | None = None,
     ) -> dict[str, Path]:
-        resolved_parquet_dir = Path(parquet_dir or self.parquet_dir or "parquet")
+        # Last fallback stays "parquet" (relative to cwd); $TV_DEFAULT_PARQUET_DIR replaces it when set (tests).
+        resolved_parquet_dir = Path(parquet_dir or self.parquet_dir or os.environ.get("TV_DEFAULT_PARQUET_DIR") or "parquet")
         resolved_parquet_dir.mkdir(parents=True, exist_ok=True)
         self.parquet_dir = resolved_parquet_dir
 

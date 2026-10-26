@@ -13,6 +13,10 @@ Example ADSH values from FDX missing filings report:
 - 0000950170-22-018769 (Q1 2023)
 """
 
+import pytest
+
+pytestmark = pytest.mark.network  # downloads live SEC/EDGAR filings
+
 import sys
 import os
 

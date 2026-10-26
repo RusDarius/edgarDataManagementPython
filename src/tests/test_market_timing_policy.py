@@ -43,6 +43,8 @@ def test_drawdown_bounce_authorizes_small_risk_despite_survival_reject() -> None
     assert policy["normalized_risk_units"] == 0.75
     assert policy["existing_safety_state"] == "speculative"
     assert policy["max_hold_days"] == 2
+    assert policy["kill_px"] is None
+    assert policy["sma_role"] == "unknown"
 
 
 def test_screen_coverage_glue_keeps_missing_upside_name_in_timing_universe() -> None:

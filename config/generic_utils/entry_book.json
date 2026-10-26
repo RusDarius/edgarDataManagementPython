@@ -1,0 +1,15 @@
+{
+  "name": "entry_book",
+  "description": "Buy band and thesis-kill prices from a catalog row. Formulas only. A kill ends this entry. A later close can open a new band. Starter and add dollars are advice copied onto the row, not an eligibility cutoff.",
+  "atr_mult": 1.5,
+  "band_atr": 0.5,
+  "starter_hint_usd": 5000,
+  "add_hint_usd": 1000,
+  "close_fields": ["close", "price"],
+  "vs50_fields": ["vs50"],
+  "atrp_fields": ["atrp", "atrp_last"],
+  "atr_fields": ["atr"],
+  "street_fields": ["street_px", "fwd_street_px"],
+  "pack_fields": ["target_px", "fwd_pack_px"],
+  "cost_fields": ["cost", "average_price", "average_price_usd"]
+}

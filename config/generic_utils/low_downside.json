@@ -1,0 +1,11 @@
+{
+  "name": "low_downside",
+  "where": "street_up_pct>=8,downside_atr_pct<=18,up_down_ratio>=1.5,rng<=80,rsi<=70",
+  "field": "up_down_ratio",
+  "top": 120,
+  "group_field": "ind",
+  "group_field_fallback": "industry",
+  "cap": 6,
+  "id_field": "symbol",
+  "note": "Caller screen from the 15 Oct 2026 flow page. up_down_ratio is street upside divided by 1.5 ATR percent. Edit this where. It is not a score and it is not inside ranking.py. Add left>=15 or leftover_carrier!=edge_only in the where when those columns are on the tape."
+}

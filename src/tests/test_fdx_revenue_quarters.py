@@ -10,6 +10,10 @@ Usage:
     python test_fdx_revenue_quarters.py
 """
 
+import pytest
+
+pytestmark = pytest.mark.network  # downloads live SEC/EDGAR filings
+
 import sys
 import os
 

@@ -250,6 +250,24 @@ class TestSetup(unittest.TestCase):
         real["val_vs_ind"] = -25.0
         self.assertEqual(classify_punished_tape(real), "BOUNCE")
 
+    def test_up_tape_classes_follow_leftover_weeks_and_range(self):
+        from operator_briefing.sleeves import attach_punished_classes, classify_up_tape
+
+        base = {"val_field": "pe", "val_vs_ind": -10.0, "rsi": 60}
+        supported = dict(base, left=40, rng=50, bo=0.8, cont=0.2, fwd=0.1)
+        self.assertEqual(classify_up_tape(supported), "IS_SUPPORTED")
+        paid = dict(base, left=3, rng=96, bo=1.6, rsi=80)
+        self.assertEqual(classify_up_tape(paid), "CHASE")
+        premium_gone = dict(base, left=2, rng=60, bo=0.2, val_vs_ind=30.0)
+        self.assertEqual(classify_up_tape(premium_gone), "CHASE")
+        no_support = dict(base, left=1, rng=60, bo=0.1, cont=0.0, fwd=-0.2, val_vs_ind=2.0)
+        self.assertEqual(classify_up_tape(no_support), "UNSUPPORTED")
+        self.assertEqual(classify_up_tape(dict(base, left=25, rng=50, bo=0.2)), "MIXED")
+        stamped = attach_punished_classes([dict(supported, tail="leaders"), dict(supported, tail="laggards")])
+        self.assertEqual(stamped[0]["up_class"], "IS_SUPPORTED")
+        self.assertIsNone(stamped[0]["down_class"])
+        self.assertIsNone(stamped[1]["up_class"])
+
 
 class TestAggregations(unittest.TestCase):
     def test_numeric_summary(self):
@@ -276,6 +294,13 @@ class TestAggregations(unittest.TestCase):
         self.assertEqual(names, ["A", "B"])
         self.assertEqual(result[0]["pct_positive"], 100.0)
         self.assertEqual(result[1]["n"], 2)
+        median = group_stats(
+            [{"ind": "A", "d5": 1}, {"ind": "A", "d5": 100}],
+            group_field="ind",
+            metrics=["d5"],
+            center="median",
+        )
+        self.assertEqual(median[0]["d5"], 50.5)
 
     def test_group_stats_pct_positive_denom_n(self):
         from generic_utils.aggregations import group_stats

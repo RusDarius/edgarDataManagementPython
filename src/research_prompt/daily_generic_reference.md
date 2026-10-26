@@ -77,7 +77,7 @@ GOALS THIS RUN MUST COVER
      Val / Peer / Proj / Tech. Not four tabs. 3M is --- MOVERS (3M) ---.
 9. Session continuity: yesterday's Book ADD/NEW cannot become today's EXIT
    unless a thesis-kill from the continuity rules is cited with numbers.
-10. Primary artifact is a Cursor canvas. Chat is a short snapshot.
+10. Primary artifact is the operator page (logs/canvases/, tv_scan_cli.py page). Chat is a short snapshot.
 
 HOW TO LAUNCH (attach these, or the newest equivalents)
 -------------------------------------------------------
@@ -181,14 +181,13 @@ OUTPUT CONTRACT — CANVAS FIRST, STRUCTURED FALLBACK
 ---------------------------------------------------
 This briefing is a standalone analytical artifact. Deliver it as follows.
 
-A. Cursor canvas (required when the canvas skill / Cursor canvas surface exists)
-   - Read the Cursor canvas skill before writing.
-   - Write one `.canvas.tsx` into the workspace canvases directory that skill
-     specifies. Do not write the canvas into this repo.
-   - Filename: `daily-focus-YYYYMMDD.canvas.tsx` using the scan day. If a
-     same-day canvas already exists, update it rather than creating a duplicate.
-   - Import only from `cursor/canvas`. Embed all numbers inline. No fetch, no
-     empty placeholder sections, no emoji, no gradients, no box-shadows.
+A. Operator page (required when the paste says canvas output)
+   - Read `.claude/skills/canvas-ledger/SKILL.md` before writing.
+   - Write one spec `logs/canvases/YYYYMMDD/daily-focus-YYYYMMDD.json` using the scan
+     day, then `python src/generic_utils/tv_scan_cli.py page --spec` it. If a
+     same-day spec already exists, update it rather than creating a duplicate.
+   - Name tables point at the pack DuckDB / CSV as `source`; the spec adds the
+     judgment columns. No empty placeholder sections, no emoji.
    - The canvas must be usable alone: a reader who never opens the chat should
      still get regime, book actions, Top 100, earnings 0–7 / 8–21 / 22–60,
      short book 15, and the roadmap.
@@ -704,7 +703,7 @@ Build-50 radar, then groups, then shorts 15, then roadmap.
     and every publish-blocked polar. Other radar names can stay table-only.
 12. Ledger menu (required, once): one tab that explains every abbreviation
     and symbol used anywhere on the canvas. Do not put a ledger on other
-    sections — that is duplicate. See `.cursor/skills/canvas-ledger/SKILL.md`.
+    sections — that is duplicate. See `.claude/skills/canvas-ledger/SKILL.md`.
 13. Tape support (one section, not four tabs): ranked Top 25 up by day /
     week / 5D / 1M return (best → least) with IS_SUPPORTED / CHASE /
     UNSUPPORTED / MIXED. From the bottom 25, BOUNCE vs CONTINUE_DOWN.

@@ -1,0 +1,105 @@
+BEST TRADES: DAILY + MOVERS + PLAYBOOK + GMV, canvas output, with global market wisdom. Day {DAY}.
+Goal: the best trades and positions for the short term (1-10 sessions) and the mid term
+(3-12 weeks), long and short, for a book that holds a lot of cash.
+
+The runner (src/run_operator_day.py) already refreshed every scan, compiled the pack
+and wrote every suite dump. Pack: {PACK}. Do not rerun producers or compile.
+Refresh record: {REFRESH_JSON}
+Run folder: {RUN_DIR} (every page, spec and note of this run goes here; the runner keeps
+run.json, prompt.txt and agent.log there). Live judgment: {JUDGMENT}.
+An earlier judgment of the same day, if any, is {RUN_DIR}/judgment.prev.json: carry its
+courses through the polar rule, do not start from zero.
+
+@.claude/skills/daily-operator-scan/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
+@src/research_prompt/daily_generic.txt
+
+Also follow, as the steps need them (read the SKILL.md only when you reach that step):
+  price-movers (Tape / movers page), book-risk (Book ladders), brief-history (digest),
+  scan-evidence (stance --line), generic-vs-domain (grep its reference.md), entry-book.
+
+1. DATA FIRST (deterministic orders before any news)
+   Read {PACK}/briefing_pack.md once: regime, breadth, industries_5d, Book, suggested_courses.
+   Prior calls: the newest logs/tradingview_analysis/operator_briefing/runs/brief_history_*/digest.md
+   Per name that could take capital: python src/operator_briefing/example_entry.py stance SYM ... --line
+
+2. OUTSIDE RESEARCH (tag OUTSIDE, date and link every line; timing and Grade only)
+   Work this checklist. Write "not found" rather than guessing a number.
+   a. Tape: index closes, the biggest sector moves and why, futures overnight, after-hours prints.
+   b. Rates and cross-asset: 10y / 30y, curve, Fed date and pricing, oil, gold, dollar, bitcoin.
+   c. Geopolitics and policy that move whole industries (war, sanctions, tariffs, elections).
+   d. Earnings season scoreboard: who printed this week, how a beat / raise was paid
+      (up, flat, sold), which themes are being punished; the next 10 sessions' prints
+      that move the Book or the candidates (megacaps, peers of held names).
+   e. Headlines on every Book name and every name that would take capital.
+   f. The narrative: what the market is rotating into and out of, and what would reverse it.
+   News changes timing or Grade; never a sort key, a size, or a reason to skip the data gate.
+
+3. CANDIDATE FUNNEL (data first, outside second)
+   Data pool: Build-50, payoff 10, playbook Base 100 / Best 25, tape IS_SUPPORTED leaders,
+   the BOUNCE pool, the earnings upside lane, the short book 15 and the breakdown screen,
+   and GMV focus / FADE ({PACK}/gmv/highlights.log; its Evidence table says which lens led
+   later closes lately, so weight the profiles that are working, and say so).
+   Outside nominations: names the step-2 narrative points at (the rotation's beneficiaries,
+   peers of a print that was paid) that are not in the data pool. Look each up with
+   `stance --line`. A nomination keeps its OUTSIDE tag and can take a slot only if the pack
+   gives it a band, a kill, and a leftover that is not edge_only. Otherwise it is a watch line.
+   Session path: the refresh writes {PACK}/intraday when the day file has two runs (session_path
+   EXTENDING / FADING / REVERSING_*, per-industry median drift). Theme candidates:
+     tv_scan_cli.py theme-slice --pack {PACK} --theme ai_buildout --line
+   Discount, bounce band, kill, reclaim add and trim zone for any named set, one call:
+     tv_scan_cli.py name-levels --pack {PACK} --theme ai_core,cyber --ids A,B --quiet
+   (entry-book skill). Record each in the judgment `scans` with {{PACK}} paths. Look names up with
+   `named --csv ... --ids ... --line`, not with ad-hoc SQL.
+   Not in the pack: tv_scan_cli.py named --csv {PACK}/movers/us2b_tape.csv --ids A,B --fields ...
+   --out {PACK}/analysis_scans/candidates.csv, then entry-book --csv on it (band, kill, street target).
+
+4. JUDGMENT for every Book, Build-50, earnings (both ways), shorts and tape name you rule on,
+   plus Best 25 on the playbook base 100 (mesh_band). Split the picks by horizon:
+     short term (1-10 sessions): tape / bounce / event trades with a trigger, a kill and a
+       first target; earnings both ways; forming and opportune opens.
+     mid term (3-12 weeks): leftover + weeks bo + mesh + peer discount, with an entry band.
+   Answer explicitly:
+     - rebound: allocate more now, or do better trades stand in line or come soon? Name the
+       condition that would change the answer (a level, a print, a date).
+     - capital allocation and recycle from EXIT / TRIM into the named starters
+     - best NEW lines (0-2), the queue for the next sessions, and the best shorts where
+       specific names can fall (trigger, cover, catalyst)
+   Trade card for each pick, short and long: horizon, entry band or trigger, kill, target
+   (street and value kept separate), catalyst date, size, and what would change the call.
+   A new line is sized with about $5,000 in mind and never smaller (a smaller starter is not
+   a useful book slot). An add to a held line can be about $1,000 and up. Advice on the
+   recommendation, not a hard target.
+
+5. WRITE {JUDGMENT} (schema in canvas-ledger). Start from {RUN_DIR}/judgment.skeleton.json: it lists every
+   template block id with its shape (`_shapes`), carries the prior day's courses ("<d Mon> (carried): ...")
+   and its recorded scans. Save it as {JUDGMENT} and fill it: courses for every ruled name,
+   pages.daily / pages.movers / pages.playbook / pages.gmv blocks, plus pages.playbook.best_25 (the 25
+   ids, in order) and pages.playbook.span_ids (Best 25 + Book) (template block ids:
+   grep "from" in config/generic_utils/pages/*.json), capital_plan rows, and any extra
+   deterministic scan you ran in `scans` (argv with {{PACK}}) so later updates replay it.
+   Capital preview from the judgment rows (the same rows UPDATE replays; quote its cash_end_pct):
+     python src/generic_utils/tv_scan_cli.py capital-plan --judgment {JUDGMENT} --key capital_plan --pack {PACK}/briefing_pack.json --quiet
+     (and --key capital_plan_queue). Then replay plans + scans and render into the run folder:
+     python src/run_daily_refresh.py --no-producers --no-compile --no-suites --update-day {DAY} --run-dir {RUN_DIR}
+
+6. RENDER every page in one call and fix every Ledger warning (it also lists unfilled block ids):
+     python src/generic_utils/tv_scan_cli.py page-all --day {DAY} --judgment {JUDGMENT} --out-dir {RUN_DIR} --strict
+   (daily_focus, movers, playbook, gmv, wisdom). Wisdom needs the named levels first:
+     python src/generic_utils/tv_scan_cli.py name-levels --pack {PACK} --theme <themes> --ids <book + picks> --quiet
+   (themes in config/generic_utils/themes.json; record it in `scans`), then fill pages.wisdom blocks and the
+   book_ids / focus_ids / session_ids lists. Never hand-write page spec JSON; a one-off page on named groups is
+   tv_scan_cli.py deep-dive (watchlist-deep-dive skill).
+
+7. Priors: python src/generic_utils/tv_scan_cli.py priors --day {DAY} --notes "<one plan line>"
+   (keys EXCHANGE:TICKER, from the judgment; never hand-write the priors JSON).
+
+8. FINAL MESSAGE, short: bias, the short-term and mid-term trade cards (5-8 actions with
+   bands and kills), cash after, best shorts, the rebound answer, page links, sources.
+   Close with 3-5 changes that would widen what the scans can see or test (a missing
+   field, a universe gap, a backtest family that should exist), grounded in what this run
+   could not answer. The newest backtests run (family_metrics.csv) is the starting point.
+
+Every stock id in pages, judgment, priors and chat is EXCHANGE:TICKER (NASDAQ:MU), never a bare ticker.
+Budget 0-2 NEW, 0-2 ADD, 0-2 TRIM/EXIT, 0-2 event, 0-1 short. Polar rule, MTP is climate,
+no 0-100 composites, no logs/_tmp_*.py, never read a whole queries.txt.

@@ -9,10 +9,10 @@ This suite is a deterministic path dump for ever-held names:
 - prediction profile progression (`score_path`, `score_span`)
 - deterministic join flags (`jobs`) + coverage visibility (`coverage_fill_rates`)
 
-@.cursor/skills/capture-book/SKILL.md
-@.cursor/skills/canvas-ledger/SKILL.md
-@.cursor/skills/generic-ranking/SKILL.md
-@.cursor/skills/scan-evidence/SKILL.md
+@.claude/skills/capture-book/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
+@.claude/skills/generic-ranking/SKILL.md
+@.claude/skills/scan-evidence/SKILL.md
 Recipe: config/generic_utils/capture.json
 
 Run on existing data (default 90-day live progression):
@@ -26,7 +26,7 @@ What to produce (canvas first; chat is a short snapshot):
   1. Scan folder (`--out-dir`): `capture.duckdb` + `capture.md` + `overview.log`.
      DuckDB tables: `book_asof`, `book_names`, `exits`, `fund_path`, `fund_span`,
      `score_path`, `score_span`, `jobs`, `coverage_fill_rates`, `ic_snapshot`.
-  2. Canvas `capture-YYYYMMDD.canvas.tsx` (project canvases/), one Ledger tab.
+  2. Canvas `logs/canvases/YYYYMMDD/capture-YYYYMMDD` (JSON spec → HTML via `tv_scan_cli.py page`), one Ledger tab.
      Tabs: Guide / Book / Fundamentals / Progression / Jobs / Follow-up / Ledger.
   3. Chat: best 1-4 week / 1-2 month moves from deterministic evidence only.
 

@@ -25,7 +25,7 @@ from generic_utils.brief_history import (
     pack_day,
 )
 from generic_utils.derive import leftover_carrier
-from generic_utils.symbol_identity import SymbolCatalog, lookup_mapping, parse_symbol
+from generic_utils.symbol_identity import SymbolCatalog, display_id, lookup_mapping, parse_symbol, qualify
 
 DEFAULT_SPEC: dict[str, float] = {
     "top": 100,
@@ -35,6 +35,14 @@ DEFAULT_SPEC: dict[str, float] = {
     "gap_pct": 1.0,
     "rank_good_pct": 3.0,
     "rank_bad_pct": -8.0,
+    "performer_pct": 15.0,
+    "pump_pct": 20.0,
+    "break_pct": 12.0,
+    "high_rank": 25.0,
+    "tape_m1_pct": 25.0,
+    "tape_w_pct": 15.0,
+    "tape_d5_pct": 12.0,
+    "tape_m3_pct": 40.0,
 }
 
 _KEEP = "KEEP"
@@ -110,6 +118,130 @@ def _ordinal(values: Sequence[float]) -> list[float]:
     for place, index in enumerate(order, start=1):
         ranks[index] = float(place)
     return ranks
+
+
+def rollup_names(
+    sightings: Sequence[Mapping[str, Any]],
+    spec: Mapping[str, float] | None = None,
+) -> list[dict[str, Any]]:
+    """One row per symbol across every briefing tape day.
+
+    Path return is the first close to the last close. Peak return is the
+    first close to the highest close. A pump that gives back ``break_pct``
+    from that peak is ``PUMP_BROKE`` even when the last close is still up.
+    A published upside rank at or inside ``high_rank`` with a path at or
+    below the bad band is ``HIGH_RANK_BAD``. Tape week and month fields
+    mark a runner even when the name was never on the upside 100.
+    """
+    used = dict(DEFAULT_SPEC)
+    if spec:
+        used.update({key: float(spec[key]) for key in DEFAULT_SPEC if key in spec})
+    grouped: dict[str, list[Mapping[str, Any]]] = {}
+    for row in sightings:
+        symbol = str(row.get("symbol") or "").strip()
+        if not symbol:
+            continue
+        grouped.setdefault(symbol, []).append(row)
+    names: list[dict[str, Any]] = []
+    for symbol, rows in grouped.items():
+        ordered = sorted(rows, key=lambda item: str(item.get("day") or ""))
+        priced = [row for row in ordered if (_num(row.get("close")) or 0) > 0]
+        if not priced:
+            continue
+        first = priced[0]
+        last = priced[-1]
+        peak = max(priced, key=lambda item: float(item["close"]))
+        first_close = float(first["close"])
+        last_close = float(last["close"])
+        peak_close = float(peak["close"])
+        ret = (last_close / first_close - 1.0) * 100.0
+        peak_ret = (peak_close / first_close - 1.0) * 100.0
+        giveback = (last_close / peak_close - 1.0) * 100.0
+        ranks = [int(row["rank"]) for row in ordered if _num(row.get("rank")) is not None]
+        best_rank = min(ranks) if ranks else None
+
+        def _max_field(field: str) -> float | None:
+            values = [_num(row.get(field)) for row in ordered]
+            present = [value for value in values if value is not None]
+            return max(present) if present else None
+
+        max_day = _max_field("day_ret")
+        max_d5 = _max_field("d5")
+        max_w = _max_field("w")
+        max_m1 = _max_field("m1")
+        max_m3 = _max_field("m3")
+        tape_runner = any(
+            (
+                max_m1 is not None and max_m1 >= float(used["tape_m1_pct"]),
+                max_w is not None and max_w >= float(used["tape_w_pct"]),
+                max_d5 is not None and max_d5 >= float(used["tape_d5_pct"]),
+                max_m3 is not None and max_m3 >= float(used["tape_m3_pct"]),
+            )
+        )
+        runner = ret >= float(used["performer_pct"]) or tape_runner
+        broke = peak_ret >= float(used["pump_pct"]) and giveback <= -float(used["break_pct"])
+        high_rank_bad = (
+            best_rank is not None
+            and best_rank <= int(used["high_rank"])
+            and ret <= float(used["rank_bad_pct"])
+        )
+        ranked_bad = (
+            best_rank is not None
+            and best_rank <= int(used["top"])
+            and ret <= float(used["rank_bad_pct"])
+        )
+        if broke:
+            path_class = "PUMP_BROKE"
+        elif ret >= float(used["performer_pct"]):
+            path_class = "RUNNER"
+        elif high_rank_bad:
+            path_class = "HIGH_RANK_BAD"
+        elif ret <= float(used["rank_bad_pct"]):
+            path_class = "FADE"
+        elif tape_runner:
+            path_class = "TAPE_RUN"
+        else:
+            path_class = "FLAT"
+        sample = last
+        names.append(
+            {
+                "symbol": symbol,
+                "ticker": sample.get("ticker") or parse_symbol(symbol).ticker,
+                "company": str(sample.get("company") or ""),
+                "ind": str(sample.get("ind") or ""),
+                "n_days": len(priced),
+                "first_day": str(first.get("day") or ""),
+                "first_close": _round(first_close),
+                "peak_day": str(peak.get("day") or ""),
+                "peak_close": _round(peak_close),
+                "last_day": str(last.get("day") or ""),
+                "last_close": _round(last_close),
+                "ret_pct": _round(ret),
+                "peak_ret_pct": _round(peak_ret),
+                "giveback_pct": _round(giveback),
+                "best_rank": best_rank,
+                "max_day": _round(max_day),
+                "max_d5": _round(max_d5),
+                "max_w": _round(max_w),
+                "max_m1": _round(max_m1),
+                "max_m3": _round(max_m3),
+                "path_class": path_class,
+                "runner": runner and not broke,
+                "pump_broke": broke,
+                "high_rank_bad": high_rank_bad,
+                "ranked_bad": ranked_bad,
+                "tape_runner": tape_runner,
+            }
+        )
+    names.sort(
+        key=lambda row: (
+            0 if row["pump_broke"] else 1 if row["high_rank_bad"] else 2 if row["path_class"] == "RUNNER" else 3,
+            -(abs(row["ret_pct"]) if row["ret_pct"] is not None else 0),
+            -(row["peak_ret_pct"] or 0),
+            row["ticker"],
+        )
+    )
+    return names
 
 
 def rank_label(ret_pct: float | None, spec: Mapping[str, float]) -> str:
@@ -234,6 +366,7 @@ def build_decision_review(
     actions_by_day: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
     latest_day: str | None = None,
     signal_support: Sequence[Mapping[str, Any]] | None = None,
+    tape_sightings: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Score each session's top ranks and build the suggestion matrix.
 
@@ -335,7 +468,8 @@ def build_decision_review(
             }
         )
         for action in (actions_by_day or {}).get(day) or []:
-            ticker = str(action.get("ticker") or "")
+            # EXCHANGE:TICKER from the prior, else qualified from that day's marks (a bare id that stays ambiguous stays bare).
+            ticker = str(action.get("symbol") or "") or qualify(action.get("ticker"), catalogs.get(day))
             family = action_family(action.get("action"))
             entry = _close_for(marks_by_day.get(day) or {}, ticker, catalogs.get(day))
             later_day, later_close = (None, None)
@@ -350,11 +484,13 @@ def build_decision_review(
                     ret = (later_close / entry - 1.0) * 100.0
                 if next_close is not None:
                     ret_next = (next_close / entry - 1.0) * 100.0
-            match = next((row for row in ranks if row.get("ticker") == ticker), None)
+            match = next((row for row in ranks if row.get("symbol") == ticker), None) or next(
+                (row for row in ranks if ":" not in ticker and row.get("ticker") == ticker), None)
             decisions.append(
                 {
                     "day": day,
-                    "ticker": ticker,
+                    "symbol": ticker,
+                    "ticker": parse_symbol(ticker).ticker,
                     "action": str(action.get("action") or ""),
                     "family": family,
                     "rank": match.get("rank") if match else None,
@@ -369,12 +505,19 @@ def build_decision_review(
 
     matrix = suggestion_matrix(rank_rows, used)
     matrix_to_latest = suggestion_matrix(rank_rows, used, field="ret_pct")
+    name_path = rollup_names(tape_sightings, used) if tape_sightings is not None else []
     payload = {
         "spec": {
             **used,
             "n_sessions": len(list(sessions)),
             "n_ranks": len(rank_rows),
             "n_priced": sum(1 for row in rank_rows if row.get("ret_next_pct") is not None),
+            "n_names": len(name_path),
+            "n_runners": sum(1 for row in name_path if row.get("path_class") == "RUNNER"),
+            "n_tape_run": sum(1 for row in name_path if row.get("path_class") == "TAPE_RUN"),
+            "n_pump_broke": sum(1 for row in name_path if row.get("pump_broke")),
+            "n_high_rank_bad": sum(1 for row in name_path if row.get("high_rank_bad")),
+            "n_tape": len(list(tape_sightings or [])),
             "days_at_top": sum(1 for row in coverage if row["shortfall"] == 0),
             "latest_day": latest_day or "",
             "first_day": sessions[0]["day"] if sessions else "",
@@ -386,6 +529,8 @@ def build_decision_review(
         "decisions": decisions,
         "matrix": matrix,
         "matrix_to_latest": matrix_to_latest,
+        "name_path": name_path,
+        "tape": [dict(row) for row in (tape_sightings or [])],
         "signal_support": [dict(row) for row in (signal_support or [])],
     }
     return payload
@@ -505,68 +650,257 @@ def suggestion_matrix(
     return rows
 
 
-def format_highlights(payload: Mapping[str, Any]) -> str:
-    spec = payload.get("spec") or {}
-    lines = [
-        "# Decision review",
-        "",
-        (
-            f"Sessions {spec.get('n_sessions', 0)} "
-            f"({spec.get('first_day') or '—'} to {spec.get('last_day') or '—'}). "
-            f"Rank rows {spec.get('n_ranks', 0)}. "
-            f"Priced forward {spec.get('n_priced', 0)}. "
-            f"Days with a full top {int(spec.get('top') or 0)}: {spec.get('days_at_top', 0)}."
-        ),
-        "The matrix uses the close on the next briefing day. ret_pct on table ranks is the path through the latest pack.",
-        "GOOD is a later close at or above the rank-good band. BAD is at or below the rank-bad band.",
-        "This file is the matrix. The name tape is table ranks. One day: SELECT * FROM ranks WHERE day = 'YYYY-MM-DD'.",
-        "",
-        "## Suggestion matrix, next briefing day",
-        "",
-        "| Lever | Call | Favored median | Other median | Favored n | Other n | What to change |",
-        "|---|---|---:|---:|---:|---:|---|",
-    ]
-    for row in payload.get("matrix") or []:
+def _preview_names(title: str, rows: Sequence[Mapping[str, Any]], note: str, *, limit: int = 25) -> list[str]:
+    ordered = list(rows)
+    lines = ["", f"## {title}", "", note, f"rows={len(ordered)} shown={min(limit, len(ordered))}", ""]
+    if not ordered:
+        lines.append("(none)")
+        return lines
+    lines.append("symbol  class  ret  peak  giveback  best_rank  max_m1  max_w  first  last")
+    for row in ordered[:limit]:
         lines.append(
-            "| {lever} | {call} | {fav} | {other} | {fn} | {on} | {text} |".format(
-                lever=row.get("lever"),
-                call=row.get("call"),
-                fav="—" if row.get("favored_median") is None else row.get("favored_median"),
-                other="—" if row.get("other_median") is None else row.get("other_median"),
-                fn=row.get("favored_n"),
-                on=row.get("other_n"),
-                text=row.get("suggestion"),
-            )
-            )
-    lines.extend(["", "## Suggestion matrix, through the latest pack", ""])
-    lines.append("Same levers on ret_pct. A September name and an October name do not share a holding length.")
-    lines.append("")
-    lines.append("| Lever | Call | Favored median | Other median | Favored n | Other n | What to change |")
-    lines.append("|---|---|---:|---:|---:|---:|---|")
-    for row in payload.get("matrix_to_latest") or []:
-        lines.append(
-            "| {lever} | {call} | {fav} | {other} | {fn} | {on} | {text} |".format(
-                lever=row.get("lever"),
-                call=row.get("call"),
-                fav="—" if row.get("favored_median") is None else row.get("favored_median"),
-                other="—" if row.get("other_median") is None else row.get("other_median"),
-                fn=row.get("favored_n"),
-                on=row.get("other_n"),
-                text=row.get("suggestion"),
+            "  {ticker:<16} {path:<14} {ret:>7} {peak:>7} {back:>8} {rank:>9} {m1:>7} {week:>7}  {first} {fc} -> {last} {lc}".format(
+                ticker=display_id(row),
+                path=row.get("path_class") or "",
+                ret=row.get("ret_pct") if row.get("ret_pct") is not None else "—",
+                peak=row.get("peak_ret_pct") if row.get("peak_ret_pct") is not None else "—",
+                back=row.get("giveback_pct") if row.get("giveback_pct") is not None else "—",
+                rank=row.get("best_rank") if row.get("best_rank") is not None else "—",
+                m1=row.get("max_m1") if row.get("max_m1") is not None else "—",
+                week=row.get("max_w") if row.get("max_w") is not None else "—",
+                first=str(row.get("first_day") or "")[5:],
+                fc=row.get("first_close"),
+                last=str(row.get("last_day") or "")[5:],
+                lc=row.get("last_close"),
             )
         )
-    lines.extend(["", "## Coverage shortfalls", ""])
-    short = [row for row in payload.get("coverage") or [] if int(row.get("shortfall") or 0) > 0]
-    if not short:
-        lines.append("Every session reached the top size.")
-    else:
-        lines.append("| Day | Ranked | Shortfall | Source |")
-        lines.append("|---|---:|---:|---|")
-        for row in short:
-            lines.append(
-                f"| {row.get('day')} | {row.get('n_ranked')} | {row.get('shortfall')} | {row.get('rank_source')} |"
+    if len(ordered) > limit:
+        lines.append(f"  ... {len(ordered) - limit} more in queries.txt")
+    return lines
+
+
+def _recommendation_lines(decisions: Sequence[Mapping[str, Any]]) -> list[str]:
+    capital = {"NEW", "ADD", "TRIM", "EXIT", "SHORT", "SHORT_PRE", "DERISK", "DERISK_INTO_PRINT"}
+    first: dict[str, Mapping[str, Any]] = {}
+    for row in decisions:
+        action = str(row.get("action") or "")
+        if action not in capital or row.get("ret_pct") is None:
+            continue
+        ticker = display_id(row)
+        current = first.get(ticker)
+        if current is None or str(row.get("day") or "") < str(current.get("day") or ""):
+            first[ticker] = row
+    ordered = sorted(first.values(), key=lambda row: -(row.get("ret_pct") or 0))
+    lines = [
+        "",
+        "## Recommendation stack",
+        "",
+        "First NEW, ADD, TRIM, EXIT, SHORT, or derisk that has a later close. Return is that call's close to the latest pack close.",
+        "Label on the row is the next-day band. ret_pct is the path through the latest pack.",
+        f"rows={len(ordered)}",
+        "",
+        "symbol  action  day  ret_to_latest  next_day_label  rank",
+    ]
+    if not ordered:
+        lines.append("(none)")
+        return lines
+    for row in ordered:
+        lines.append(
+            "  {ticker:<16} {action:<8} {day}  {ret:>7}  {label:<6}  {rank}".format(
+                ticker=display_id(row),
+                action=row.get("action") or "",
+                day=row.get("day") or "",
+                ret=row.get("ret_pct"),
+                label=row.get("label") or "",
+                rank=row.get("rank") if row.get("rank") is not None else "—",
             )
-    lines.extend(["", "## Days where the head lagged the tail", ""])
+        )
+    return lines
+
+
+def performance_queries(database: str) -> str:
+    """Copy-paste SQL that judges the model. The field dump in queries.txt stays below this block."""
+    db = database.replace('"', '""')
+    return "\n".join(
+        [
+            "PERFORMANCE — read this block before the field dump",
+            f'database="{db}"',
+            "",
+            "Path % is first tape close to last tape close. It is not a 0-100.",
+            "Peak % is first close to the high. Giveback is last close versus that high.",
+            "Best rank is the best place on a published upside 100. Null means the name never made that list.",
+            "The matrix tables judge the upside-100 order. name_path judges the whole briefing tape.",
+            "",
+            "1. Path runners. First close to last close cleared the performer band.",
+            "   SELECT ticker, ind, ret_pct, peak_ret_pct, giveback_pct, best_rank, max_m1, max_w, first_close, last_close",
+            "   FROM name_path WHERE path_class = 'RUNNER' ORDER BY ret_pct DESC;",
+            "",
+            "2. Tape moves whose path stayed under that band.",
+            "   SELECT ticker, ind, ret_pct, max_d5, max_w, max_m1, max_m3, best_rank, path_class",
+            "   FROM name_path",
+            "   WHERE path_class = 'TAPE_RUN'",
+            "   ORDER BY max_m1 DESC NULLS LAST;",
+            "",
+            "3. Pumps that broke. Peak cleared the pump band, then the last close gave back the break band.",
+            "   SELECT ticker, ind, ret_pct, peak_ret_pct, giveback_pct, best_rank, first_close, peak_close, last_close",
+            "   FROM name_path WHERE path_class = 'PUMP_BROKE' ORDER BY peak_ret_pct DESC;",
+            "",
+            "4. High rank and a bad path. Best upside rank inside the high-rank band, path at or below the bad band.",
+            "   SELECT ticker, ind, best_rank, ret_pct, peak_ret_pct, giveback_pct, first_close, last_close",
+            "   FROM name_path WHERE path_class = 'HIGH_RANK_BAD' ORDER BY ret_pct;",
+            "",
+            "5. Any upside-100 name with a bad path, including ranks outside the high-rank band.",
+            "   SELECT ticker, ind, best_rank, ret_pct, peak_ret_pct, giveback_pct, max_m1",
+            "   FROM name_path WHERE ranked_bad ORDER BY ret_pct;",
+            "",
+            "6. One symbol across briefing days.",
+            "   SELECT day, \"close\", rank, w, d5, m1, m3, \"left\", rr, bo",
+            "   FROM tape WHERE ticker = 'MU' ORDER BY day;",
+            "",
+            "7. Recommendation stack. Every published capital call, earliest day first.",
+            "   SELECT day, ticker, action, family, rank, in_top, ret_pct, ret_next_pct, label",
+            "   FROM decisions",
+            "   WHERE action IN ('NEW','ADD','TRIM','EXIT','SHORT','SHORT_PRE','DERISK','DERISK_INTO_PRINT')",
+            "   ORDER BY ticker, day;",
+            "",
+            "8. Does the upside-100 order point at the next day's return.",
+            "   SELECT lever, call, favored_median, other_median, favored_n, other_n, suggestion",
+            "   FROM matrix ORDER BY lever;",
+            "",
+            "9. Same levers on the path through the latest pack. Holding length is not the same for every name.",
+            "   SELECT lever, call, favored_median, other_median, favored_n, other_n, suggestion",
+            "   FROM matrix_to_latest ORDER BY lever;",
+            "",
+            "10. Days the published head lagged the tail.",
+            "   SELECT day, n_priced, spearman_rank_vs_forward, head_median, tail_median, head_minus_tail",
+            "   FROM quality WHERE head_minus_tail < 0 ORDER BY head_minus_tail;",
+            "",
+        ]
+    )
+
+
+def _matrix_lines(title: str, rows: Sequence[Mapping[str, Any]], note: str) -> list[str]:
+    lines = ["", f"## {title}", "", note, ""]
+    if not rows:
+        lines.append("(none)")
+        return lines
+    lines.append("call    lever                         favored   n    other   n")
+    for row in rows:
+        lines.append(
+            "  {call:<6} {lever:<28} {fav:>8} {fn:>4}  {other:>8} {on:>4}".format(
+                call=row.get("call") or "",
+                lever=row.get("lever") or "",
+                fav="—" if row.get("favored_median") is None else row.get("favored_median"),
+                fn=row.get("favored_n"),
+                other="—" if row.get("other_median") is None else row.get("other_median"),
+                on=row.get("other_n"),
+            )
+        )
+        lines.append(f"         {row.get('suggestion')}")
+    return lines
+
+
+def format_highlights(payload: Mapping[str, Any]) -> str:
+    """Judgment page. Every row of each class stays in the DuckDB and in queries.txt."""
+    spec = payload.get("spec") or {}
+    names = list(payload.get("name_path") or [])
+    counts: dict[str, int] = {}
+    for row in names:
+        key = str(row.get("path_class") or "NA")
+        counts[key] = counts.get(key, 0) + 1
+    ranked_bad = sum(1 for row in names if row.get("ranked_bad"))
+    count_text = " ".join(f"{key}={counts[key]}" for key in sorted(counts)) or "none"
+    lines = [
+        "Decision review — performance",
+        (
+            f"sessions={spec.get('n_sessions', 0)} "
+            f"first={spec.get('first_day') or '—'} last={spec.get('last_day') or '—'} "
+            f"rank_rows={spec.get('n_ranks', 0)} tape_rows={spec.get('n_tape', 0)} "
+            f"names={spec.get('n_names', len(names))}"
+        ),
+        f"path_class {count_text} ranked_bad={ranked_bad}",
+        "",
+        "Read this file to judge the model. queries.txt item 1 through 10 pulls every row.",
+        "Path % is the first tape close to the last tape close. It is not the operator-call clock.",
+        "The recommendation stack below is the operator-call clock: first capital action to the latest close.",
+        "Next-day matrix medians share one step. Through-latest medians mix short and long holds.",
+        "KEEP means the favored slice beat the other side by the gap. CHANGE means the other side won. FLAT is inside the gap. THIN is a thin sample.",
+        "A label does not drop a name. The full tape is table name_path.",
+    ]
+    lines.extend(
+        _matrix_lines(
+            "Model, next briefing day",
+            list(payload.get("matrix") or []),
+            "Comparable step. Favored is the published slice. Other is the rest of that cut.",
+        )
+    )
+    lines.extend(
+        _matrix_lines(
+            "Model, through the latest pack",
+            list(payload.get("matrix_to_latest") or []),
+            "Same cuts on the full path. Do not treat a CHANGE here as the one-step call.",
+        )
+    )
+    lines.extend(_recommendation_lines(list(payload.get("decisions") or [])))
+    runners = sorted(
+        [row for row in names if row.get("path_class") == "RUNNER"],
+        key=lambda row: -(row.get("ret_pct") or 0),
+    )
+    tape_runs = sorted(
+        [row for row in names if row.get("path_class") == "TAPE_RUN"],
+        key=lambda row: -(row.get("max_m1") or row.get("max_w") or 0),
+    )
+    pumps = sorted(
+        [row for row in names if row.get("path_class") == "PUMP_BROKE"],
+        key=lambda row: -(row.get("peak_ret_pct") or 0),
+    )
+    high_bad = sorted(
+        [row for row in names if row.get("path_class") == "HIGH_RANK_BAD"],
+        key=lambda row: row.get("ret_pct") if row.get("ret_pct") is not None else 0,
+    )
+    ranked = sorted(
+        [row for row in names if row.get("ranked_bad") and row.get("path_class") != "HIGH_RANK_BAD"],
+        key=lambda row: row.get("ret_pct") if row.get("ret_pct") is not None else 0,
+    )
+    lines.extend(
+        _preview_names(
+            "Path runners",
+            runners,
+            "First close to last close cleared the performer band. Full list: queries.txt item 1.",
+        )
+    )
+    lines.extend(
+        _preview_names(
+            "Tape moves under the path band",
+            tape_runs,
+            "A week, 5-day, month, or 3-month field cleared its band. The path itself did not. Full list: queries.txt item 2.",
+            limit=15,
+        )
+    )
+    lines.extend(
+        _preview_names(
+            "Pumps that broke",
+            pumps,
+            "Peak cleared the pump band, then the last close gave back the break band. Full list: queries.txt item 3.",
+            limit=40,
+        )
+    )
+    lines.extend(
+        _preview_names(
+            "High rank, bad path",
+            high_bad,
+            "Best upside rank was inside the high-rank band and the path is at or below the bad band. Full list: queries.txt item 4.",
+            limit=40,
+        )
+    )
+    lines.extend(
+        _preview_names(
+            "Other upside-100 names with a bad path",
+            ranked,
+            "Best rank was inside the top 100, outside the high-rank band, and the path is at or below the bad band. Full list: queries.txt item 5.",
+        )
+    )
+    lines.extend(["", "## Days the published head lagged the tail", ""])
     lagged = [
         row
         for row in payload.get("quality") or []
@@ -574,33 +908,23 @@ def format_highlights(payload: Mapping[str, Any]) -> str:
     ]
     lagged.sort(key=lambda row: float(row["head_minus_tail"]))
     if not lagged:
-        lines.append("No priced day had a negative head-minus-tail.")
+        lines.append("(none)")
     else:
-        lines.append("| Day | Head median | Tail median | Spearman |")
-        lines.append("|---|---:|---:|---:|")
+        lines.append("day         head    tail   spearman")
         for row in lagged[:8]:
             lines.append(
-                f"| {row.get('day')} | {row.get('head_median')} | {row.get('tail_median')} | {row.get('spearman_rank_vs_forward')} |"
+                f"  {row.get('day')}  {row.get('head_median'):>6}  {row.get('tail_median'):>6}  {row.get('spearman_rank_vs_forward')}"
             )
-        lines.append("")
-        lines.append("Spearman is rank number versus later return. Negative means the top of the list had the higher return.")
+        lines.append("Spearman is rank number versus the next-day return. Negative means the top of the list had the higher return.")
     support = list(payload.get("signal_support") or [])
-    lines.extend(["", "## Signal family support", ""])
+    lines.extend(["", "## Signal families", ""])
     if not support:
-        lines.append(
-            "No family_metrics.csv was attached. src/backtests scores signal families, not these briefing ranks. "
-            "Do not rerun python src/run_backtests.py for this review."
-        )
+        lines.append("Not attached. This file scores the briefing tape. Signal-family accuracy is the backtests module.")
     else:
-        lines.append(
-            "Attached from an existing backtest run. spearman_ic only. Top-20 lift is omitted because extreme ATRP lifts are outliers."
-        )
-        lines.append("")
-        lines.append("| Family | Signal | Horizon | IC | Days |")
-        lines.append("|---|---|---:|---:|---:|")
+        lines.append("family  signal  horizon  spearman_ic  days")
         for row in support[:12]:
             lines.append(
-                f"| {row.get('family')} | {row.get('signal_name')} | {row.get('horizon_days')} | {row.get('spearman_ic')} | {row.get('day_count')} |"
+                f"  {row.get('family')}  {row.get('signal_name')}  {row.get('horizon_days')}  {row.get('spearman_ic')}  {row.get('day_count')}"
             )
     lines.append("")
     return "\n".join(lines)
@@ -654,28 +978,88 @@ def _tape_rows_from_db(db_path: Path) -> list[dict[str, Any]]:
         if "symbol" not in columns:
             return []
         pieces = ["symbol"]
-        if "close" in columns:
-            pieces.append('"close"')
-        if "left" in columns:
-            pieces.append('"left" AS left')
-        for name in ("street_left", "rr", "bo", "rng", "peer", "mix"):
+        quoted = {
+            "close": '"close"',
+            "left": '"left" AS left',
+            "day": '"day" AS day_ret',
+            "w": "w",
+            "d5": "d5",
+            "m1": "m1",
+            "m3": "m3",
+            "street_left": "street_left",
+            "rr": "rr",
+            "bo": "bo",
+            "rng": "rng",
+            "peer": "peer",
+            "mix": "mix",
+            "company": "company",
+            "ind": "ind",
+        }
+        for name, sql in quoted.items():
             if name in columns:
-                pieces.append(name)
+                pieces.append(sql)
         frame = connection.execute(f"SELECT {', '.join(pieces)} FROM us2b_tape").fetchdf()
     finally:
         connection.close()
     return frame.to_dict(orient="records")
 
 
+def _book_rows_from_db(db_path: Path) -> list[dict[str, Any]]:
+    import duckdb
+
+    connection = duckdb.connect(db_path.as_posix(), read_only=True)
+    try:
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT table_name FROM information_schema.tables"
+            ).fetchall()
+        }
+        if "book" not in tables:
+            return []
+        frame = connection.execute(
+            'SELECT symbol, ticker, "close" AS close, ind FROM book'
+        ).fetchdf()
+    finally:
+        connection.close()
+    return frame.to_dict(orient="records")
+
+
+def _sighting(day: str, row: Mapping[str, Any], rank: int | None) -> dict[str, Any]:
+    symbol = str(row.get("symbol") or "").strip()
+    return {
+        "day": day,
+        "symbol": symbol,
+        "ticker": str(row.get("ticker") or parse_symbol(symbol).ticker),
+        "company": str(row.get("company") or ""),
+        "ind": str(row.get("ind") or ""),
+        "close": _num(row.get("close")),
+        "left": _num(row.get("left")),
+        "street_left": _num(row.get("street_left")),
+        "rr": _num(row.get("rr")),
+        "bo": _num(row.get("bo")),
+        "rng": _num(row.get("rng")),
+        "peer": str(row.get("peer") or ""),
+        "mix": str(row.get("mix") or ""),
+        "day_ret": _num(row.get("day_ret") if "day_ret" in row else row.get("day")),
+        "w": _num(row.get("w")),
+        "d5": _num(row.get("d5")),
+        "m1": _num(row.get("m1")),
+        "m3": _num(row.get("m3")),
+        "rank": rank,
+    }
+
+
 def load_briefing_rank_sessions(
     runs_root: str | Path,
     *,
     top: int = 100,
-) -> tuple[list[dict[str, Any]], dict[str, dict[str, float]], list[str]]:
-    """Published upside-100 per day, plus a close map for the later mark."""
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, float]], list[dict[str, Any]], list[str]]:
+    """Upside-100 for the matrix, plus every tape and book name for the path rollup."""
     notes: list[str] = []
     sessions: list[dict[str, Any]] = []
     marks: dict[str, dict[str, float]] = {}
+    sightings: list[dict[str, Any]] = []
     for folder in latest_pack_dirs(Path(runs_root)):
         day = pack_day(folder.name) or ""
         json_path = folder / "briefing_pack.json"
@@ -688,12 +1072,18 @@ def load_briefing_rank_sessions(
             except (OSError, json.JSONDecodeError):
                 notes.append(f"unreadable json {folder.name}")
         sleeve = _sleeve_rows(payload)
+        rank_of = {
+            str(row.get("symbol") or ""): index
+            for index, row in enumerate(sleeve, start=1)
+            if row.get("symbol")
+        }
         db_path = folder / "briefing_pack.duckdb"
         tape: list[dict[str, Any]] = []
+        book_rows: list[dict[str, Any]] = []
         if db_path.exists():
             marks[day] = closes_from_pack_db(db_path)
-            if len(sleeve) < top:
-                tape = _tape_rows_from_db(db_path)
+            tape = _tape_rows_from_db(db_path)
+            book_rows = _book_rows_from_db(db_path)
         else:
             tape = _tape_rows_from_json(payload)
             pairs = [(row.get("symbol"), row.get("close")) for row in tape]
@@ -701,6 +1091,19 @@ def load_briefing_rank_sessions(
             from generic_utils.brief_history import index_closes
 
             marks[day] = index_closes([(key, value) for key, value in pairs if key])
+        seen: set[str] = set()
+        for row in tape:
+            symbol = str(row.get("symbol") or "")
+            if not symbol or symbol in seen:
+                continue
+            seen.add(symbol)
+            sightings.append(_sighting(day, row, rank_of.get(symbol)))
+        for row in book_rows:
+            symbol = str(row.get("symbol") or "")
+            if not symbol or symbol in seen:
+                continue
+            seen.add(symbol)
+            sightings.append(_sighting(day, row, rank_of.get(symbol)))
         ranks, source = complete_top(sleeve, tape, top)
         sessions.append(
             {
@@ -712,7 +1115,7 @@ def load_briefing_rank_sessions(
         )
         if len(ranks) < top:
             notes.append(f"{day} ranked {len(ranks)} short of {top}")
-    return sessions, marks, notes
+    return sessions, marks, sightings, notes
 
 
 def actions_from_priors(priors_dir: str | Path | None) -> dict[str, list[dict[str, Any]]]:
@@ -722,9 +1125,9 @@ def actions_from_priors(priors_dir: str | Path | None) -> dict[str, list[dict[st
     for session in load_sessions(priors_dir):
         day = str(session["day"])
         bucket = grouped.setdefault(day, [])
-        seen = {row["ticker"] for row in bucket}
+        seen = {row.get("symbol") or row["ticker"] for row in bucket}
         for action in session.get("actions") or []:
-            ticker = str(action.get("ticker") or "")
+            ticker = str(action.get("symbol") or action.get("ticker") or "")
             if ticker and ticker not in seen:
                 seen.add(ticker)
                 bucket.append(action)

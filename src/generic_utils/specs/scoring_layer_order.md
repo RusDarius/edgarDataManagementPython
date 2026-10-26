@@ -336,7 +336,7 @@ Paid continuation (RSI ≥ 70, leftover gone, rng ≥ 85) = CHASE, do not add.
 ## Backtest evidence (generic, not a new layer)
 
 Generic runner: `src/backtests/` / `python src/run_backtests.py`.
-Agent join: `.cursor/skills/backtest-horizon/SKILL.md` — rank `family_metrics.csv`
+Agent join: `.claude/skills/backtest-horizon/SKILL.md` — rank `family_metrics.csv`
 with `rank_cli.py`, then apply to the current pack. Prefer **IC + day_count**
 over Top20Lift.
 

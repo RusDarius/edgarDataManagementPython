@@ -8,6 +8,7 @@ rows**. Growth lanes are the default suite; price and overview are secondary.
 | **Growth** (default) | `--mode growth` | `fingrowth_*` | How do **revenue / EBIT / EBITDA / margins** evolve over 5y under 3 assumption lanes? |
 | **Price** | `--mode price` | `finproj_*` | What **terminal price / upside** does EV/Rev imply (with street + peer diagnostics)? |
 | **Overview** | `--mode overview --ticker …` | `tickoverview_*` | What ~100 all-fields metrics does this name show **today** (no projection path)? |
+| **Movement** (sibling) | `--mode movement` or `src/run_movement_opportunity.py` | `movement_opportunity_*` | Trading 1–10 upside/downside from day-to-day variation. Not a 5-year path. See [movement_opportunity_usage.md](movement_opportunity_usage.md). |
 
 **Entrypoint:** [`src/run_financial_projection.py`](../src/run_financial_projection.py)  
 **Operator join / all-suite dumps:** [`src/run_operator_suites.py`](../src/run_operator_suites.py) (`forward`, `finproj-growth`, `finproj-price`, `wisdom --run-finproj`)  

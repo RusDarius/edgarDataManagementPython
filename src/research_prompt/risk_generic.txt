@@ -7,8 +7,8 @@ on Book.
 This file is a standalone Book risk run.
 Do not attach daily_generic.txt or movers_generic.txt.
 
-@.cursor/skills/book-risk/SKILL.md
-@.cursor/skills/canvas-ledger/SKILL.md
+@.claude/skills/book-risk/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
 Recipe: config/generic_utils/book_risk.json
 Holdings: config/holdings_scoring/current_holdings.json
 Scan: latest holdings_scoring_* (marks, FX USD). Config-only is USD-naive.
@@ -21,8 +21,8 @@ What to produce (canvas first; chat is a short snapshot):
      If --out-dir omitted, CLI writes
      logs/tradingview_analysis/operator_briefing/runs/book_risk_YYYYMMDD_HHMM_utc/.
      book_risk.md is numbers only (no TRIM/HOLD/EXIT).
-  2. Cursor canvas book-risk-YYYYMMDD.canvas.tsx in the project canvases/
-     directory — same place as daily-focus-YYYYMMDD and movers-3m-YYYYMMDD.
+  2. Page logs/canvases/YYYYMMDD/book-risk-YYYYMMDD.json rendered by tv_scan_cli.py page
+     — same folder as daily-focus-YYYYMMDD and movers-3m-YYYYMMDD.
      Cover every Book name. Three frames: position %, $, % NAV.
      Tabs: Guide / Plan / Positions / Ladders / Path / Setup / Concentration / Ledger.
      One Ledger tab. Do not steal Daily tabs.

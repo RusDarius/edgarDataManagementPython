@@ -1,0 +1,48 @@
+{
+  "name": "movement_opportunity",
+  "description": "Stock movement, day-to-day variation, expected-move envelope, and auditable 1-10 upside/downside trading opportunity ratings across all project datasets. Every input and sub-component stays a separate column.",
+  "min_market_cap_usd": 500000000,
+  "history_days": 30,
+  "hist_min_n": 6,
+  "horizons": [1, 5, 10, 20, 60],
+  "primary_horizon_days": 20,
+  "top_upside": 50,
+  "top_downside": 30,
+  "top_bounce": 25,
+  "group_field": "ind",
+  "cap": 4,
+  "min_peer_n": 6,
+  "us_listings_only": true,
+  "upside_weights": {
+    "asymmetric_payoff": 0.25,
+    "structure_conviction": 0.25,
+    "valuation_growth": 0.20,
+    "timing_catalyst": 0.15,
+    "move_fuel": 0.15
+  },
+  "downside_weights": {
+    "fragility_trend": 0.25,
+    "valuation_ceiling": 0.25,
+    "exhaustion_reversal": 0.20,
+    "edge_risk": 0.15,
+    "vol_amplification": 0.15
+  },
+  "path_rules": {
+    "opening_close_max_pct": 5.0,
+    "opening_pt_min_pct": -2.0,
+    "opening_left_min_pct": 18.0,
+    "dying_close_min_pct": 8.0,
+    "dying_pt_max_pct": 2.0,
+    "cheaper_val_max_pct": -5.0,
+    "cheaper_rng_max": 85.0,
+    "runner_pct": 15.0,
+    "pump_pct": 20.0,
+    "break_pct": -12.0,
+    "fade_pct": -8.0
+  },
+  "volatility_bands": {
+    "coiled_max_pct": 2.0,
+    "active_swing_max_pct": 5.0,
+    "high_velocity_max_pct": 9.0
+  }
+}

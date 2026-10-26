@@ -25,6 +25,7 @@ from generic_utils.risk import cash_from_holdings_manifest, load_holdings_summar
 from generic_utils.run_export import load_json_recipe
 from generic_utils.scan_sources import rows_from_csv
 from generic_utils.series import fetch_named, field_history, list_dated_files, series_span
+from generic_utils.symbol_identity import display_id
 
 _PROJECT = Path(__file__).resolve().parents[2]
 DEFAULT_RECIPE = _PROJECT / "config" / "generic_utils" / "capture.json"
@@ -371,6 +372,104 @@ def _book_from_runs(runs: Sequence[Mapping[str, Any]]) -> tuple[list[dict[str, A
     exits = [row for row in names if not row.get("still_held")]
     exits.sort(key=lambda rec: (str(rec.get("last_as_of") or ""), str(rec.get("symbol") or "")))
     return rows, names, exits
+
+
+def _latest_holdings_day(root: Path) -> date | None:
+    latest: date | None = None
+    if not root.exists():
+        return None
+    for path in root.iterdir():
+        if not path.is_dir():
+            continue
+        as_of = _parse_holdings_run_date(path.name)
+        if as_of is not None and (latest is None or as_of > latest):
+            latest = as_of
+    return latest
+
+
+def _join_brief_labels(
+    names: Sequence[Mapping[str, Any]],
+    briefs_db: str | Path,
+) -> list[dict[str, Any]]:
+    """Left-join brief_history.names onto holdings names. No score."""
+    import duckdb
+
+    path = Path(briefs_db)
+    if not path.exists():
+        return [dict(row) for row in names]
+    connection = duckdb.connect(path.as_posix(), read_only=True)
+    try:
+        tables = {str(row[0]) for row in connection.execute("SHOW TABLES").fetchall()}
+        if "names" not in tables:
+            return [dict(row) for row in names]
+        columns = {str(row[0]) for row in connection.execute("DESCRIBE names").fetchall()}
+        wanted = [
+            column
+            for column in ("ticker", "label", "path", "ret_pct", "scored_action", "family", "n_sessions")
+            if column in columns
+        ]
+        if "ticker" not in wanted:
+            return [dict(row) for row in names]
+        fetched = connection.execute(
+            "SELECT " + ", ".join(wanted) + " FROM names"
+        ).fetchall()
+    finally:
+        connection.close()
+    by_ticker = {
+        str(dict(zip(wanted, rec)).get("ticker") or "").upper(): dict(zip(wanted, rec))
+        for rec in fetched
+    }
+    joined: list[dict[str, Any]] = []
+    for name in names:
+        row = dict(name)
+        brief = by_ticker.get(str(row.get("ticker") or "").upper())
+        row["brief_label"] = None if not brief else brief.get("label")
+        row["brief_path"] = None if not brief else brief.get("path")
+        row["brief_ret_pct"] = None if not brief else brief.get("ret_pct")
+        row["brief_action"] = None if not brief else brief.get("scored_action")
+        row["brief_family"] = None if not brief else brief.get("family")
+        row["brief_n"] = None if not brief else brief.get("n_sessions")
+        joined.append(row)
+    return joined
+
+
+def build_holdings_sessions(
+    *,
+    lookback_days: int = 180,
+    start: str | None = None,
+    end: str | None = None,
+    holdings_runs_root: str | Path | None = None,
+    briefs_db: str | Path | None = None,
+) -> dict[str, Any]:
+    """Holdings membership over a window, optionally joined to brief labels.
+
+    This is the session roll only. It does not rebuild the all-fields path.
+    Full fundamentals and score paths stay in ``build_capture_dump``.
+    """
+    root = _resolve_root(holdings_runs_root, DEFAULT_HOLDINGS_ROOT)
+    end_date = parse_day_label(end) or _latest_holdings_day(root)
+    if end_date is None:
+        raise FileNotFoundError(f"No holdings runs under {root}")
+    start_date = parse_day_label(start)
+    if start_date is None:
+        start_date = end_date - timedelta(days=max(1, int(lookback_days)) - 1)
+    runs = _list_holdings_runs(root, start_date=start_date, end_date=end_date)
+    asof, names, exits = _book_from_runs(runs)
+    if briefs_db:
+        names = _join_brief_labels(names, briefs_db)
+        held = {str(row.get("symbol")) for row in names if row.get("still_held")}
+        exits = [row for row in names if str(row.get("symbol")) not in held]
+    return {
+        "start": start_date.isoformat(),
+        "end": end_date.isoformat(),
+        "lookback_days": int(lookback_days),
+        "n_runs": len(runs),
+        "holdings_runs_root": root.as_posix(),
+        "briefs_db": None if not briefs_db else Path(briefs_db).as_posix(),
+        "book_asof": asof,
+        "book_names": names,
+        "exits": exits,
+    }
 
 
 def _build_fund_path(
@@ -1582,12 +1681,12 @@ def format_capture_replay_md(payload: Mapping[str, Any]) -> str:
         "",
         "## First PIT job hit (entry proxy)",
         "",
-        "| ticker | first_as_of | ret_21 | ret_60 | reasons |",
+        "| symbol | first_as_of | ret_21 | ret_60 | reasons |",
         "|---|---|---:|---:|---|",
     ]
     for row in first_hit[:40]:
         lines.append(
-            f"| {row.get('ticker') or row.get('symbol')} | {row.get('first_as_of')} | {_md_cell(row.get('ret_21'), 4)} | {_md_cell(row.get('ret_60'), 4)} | {row.get('pit_reasons') or ''} |"
+            f"| {display_id(row)} | {row.get('first_as_of')} | {_md_cell(row.get('ret_21'), 4)} | {_md_cell(row.get('ret_60'), 4)} | {row.get('pit_reasons') or ''} |"
         )
     lines += [
         "",
