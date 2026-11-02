@@ -27,7 +27,7 @@ ALL_FIELDS_ROOT = REPO_ROOT / "logs" / "tradingview_analysis" / "trading_view_al
 TAPE_FIELDS: tuple[str, ...] = (
     "symbol", "company", "ind", "close", "mcap", "day", "d5", "m1", "m3", "rsi", "rng", "vs50", "vs200", "atr", "atrp",
     "pt", "street_px", "target_px", "left", "street_left", "rr", "bo", "cont", "fwd", "mix", "mtp", "dte", "pe",
-    "pe_fwd", "peg", "evebitda", "opm",
+    "pe_fwd", "peg", "evebitda", "opm", "last_surprise", "rev_surprise", "surprise_mix", "dsp", "react_last", "since_print",
 )
 LENS_FIELDS: tuple[str, ...] = (
     "symbol", "lenses", "weak_lens", "strong_lens", "tape_state", "r_1m", "r_3m", "trend_q", "hi_prox", "updown_vol",

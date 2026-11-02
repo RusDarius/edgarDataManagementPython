@@ -269,9 +269,10 @@ def fetch_named(
     filters = [str(v) for v in (filter_values or []) if str(v)]
     eq = dict(equals or {})
     has_run_id = run_id is not None and "run_id" in set(available)
+    id_fields = [f for f in dict.fromkeys([id_field, "symbol", "ticker"]) if f and f in set(available)] if wanted_ids else []
     sql, missing = build_named_sql(
         table=table,
-        columns=columns,
+        columns=[f for f in id_fields if f not in columns] + list(columns),  # the id match below needs the id columns
         available=available,
         id_field=id_field if wanted_ids else None,
         n_ids=len(wanted_ids),
@@ -291,10 +292,6 @@ def fetch_named(
     params.extend(eq.values())
     rows = rows_from_duckdb(database_path, sql, params)
     if wanted_ids:
-        id_fields = [id_field] if id_field else []
-        for extra in ("symbol", "ticker"):
-            if extra not in id_fields and extra in available:
-                id_fields.append(extra)
         rows = [r for r in rows if row_id_matches(r, wanted_ids, id_fields)]
     return {
         "spec": {
@@ -320,13 +317,24 @@ def select_named_rows(
     columns: Sequence[str],
     id_field: str | None = None,
     ids: Sequence[str] | None = None,
+    filter_field: str | None = None,
+    filter_values: Sequence[str] | None = None,
+    equals: Mapping[str, Any] | None = None,
     source: str = "",
 ) -> dict[str, Any]:
-    """`fetch_named` for rows already in memory (a CSV). Same id matching, same payload shape.
+    """`fetch_named` for rows already in memory (a CSV). Same id matching, filters and payload shape.
 
     Ids come back in the caller's order; ids with no row are listed in `missing_ids`.
     """
     available = set(rows[0]) if rows else set()
+    filters = {str(v) for v in (filter_values or []) if str(v)}
+    eq = dict(equals or {})
+    for field in ([filter_field] if filter_field and filters else []) + list(eq):
+        if rows and field not in available:
+            raise ValueError(f"filter field {field!r} is not in {source or 'the rows'}")
+    rows = [r for r in rows
+            if (not (filter_field and filters) or str(r.get(filter_field)) in filters)
+            and all(str(r.get(k)) == str(v) for k, v in eq.items())]
     wanted_ids = expand_ids(ids or [])
     id_fields = [f for f in [id_field, "symbol", "ticker"] if f and f in available]
     picked: list[dict[str, Any]] = []

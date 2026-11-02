@@ -30,6 +30,18 @@ class TestDerive(unittest.TestCase):
         self.assertLess(out[0]["street_left"], 0)
         self.assertGreater(out[0]["left"], 0)
 
+    def test_move_usd_and_page_derives(self):
+        from generic_utils.canvas_page import DERIVED_COLUMNS, _decimals_for
+        from generic_utils.derive import move_usd
+
+        self.assertEqual(move_usd(9520, -16.45), -1566.0)
+        self.assertIsNone(move_usd(9520, None))
+        row = {"book_usd": 9520.0, "post_chg": -16.45}
+        self.assertEqual((DERIVED_COLUMNS["post_usd"](row), DERIVED_COLUMNS["post_value_usd"](row)), (-1566.0, 7954))
+        self.assertEqual(DERIVED_COLUMNS["post_value_usd"]({"book_usd": 8702.0}), 8702)
+        self.assertEqual((_decimals_for({"book_usd": 0, "*": 1}, "book_usd"), _decimals_for({"book_usd": 0, "*": 1}, "rsi")), (0, 1))
+        self.assertEqual(_decimals_for(2, "rsi"), 2)
+
     def test_leftover_to_range_has_no_default_dump_cutoff(self):
         from generic_utils.derive import leftover_to_range
 
@@ -784,6 +796,65 @@ class TestRecipesAndCli(unittest.TestCase):
             self.assertEqual(
                 fetched["rows"], [{"symbol": "NYSE:MMS", "close": 56.99}]
             )
+            fetched = fetch_named(db_path, table="all_fields_rows", columns=["close"], id_field="symbol", ids=["NYSE:MMS"])
+            self.assertEqual(fetched["rows"], [{"symbol": "NYSE:MMS", "close": 56.99}])
+            fetched = fetch_named(db_path, table="all_fields_rows", columns=["close"], ids=["NYSE:MMS"])
+            self.assertEqual(fetched["rows"], [{"symbol": "NYSE:MMS", "close": 56.99}])
+
+    def test_page_source_drops_a_missing_qualified_column(self):
+        import duckdb
+
+        from generic_utils.canvas_page import _rows_dropping_missing
+
+        with TemporaryDirectory() as tmp:
+            db = Path(tmp) / "m.duckdb"
+            con = duckdb.connect(str(db))
+            con.execute("CREATE TABLE matrix AS SELECT 'NYSE:A' AS symbol, 1 AS ptr_up")
+            con.close()
+            rows = _rows_dropping_missing(db, "SELECT m.symbol, m.ptr_up, m.x_eps_surprise, m.x_react_fx FROM matrix m")
+        self.assertEqual(rows, [{"symbol": "NYSE:A", "ptr_up": 1}])
+
+    def test_chart_block_renders_lines_from_a_source(self):
+        import csv as _csv
+
+        from generic_utils.canvas_page import build_page, render_html
+
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "steps.csv"
+            with path.open("w", newline="", encoding="utf-8") as fh:
+                w = _csv.writer(fh)
+                w.writerow(["as_of", "cap_dd_pct", "book_dd_pct"])
+                w.writerows([["2026-10-01", 0, 0], ["2026-10-02", -1.5, ""], ["2026-10-05", -4.4, -12.0]])
+            spec = {"name": "chart-test", "tabs": [{"label": "Path", "blocks": [
+                {"type": "chart", "title": "Drawdown", "source": {"csv": str(path)}, "x": "as_of",
+                 "series": [["cap_dd_pct", "Market"], ["book_dd_pct", "Book"]], "y_label": "% under high"}]}]}
+            page = build_page(spec, base_dir=Path(tmp))
+            text = render_html(page)
+        self.assertEqual(page["warnings"], [])
+        self.assertIn('<path class="ln c0" d="M', text)
+        self.assertEqual(text.count('class="hov"'), 3)
+        self.assertIn("Book: -12.00", text)
+        self.assertIn("M", text.split('class="ln c1" d="')[1].split('"')[0])  # the gap restarts the Book line
+
+    def test_inline_links_reach_sibling_pages_only(self):
+        from generic_utils.canvas_page import _inline
+
+        self.assertIn('<a href="downside-risk-20261030.html"', _inline("[page](downside-risk-20261030.html)"))
+        self.assertIn('<a href="https://x.y/z"', _inline("[web](https://x.y/z)"))
+        self.assertNotIn("<a ", _inline("[up](../other/page.html)"))
+
+    def test_select_named_rows_applies_filter_and_equals(self):
+        from generic_utils.series import select_named_rows
+
+        rows = [{"symbol": "NYSE:A", "in_book": "True", "ind": "Chips"},
+                {"symbol": "NYSE:B", "in_book": "False", "ind": "Chips"},
+                {"symbol": "NYSE:C", "in_book": "True", "ind": "Banks"}]
+        picked = select_named_rows(rows, columns=["symbol"], filter_field="in_book", filter_values=["True"])
+        self.assertEqual([r["symbol"] for r in picked["rows"]], ["NYSE:A", "NYSE:C"])
+        picked = select_named_rows(rows, columns=["symbol"], filter_field="in_book", filter_values=["True"], equals={"ind": "Banks"})
+        self.assertEqual([r["symbol"] for r in picked["rows"]], ["NYSE:C"])
+        with self.assertRaises(ValueError):
+            select_named_rows(rows, columns=["symbol"], equals={"nope": "x"})
 
     def test_tape_returns_recipe_aliases_horizons(self):
         from generic_utils.recipes import render_recipe

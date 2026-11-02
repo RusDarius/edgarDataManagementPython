@@ -336,7 +336,12 @@ def load_earnings_window_candidates(
             )
             join_sql = ""
 
-        earnings_date_expr = f"TRY_CAST(r.{_qi(earnings_date_field)} AS DATE)"
+        # Day files store TradingView dates as epoch seconds (VARCHAR); older files and tests as DATE.
+        raw_date = f"CAST(r.{_qi(earnings_date_field)} AS VARCHAR)"
+        earnings_date_expr = (
+            f"COALESCE(TRY_CAST({raw_date} AS DATE), "
+            f"CAST(to_timestamp(TRY_CAST({raw_date} AS DOUBLE)) AT TIME ZONE 'UTC' AS DATE))"
+        )
         as_of_date_expr = f"CAST({_q(as_of_date)} AS DATE)"
         days_until_expr = f"DATE_DIFF('day', {as_of_date_expr}, {earnings_date_expr})"
 

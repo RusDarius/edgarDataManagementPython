@@ -1,0 +1,44 @@
+{
+  "name": "signal_lab",
+  "description": "Backward evidence on the panel store: per-feature rank IC against later excess returns (overlap-corrected t, industry-neutral, halves, market regime), an event study of every print (surprise, reaction, run-up, drift, hold-through), and the later returns of each briefing-pack list. Numbers are evidence, not a gate: no list is filtered by them.",
+  "study": {
+    "min_market_cap_usd": 1000000000,
+    "min_names": 200,
+    "winsor_pct": 1.0,
+    "industry_min_n": 5,
+    "quantiles": 5,
+    "recent_days": 30,
+    "first_day": null,
+    "last_day": null
+  },
+  "horizons": ["1d", "7d", "14d", "28d", "56d"],
+  "features": "all",
+  "verdict": {"strong_t": 3.0, "t": 2.0, "regime_ic": 0.02},
+  "regime_field": "r_1m",
+  "feature_corr": {"top": 20, "horizon": "28d", "every_nth_day": 5},
+  "prints": {
+    "min_market_cap_usd": 1000000000,
+    "horizons": ["7d", "28d"],
+    "quantiles": 5,
+    "big_react_pct": 5.0,
+    "ah_after_close_minutes": 30
+  },
+  "scans": {
+    "runs_root": "logs/tradingview_analysis/operator_briefing/runs",
+    "horizons": ["1d", "7d", "14d", "28d"],
+    "lists": [
+      {"name": "tape", "side": "long", "sql": "SELECT symbol, close FROM us2b_tape"},
+      {"name": "radar_25", "side": "long", "sql": "SELECT symbol, close FROM radar_curated_25"},
+      {"name": "radar_50", "side": "long", "sql": "SELECT symbol, close FROM radar_curated_50"},
+      {"name": "earnings_up", "side": "long", "sql": "SELECT symbol, close FROM earnings_upside_curated"},
+      {"name": "earnings_down", "side": "short", "sql": "SELECT symbol, close FROM earnings_downside_curated"},
+      {"name": "short_15", "side": "short", "sql": "SELECT symbol, close FROM short_book_15_curated"},
+      {"name": "book", "side": "long", "sql": "SELECT symbol, close FROM book"},
+      {"name": "courses", "side": "by_sub", "sql": "SELECT symbol, NULL AS close, bucket AS sub FROM suggested_courses"},
+      {"name": "movers", "side": "by_sub", "sql": "SELECT symbol, close, horizon || ':' || tail || ':' || COALESCE(up_class, down_class, '-') AS sub FROM movers_tails"},
+      {"name": "movers_class", "side": "by_sub", "sql": "SELECT DISTINCT symbol, close, tail || ':' || COALESCE(up_class, down_class, '-') AS sub FROM movers_tails"},
+      {"name": "movers_tail", "side": "by_sub", "sql": "SELECT symbol, close, horizon || ':' || tail AS sub FROM movers_tails"}
+    ],
+    "short_subs": ["short_wait", "trim_exit", "pass", "stand_aside"]
+  }
+}

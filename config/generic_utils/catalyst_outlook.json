@@ -1,0 +1,243 @@
+{
+  "name": "catalyst_outlook_v1",
+  "description": "Every US name on the floor with its catalysts over the horizon (earnings with slot, ex-dividend, IPO lockup, dated OUTSIDE events from catalyst_calendar.json) and the day's suites side by side, columns in a fixed group order: technical, setup, earnings surprise, value, progression, lists. Zero cutoffs beyond the floor; windows, cells and courses are the page's and the judgment's.",
+  "horizon_days": 42,
+  "universe": {
+    "min_market_cap_usd": 2000000000,
+    "markets": [
+      "america"
+    ],
+    "types": [
+      "stock",
+      "dr"
+    ]
+  },
+  "lockup_days": 180,
+  "amc_from_hour_utc": 13,
+  "levels_window_days": 21,
+  "names_per_day": 8,
+  "calendar_path": "config/generic_utils/catalyst_calendar.json",
+  "catalyst_probe_field": "recommendation_total",
+  "catalyst_fields": {
+    "exdiv": "ex_dividend_date_upcoming",
+    "div_amt": "dividend_amount_upcoming",
+    "div_yield": "dividends_yield_current",
+    "ipo_date": "ipo_offer_date",
+    "analysts": "recommendation_total",
+    "rating": "recommendation_mark",
+    "hi52_date": "price_52_week_high_date"
+  },
+  "joins": {
+    "alpha": [
+      "dec_7d",
+      "pred_7d",
+      "dec_28d",
+      "pred_28d",
+      "b28d_q20",
+      "b28d_q80",
+      "dec_56d",
+      "pred_56d",
+      "why_28d",
+      "p_def",
+      "p_dvc",
+      "book_usd"
+    ],
+    "lens": [
+      "tape_state",
+      "trend_q",
+      "updown_vol",
+      "eps_rev_3m",
+      "eps_rev_breadth",
+      "rev_rev_3m",
+      "pt_drift_3m",
+      "pe_nfy_vs_ind",
+      "peg_fwd",
+      "fwd_eps_g",
+      "lenses",
+      "weak_lens",
+      "strong_lens"
+    ],
+    "tape": [
+      "left",
+      "street_left",
+      "rr",
+      "bo",
+      "mix",
+      "react_last",
+      "react_abs_mean",
+      "since_print",
+      "n_prints"
+    ],
+    "plays": [
+      "phase",
+      "runup",
+      "setup_cell",
+      "setup_mean",
+      "setup_t",
+      "mix_cell",
+      "mix_mean",
+      "big_cell",
+      "big_mean",
+      "react_fx",
+      "bounce_low",
+      "bounce_high",
+      "bounce_kill",
+      "first_target",
+      "mos_own_med_pct",
+      "mos_peer_pct"
+    ],
+    "calendar": [
+      "pe_nfy_vs_own"
+    ]
+  },
+  "entry_fields": [
+    "sma_role",
+    "entry_low",
+    "entry_high",
+    "kill_px",
+    "mark_vs_band"
+  ],
+  "safety_fields": [
+    "bounce_low",
+    "bounce_high",
+    "bounce_kill",
+    "first_target",
+    "mos_own_med_pct",
+    "mos_peer_pct"
+  ],
+  "column_groups": [
+    [
+      "Name",
+      [
+        "symbol",
+        "company",
+        "ind",
+        "mcap_b"
+      ]
+    ],
+    [
+      "Technical",
+      [
+        "close",
+        "day",
+        "w",
+        "m1",
+        "m3",
+        "rsi",
+        "rng",
+        "vs50",
+        "vs200",
+        "atrp",
+        "relvol",
+        "tape_state",
+        "trend_q",
+        "updown_vol",
+        "hi52_days"
+      ]
+    ],
+    [
+      "Setup",
+      [
+        "next_kind",
+        "next_date",
+        "next_dow",
+        "next_days",
+        "catalysts",
+        "earn_date",
+        "earn_slot",
+        "earn_days",
+        "earn_week",
+        "phase",
+        "runup",
+        "setup_cell",
+        "setup_mean",
+        "sma_role",
+        "entry_low",
+        "entry_high",
+        "kill_px",
+        "mark_vs_band",
+        "bounce_low",
+        "bounce_high",
+        "bounce_kill",
+        "bmid_vs_close_pct",
+        "first_target",
+        "b28d_q20",
+        "b28d_q80"
+      ]
+    ],
+    [
+      "Surprise",
+      [
+        "last_surprise",
+        "rev_surprise",
+        "surprise_mix",
+        "react_last",
+        "react_abs_mean",
+        "since_print",
+        "react_fx",
+        "mix_cell",
+        "mix_mean",
+        "big_cell",
+        "big_mean",
+        "eps_q_step",
+        "rev_q_step"
+      ]
+    ],
+    [
+      "Value",
+      [
+        "pe_nfy",
+        "pe_nfy_vs_ind",
+        "pe_nfy_vs_own",
+        "mos_own_med_pct",
+        "mos_peer_pct",
+        "peg_fwd",
+        "evebitda",
+        "fcf_margin",
+        "opm",
+        "nd_ebitda",
+        "div_yield",
+        "pt",
+        "pt_up",
+        "left",
+        "street_left"
+      ]
+    ],
+    [
+      "Progression",
+      [
+        "eps_rev_3m",
+        "eps_rev_breadth",
+        "rev_rev_3m",
+        "pt_drift_3m",
+        "fwd_eps_g",
+        "rev_yoy",
+        "eps_yoy",
+        "dec_7d",
+        "pred_7d",
+        "dec_28d",
+        "pred_28d",
+        "dec_56d",
+        "pred_56d",
+        "p_def",
+        "p_dvc",
+        "lenses",
+        "weak_lens",
+        "strong_lens",
+        "analysts",
+        "rating",
+        "why_28d"
+      ]
+    ],
+    [
+      "Lists",
+      [
+        "pack_lists",
+        "book_usd",
+        "mix",
+        "rr",
+        "bo"
+      ]
+    ]
+  ]
+}

@@ -9,7 +9,7 @@ description: Classify whether day / week / 5D / 1M (or 3M) price movers are supp
 
 **Did price already move, and is that move supported?** DAILY leftover radar answers **can this still pay**.
 
-`duckdb output` (the default paste) stops at `movers.duckdb`. Write `movers-YYYYMMDD` only when the paste says `canvas output`. Shown tape rows add `opm`, `pe`, `pe_fwd`, and `dte` next to Val / Peer / Proj / Tech. Peer is the label plus `val_vs_ind` (percent versus the industry median) and `val_vs_avg` (percent versus the industry average). Those are different columns. Tech is `ABOVE`/`BELOW` plus `vs50`, and `UNUSED`/`MID`/`PAID` plus `rng`. Field relatives such as `pe_vs_ind` and `pe_vs_avg` stay on the row. The canvas table keeps them; zoom handles the width.
+`duckdb output` (the default paste) stops at `movers.duckdb`. Write `movers-YYYYMMDD` only when the paste says `canvas output`. Shown tape rows add `opm`, `pe`, `pe_fwd`, and `dte` next to Val / Peer / Proj / Tech. Peer is the label plus `val_vs_ind` (percent versus the industry median) and `val_vs_avg` (percent versus the industry average). Those are different columns. Tech is `ABOVE`/`BELOW` plus `vs50`, and `UNUSED`/`MID`/`PAID` plus `rng`. Field relatives such as `pe_vs_ind` and `pe_vs_avg` stay on the row. The canvas table keeps them; zoom handles the width. Print pointers ride on every tape row: `last_surprise`, `rev_surprise`, `surprise_mix` (B/M per EPS / revenue), `dsp`, `react_last`, `since_print`. A mover with `dsp` 0–1 is moving on its print; signal-lab `print_cells` says which reactions kept drifting.
 
 On DAILY (full): one **condensed Tape** section on `daily-focus-YYYYMMDD` (day / week / 5D / 1M clusters). Not four Daily tabs. Full ranked 25s are **not** Daily work.
 

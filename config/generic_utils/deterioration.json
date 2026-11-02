@@ -1,0 +1,87 @@
+{
+  "name": "deterioration",
+  "description": "Deterioration study (generic_utils.deterioration): what a drawdown from the 52-week high did next on the panel store, split by what else was deteriorating (letters below), and where every name sits now. Bucket edges, letter rules and the cell row floor are knobs here; hold, cut or add is the judgment's (deterioration skill).",
+  "study": {
+    "min_market_cap_usd": 2000000000.0,
+    "winsor_pct": 1.0,
+    "first_day": null,
+    "last_day": null
+  },
+  "regime_field": "r_1m",
+  "horizons": ["7d", "28d", "56d"],
+  "min_cell_rows": 50,
+  "drawdown": {
+    "field": "hi_prox",
+    "edges": [-50, -35, -20, -10],
+    "labels": ["dd 50+", "dd 35-50", "dd 20-35", "dd 10-20", "dd 0-10"]
+  },
+  "letters": [
+    {"key": "E", "field": "eps_rev_3m", "op": "<", "value": -1, "label": "next-FY EPS estimate cut by more than 1% over 3 months"},
+    {"key": "R", "field": "rev_rev_3m", "op": "<", "value": -1, "label": "next-FY revenue estimate cut by more than 1% over 3 months"},
+    {"key": "C", "field": "fcf_margin", "op": "<", "value": 0, "label": "free cash flow negative (ttm)"},
+    {"key": "S", "field": "last_surprise", "op": "<", "value": 0, "label": "last reported EPS under its estimate"}
+  ],
+  "count_cap": 3,
+  "count_needs_all": true,
+  "splits": {
+    "dir_1m": {"field": "r_1m", "edges": [0], "labels": ["1M down", "1M up"]},
+    "run_12m": {"field": "r_12m", "edges": [0, 50, 100], "labels": ["12M down", "12M 0-50", "12M 50-100", "12M 100+"]},
+    "mkt": {"field": "mkt_regime", "edges": [0], "labels": ["mkt down", "mkt up"]},
+    "trend": {"field": "vs200", "edges": [0], "labels": ["under 200d", "over 200d"]},
+    "street": {"field": "pt_rev_1m", "edges": [-2], "labels": ["targets cut", "targets held"]}
+  },
+  "letter_studies": true,
+  "studies": [
+    {"study": "drawdown", "keys": ["dd"]},
+    {"study": "drawdown x deterioration count", "keys": ["dd", "n_det"]},
+    {"study": "drawdown x letters", "keys": ["dd", "det"]},
+    {"study": "drawdown x 1m direction", "keys": ["dd", "dir_1m"]},
+    {"study": "drawdown x count x 1m direction", "keys": ["dd", "n_det", "dir_1m"]},
+    {"study": "drawdown x 12m run", "keys": ["dd", "run_12m"]},
+    {"study": "drawdown x count x 12m run", "keys": ["dd", "n_det", "run_12m"]},
+    {"study": "drawdown x market", "keys": ["dd", "mkt"]},
+    {"study": "drawdown x count x market", "keys": ["dd", "n_det", "mkt"]},
+    {"study": "drawdown x trend", "keys": ["dd", "trend"]},
+    {"study": "drawdown x count x trend", "keys": ["dd", "n_det", "trend"]},
+    {"study": "drawdown x street", "keys": ["dd", "street"]}
+  ],
+  "tails": {"dn_pct": 10, "up_pct": 10},
+  "live_cells": [
+    {"col": "cnt", "study": "drawdown x deterioration count"},
+    {"col": "let", "study": "drawdown x letters"},
+    {"col": "cdir", "study": "drawdown x count x 1m direction"},
+    {"col": "crun", "study": "drawdown x count x 12m run"},
+    {"col": "cmkt", "study": "drawdown x count x market"},
+    {"col": "ctr", "study": "drawdown x count x trend"}
+  ],
+  "live_measures": ["n_28d", "fx_7d_mean", "fx_28d_mean", "fx_28d_t", "fx_28d_n_indep", "fx_28d_hit", "fx_28d_q10", "fx_28d_q90", "p_dn_28d", "p_up_28d", "fx_56d_mean", "p_half_56d", "p_dn_56d"],
+  "dollar_cell": "cnt",
+  "dollar_horizons": ["28d", "56d"],
+  "quarter_ago_days": 91,
+  "live_fields": ["ind", "mcap", "hi_prox", "rng52", "r_1w", "r_1m", "r_3m", "r_6m", "r_12m", "vs50", "vs200", "rsi", "rvol_20",
+                  "eps_rev_1m", "eps_rev_3m", "rev_rev_1m", "rev_rev_3m", "pt_rev_1m", "pt_up", "rev_yoy", "eps_yoy", "eps_nfy_g",
+                  "opm", "fcf_margin", "nd_ebitda", "ey_fwd", "fcf_yield", "last_surprise", "rev_surprise", "react_last",
+                  "since_print", "dte", "p_def", "p_recov", "p_frag", "p_dvc"],
+  "joins": [
+    {"name": "book", "duckdb": "{PACK}/briefing_pack.duckdb", "table": "book", "id_field": "symbol",
+     "fields": {"value_usd": "book_usd", "cost_usd": "cost_usd", "vs_cost": "book_vs_cost", "wt_nav": "wt_nav", "pnl_usd": "pnl_usd", "average_price_usd": "avg_px"}},
+    {"name": "alpha", "csv": "{PACK}/alpha_model/live.csv", "id_field": "symbol",
+     "fields": {"pred_7d": "pred_7d", "dec_7d": "dec_7d", "pred_28d": "pred_28d", "dec_28d": "dec_28d", "b28d_q20": "b28d_q20", "b28d_q80": "b28d_q80",
+                "pred_56d": "pred_56d", "dec_56d": "dec_56d", "why_28d": "why_28d"}},
+    {"name": "week_plays_book", "duckdb": "{PACK}/week_plays/week_plays.duckdb", "table": "book", "id_field": "symbol",
+     "fields": {"earn_date": "earn_date", "slot": "slot", "entry_low": "entry_low", "entry_high": "entry_high", "kill_px": "kill_px",
+                "bounce_low": "bounce_low", "bounce_high": "bounce_high", "bounce_kill": "bounce_kill", "first_target": "first_target",
+                "mos_own_med_pct": "mos_own_med_pct", "mos_peer_pct": "mos_peer_pct", "setup_cell": "setup_cell", "setup_mean": "setup_mean",
+                "setup_rx_q10": "setup_rx_q10", "rx_tail_usd": "rx_tail_usd", "lenses": "lenses", "weak_lens": "weak_lens", "tape_state": "tape_state"}},
+    {"name": "week_plays", "duckdb": "{PACK}/week_plays/week_plays.duckdb", "table": "plays", "id_field": "symbol",
+     "fields": {"earn_date": "earn_date", "slot": "slot", "entry_low": "entry_low", "entry_high": "entry_high", "kill_px": "kill_px",
+                "bounce_low": "bounce_low", "bounce_high": "bounce_high", "bounce_kill": "bounce_kill", "setup_cell": "setup_cell",
+                "setup_mean": "setup_mean", "lenses": "lenses"}},
+    {"name": "pack_tape", "duckdb": "{PACK}/briefing_pack.duckdb", "table": "us2b_tape", "id_field": "symbol",
+     "fields": {"company": "company", "left": "left", "street_left": "street_left", "rr": "rr", "mix": "mix", "mtp": "mtp", "pe_fwd": "pe_fwd", "street_px": "street_px"}},
+    {"name": "gmv", "duckdb": "{PACK}/gmv/gmv_lens.duckdb", "table": "lens_tape", "id_field": "symbol",
+     "fields": {"lenses": "lenses", "weak_lens": "weak_lens", "tape_state": "tape_state"}},
+    {"name": "calendar", "csv": "{PACK}/earnings_week/calendar.csv", "id_field": "symbol",
+     "fields": {"earn_date": "earn_date", "slot": "slot"}}
+  ]
+}

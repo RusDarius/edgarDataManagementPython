@@ -1,0 +1,136 @@
+{
+  "name": "deterioration-{DAY}",
+  "page_key": "deterioration",
+  "requires": "{PACK}/deterioration/deterioration.duckdb",
+  "title": "Deterioration {DAY}",
+  "subtitle": "Is a drawdown only price, or is the business deteriorating too? Every Book line (and the named ids) with its drawdown from the 52-week high, the letters beyond price (estimate cuts, revenue cuts, cash burn, the last miss), what that state did next on the panel store (mean excess, the bad case, the odds of a further -10% and of regaining half the gap), the dollars that is on the line, and the levels a recovery has to clear. Each column is one read; nothing is a sum.",
+  "sources_extra": [
+    "deterioration {PACK}/deterioration (tv_scan_cli.py deterioration --pack {PACK} --quiet)",
+    "store logs/tradingview_analysis/signal_lab/panel_store.duckdb (features + labels, point in time)",
+    "bands {PACK}/alpha_model/live.csv and {PACK}/week_plays (bounce band, kill)"
+  ],
+  "tone_map": {
+    "ADD": "good",
+    "NEW": "good",
+    "HOLD": "info",
+    "HOLD_THROUGH": "info",
+    "WATCH": "neutral",
+    "WAIT": "neutral",
+    "HOLD_NO_ADD": "warning",
+    "DERISK": "warning",
+    "DERISK_INTO_PRINT": "warning",
+    "TRIM": "warning",
+    "EXIT": "bad",
+    "PASS": "bad"
+  },
+  "tabs": [
+    {
+      "label": "Book",
+      "blocks": [
+        {"type": "callout", "from": "update.banner"},
+        {"type": "stats", "from": "pages.deterioration.blocks.stats"},
+        {"type": "callout", "from": "pages.deterioration.blocks.read"},
+        {"type": "table", "title": "Per Book line: state, verdict, the two paths and the levels (judgment)",
+         "headers": ["Symbol", "NAV %", "State", "Verdict", "Recovery path", "Deterioration path", "Levels", "Why (data)"],
+         "from": "pages.deterioration.blocks.verdicts"},
+        {"type": "table", "title": "Book lines: drawdown, letters beyond price and what that state did next (cnt cell = drawdown x letter count)",
+         "source": {"duckdb": "{PACK}/deterioration/deterioration.duckdb",
+                    "sql": "SELECT symbol, book_usd, book_vs_cost, wt_nav, close, hi_prox AS dd52_pct, dd, det_seen, n_det, r_1m, r_3m, r_12m, vs200, cnt_cell, cnt_fx_28d_mean, cnt_fx_28d_t, cnt_fx_28d_hit, cnt_fx_28d_q10, cnt_p_dn_28d, cnt_fx_56d_mean, cnt_p_half_56d, carry_28d_usd, tail_28d_usd, pred_28d, dec_28d, earn_date FROM names WHERE in_book ORDER BY book_usd DESC NULLS LAST",
+                    "drop_missing_columns": true},
+         "extra_columns": ["Course", "Grade", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+        {"type": "callout", "from": "pages.deterioration.blocks.concentration"},
+        {"type": "list", "from": "pages.deterioration.blocks.path"},
+        {"type": "list", "from": "pages.deterioration.blocks.rules"}
+      ]
+    },
+    {
+      "label": "Cells by regime",
+      "blocks": [
+        {"type": "callout", "from": "pages.deterioration.blocks.regime_read"},
+        {"type": "table", "title": "Book and named ids: the same state split by the 12-month run (crowded winners), the market's trailing month and the 200-day trend",
+         "source": {"duckdb": "{PACK}/deterioration/deterioration.duckdb",
+                    "sql": "SELECT symbol, dd, det_seen, crun_cell, crun_fx_28d_mean, crun_p_dn_28d, crun_n_28d, cmkt_cell, cmkt_fx_28d_mean, cmkt_p_dn_28d, ctr_cell, ctr_fx_28d_mean, cdir_cell, cdir_fx_28d_mean, let_cell, let_fx_28d_mean, let_n_28d FROM names WHERE in_book OR named ORDER BY in_book DESC, book_usd DESC NULLS LAST, symbol",
+                    "drop_missing_columns": true}}
+      ]
+    },
+    {
+      "label": "Beyond price",
+      "blocks": [
+        {"type": "callout", "from": "pages.deterioration.blocks.beyond_read"},
+        {"type": "table", "title": "Estimates, targets, margins, growth and cash against a quarter ago (Book first, then the named ids)",
+         "source": {"duckdb": "{PACK}/deterioration/deterioration.duckdb",
+                    "sql": "SELECT symbol, det_seen, eps_rev_1m AS eps_chg_1m, eps_rev_3m AS eps_chg_3m, rev_rev_3m AS rev_chg_3m, pt_rev_1m AS pt_chg_1m, opm, opm_chg_q, rev_yoy, rev_yoy_chg_q, fcf_margin, fcf_margin_chg_q, nd_ebitda, last_surprise, rev_surprise, react_last, since_print, q_ago_on FROM names WHERE in_book OR named ORDER BY in_book DESC, book_usd DESC NULLS LAST, symbol",
+                    "drop_missing_columns": true},
+         "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"}
+      ]
+    },
+    {
+      "label": "Recovery levels",
+      "blocks": [
+        {"type": "callout", "from": "pages.deterioration.blocks.levels_read"},
+        {"type": "table", "title": "What a recovery has to clear and where the thesis dies: kill, bounce band, 50 / 200-day, half-way to the high, the 52-week low, the alpha 28-day band",
+         "source": {"duckdb": "{PACK}/deterioration/deterioration.duckdb",
+                    "sql": "SELECT symbol, close, kill_px, bounce_low, bounce_high, bounce_kill, sma50, to_sma50_pct, sma200, to_sma200_pct, half_px, to_half_px_pct, hi52, lo52, to_lo52_pct, b28d_q20, b28d_q80, earn_date, slot FROM names WHERE in_book OR named ORDER BY in_book DESC, book_usd DESC NULLS LAST, symbol",
+                    "drop_missing_columns": true}}
+      ]
+    },
+    {
+      "label": "Evidence",
+      "blocks": [
+        {"type": "callout", "from": "pages.deterioration.blocks.evidence_read"},
+        {"type": "text", "text": "Rows are (store day, name) on the US $2B+ floor; fx = return minus that day's universe median. The t uses the cell's daily means on non-overlapping days only, so a cell filled by one sector on a few days does not look strong. The letter-count cells start about three months into the store (the 3-month revisions need history): about three independent 28-day periods. Direction, not proof."},
+        {"type": "table", "title": "Drawdown x deterioration count (letters beyond price): what followed",
+         "source": {"duckdb": "{PACK}/deterioration/deterioration.duckdb",
+                    "sql": "SELECT cell, n, days, fx_7d_mean, fx_28d_mean, fx_28d_t, fx_28d_t_nw, fx_28d_n_indep, fx_28d_hit, fx_28d_q10, p_dn_28d, p_up_28d, fx_56d_mean, p_dn_56d, p_half_56d FROM cells WHERE study = 'drawdown x deterioration count' ORDER BY cell"}},
+        {"type": "table", "title": "The same, split by the market's trailing month (mkt up / mkt down)",
+         "source": {"duckdb": "{PACK}/deterioration/deterioration.duckdb",
+                    "sql": "SELECT cell, n, fx_28d_mean, fx_28d_hit, fx_28d_q10, p_dn_28d, fx_56d_mean, p_dn_56d FROM cells WHERE study = 'drawdown x count x market' ORDER BY cell"}},
+        {"type": "table", "title": "Crowded winners: drawdown x count x 12-month run",
+         "source": {"duckdb": "{PACK}/deterioration/deterioration.duckdb",
+                    "sql": "SELECT cell, n, fx_28d_mean, fx_28d_hit, fx_28d_q10, p_dn_28d, fx_56d_mean, p_dn_56d, p_half_56d FROM cells WHERE study = 'drawdown x count x 12m run' ORDER BY cell"}},
+        {"type": "table", "title": "One letter at a time (each of the four letters on / off inside each drawdown bucket)",
+         "source": {"duckdb": "{PACK}/deterioration/deterioration.duckdb",
+                    "sql": "SELECT study, cell, n, fx_28d_mean, fx_28d_t, fx_28d_hit, fx_28d_q10, p_dn_28d, fx_56d_mean, p_dn_56d FROM cells WHERE study IN ('drawdown x E', 'drawdown x R', 'drawdown x C', 'drawdown x S') ORDER BY study, cell"}},
+        {"type": "table", "title": "Price-following reads as splits: the 200-day trend and street target revisions",
+         "source": {"duckdb": "{PACK}/deterioration/deterioration.duckdb",
+                    "sql": "SELECT study, cell, n, fx_28d_mean, fx_28d_t, fx_28d_hit, p_dn_28d, fx_56d_mean, p_half_56d FROM cells WHERE study IN ('drawdown', 'drawdown x trend', 'drawdown x street', 'drawdown x 1m direction', 'drawdown x 12m run') ORDER BY study, cell"}}
+      ]
+    },
+    {
+      "label": "Screens",
+      "blocks": [
+        {"type": "callout", "from": "pages.deterioration.blocks.screens_read"},
+        {"type": "table", "title": "Price-only damage: $10B+, 35%+ under the high, no letter on (deepest first)",
+         "source": {"duckdb": "{PACK}/deterioration/deterioration.duckdb",
+                    "sql": "SELECT symbol, ind, close, hi_prox AS dd52_pct, dd, det, r_1m, r_12m, eps_rev_3m AS eps_chg_3m, fcf_margin, last_surprise, cnt_fx_28d_mean, crun_cell, crun_fx_28d_mean, pred_28d, dec_28d, earn_date FROM names WHERE NOT in_book AND mcap >= 1e10 AND dd IN ('dd 35-50', 'dd 50+') AND det = '-' ORDER BY hi_prox",
+                    "drop_missing_columns": true}, "limit": 40},
+        {"type": "table", "title": "Deteriorating beyond price: $10B+, 20%+ under the high, 3+ letters (deepest first)",
+         "source": {"duckdb": "{PACK}/deterioration/deterioration.duckdb",
+                    "sql": "SELECT symbol, ind, close, hi_prox AS dd52_pct, dd, det, r_1m, eps_rev_3m AS eps_chg_3m, rev_rev_3m AS rev_chg_3m, fcf_margin, last_surprise, cnt_fx_28d_mean, cnt_p_dn_28d, pred_28d, dec_28d, earn_date FROM names WHERE NOT in_book AND mcap >= 1e10 AND dd IN ('dd 20-35', 'dd 35-50', 'dd 50+') AND n_det = '3+' ORDER BY hi_prox",
+                    "drop_missing_columns": true}, "limit": 40},
+        {"type": "table", "title": "Crowded winners still unwinding: $10B+, 12-month return 100%+, 10-35% under the high",
+         "source": {"duckdb": "{PACK}/deterioration/deterioration.duckdb",
+                    "sql": "SELECT symbol, ind, close, hi_prox AS dd52_pct, dd, det_seen, r_1m, r_12m, crun_cell, crun_fx_28d_mean, crun_p_dn_28d, pred_28d, dec_28d, earn_date FROM names WHERE mcap >= 1e10 AND r_12m >= 100 AND dd IN ('dd 10-20', 'dd 20-35') ORDER BY hi_prox",
+                    "drop_missing_columns": true}, "limit": 40}
+      ]
+    },
+    {
+      "label": "Sources",
+      "blocks": [
+        {"type": "list", "from": "pages.deterioration.blocks.sources"}
+      ]
+    }
+  ],
+  "ledger": {
+    "auto": true,
+    "entries": [
+      {"group": "Deterioration letters", "rows": [
+        ["E", "On: next-FY EPS estimate cut by more than 1% over about 3 months (panel eps_rev_3m < -1). Off: held or raised. Unknown (?): no positive estimate 3 months ago or now."],
+        ["R", "On: next-FY revenue estimate cut by more than 1% over about 3 months (rev_rev_3m < -1). Off: held or raised. Unknown (?): no estimate."],
+        ["C", "On: free cash flow margin (ttm) under 0, the business burns cash. Off: FCF positive. Unknown (?): no FCF margin (banks, some ADRs)."],
+        ["S", "On: last reported EPS under its estimate (last_surprise < 0). Off: met or beat. Unknown (?): no surprise on file."],
+        ["?", "In det_seen only: that letter's field is empty, so the letter count and the count cells are empty for the name."]
+      ]}
+    ]
+  }
+}

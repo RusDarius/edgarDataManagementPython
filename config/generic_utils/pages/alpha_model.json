@@ -1,0 +1,112 @@
+{
+ "name": "alpha-model-{DAY}",
+ "page_key": "alpha_model",
+ "requires": "{PACK}/alpha_model/alpha_model.duckdb",
+ "title": "Alpha model {DAY}",
+ "subtitle": "Walk-forward forecast of excess return per horizon (US $1B+), its out-of-sample record against baselines, the weights it learned from past-known days only, and volatility-scaled price bands. pred is percent excess against the market median: one order, never summed with rr / bo / left, never a buy list.",
+ "sources_extra": [
+  "panel store logs/tradingview_analysis/signal_lab/panel_store.duckdb (tv_scan_cli.py panel-store)",
+  "alpha model {PACK}/alpha_model (tv_scan_cli.py alpha-model --pack {PACK})",
+  "live log logs/tradingview_analysis/alpha_model/live_log.duckdb"
+ ],
+ "tone_map": {
+  "OK": "good",
+  "WEAK": "neutral",
+  "NO_TRACK": "neutral",
+  "DEGRADED": "warning",
+  "FAILING": "bad",
+  "ADD": "good",
+  "NEW": "good",
+  "HOLD": "info",
+  "WAIT": "neutral",
+  "WATCH": "neutral",
+  "HOLD_NO_ADD": "warning",
+  "DERISK_INTO_PRINT": "warning",
+  "TRIM": "warning",
+  "PASS": "bad",
+  "EXIT": "bad"
+ },
+ "tabs": [
+  {
+   "label": "Health",
+   "blocks": [
+    {"type": "callout", "from": "update.banner"},
+    {"type": "stats", "from": "pages.alpha_model.blocks.stats"},
+    {"type": "callout", "from": "pages.alpha_model.blocks.read"},
+    {"type": "text", "text": "state: OK = out-of-sample IC with t >= 2 on non-overlapping periods and a positive recent IC; WEAK = positive but unproven; DEGRADED = positive overall, negative lately; FAILING = negative overall; NO_TRACK = under 10 scored days. Trust a horizon only when it is OK and beats the walk-forward baselines (ew_sign, best_single)."},
+    {"type": "table", "title": "State per horizon",
+     "source": {"duckdb": "{PACK}/alpha_model/alpha_model.duckdb", "sql": "SELECT horizon, state, oos_days, n_indep, ic_mean, ic_t_indep, ic_recent, spread, best_baseline, best_baseline_ic, beats_baselines, best_fixed, best_fixed_ic FROM state ORDER BY CAST(replace(horizon, 'd', '') AS INTEGER)"},
+     "tone_field": "state"},
+    {"type": "table", "title": "Out-of-sample record: model and baselines (ic_mean descending per horizon)",
+     "source": {"duckdb": "{PACK}/alpha_model/alpha_model.duckdb", "sql": "SELECT horizon, method, n_days, n_indep, ic_mean, ic_t_indep, ic_t_nw, ic_h1, ic_h2, ic_recent, ic_pos, top, bottom, spread, top_hit FROM oos_summary ORDER BY CAST(replace(horizon, 'd', '') AS INTEGER), ic_mean DESC"}},
+    {"type": "table", "title": "Calibration: realized out-of-sample excess per forecast decile (u = excess / own volatility over the horizon)",
+     "source": {"duckdb": "{PACK}/alpha_model/alpha_model.duckdb", "sql": "SELECT horizon, decile, n, fx_mean, fx_med, hit, u_q20, u_q50, u_q80 FROM deciles ORDER BY CAST(replace(horizon, 'd', '') AS INTEGER), decile"}}
+   ]
+  },
+  {
+   "label": "28d",
+   "blocks": [
+    {"type": "text", "text": "Bands b28d_q20 / q50 / q80 are the 20th / 50th / 80th percentile of the 28-day outcome for the name's forecast decile, scaled by its own volatility, in a flat market. move_28d is one standard deviation over the horizon in percent."},
+    {"type": "table", "title": "Top forecasts, 28 days (pred_28d descending)",
+     "source": {"duckdb": "{PACK}/alpha_model/alpha_model.duckdb", "sql": "SELECT symbol, ind, mcap_b, close, pred_28d, dec_28d, b28d_q20, b28d_q50, b28d_q80, move_28d, why_28d, pred_7d, last_surprise, dsp, dte, \"left\", rr, mix, book_usd, earn_date FROM live WHERE pred_28d IS NOT NULL AND mcap_b >= 2 ORDER BY pred_28d DESC LIMIT 40"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+    {"type": "table", "title": "Bottom forecasts, 28 days (pred_28d ascending): the model's laggards",
+     "source": {"duckdb": "{PACK}/alpha_model/alpha_model.duckdb", "sql": "SELECT symbol, ind, mcap_b, close, pred_28d, dec_28d, b28d_q20, b28d_q50, b28d_q80, move_28d, why_28d, pred_7d, last_surprise, dsp, dte, \"left\", rr, mix, book_usd FROM live WHERE pred_28d IS NOT NULL AND mcap_b >= 2 ORDER BY pred_28d ASC LIMIT 30"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"}
+   ]
+  },
+  {
+   "label": "7d",
+   "blocks": [
+    {"type": "table", "title": "Top forecasts, 7 days (pred_7d descending)",
+     "source": {"duckdb": "{PACK}/alpha_model/alpha_model.duckdb", "sql": "SELECT symbol, ind, mcap_b, close, pred_7d, dec_7d, b7d_q20, b7d_q50, b7d_q80, move_7d, why_7d, pred_28d, last_surprise, dsp, dte, \"left\", rr, book_usd, earn_date FROM live WHERE pred_7d IS NOT NULL AND mcap_b >= 2 ORDER BY pred_7d DESC LIMIT 40"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+    {"type": "table", "title": "Bottom forecasts, 7 days (pred_7d ascending)",
+     "source": {"duckdb": "{PACK}/alpha_model/alpha_model.duckdb", "sql": "SELECT symbol, ind, mcap_b, close, pred_7d, dec_7d, b7d_q20, b7d_q50, b7d_q80, move_7d, why_7d, pred_28d, last_surprise, dsp, dte, book_usd FROM live WHERE pred_7d IS NOT NULL AND mcap_b >= 2 ORDER BY pred_7d ASC LIMIT 30"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"}
+   ]
+  },
+  {
+   "label": "Book and prints",
+   "blocks": [
+    {"type": "table", "title": "Book names (pred_28d descending)",
+     "source": {"duckdb": "{PACK}/alpha_model/alpha_model.duckdb", "sql": "SELECT symbol, close, book_usd, book_vs_cost, pred_7d, dec_7d, pred_28d, dec_28d, b28d_q20, b28d_q50, b28d_q80, why_28d, last_surprise, dsp, dte, \"left\", mix FROM live WHERE book_usd IS NOT NULL ORDER BY pred_28d DESC"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+    {"type": "table", "title": "Named names", "judgment_only": true, "ids_from": "pages.alpha_model.named_ids",
+     "source": {"duckdb": "{PACK}/alpha_model/alpha_model.duckdb", "sql": "SELECT symbol, ind, close, pred_7d, dec_7d, b7d_q20, b7d_q80, pred_28d, dec_28d, b28d_q20, b28d_q50, b28d_q80, why_28d, last_surprise, dsp, dte, \"left\", earn_date FROM live ORDER BY pred_28d DESC LIMIT 60"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+    {"type": "table", "title": "Printing this week (earnings-week W0, pred_28d descending)", "optional": true,
+     "source": {"duckdb": "{PACK}/alpha_model/alpha_model.duckdb", "sql": "SELECT symbol, ind, mcap_b, earn_date, slot, close, pred_28d, dec_28d, b28d_q20, b28d_q80, why_28d, pred_7d, last_surprise, \"left\", rr FROM live WHERE earn_week = 'W0' AND mcap_b >= 2 ORDER BY pred_28d DESC LIMIT 60"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"}
+   ]
+  },
+  {
+   "label": "Weights",
+   "blocks": [
+    {"type": "text", "text": "coef is the weight today's forecast uses: the feature's trailing rank IC from past-known days, age-decayed and shrunk by its own t (zero under select_t). coef_20d_ago shows how it moved; flips_60d counts sign changes over the last 60 fitted days."},
+    {"type": "table", "title": "Weights in use, 28 days (|coef| descending)",
+     "source": {"duckdb": "{PACK}/alpha_model/alpha_model.duckdb", "sql": "SELECT feature, family, coef, coef_raw, t, coef_20d_ago, flips_60d, cover_today, label FROM weights WHERE horizon = '28d' ORDER BY abs(coef) DESC, abs(t) DESC LIMIT 30"}},
+    {"type": "table", "title": "Weights in use, 7 days (|coef| descending)",
+     "source": {"duckdb": "{PACK}/alpha_model/alpha_model.duckdb", "sql": "SELECT feature, family, coef, coef_raw, t, coef_20d_ago, flips_60d, cover_today, label FROM weights WHERE horizon = '7d' ORDER BY abs(coef) DESC, abs(t) DESC LIMIT 30"}},
+    {"type": "table", "title": "Weights in use, 1 day and 56 days (nonzero only)",
+     "source": {"duckdb": "{PACK}/alpha_model/alpha_model.duckdb", "sql": "SELECT horizon, feature, family, coef, coef_raw, t, coef_20d_ago, flips_60d FROM weights WHERE horizon IN ('1d', '56d') AND coef <> 0 ORDER BY horizon, abs(coef) DESC"}}
+   ]
+  },
+  {
+   "label": "Track",
+   "blocks": [
+    {"type": "table", "title": "Live forecasts scored once their labels exist (empty until the first logged forecasts mature; grows daily)", "optional": true,
+     "source": {"duckdb": "{PACK}/alpha_model/alpha_model.duckdb", "sql": "SELECT horizon, as_of, n, ic_pearson, top_fx, bottom_fx FROM live_track ORDER BY as_of DESC, horizon"}},
+    {"type": "table", "title": "Walk-forward record, last 30 scored days per horizon",
+     "source": {"duckdb": "{PACK}/alpha_model/alpha_model.duckdb", "sql": "SELECT horizon, as_of, n, n_train, ic_model, ic_best_single, ic_ew_sign, top, bottom, top_hit, slope FROM (SELECT *, row_number() OVER (PARTITION BY horizon ORDER BY as_of DESC) AS k FROM oos_days) WHERE k <= 30 ORDER BY CAST(replace(horizon, 'd', '') AS INTEGER), as_of DESC"}}
+   ]
+  },
+  {
+   "label": "Sources",
+   "blocks": [
+    {"type": "list", "from": "pages.alpha_model.blocks.sources"}
+   ]
+  }
+ ],
+ "ledger": {"auto": true}
+}

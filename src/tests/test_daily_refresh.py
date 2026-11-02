@@ -101,6 +101,56 @@ class TestUpdateDiff(unittest.TestCase):
         gone = diff_symbol("NYSE:A", old, None, fields=fields, thresholds=thresholds)
         self.assertEqual(gone["flags"], ["dropped_from_tables"])
 
+    def test_after_hours_moves_only_on_the_print_night(self):
+        import csv
+        import json
+        import tempfile
+        from pathlib import Path
+
+        from generic_utils.page_update import after_hours_moves
+
+        with tempfile.TemporaryDirectory() as tmp:
+            pack = Path(tmp)
+            (pack / "briefing_pack.json").write_text(json.dumps({"created_at_utc": "2026-10-28T21:38:00+00:00"}), encoding="utf-8")
+            (pack / "earnings_week").mkdir()
+            rows = [{"symbol": "NASDAQ:GOOG", "printed": "True", "react_on": "2026-10-29", "post_chg": "-9.43", "book_usd": "2988"},
+                    {"symbol": "NYSE:CMG", "printed": "True", "react_on": "2026-10-29", "post_chg": "6.5", "book_usd": ""},
+                    {"symbol": "NYSE:VRT", "printed": "True", "react_on": "2026-10-28", "post_chg": "-4.0", "book_usd": ""},
+                    {"symbol": "NYSE:AMP", "printed": "False", "react_on": "2026-10-29", "post_chg": "-5.0", "book_usd": ""},
+                    {"symbol": "NASDAQ:EBAY", "printed": "True", "react_on": "2026-10-29", "post_chg": "2.0", "book_usd": ""}]
+            with (pack / "earnings_week" / "calendar.csv").open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+            moves = after_hours_moves(str(pack), {"csv": "{PACK}/earnings_week/calendar.csv", "min_abs_pct": 3.0})
+        self.assertEqual(moves, {"NASDAQ:GOOG": {"post_chg": -9.43, "held": True}, "NYSE:CMG": {"post_chg": 6.5, "held": False}})
+        self.assertEqual(after_hours_moves(str(pack), None), {})
+
+    def test_letter_changes_between_packs(self):
+        import tempfile
+        from pathlib import Path
+
+        import duckdb
+
+        from generic_utils.page_update import letter_changes
+
+        with tempfile.TemporaryDirectory() as tmp:
+            packs = {}
+            for name, rows in (("old", [("NASDAQ:GOOG", "S", True), ("NASDAQ:MU", "-", True), ("NYSE:X", "E", False)]),
+                               ("new", [("NASDAQ:GOOG", "CS", True), ("NASDAQ:MU", "-", True), ("NYSE:Y", "E", False)])):
+                folder = Path(tmp) / name / "deterioration"
+                folder.mkdir(parents=True)
+                con = duckdb.connect(str(folder / "deterioration.duckdb"))
+                con.execute("CREATE TABLE names (symbol VARCHAR, det_seen VARCHAR, in_book BOOLEAN)")
+                con.executemany("INSERT INTO names VALUES (?, ?, ?)", rows)
+                con.close()
+                packs[name] = str(Path(tmp) / name)
+            spec = {"db": "{PACK}/deterioration/deterioration.duckdb"}
+            changes = letter_changes(packs["old"], packs["new"], spec)
+            self.assertEqual(changes, {"NASDAQ:GOOG": {"old": "S", "new": "CS", "held": True}})
+            self.assertEqual(letter_changes(packs["old"], packs["new"], None), {})
+            self.assertEqual(letter_changes(packs["old"], str(Path(tmp) / "missing"), spec), {})
+
 
 if __name__ == "__main__":
     unittest.main()

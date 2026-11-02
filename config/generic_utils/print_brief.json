@@ -1,0 +1,26 @@
+{
+  "name": "print_brief_v1",
+  "description": "One card per print-night reporter: a short written read built only from the pack's numbers (going into the print, value against the industry and its own history, what the quarter has to show, the industry's peers and their prints this season, the measured pointers, the levels, past prints) plus a checklist of what to read on the print. Zero cutoffs: which cards a page shows, and every course, are the page's and the judgment's.",
+  "starter_usd": 5000,
+  "peer_window_days": 35,
+  "peers_listed": 3,
+  "peer_prints_listed": 4,
+  "setup_notes": {
+    "sold into & previous print down": "Set-up: sold into after a down print, the best pre-print cell. A sell-off on the reaction has kept drifting up: the kill does not fire on the reaction close; re-arm it at the reaction session's low, judged from the second close (earnings playbook 5).",
+    "sold into & previous print up": "Set-up: sold into after an up print, the second-best cell. A 5%+ sell-off on the reaction has drifted back: re-arm the kill at the reaction session's low (earnings playbook 5).",
+    "ran into & previous print down": "Set-up: ran into the print after a down print. Sell-offs have drifted back: re-arm the kill at the reaction session's low (earnings playbook 5).",
+    "ran into & previous print up": "Set-up: ran into the print after an up print, the weakest cell (sell-the-news risk). The kill fires as written; a held line fits DERISK (earnings playbook 3)."
+  },
+  "slot_notes": {
+    "AMC": "AMC: the after-hours print is a first read, not the decision; decide at the cash close (earnings playbook 6).",
+    "BMO": "BMO: the reaction is tomorrow's session; read the opening gap and decide at the close, not the open (earnings playbook 6)."
+  },
+  "card_fields": [
+    "symbol", "company", "ind", "market", "slot", "earn_date", "react_on", "phase", "mcap_b", "book_usd", "book_vs_cost",
+    "close", "day", "runup", "m1", "m3", "rsi", "rng", "pe_nfy", "pe_nfy_vs_ind", "pe_nfy_vs_own", "fcf_margin", "pt_up",
+    "eps_q_step", "rev_q_step", "eps_rev_3m", "last_surprise", "rev_surprise", "surprise_mix", "react_abs_mean", "react_fx",
+    "rx_up", "rx_dn", "h7_up", "h7_dn", "h28_up", "h28_dn", "h28_fam_up", "h28_fam_dn", "ac_up", "ac_dn", "d28_up", "d28_dn",
+    "dec_7d", "dec_28d", "pred_28d", "setup_cell", "setup_rx_q10", "bounce_low", "bounce_high", "bounce_kill",
+    "tail_starter_usd", "own_move_starter_usd", "peer_rx", "peer_n", "det_seen"
+  ]
+}

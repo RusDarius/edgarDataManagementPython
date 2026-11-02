@@ -1,0 +1,123 @@
+{
+ "name": "earnings-week-{DAY}",
+ "page_key": "earnings_week",
+ "requires": "{PACK}/earnings_week/earnings_week.duckdb",
+ "title": "Earnings week {DAY}",
+ "subtitle": "Every print this week (W0) and next (W1) on the US + Europe $1B floor: slot, tape into the print, the coming quarter against the last, value to peers and to own history, past print reactions, and the day's suites joined. Each table is one order; nothing is a sum.",
+ "sources_extra": ["earnings_week {PACK}/earnings_week (tv_scan_cli.py earnings-week --pack {PACK} --ids ...)", "levels {PACK}/earnings_week/name_levels (tv_scan_cli.py name-levels --pack {PACK} --ids <focus> --out-dir {PACK}/earnings_week/name_levels)"],
+ "tone_map": {"BUY_PRE": "good", "NEW": "good", "ADD": "good", "BUY_DIP_AFTER": "good", "HOLD_THROUGH": "info", "HOLD": "info", "WATCH": "neutral", "WAIT": "neutral", "WAIT_PRINT": "neutral", "DERISK_INTO_PRINT": "warning", "TRIM": "warning", "SELL_THE_NEWS": "warning", "HOLD_NO_ADD": "warning", "PASS": "bad", "SHORT_PRE": "bad", "EXIT": "bad"},
+ "tabs": [
+  {
+   "label": "Plan",
+   "blocks": [
+    {"type": "callout", "from": "update.banner"},
+    {"type": "stats", "from": "pages.earnings_week.blocks.stats"},
+    {"type": "callout", "from": "pages.earnings_week.blocks.bias"},
+    {"type": "callout", "from": "pages.earnings_week.blocks.tonight"},
+    {"type": "callout", "from": "pages.earnings_week.blocks.risk"},
+    {"type": "table", "title": "Event plays (judgment; size is advice: $5,000 starter, about $1,000 add)", "headers": ["Symbol", "Print", "Course", "Size", "Entry", "Kill", "Why"], "from": "pages.earnings_week.blocks.picks"},
+    {"type": "list", "from": "pages.earnings_week.blocks.rules"},
+    {"type": "table", "title": "Named names", "ids_from": "pages.earnings_week.named_ids",
+     "source": {"duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "sql": "SELECT symbol, ind, earn_utc, slot, react_on, printed, ROUND(mcap / 1e9, 1) AS mcap_b, day, w, runup, pt_up, eps_q_step, rev_q_step, last_surprise, rev_surprise, surprise_mix, pe_nfy, pe_nfy_vs_ind, pe_nfy_vs_own, eps_rev_3m, react_hist, lenses, cons_w, \"left\", book_usd FROM calendar", "drop_missing_columns": true},
+     "extra_columns": ["Course", "Grade", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+    {"type": "table", "title": "Focus levels: buy-in-red band, kill, reclaim add, trim zone (name-levels)", "optional": true, "ids_from": "pages.earnings_week.focus_ids",
+     "source": {"duckdb": "{PACK}/earnings_week/name_levels/safety_band/safety_band.duckdb", "sql": "SELECT symbol, ind, close, bounce_low, bounce_high, bounce_kill, bounce_kill_pct, add_trigger_low, add_trigger_high, trim_zone, trim_zone_state, street_px, mos_peer_pct, mos_own_med_pct FROM safety_band"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"}
+   ]
+  },
+  {
+   "label": "Tonight + tomorrow",
+   "blocks": [
+    {"type": "text", "text": "Prints not yet out with dte 0 or 1 ($2B+), in time order. react_on is the session the move shows in: the print day for BMO, the next weekday for AMC. An entry before an AMC print is a position through the event, not a trade on the reaction."},
+    {"type": "table", "title": "Next two sessions",
+     "source": {"duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "sql": "SELECT symbol, ind, earn_utc, slot, react_on, ROUND(mcap / 1e9, 1) AS mcap_b, day, w, runup, pt_up, eps_q_step, last_surprise, pe_nfy_vs_ind, pe_nfy_vs_own, eps_rev_3m, react_hist, lenses, cons_w, \"left\", book_usd FROM calendar WHERE dte IN (0, 1) AND NOT printed AND mcap >= 2e9 ORDER BY earn_utc, mcap DESC LIMIT 80"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"}
+   ]
+  },
+  {
+   "label": "Event upside",
+   "blocks": [
+    {"type": "text", "from": "pages.earnings_week.blocks.event_0"},
+    {"type": "table", "title": "Sold into the print, previous print sold off, revisions under the priced top quintile (signal lab best pre-print cell; runup ascending)",
+     "source": {"duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "sql": "SELECT symbol, ind, earn_dow, slot, ROUND(mcap / 1e9, 1) AS mcap_b, runup, eps_rev_3m, pt_up, pt_low_up, pe_nfy_vs_own, pe_nfy_vs_ind, react_hist, atrp, lenses, cons_w, \"left\" FROM calendar WHERE week = 'W0' AND NOT printed AND mcap >= 2e9 AND runup < 0 AND react_last < 0 AND COALESCE(eps_rev_3m, 0) < 6.6 ORDER BY runup LIMIT 30"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+    {"type": "table", "title": "Sold into the print while next-FY EPS rose (runup ascending, eps_rev_3m > 0)",
+     "source": {"duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "sql": "SELECT symbol, ind, earn_dow, slot, ROUND(mcap / 1e9, 1) AS mcap_b, runup, w, m1, eps_rev_3m, pt_up, pe_nfy, pe_nfy_vs_ind, pe_nfy_vs_own, pe_nfy_seat, last_surprise, react_hist, lenses, cons_w, \"left\" FROM calendar WHERE week = 'W0' AND NOT printed AND mcap >= 2e9 AND eps_rev_3m > 0 ORDER BY runup LIMIT 30"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+    {"type": "table", "title": "Street upside, estimates not falling (pt_up descending)",
+     "source": {"duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "sql": "SELECT symbol, ind, earn_dow, slot, ROUND(mcap / 1e9, 1) AS mcap_b, pt_up, pt_low_up, pt_high_up, pt_drift_1m, eps_rev_3m, runup, pe_nfy_vs_ind, react_hist, lenses, \"left\", rr FROM calendar WHERE week = 'W0' AND NOT printed AND mcap >= 2e9 AND COALESCE(eps_rev_3m, 0) >= 0 ORDER BY pt_up DESC NULLS LAST LIMIT 30"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+    {"type": "table", "title": "Cheap to its own history on next-FY EPS, EPS growing (pe_nfy_vs_own ascending)",
+     "source": {"duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "sql": "SELECT symbol, ind, earn_dow, slot, ROUND(mcap / 1e9, 1) AS mcap_b, pe_nfy, pe_nfy_own_med, pe_nfy_vs_own, pe_nfy_seat, pe_nfy_vs_ind, eps_nfy_g, eps_rev_3m, runup, pt_up, react_hist FROM calendar WHERE week = 'W0' AND NOT printed AND mcap >= 2e9 AND eps_nfy_g > 0 AND pe_nfy_vs_own IS NOT NULL ORDER BY pe_nfy_vs_own LIMIT 25"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+    {"type": "table", "title": "Cheap to industry peers on next-FY EPS, EPS growing (pe_nfy_vs_ind ascending)",
+     "source": {"duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "sql": "SELECT symbol, ind, earn_dow, slot, ROUND(mcap / 1e9, 1) AS mcap_b, pe_nfy, pe_nfy_ind_med, pe_nfy_vs_ind, evebitda_vs_ind, eps_nfy_g, eps_rev_3m, runup, pt_up, react_hist FROM calendar WHERE week = 'W0' AND NOT printed AND mcap >= 2e9 AND eps_nfy_g > 0 AND pe_nfy_vs_ind IS NOT NULL ORDER BY pe_nfy_vs_ind LIMIT 25"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"}
+   ]
+  },
+  {
+   "label": "Suite scores",
+   "blocks": [
+    {"type": "text", "text": "The day's other suites, each in its own order: GMV RERATE floor (weakest of growth, estimates, value), the prediction earnings consensus over weeks, and the edge upside score. A name outside a suite's universe shows empty."},
+    {"type": "table", "title": "GMV rerate_floor descending",
+     "source": {"duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "sql": "SELECT symbol, ind, earn_dow, slot, ROUND(mcap / 1e9, 1) AS mcap_b, rerate_floor, lenses, tape_state, eps_rev_3m, pe_nfy_vs_ind, runup, pt_up, react_hist, \"left\" FROM calendar WHERE week = 'W0' AND NOT printed AND mcap >= 2e9 AND rerate_floor IS NOT NULL ORDER BY rerate_floor DESC LIMIT 25"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+    {"type": "table", "title": "Prediction earnings consensus, weeks horizon (cons_w descending)",
+     "source": {"duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "sql": "SELECT symbol, ind, earn_dow, slot, ROUND(mcap / 1e9, 1) AS mcap_b, cons_w, cons_w_dir, cons_w_conf, cons_d, cons_m, p_breakout_w, p_fwd_edge_w, p_asym_value_w, p_fragility_w, runup, pt_up, react_hist FROM calendar WHERE week = 'W0' AND NOT printed AND mcap >= 2e9 AND cons_w IS NOT NULL ORDER BY cons_w DESC LIMIT 25"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+    {"type": "table", "title": "Edge upside score descending",
+     "source": {"duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "sql": "SELECT symbol, ind, earn_dow, slot, ROUND(mcap / 1e9, 1) AS mcap_b, edge_up_score, edge_fwd_up, edge_hist_win, edge_med_5d, edge_safety, runup, pt_up, react_hist FROM calendar WHERE week = 'W0' AND NOT printed AND mcap >= 2e9 AND edge_up_score IS NOT NULL ORDER BY edge_up_score DESC LIMIT 20"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"}
+   ]
+  },
+  {
+   "label": "Print history",
+   "blocks": [
+    {"type": "text", "text": "From the day files since March: react is the reaction session's change, runup the two weeks into that print, drift the four files after it, eps_surprise as TradingView recorded it. Two prints is a small sample: it sizes the move, it does not call the direction."},
+    {"type": "table", "title": "Biggest movers on their prints (react_abs_mean descending, 2+ prints)",
+     "source": {"duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "sql": "SELECT symbol, ind, earn_dow, slot, ROUND(mcap / 1e9, 1) AS mcap_b, react_abs_mean, react_up, react_hist, atrp, runup, pt_up, eps_rev_3m FROM calendar WHERE week = 'W0' AND NOT printed AND mcap >= 2e9 AND n_prints >= 2 ORDER BY react_abs_mean DESC LIMIT 30"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+    {"type": "table", "title": "Ran into the print (runup descending): sell-the-news exposure",
+     "source": {"duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "sql": "SELECT symbol, ind, earn_dow, slot, ROUND(mcap / 1e9, 1) AS mcap_b, runup, w, rsi, rng, pt_up, pe_nfy_vs_own, react_hist, \"left\", book_usd FROM calendar WHERE week = 'W0' AND NOT printed AND mcap >= 2e9 AND runup IS NOT NULL ORDER BY runup DESC LIMIT 20"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+    {"type": "table", "title": "Past prints of the focus names", "ids_from": "pages.earnings_week.focus_ids",
+     "source": {"duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "sql": "SELECT symbol, print_date, slot, react_file, react, react_px, react_relvol, runup, drift, eps_surprise, rev_surprise FROM prints ORDER BY symbol, print_date DESC"}}
+   ]
+  },
+  {
+   "label": "Book",
+   "blocks": [
+    {"type": "text", "from": "pages.earnings_week.blocks.book_0"},
+    {"type": "table", "title": "Held names with a print in the window",
+     "source": {"duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "sql": "SELECT symbol, ind, week, earn_utc, slot, react_on, book_usd, book_vs_cost, day, w, runup, pt_up, eps_q_step, pe_nfy_vs_own, eps_rev_3m, react_hist, pack_play, \"left\" FROM calendar WHERE book_usd IS NOT NULL ORDER BY earn_utc"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"}
+   ]
+  },
+  {
+   "label": "Next week",
+   "blocks": [
+    {"type": "text", "from": "pages.earnings_week.blocks.next_0"},
+    {"type": "table", "title": "W1 $10B+ in time order",
+     "source": {"duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "sql": "SELECT symbol, ind, earn_utc, slot, ROUND(mcap / 1e9, 1) AS mcap_b, w, runup, pt_up, eps_rev_3m, pe_nfy_vs_ind, pe_nfy_vs_own, react_hist, lenses, \"left\" FROM calendar WHERE week = 'W1' AND mcap >= 1e10 ORDER BY earn_utc, mcap DESC LIMIT 70"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+    {"type": "table", "title": "W1 sold into the print while next-FY EPS rose",
+     "source": {"duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "sql": "SELECT symbol, ind, earn_utc, slot, ROUND(mcap / 1e9, 1) AS mcap_b, runup, eps_rev_3m, pt_up, pe_nfy_vs_own, pe_nfy_vs_ind, react_hist, lenses, \"left\" FROM calendar WHERE week = 'W1' AND mcap >= 2e9 AND eps_rev_3m > 0 ORDER BY runup LIMIT 25"},
+     "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"}
+   ]
+  },
+  {
+   "label": "By day / industry",
+   "blocks": [
+    {"type": "table", "title": "Prints per day and slot",
+     "source": {"duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "sql": "SELECT week, earn_date, earn_dow, slot, n, n_10b, med_day, med_w, med_runup, med_pt_up, med_eps_rev_3m, med_react_abs_mean, largest FROM by_day ORDER BY earn_date, slot"}},
+    {"type": "table", "title": "This week by industry (4+ names), runup ascending",
+     "source": {"duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "sql": "SELECT ind, n, n_10b, med_runup, med_w, med_pt_up, med_pe_nfy_vs_ind, med_pe_nfy_vs_own, med_eps_rev_3m, med_react_abs_mean, largest FROM by_industry WHERE week = 'W0' AND n >= 4 ORDER BY med_runup LIMIT 40"}}
+   ]
+  },
+  {
+   "label": "Sources",
+   "blocks": [{"type": "list", "from": "pages.earnings_week.blocks.sources"}]
+  }
+ ],
+ "ledger": {"auto": true}
+}

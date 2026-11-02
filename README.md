@@ -44,6 +44,8 @@ SEC EDGAR / Arelle          TradingView screener API
 
 **Financial projection** keeps core, street, history, and peer lanes separate so disagreements stay visible.
 
+**Signal lab / alpha model** sit on a point-in-time panel of the all-fields day files (`generic_utils/panel_store.py`): the lab measures which features, screener scores, print set-ups and pack lists led later excess returns (`signal_lab.py`); the model forecasts excess return per horizon walk-forward, scores every past forecast, and gives volatility-scaled bands (`alpha_model.py`). Runners: `src/run_signal_lab.py`, `src/run_alpha_model.py`.
+
 ## Repo map (high signal)
 
 | Path | Role |
@@ -59,7 +61,7 @@ SEC EDGAR / Arelle          TradingView screener API
 | `documentation/` | Usage guides and research playbooks |
 | `logs/` | Run outputs (DuckDB, CSV, markdown reports) |
 
-Standalone runners (examples): `src/run_edge_research_tools.py`, `src/run_financial_projection.py`, `src/run_market_timing_policy.py`, upside / historical edge backtest scripts.
+Standalone runners (examples): `src/run_edge_research_tools.py`, `src/run_financial_projection.py`, `src/run_market_timing_policy.py`, `src/run_signal_lab.py`, `src/run_alpha_model.py`, upside / historical edge backtest scripts.
 
 ## Stack
 

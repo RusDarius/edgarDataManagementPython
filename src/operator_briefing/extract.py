@@ -10,6 +10,7 @@ from typing import Any, Iterable
 
 from db.trading_view_move_prediction_duckdb import query_move_prediction_duckdb
 from generic_utils.aggregations import group_stats, numeric_summary
+from generic_utils.print_pointers import snapshot_pointers
 from generic_utils.ranking import to_float as _f
 
 from .discovery import LockedSources
@@ -56,6 +57,14 @@ AF_CANDIDATES = {
     "earn_last": ("earnings_release_date", "earnings_release_trading_date_fq"),
     "earn_time": ("earnings_release_time",),
     "earn_next_time": ("earnings_release_next_time",),
+    "last_surprise": ("eps_surprise_percent_fq",),
+    "rev_surprise_tv": ("revenue_surprise_percent_fq",),
+    "eps_last_q": ("earnings_per_share_fq",),
+    "eps_est_last_q": ("earnings_per_share_forecast_fq",),
+    "rev_last_q": ("total_revenue_fq",),
+    "rev_est_last_q": ("revenue_forecast_fq",),
+    "eps_next_q": ("earnings_per_share_forecast_next_fq",),
+    "rev_next_q": ("revenue_forecast_next_fq",),
     "pre_chg": ("premarket_change",),
     "pre_gap": ("premarket_gap",),
     "pre_close": ("premarket_close",),
@@ -254,6 +263,8 @@ def extract_all_fields(
         earn = _parse_date(row.get("earn"))
         rec["earn"] = earn.isoformat() if earn else None
         rec["dte"] = (earn - scan).days if earn and scan else None
+        # print pointers: last surprise (EPS, revenue), the coming quarter's step, days since the print, next slot
+        rec.update(snapshot_pointers({**row, "earn_next": row.get("earn")}, scan))
         rec["_af_aliases"] = aliases
         out.append(rec)
     return out

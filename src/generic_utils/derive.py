@@ -60,6 +60,15 @@ def implied_price(close: Any, leftover_pct_value: Any, *, digits: int = 2) -> fl
     return round(close_f * (1.0 + leftover / 100.0), digits)
 
 
+def move_usd(value_usd: Any, change_pct: Any, *, digits: int = 0) -> float | None:
+    """Dollar move of a position worth `value_usd` on a `change_pct` percent move."""
+    value = to_float(value_usd)
+    change = to_float(change_pct)
+    if value is None or change is None:
+        return None
+    return round(value * change / 100.0, digits)
+
+
 def range_position_pct(close: Any, week52_low: Any, week52_high: Any) -> float | None:
     close_f = to_float(close)
     lo = to_float(week52_low)

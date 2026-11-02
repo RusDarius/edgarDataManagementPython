@@ -706,13 +706,13 @@ def main():
     #     etf_regime_tape.log / etf_sleeve_heat.log / etf_divergences.log
     #     etf_catch_up_vs_extended.log / etf_vehicle_quality.log
     #     etf_holdings_overlay.log / etf_dod_changes.log / etf_book_ranked.csv
-    # run_etf_scan_and_analysis_suite(
-    #     TRADINGVIEW_API_CLIENT,
-    #     min_aum_usd=1_000_000_000,
-    # )
+    run_etf_scan_and_analysis_suite(
+        TRADINGVIEW_API_CLIENT,
+        min_aum_usd=1_000_000_000,
+    )
 
-    # # ── Stock move-prediction ─────────────────────────────────────────────
-    # daily_prediction_move_analysis_suite()
+    # ── Stock move-prediction ─────────────────────────────────────────────
+    daily_prediction_move_analysis_suite()
 
     # Price-driven decile analysis: bucket by change / Perf.5D / Perf.1M, score profiles,
     # surface upward-move opportunities in worst performers. Output:
@@ -730,7 +730,7 @@ def main():
     # storage location/table, non-fetched columns simply stay NULL for that run).
     # export_all_tradingview_fields_duckdb()
     # export_all_tradingview_fields_duckdb(chunk_size=300, timeout=90)
-    # export_focused_tradingview_fields_duckdb()
+    export_focused_tradingview_fields_duckdb()
 
     # ── Focus pool screening (deterministic wide pool) ─────────────────────
     # Reads latest move-prediction run (scores + raw scan) enriched with the

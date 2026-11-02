@@ -228,7 +228,8 @@ def join_named_premarket(
 
     ``pre_px`` is the cash close adjusted by ``premarket_change`` only when
     that percent changed versus the prior scan. ``pre_repeat`` true means
-    leave the cash close as the mark.
+    leave the cash close as the mark. ``post_px`` is the cash close adjusted
+    by ``postmarket_change`` (a post-close scan's after-hours read).
     """
     prior = _index(prior_rows)
     current = _index(current_rows)
@@ -244,6 +245,7 @@ def join_named_premarket(
         pre_then = _num(then.get("premarket_change"))
         repeated = premarket_repeated(pre_then, pre_now)
         close = _num(now.get("close"))
+        post_now = _num(now.get("postmarket_change"))
         out.append(
             {
                 "symbol": symbol,
@@ -260,6 +262,8 @@ def join_named_premarket(
                 "pre_gap": _round(_num(now.get("premarket_gap")), 2),
                 "pre_repeat": repeated,
                 "pre_px": _round(implied_premarket_price(close, pre_now, repeated=repeated), 2),
+                "post_chg": _round(post_now, 2),
+                "post_px": _round(implied_premarket_price(close, post_now, repeated=False), 2),
                 "rsi": _round(_num(now.get("RSI")), 1),
                 "sma50": _round(_num(now.get("SMA50")), 2),
                 "sma200": _round(_num(now.get("SMA200")), 2),

@@ -26,6 +26,8 @@ Compile compact (`_compact_name`) is what Radar / Build-50 / Book tables see.
 | bo, cont, fwd, early, sms, recov, rev, exh, frag | 2 | technical (profile) | Weeks profile scores. Sort still uses bo/cont/fwd live only. |
 | mix, conv, regime | 2 | mix / composite | Mix class, conviction (do not leftover-rank with it), regime fit |
 | dte | 4 | calendar | Days to next earnings |
+| last_surprise, rev_surprise, surprise_mix, eps_q_step, rev_q_step, earn_last, dsp, earn_slot | 1 | print (snapshot) | Last print's EPS / revenue surprise %, B/M mix, coming quarter vs last, days since the print, next slot (`generic_utils.print_pointers`) |
+| n_prints, react_last, react_abs_mean, react_up, since_print | 1 | print (history) | Past print reactions from the panel store `prints` (day files when the store is behind) |
 | mtp | 4 | timing | ENTER_SMALL / WATCH / AVOID_CHASE |
 
 Peer columns on **movers** and pack names: `val_field`, `val`, `val_vs_ind`, `val_ind_med`, `val_vs_avg`, `val_ind_avg`, `peer`. The label uses the median percent. `val_vs_avg` is the percent versus the industry average and is a different column. Each recipe field also has `FIELD_vs_ind`, `FIELD_ind_med`, `FIELD_vs_avg`, and `FIELD_ind_avg`.
@@ -48,6 +50,7 @@ Whitelist: `extract.AF_CANDIDATES`.
 | Size | `market_cap_basic` | mcap | Universe gate $2B / satellite |
 | Street PT | `price_target_average`, `price_target_1y` | pt, street_px | Street leftover |
 | Earnings calendar | `earnings_release_next_date` (+ fallbacks) | dte | Catalyst lanes |
+| Last print | `eps_surprise_percent_fq`, `total_revenue_fq` / `revenue_forecast_fq`, `earnings_per_share_fq`, `earnings_per_share_forecast_next_fq`, `revenue_forecast_next_fq`, `earnings_release_date` | last_surprise, rev_surprise, surprise_mix, eps_q_step, rev_q_step, dsp | Print pointers on every tape row (sort / filter columns, not a gate) |
 | Trailing PE | `price_earnings_ttm` | pe | Current value |
 | Forward PE | projection `fp_pe_y1` / `fp_pe_y5` (path, else CAGR). TradingView `price_earnings_forward_fy` is `pe_fwd_tv` | pe_fwd | Quoted forward PE is the projection. `pe_fwd_tv` is empty on recent scans |
 | PEG | `price_earnings_growth_ttm` | peg | Growth-adjusted PE |

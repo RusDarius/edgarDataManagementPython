@@ -82,13 +82,16 @@ class TestSessionTape(unittest.TestCase):
 
         prior = [{"symbol": "NASDAQ:MU", "close": 100.0, "premarket_change": -2.6, "industry": "Semiconductors"}]
         current = [
-            {"symbol": "NASDAQ:MU", "close": 100.0, "premarket_change": -3.0, "change": -4.0, "SMA50": 99.0, "industry": "Semiconductors"},
+            {"symbol": "NASDAQ:MU", "close": 100.0, "premarket_change": -3.0, "postmarket_change": -2.5, "change": -4.0, "SMA50": 99.0,
+             "industry": "Semiconductors"},
             {"symbol": "NASDAQ:PGY", "close": 17.4, "premarket_change": -0.90, "industry": "Packaged Software"},
         ]
         prior.append({"symbol": "NASDAQ:PGY", "close": 17.4, "premarket_change": -0.88})
         rows = {row["symbol"]: row for row in join_named_premarket(prior, current, ["NASDAQ:MU", "NASDAQ:PGY", "NASDAQ:MISSING"])}
         self.assertFalse(rows["NASDAQ:MU"]["pre_repeat"])
         self.assertEqual(rows["NASDAQ:MU"]["pre_px"], 97.0)
+        self.assertEqual((rows["NASDAQ:MU"]["post_chg"], rows["NASDAQ:MU"]["post_px"]), (-2.5, 97.5))
+        self.assertIsNone(rows["NASDAQ:PGY"]["post_px"])
         self.assertTrue(rows["NASDAQ:PGY"]["pre_repeat"])
         self.assertIsNone(rows["NASDAQ:PGY"]["pre_px"])
         self.assertIsNone(rows["NASDAQ:MISSING"]["pre_px"])

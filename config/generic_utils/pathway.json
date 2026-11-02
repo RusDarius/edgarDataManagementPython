@@ -1,0 +1,30 @@
+{
+  "name": "pathway",
+  "description": "Investing pathway scan (generic_utils.pathway): the Book's factor tilt (NAV-weighted cross-sectional percentile per factor) beside what each factor has paid (signal-lab IC: full sample, this month, the trailing tape), the Book's 1M / 3M return split into market, industry and stock parts, the daily regime series, and the change in the Book's tilt from trimming a line or adding a starter to any floor name. Factor list, windows and the starter / trim sizes are knobs here; what to do with a tilt is judgment (pathway skill).",
+  "study": {"min_market_cap_usd": 2000000000.0},
+  "factors": ["p_def", "p_dvc", "p_qvc", "p_recov", "fcf_margin", "ey_fwd", "eps_rev_3m", "last_surprise", "beta", "rvol_20", "r_12m", "r_1m", "pt_up", "hi_prox", "vs200", "size"],
+  "move_factors": ["p_def", "p_dvc", "fcf_margin", "beta", "rvol_20", "r_12m", "pt_up"],
+  "ic_horizon": "28d",
+  "month_horizon": "7d",
+  "tape_horizon": "7d",
+  "tape_window_days": 20,
+  "returns": ["r_1m", "r_3m"],
+  "industry_min_n": 5,
+  "regime_days": 90,
+  "starter_usd": 5000,
+  "trim_frac": 0.33,
+  "joins": [
+    {"name": "book", "duckdb": "{PACK}/briefing_pack.duckdb", "table": "book", "id_field": "symbol",
+     "fields": {"value_usd": "book_usd", "wt_nav": "wt_nav", "vs_cost": "book_vs_cost"}},
+    {"name": "deterioration", "duckdb": "{PACK}/deterioration/deterioration.duckdb", "table": "names", "id_field": "symbol",
+     "fields": {"dd": "dd", "det_seen": "det_seen", "n_det": "n_det", "cnt_fx_28d_mean": "cnt_fx_28d_mean", "crun_cell": "crun_cell", "crun_fx_28d_mean": "crun_fx_28d_mean"}},
+    {"name": "alpha", "csv": "{PACK}/alpha_model/live.csv", "id_field": "symbol",
+     "fields": {"pred_28d": "pred_28d", "dec_28d": "dec_28d", "b28d_q20": "b28d_q20", "b28d_q80": "b28d_q80"}},
+    {"name": "safety", "duckdb": "{PACK}/week_plays/week_plays.duckdb", "table": "plays", "id_field": "symbol",
+     "fields": {"earn_date": "earn_date", "bounce_low": "bounce_low", "bounce_high": "bounce_high", "bounce_kill": "bounce_kill"}},
+    {"name": "tape", "duckdb": "{PACK}/briefing_pack.duckdb", "table": "us2b_tape", "id_field": "symbol",
+     "fields": {"company": "company", "pe_fwd": "pe_fwd", "left": "left", "street_left": "street_left", "dte": "dte"}}
+  ],
+  "industry_join": {"duckdb": "{PACK}/week_plays/week_plays.duckdb", "table": "month_ind", "id_field": "ind",
+                    "fields": {"pred_28d_med": "ind_pred_28d", "dec_28d_mean": "ind_dec_28d", "r_1m_med": "ind_r_1m_med"}}
+}

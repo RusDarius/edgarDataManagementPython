@@ -1,0 +1,69 @@
+{
+  "name": "print_night_v1",
+  "description": "Every name whose print reaction lands on the chosen session (default the next one: tonight's AMC and tomorrow's BMO), with a pointer matrix. A pointer is one pre-print field measured on the lab's past prints: the quintile (or category) the name sits in now, what prints in that quintile did next (reaction vs the market, hold-through excess from the pre-print close) and the lift against every other print. The arrow is set only where the lift clears t_min on min_n prints, keeps its sign in both halves of the sample and the cell's hit rate moves the same way (so a few large moves cannot carry it). After the print the same is done for the print fields (surprise, mix, after-hours read, reaction) against the after-hours-to-close move and the drift. Counts of arrows are counts of measured cells, not a score; zero cutoffs beyond the night.",
+  "quantiles": 5,
+  "t_min": 2.0,
+  "min_n": 40,
+  "require_halves": true,
+  "require_hit": true,
+  "starter_usd": 5000,
+  "peer_window_days": 35,
+  "peer_min_n": 3,
+  "measures": {
+    "pre": [
+      ["react_fx", "rx", "Reaction session vs the market (pp)"],
+      ["hold_fx_7d", "h7", "Hold from the pre-print close, 7 days, excess (pp)"],
+      ["hold_fx_28d", "h28", "Hold from the pre-print close, 28 days, excess (pp)"]
+    ],
+    "post": [
+      ["react_fx", "rx", "Reaction session vs the market (pp)"],
+      ["ah_to_close", "ac", "Reaction close minus the after-hours read (pp, AMC)"],
+      ["drift_fx_28d", "d28", "Drift from the reaction close, 28 days, excess (pp)"]
+    ]
+  },
+  "pointers": [
+    {"key": "runup", "family": "Tape", "event": "runup", "live": "runup", "label": "Run-up into the print (14 days, %)"},
+    {"key": "r_1m", "family": "Tape", "store": "r_1m", "calendar": "m1", "label": "Trailing month (%)"},
+    {"key": "r_3m", "family": "Tape", "store": "r_3m", "calendar": "m3", "label": "Trailing three months (%)"},
+    {"key": "rsi", "family": "Tape", "store": "rsi", "calendar": "rsi", "label": "RSI 14"},
+    {"key": "vs50", "family": "Tape", "store": "vs50", "calendar": "vs50", "label": "Close vs the 50-day average (%)"},
+    {"key": "hi_prox", "family": "Tape", "store": "hi_prox", "label": "Close vs the 52-week high (%)"},
+    {"key": "rvol_20", "family": "Tape", "store": "rvol_20", "label": "Realized volatility, 20 sessions"},
+    {"key": "beta", "family": "Tape", "store": "beta", "label": "Beta"},
+    {"key": "prev_react", "family": "History", "event": "prev_react", "live": "react_last", "label": "Previous print's reaction (%)"},
+    {"key": "last_surprise", "family": "History", "store": "last_surprise", "calendar": "last_surprise", "print_moves": true, "label": "Previous print's EPS surprise (%)"},
+    {"key": "slot", "family": "History", "kind": "category", "event": "slot", "live": "slot", "label": "Slot (BMO / AMC, ~ inferred, merged)"},
+    {"key": "eps_rev_3m", "family": "Estimates", "store": "eps_rev_3m", "calendar": "eps_rev_3m", "print_moves": true, "label": "Next-FY EPS estimate change, 3 months (%)"},
+    {"key": "eps_rev_1m", "family": "Estimates", "store": "eps_rev_1m", "calendar": "eps_rev_1m", "print_moves": true, "label": "Next-FY EPS estimate change, 1 month (%)"},
+    {"key": "rev_rev_3m", "family": "Estimates", "store": "rev_rev_3m", "print_moves": true, "label": "Next-FY revenue estimate change, 3 months (%)"},
+    {"key": "eps_q_step", "family": "Estimates", "store": "eps_q_step", "calendar": "eps_q_step", "print_moves": true, "label": "Coming quarter's EPS estimate vs the last quarter (%)"},
+    {"key": "rev_q_step", "family": "Estimates", "store": "rev_q_step", "calendar": "rev_q_step", "print_moves": true, "label": "Coming quarter's revenue estimate vs the last quarter (%)"},
+    {"key": "pt_up", "family": "Street", "store": "pt_up", "calendar": "pt_up", "label": "Street target upside (%)"},
+    {"key": "pt_rev_1m", "family": "Street", "store": "pt_rev_1m", "calendar": "pt_drift_1m", "label": "Street target change, 1 month (%)"},
+    {"key": "ey_fwd", "family": "Value", "store": "ey_fwd", "label": "Forward earnings yield (%)"},
+    {"key": "fcf_margin", "family": "Value", "store": "fcf_margin", "calendar": "fcf_margin", "label": "FCF margin (%)"},
+    {"key": "p_dvc", "family": "Value", "store": "p_dvc", "label": "Move-prediction p_dvc (value / cash-flow profile)"},
+    {"key": "p_cons_w", "family": "Model", "store": "p_cons_w", "label": "Move-prediction weekly consensus"},
+    {"key": "peer_rx", "family": "Peers", "derived": "peer_rx", "label": "Mean reaction vs the market of the industry's prints in the prior peer_window_days"}
+  ],
+  "post_pointers": [
+    {"key": "eps_surprise", "family": "Print", "event": "eps_surprise", "live": "eps_surprise", "label": "EPS surprise (%)"},
+    {"key": "rev_surprise", "family": "Print", "event": "rev_surprise", "live": "rev_surprise", "label": "Revenue surprise (%)"},
+    {"key": "surprise_mix", "family": "Print", "kind": "category", "event": "surprise_mix", "live": "surprise_mix", "label": "Surprise mix EPS/revenue (B beat, M miss)"},
+    {"key": "ah_read", "family": "Session", "event": "ah_read", "live": "ah_read", "label": "After-hours change on the print night (AMC, %)"},
+    {"key": "react_fx", "family": "Session", "event": "react_fx", "live": "react_fx", "measures": ["drift_fx_28d"], "label": "Reaction vs the market (pp; on the print night the after-hours change less the tape)"}
+  ],
+  "name_fields": [
+    "symbol", "company", "ind", "market", "mcap", "earn_date", "earn_dow", "slot", "react_on", "printed", "rev_posted", "close", "day",
+    "post_chg", "m1", "runup", "rsi", "vs50", "rng", "atrp", "relvol", "pt_up", "eps_q_step", "rev_q_step", "last_surprise",
+    "rev_surprise", "surprise_mix", "eps_rev_3m", "pe_nfy", "pe_nfy_vs_ind", "pe_nfy_vs_own", "fcf_margin", "nd_ebitda",
+    "n_prints", "react_last", "react_abs_mean", "react_up", "react_hist", "lenses", "tape_state", "book_usd", "book_vs_cost"
+  ],
+  "plays_fields": [
+    "setup_cell", "setup_mean", "setup_t", "setup_n", "setup_rx_cell", "setup_rx_mean", "setup_rx_q10", "setup_rx_q90",
+    "rx_tail_usd", "mix_cell", "mix_mean", "setrx_cell", "setrx_mean", "setrx_t", "ah_q_cell", "ah_q_mean", "ah_q_q10", "ah_q_q90",
+    "react_fx", "dec_1d", "dec_7d", "pred_7d", "b7d_q20", "b7d_q80", "dec_28d", "pred_28d", "entry_low", "entry_high", "kill_px",
+    "bounce_low", "bounce_high", "bounce_kill", "first_target", "mos_own_med_pct", "mos_peer_pct"
+  ],
+  "alpha_horizons": ["1d", "7d"]
+}

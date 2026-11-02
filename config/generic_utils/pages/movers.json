@@ -49,7 +49,8 @@
      "title": "Day: Top 25 up",
      "source": {
       "duckdb": "{PACK}/movers/movers.duckdb",
-      "sql": "SELECT rank, symbol, ind, day, up_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, mix, mtp FROM movers_tails WHERE horizon='day' AND tail='leaders' ORDER BY rank"
+      "drop_missing_columns": true,
+      "sql": "SELECT rank, symbol, ind, day, up_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, last_surprise, surprise_mix, dsp, react_last, mix, mtp FROM movers_tails WHERE horizon='day' AND tail='leaders' ORDER BY rank"
      },
      "derive": [
       "left_carrier"
@@ -66,7 +67,8 @@
      "title": "Day: punished BOUNCE",
      "source": {
       "duckdb": "{PACK}/movers/movers.duckdb",
-      "sql": "SELECT rank, symbol, ind, day, down_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, mix, mtp FROM movers_tails WHERE horizon='day' AND tail='laggards' AND down_class='BOUNCE' ORDER BY rank"
+      "drop_missing_columns": true,
+      "sql": "SELECT rank, symbol, ind, day, down_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, last_surprise, surprise_mix, dsp, react_last, mix, mtp FROM movers_tails WHERE horizon='day' AND tail='laggards' AND down_class='BOUNCE' ORDER BY rank"
      },
      "derive": [
       "left_carrier"
@@ -83,7 +85,8 @@
      "title": "Day: punished CONTINUE_DOWN / MIXED",
      "source": {
       "duckdb": "{PACK}/movers/movers.duckdb",
-      "sql": "SELECT rank, symbol, ind, day, down_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, mix, mtp FROM movers_tails WHERE horizon='day' AND tail='laggards' AND down_class<>'BOUNCE' ORDER BY rank"
+      "drop_missing_columns": true,
+      "sql": "SELECT rank, symbol, ind, day, down_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, last_surprise, surprise_mix, dsp, react_last, mix, mtp FROM movers_tails WHERE horizon='day' AND tail='laggards' AND down_class<>'BOUNCE' ORDER BY rank"
      },
      "derive": [
       "left_carrier"
@@ -104,7 +107,8 @@
      "title": "Week: Top 25 up",
      "source": {
       "duckdb": "{PACK}/movers/movers.duckdb",
-      "sql": "SELECT rank, symbol, ind, w, up_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, mix, mtp FROM movers_tails WHERE horizon='w' AND tail='leaders' ORDER BY rank"
+      "drop_missing_columns": true,
+      "sql": "SELECT rank, symbol, ind, w, up_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, last_surprise, surprise_mix, dsp, react_last, mix, mtp FROM movers_tails WHERE horizon='w' AND tail='leaders' ORDER BY rank"
      },
      "derive": [
       "left_carrier"
@@ -121,7 +125,8 @@
      "title": "Week: punished BOUNCE",
      "source": {
       "duckdb": "{PACK}/movers/movers.duckdb",
-      "sql": "SELECT rank, symbol, ind, w, down_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, mix, mtp FROM movers_tails WHERE horizon='w' AND tail='laggards' AND down_class='BOUNCE' ORDER BY rank"
+      "drop_missing_columns": true,
+      "sql": "SELECT rank, symbol, ind, w, down_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, last_surprise, surprise_mix, dsp, react_last, mix, mtp FROM movers_tails WHERE horizon='w' AND tail='laggards' AND down_class='BOUNCE' ORDER BY rank"
      },
      "derive": [
       "left_carrier"
@@ -138,7 +143,8 @@
      "title": "Week: punished CONTINUE_DOWN / MIXED",
      "source": {
       "duckdb": "{PACK}/movers/movers.duckdb",
-      "sql": "SELECT rank, symbol, ind, w, down_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, mix, mtp FROM movers_tails WHERE horizon='w' AND tail='laggards' AND down_class<>'BOUNCE' ORDER BY rank"
+      "drop_missing_columns": true,
+      "sql": "SELECT rank, symbol, ind, w, down_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, last_surprise, surprise_mix, dsp, react_last, mix, mtp FROM movers_tails WHERE horizon='w' AND tail='laggards' AND down_class<>'BOUNCE' ORDER BY rank"
      },
      "derive": [
       "left_carrier"
@@ -159,7 +165,8 @@
      "title": "5D: Top 25 up",
      "source": {
       "duckdb": "{PACK}/movers/movers.duckdb",
-      "sql": "SELECT rank, symbol, ind, d5, up_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, mix, mtp FROM movers_tails WHERE horizon='d5' AND tail='leaders' ORDER BY rank"
+      "drop_missing_columns": true,
+      "sql": "SELECT rank, symbol, ind, d5, up_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, last_surprise, surprise_mix, dsp, react_last, mix, mtp FROM movers_tails WHERE horizon='d5' AND tail='leaders' ORDER BY rank"
      },
      "derive": [
       "left_carrier"
@@ -176,7 +183,8 @@
      "title": "5D: punished BOUNCE",
      "source": {
       "duckdb": "{PACK}/movers/movers.duckdb",
-      "sql": "SELECT rank, symbol, ind, d5, down_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, mix, mtp FROM movers_tails WHERE horizon='d5' AND tail='laggards' AND down_class='BOUNCE' ORDER BY rank"
+      "drop_missing_columns": true,
+      "sql": "SELECT rank, symbol, ind, d5, down_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, last_surprise, surprise_mix, dsp, react_last, mix, mtp FROM movers_tails WHERE horizon='d5' AND tail='laggards' AND down_class='BOUNCE' ORDER BY rank"
      },
      "derive": [
       "left_carrier"
@@ -193,7 +201,8 @@
      "title": "5D: punished CONTINUE_DOWN / MIXED",
      "source": {
       "duckdb": "{PACK}/movers/movers.duckdb",
-      "sql": "SELECT rank, symbol, ind, d5, down_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, mix, mtp FROM movers_tails WHERE horizon='d5' AND tail='laggards' AND down_class<>'BOUNCE' ORDER BY rank"
+      "drop_missing_columns": true,
+      "sql": "SELECT rank, symbol, ind, d5, down_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, last_surprise, surprise_mix, dsp, react_last, mix, mtp FROM movers_tails WHERE horizon='d5' AND tail='laggards' AND down_class<>'BOUNCE' ORDER BY rank"
      },
      "derive": [
       "left_carrier"
@@ -214,7 +223,8 @@
      "title": "1M: Top 25 up",
      "source": {
       "duckdb": "{PACK}/movers/movers.duckdb",
-      "sql": "SELECT rank, symbol, ind, m1, up_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, mix, mtp FROM movers_tails WHERE horizon='m1' AND tail='leaders' ORDER BY rank"
+      "drop_missing_columns": true,
+      "sql": "SELECT rank, symbol, ind, m1, up_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, last_surprise, surprise_mix, dsp, react_last, mix, mtp FROM movers_tails WHERE horizon='m1' AND tail='leaders' ORDER BY rank"
      },
      "derive": [
       "left_carrier"
@@ -231,7 +241,8 @@
      "title": "1M: punished BOUNCE",
      "source": {
       "duckdb": "{PACK}/movers/movers.duckdb",
-      "sql": "SELECT rank, symbol, ind, m1, down_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, mix, mtp FROM movers_tails WHERE horizon='m1' AND tail='laggards' AND down_class='BOUNCE' ORDER BY rank"
+      "drop_missing_columns": true,
+      "sql": "SELECT rank, symbol, ind, m1, down_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, last_surprise, surprise_mix, dsp, react_last, mix, mtp FROM movers_tails WHERE horizon='m1' AND tail='laggards' AND down_class='BOUNCE' ORDER BY rank"
      },
      "derive": [
       "left_carrier"
@@ -248,7 +259,8 @@
      "title": "1M: punished CONTINUE_DOWN / MIXED",
      "source": {
       "duckdb": "{PACK}/movers/movers.duckdb",
-      "sql": "SELECT rank, symbol, ind, m1, down_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, mix, mtp FROM movers_tails WHERE horizon='m1' AND tail='laggards' AND down_class<>'BOUNCE' ORDER BY rank"
+      "drop_missing_columns": true,
+      "sql": "SELECT rank, symbol, ind, m1, down_class, val_label, val, peer, val_vs_ind, val_vs_avg, pe_peer, pe_vs_ind, evebitda_peer, evebitda_vs_ind, pe_fwd_peer, pe_fwd_vs_ind, evebitda_fwd_peer, evebitda_fwd_vs_ind, \"left\", street_left, rr, bo, cont, fwd, street_px, target_px, tech_sma, vs50, tech_rng, rng, rsi, tech_sma200, vs200, opm, pe, pe_fwd, dte, last_surprise, surprise_mix, dsp, react_last, mix, mtp FROM movers_tails WHERE horizon='m1' AND tail='laggards' AND down_class<>'BOUNCE' ORDER BY rank"
      },
      "derive": [
       "left_carrier"

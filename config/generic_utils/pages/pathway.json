@@ -1,0 +1,110 @@
+{
+  "name": "pathway-{DAY}",
+  "page_key": "pathway",
+  "requires": "{PACK}/pathway/pathway.duckdb",
+  "title": "Pathway {DAY}",
+  "subtitle": "Where the Book is tilted against what has been paying, whether the return gap is industry choice or stock picking, whether the factor tape is turning, and which trims and starters move the tilt toward what pays. The judgment turns it into stages with triggers. Each column is one read; nothing is a sum.",
+  "sources_extra": [
+    "pathway {PACK}/pathway (tv_scan_cli.py pathway --pack {PACK} --quiet)",
+    "factor IC {PACK}/signal_lab/signal_lab.duckdb (factor_summary, factor_month, factor_days)",
+    "deterioration {PACK}/deterioration; alpha {PACK}/alpha_model/live.csv; month read {PACK}/week_plays month_ind"
+  ],
+  "tone_map": {
+    "NEW": "good", "NEW (queue)": "info", "ADD": "good", "HOLD": "info", "WATCH": "neutral", "WAIT": "neutral",
+    "HOLD_NO_ADD": "warning", "DERISK": "warning", "DERISK_INTO_PRINT": "warning", "TRIM": "warning", "EXIT": "bad", "PASS": "bad"
+  },
+  "tabs": [
+    {
+      "label": "Pathway",
+      "blocks": [
+        {"type": "callout", "from": "update.banner"},
+        {"type": "stats", "from": "pages.pathway.blocks.stats"},
+        {"type": "callout", "from": "pages.pathway.blocks.read"},
+        {"type": "table", "title": "Stages (judgment): each stage starts when the previous one is done and its trigger holds",
+         "headers": ["Stage", "When", "Action", "Trigger to move on", "Size / cash", "Evidence"],
+         "from": "pages.pathway.blocks.stages"},
+        {"type": "table", "title": "Regime triggers (judgment on the reads in the Tilt and Regime tape tabs)",
+         "headers": ["Read", "Now", "Lean back into the AI cluster when", "Go more defensive when", "Source"],
+         "from": "pages.pathway.blocks.triggers"},
+        {"type": "list", "from": "pages.pathway.blocks.checkpoints"},
+        {"type": "list", "from": "pages.pathway.blocks.rules"}
+      ]
+    },
+    {
+      "label": "Tilt",
+      "blocks": [
+        {"type": "callout", "from": "pages.pathway.blocks.tilt_read"},
+        {"type": "table", "title": "The Book's tilt per factor beside what that factor paid (tilt_month ascending: the largest cost first)",
+         "source": {"duckdb": "{PACK}/pathway/pathway.duckdb",
+                    "sql": "SELECT factor, family, book_pctl, gap, coverage_pct, ic_28d, verdict_28d, t_indep_28d, ic_up_mkt, ic_down_mkt, month, ic_month, ic_prev_month, ic_tape, ic_tape_prev, tape_pos, tape_last, tilt_month, tilt_tape FROM exposure ORDER BY tilt_month NULLS LAST",
+                    "drop_missing_columns": true}, "tone_field": "verdict_28d"}
+      ]
+    },
+    {
+      "label": "Attribution",
+      "blocks": [
+        {"type": "callout", "from": "pages.pathway.blocks.attribution_read"},
+        {"type": "table", "title": "The Book against the market: industry choice vs stock picking (NAV-weighted, today's weights)",
+         "source": {"duckdb": "{PACK}/pathway/pathway.duckdb",
+                    "sql": "SELECT horizon, mkt, book_rel, book_ind_part, book_stock_part, rel_usd, ind_part_usd, stock_part_usd, coverage_pct FROM attribution ORDER BY horizon"}},
+        {"type": "table", "title": "Per Book line: return vs the market, its industry's part and its own part",
+         "source": {"duckdb": "{PACK}/pathway/pathway.duckdb",
+                    "sql": "SELECT symbol, ind, book_usd, r_1m, mkt_r_1m, ind_r_1m, ind_part_r_1m, stock_part_r_1m, r_3m, ind_part_r_3m, stock_part_r_3m, det_seen, dd FROM lines ORDER BY book_usd DESC NULLS LAST",
+                    "drop_missing_columns": true},
+         "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"}
+      ]
+    },
+    {
+      "label": "Regime tape",
+      "blocks": [
+        {"type": "callout", "from": "pages.pathway.blocks.regime_read"},
+        {"type": "table", "title": "Market by store day (US $2B+ floor): breadth, trend, volatility, distance to the high",
+         "source": {"duckdb": "{PACK}/pathway/pathway.duckdb",
+                    "sql": "SELECT as_of, n, mkt_1d, mkt_1m, breadth_1d, above_200d, med_rvol_20, med_hi_prox FROM regime ORDER BY as_of DESC"}, "limit": 30},
+        {"type": "table", "title": "Factor tape: trailing mean of the daily 7-day IC per factor (labels lag a week)",
+         "source": {"duckdb": "{PACK}/pathway/pathway.duckdb",
+                    "sql": "SELECT as_of, max(CASE WHEN factor = 'beta' THEN ic_trail END) AS trail_beta, max(CASE WHEN factor = 'pt_up' THEN ic_trail END) AS trail_pt_up, max(CASE WHEN factor = 'rvol_20' THEN ic_trail END) AS trail_rvol_20, max(CASE WHEN factor = 'r_12m' THEN ic_trail END) AS trail_r_12m, max(CASE WHEN factor = 'hi_prox' THEN ic_trail END) AS trail_hi_prox, max(CASE WHEN factor = 'p_dvc' THEN ic_trail END) AS trail_p_dvc, max(CASE WHEN factor = 'fcf_margin' THEN ic_trail END) AS trail_fcf_margin, max(CASE WHEN factor = 'ey_fwd' THEN ic_trail END) AS trail_ey_fwd FROM factor_tape GROUP BY as_of ORDER BY as_of DESC"}, "limit": 30}
+      ]
+    },
+    {
+      "label": "Rebalance",
+      "blocks": [
+        {"type": "callout", "from": "pages.pathway.blocks.rebalance_read"},
+        {"type": "table", "title": "Trimming a Book line: how much it moves the Book's tilt (d_*_trim, a third of the line)",
+         "source": {"duckdb": "{PACK}/pathway/pathway.duckdb",
+                    "sql": "SELECT symbol, book_usd, pctl_beta, d_beta_trim, pctl_pt_up, d_pt_up_trim, pctl_rvol_20, d_rvol_20_trim, pctl_p_dvc, d_p_dvc_trim, pctl_fcf_margin, d_fcf_margin_trim, det_seen FROM lines WHERE in_store ORDER BY book_usd DESC",
+                    "drop_missing_columns": true},
+         "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+        {"type": "table", "title": "Diversifiers: $10B+, beta under the 35th percentile, p_dvc over the 70th, alpha 28d decile 9-10, no letter (the starter's effect on the tilt first)",
+         "source": {"duckdb": "{PACK}/pathway/pathway.duckdb",
+                    "sql": "SELECT symbol, ind, pctl_beta, d_beta_add, pctl_pt_up, d_pt_up_add, pctl_rvol_20, d_rvol_20_add, pctl_p_dvc, d_p_dvc_add, pctl_fcf_margin, dec_28d, pred_28d, ind_pred_28d, pe_fwd, dd, earn_date, bounce_low, bounce_high, bounce_kill FROM candidates WHERE mcap >= 1e10 AND pctl_beta <= 0.35 AND pctl_p_dvc >= 0.7 AND dec_28d >= 9 AND det_seen = '-' ORDER BY d_beta_add",
+                    "drop_missing_columns": true}, "limit": 30,
+         "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+        {"type": "table", "title": "Named candidates (the pathway call's --ids)",
+         "optional": true,
+         "source": {"duckdb": "{PACK}/pathway/pathway.duckdb",
+                    "sql": "SELECT symbol, ind, pctl_beta, d_beta_add, pctl_pt_up, d_pt_up_add, pctl_rvol_20, d_rvol_20_add, pctl_p_dvc, d_p_dvc_add, dec_28d, pred_28d, ind_pred_28d, pe_fwd, det_seen, dd, earn_date FROM candidates WHERE named ORDER BY d_beta_add",
+                    "drop_missing_columns": true},
+         "extra_columns": ["Course", "Reason"], "tone_field": "Course", "extra_from": "courses"}
+      ]
+    },
+    {
+      "label": "Sources",
+      "blocks": [
+        {"type": "list", "from": "pages.pathway.blocks.sources"}
+      ]
+    }
+  ],
+  "ledger": {
+    "auto": true,
+    "entries": [
+      {"group": "Deterioration letters", "rows": [
+        ["E", "On: next-FY EPS estimate cut by more than 1% over about 3 months (panel eps_rev_3m < -1). Off: held or raised. Unknown (?): no positive estimate 3 months ago or now."],
+        ["R", "On: next-FY revenue estimate cut by more than 1% over about 3 months (rev_rev_3m < -1). Off: held or raised. Unknown (?): no estimate."],
+        ["C", "On: free cash flow margin (ttm) under 0, the business burns cash. Off: FCF positive. Unknown (?): no FCF margin (banks, some ADRs)."],
+        ["S", "On: last reported EPS under its estimate (last_surprise < 0). Off: met or beat. Unknown (?): no surprise on file."],
+        ["?", "In det_seen only: that letter's field is empty, so the letter count and the count cells are empty for the name."]
+      ]}
+    ]
+  }
+}

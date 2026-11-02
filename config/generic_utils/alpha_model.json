@@ -1,0 +1,49 @@
+{
+  "name": "alpha_model",
+  "description": "Walk-forward cross-sectional forecast of excess return per horizon on the panel store. Each day: features as ranks, a ridge fit of that day's later excess returns; a forecast date uses only days whose labels were known by then, decayed by age and shrunk by their own t. Out-of-sample track record, baselines, calibration deciles and volatility-scaled price bands are part of every run.",
+  "universe": {"min_market_cap_usd": 1000000000, "min_names": 200},
+  "horizons": ["1d", "7d", "28d", "56d"],
+  "features": [
+    "r_1d", "r_1w", "r_1m", "r_3m", "r_12_1",
+    "vs50", "vs200", "rng52", "rsi",
+    "relvol", "vol_trend", "dollar_vol", "size",
+    "rvol_20", "max_20", "beta",
+    "ey_fwd", "ebitda_yield", "sales_yield", "fcf_yield",
+    "rev_yoy", "eps_yoy", "eps_nfy_g", "rev_nfy_g",
+    "opm", "fcf_margin", "nd_ebitda", "roe",
+    "pt_up", "pt_spread", "rec_tech",
+    "eps_rev_1m", "eps_rev_3m", "rev_rev_3m", "pt_rev_1m",
+    "last_surprise", "rev_surprise", "eps_q_step", "dsp", "dte", "react_last", "since_print",
+    "p_cons_d", "p_cons_w", "p_cons_m", "p_bo", "p_cont", "p_fwd", "p_early", "p_sms", "p_recov", "p_exh",
+    "p_frag", "p_asym", "p_dvc", "p_qvc", "p_def", "p_conv",
+    "r_1m_ri", "ey_fwd_ri", "pt_up_ri", "eps_rev_3m_ri"
+  ],
+  "fit": {
+    "mode": "ic",
+    "winsor_pct": 1.0,
+    "min_coverage": 0.5,
+    "select_t": 2.0,
+    "top_k": 0,
+    "calib_days": 30,
+    "ridge_lambda": 0.1,
+    "lookback_days": 150,
+    "half_life_days": 60,
+    "min_train_days": 15,
+    "embargo_days": 0,
+    "shrink_c": 4.0,
+    "chosen_from": "2026-10-27 sweep of 9 walk-forward variants (ic select_t 1.5/2/2.5, top_k 5/8, half-life 25/40/60; ridge lambda 0.1/5): ridge lost to the best single feature at every horizon; ic select_t 2 half-life 60 was among the best at 7d and 28d. Re-check with sweep after more history."
+  },
+  "baselines": ["p_def", "p_dvc", "p_cons_w", "last_surprise", "r_1m"],
+  "bands": {"quantiles": [0.2, 0.5, 0.8], "deciles": 10, "vol_field": "rvol_20", "vol_fallback": "atrp", "min_obs": 200},
+  "state": {"recent_days": 20, "ok_t": 2.0},
+  "drivers": 3,
+  "live_log": "logs/tradingview_analysis/alpha_model/live_log.duckdb",
+  "joins": [
+    {"name": "pack_tape", "duckdb": "{PACK}/briefing_pack.duckdb", "table": "us2b_tape",
+     "fields": {"left": "left", "rr": "rr", "mix": "mix", "mtp": "mtp", "bo": "bo"}},
+    {"name": "book", "duckdb": "{PACK}/briefing_pack.duckdb", "table": "book",
+     "fields": {"value_usd": "book_usd", "vs_cost": "book_vs_cost"}},
+    {"name": "earnings_week", "duckdb": "{PACK}/earnings_week/earnings_week.duckdb", "table": "calendar",
+     "fields": {"earn_date": "earn_date", "slot": "slot", "week": "earn_week"}}
+  ]
+}

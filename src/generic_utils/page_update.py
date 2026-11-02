@@ -10,6 +10,10 @@ see canvas_runs) listing only what moved:
 - field moves past `diff_thresholds` (close %, leftover, rr, bo, RSI, range, vs50, peer %)
 - label flips (up_class, down_class, peer, mix, MTP, mesh)
 - names that entered or left a watched list without a course
+- on a post-close pack, judged names that printed after the close and moved past `after_hours.min_abs_pct`
+  after hours (held lines and capital courses always; other courses at twice the floor)
+- judged names whose deterioration letters (`det_seen`, PACK/deterioration) changed between the packs
+  (held lines and capital courses always reviewed; others listed as minor)
 
 The agent reads that report, edits only the flagged names in the judgment file,
 sets `reviewed_pack`, and re-renders. Unflagged names keep their reasons.
@@ -138,6 +142,54 @@ def diff_symbol(
     return rec
 
 
+def after_hours_moves(pack: str, spec: Mapping[str, Any] | None) -> dict[str, dict[str, Any]]:
+    """symbol -> {post_chg, held} for names that printed after the close on the pack's scan day (reaction session
+    after it) and moved at least ``min_abs_pct`` after hours. A session-time pack has none: its after-hours
+    field is the evening before, and the cash close already holds that reaction."""
+    from generic_utils.scan_sources import rows_from_csv
+    from generic_utils.task_dag import substitute
+
+    if not spec or not spec.get("csv"):
+        return {}
+    path = REPO_ROOT / substitute(spec["csv"], {"PACK": pack, "PLAYBOOK": f"{pack}/playbook"})
+    meta = REPO_ROOT / pack / "briefing_pack.json"
+    if not path.exists() or not meta.exists():
+        return {}
+    scan_day = str(json.loads(meta.read_text(encoding="utf-8")).get("created_at_utc") or "")[:10]
+    floor = float(spec.get("min_abs_pct", 3.0))
+    out: dict[str, dict[str, Any]] = {}
+    for row in rows_from_csv(path):
+        post, on = to_float(row.get("post_chg")), str(row.get("react_on") or "")[:10]
+        if str(row.get("printed")).lower() not in ("true", "1") or not on or on <= scan_day or post is None or abs(post) < floor:
+            continue
+        out[str(row.get("symbol"))] = {"post_chg": round(post, 2), "held": (to_float(row.get("book_usd")) or 0) > 0}
+    return out
+
+
+def letter_changes(old_pack: str, new_pack: str, spec: Mapping[str, Any] | None) -> dict[str, dict[str, Any]]:
+    """symbol -> {old, new, held} where the deterioration letters (``det_seen``, generic_utils.deterioration)
+    differ between the two packs. A name missing on either side is not a change (it left or joined the table)."""
+    from generic_utils.scan_sources import rows_from_duckdb
+    from generic_utils.task_dag import substitute
+
+    if not spec or not spec.get("db"):
+        return {}
+
+    def letters(pack: str) -> dict[str, dict[str, Any]]:
+        path = REPO_ROOT / substitute(spec["db"], {"PACK": pack, "PLAYBOOK": f"{pack}/playbook"})
+        if not path.exists():
+            return {}
+        try:
+            rows = rows_from_duckdb(path, 'SELECT symbol, det_seen, in_book FROM "names" WHERE det_seen IS NOT NULL')
+        except Exception:  # an older pack without the column
+            return {}
+        return {str(r["symbol"]): r for r in rows}
+
+    old, new = letters(old_pack), letters(new_pack)
+    return {sym: {"old": old[sym]["det_seen"], "new": row["det_seen"], "held": str(row.get("in_book")).lower() in ("true", "1")}
+            for sym, row in new.items() if sym in old and str(old[sym]["det_seen"]) != str(row["det_seen"])}
+
+
 def judged_symbols(judgment: Mapping[str, Any], priors: Mapping[str, Any] | None, index: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     """symbol -> {course, source}. Priors use bare tickers; map them onto index symbols."""
     out = {sym: {"course": (c or {}).get("Course"), "source": "courses"} for sym, c in (judgment.get("courses") or {}).items()}
@@ -165,6 +217,9 @@ def build_update(
     rows = []
     capital = {str(c).upper() for c in cfg.get("review_courses") or []}
     big = {k: v * float(cfg.get("minor_flag_multiplier") or 2.0) for k, v in cfg["diff_thresholds"].items()}
+    after = after_hours_moves(new_pack, cfg.get("after_hours"))
+    ah_floor = float((cfg.get("after_hours") or {}).get("min_abs_pct", 3.0))
+    letters = letter_changes(old_pack, new_pack, cfg.get("deterioration"))
     for sym, info in judged.items():
         rec = diff_symbol(sym, old_index.get(sym), new_index.get(sym), fields=cfg["diff_fields"], thresholds=cfg["diff_thresholds"])
         rec = {**rec, "course": info["course"], "judged_in": info["source"]}
@@ -182,9 +237,31 @@ def build_update(
                         and not f.startswith("mesh ")]
             if not escalate:
                 rec["review"], rec["minor"] = False, True
+        ah = after.get(sym)
+        if ah:
+            # The cash close does not hold an after-close print yet: the after-hours move is the news.
+            rec["flags"] = rec["flags"] + [f"after-hours {ah['post_chg']:+.1f}% (printed after the close)"]
+            rec["post_chg"] = ah["post_chg"]
+            if course in capital or ah["held"] or abs(ah["post_chg"]) >= 2 * ah_floor:
+                rec["review"] = True
+                rec.pop("minor", None)
+            else:
+                rec["minor"] = not rec["review"]
+        lt = letters.get(sym)
+        if lt:
+            # A letter beyond price turning on or off is the review trigger for a held line, not the price.
+            rec["flags"] = rec["flags"] + [f"letters {lt['old']}->{lt['new']}"]
+            if course in capital or lt["held"]:
+                rec["review"] = True
+                rec.pop("minor", None)
+            elif not rec["review"]:
+                rec["minor"] = True
         rows.append(rec)
-    rank = {"THROUGH_KILL": 0}
-    rows.sort(key=lambda r: (not r["review"], min([rank.get(f, 1) for f in r["flags"]] or [9]), r["symbol"]))
+
+    def rank(flag: str) -> int:
+        return 0 if flag == "THROUGH_KILL" or flag.startswith(("after-hours", "letters ")) else 1
+
+    rows.sort(key=lambda r: (not r["review"], min([rank(f) for f in r["flags"]] or [9]), r["symbol"]))
     old_lists = watch_members(old_pack, cfg["watch_lists"])
     new_lists = watch_members(new_pack, cfg["watch_lists"])
     moves = []

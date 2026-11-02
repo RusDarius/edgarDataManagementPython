@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from generic_utils.derive import implied_price
+from generic_utils.print_pointers import POINTER_COLUMNS, attach_print_pointers
 from generic_utils.symbol_identity import display_id
 
 from .continuity import (
@@ -18,8 +19,9 @@ from .continuity import (
     map_mix_to_naive_book_action,
     prior_action_for,
 )
-from .discovery import BRIEFING_RUNS, LockedSources, lock_sources
+from .discovery import BRIEFING_RUNS, lock_sources
 from .extract import (
+    _scan_day,
     extract_all_fields,
     extract_conviction,
     extract_profile_weeks,
@@ -93,6 +95,7 @@ TAPE_FIELDS = (
     "atr",
     "atrp",
     "pt",
+    *POINTER_COLUMNS,
 )
 
 GOTCHAS = [
@@ -213,6 +216,7 @@ def _compact_name(row: dict[str, Any]) -> dict[str, Any]:
         "tech_sma200",
         "tech_rng",
         "tech_rsi",
+        *POINTER_COLUMNS,
     )
     from generic_utils.forward_fundamentals import PACK_FORWARD_KEYS
     from generic_utils.setup import FORWARD_PEER_FIELDS, TV_AS_IS_PEER_FIELDS
@@ -431,6 +435,7 @@ def _book_rows(
                 "atr": name.get("atr"),
                 "atrp": name.get("atrp"),
                 "beta": name.get("beta"),
+                **{key: name.get(key) for key in POINTER_COLUMNS},
                 "continuity": cont,
                 "event_alert": name.get("dte") is not None and name["dte"] <= 2,
             }
@@ -796,6 +801,12 @@ def compile_briefing_pack(
     priors = load_prior_actions(sources.priors_path)
     extra_symbols = list(holdings.keys()) + list(mtp.keys())
     af_rows = extract_all_fields(sources, extra_symbols=extra_symbols)
+    # last-print reaction, drift since it, typical print move: panel store when current, else the day files ($1B+)
+    print_history = attach_print_pointers(
+        af_rows,
+        scan_day=_scan_day(sources.all_fields_day_label),
+        symbols=[str(r["symbol"]) for r in af_rows if (_f(r.get("mcap")) or 0) >= 1_000_000_000],
+    )
     profiles = extract_profile_weeks(sources)
     conviction = extract_conviction(sources)
     regime = extract_regime(sources)
@@ -805,7 +816,6 @@ def compile_briefing_pack(
     from generic_utils.risk import (
         attach_book_risk,
         cash_from_holdings_config,
-        slim_position_row,
     )
 
     cash = cash_from_holdings_config(sources.holdings_config)
@@ -899,6 +909,7 @@ def compile_briefing_pack(
             "watch": len(watch),
             "book": len(book),
         },
+        "print_history": print_history,
     }
     tape = _tape_for_movers(us2b, names)
     movers_pack, movers_flat = _build_movers(tape, MOVERS_DAY_RECIPE)

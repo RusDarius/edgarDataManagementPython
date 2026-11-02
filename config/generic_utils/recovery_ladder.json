@@ -1,0 +1,12 @@
+{
+  "_note": "Recovery ladder knobs (generic_utils.recovery_ladder). Add sizes and gain targets are the caller's scenarios, not advice and not cutoffs; the course stays the judgment's.",
+  "add_usd": [1000, 2500, 5000],
+  "add_levels": ["close", "bounce_high", "bounce_low"],
+  "gain_pct": [10],
+  "kill_fields": ["bounce_kill", "kill_px"],
+  "solve_targets": ["sma50", "half_px", "street_px"],
+  "solve_at": ["bounce_high", "close"],
+  "level_fields": ["sma50", "sma200", "first_target", "half_px", "hi52", "street_px", "bounce_low", "bounce_high", "bounce_kill", "kill_px"],
+  "state_fields": ["dd", "det_seen", "let_cell", "let_n_28d", "let_fx_28d_mean", "let_fx_28d_q10", "let_fx_56d_mean", "let_p_dn_56d",
+                   "let_p_half_56d", "trend", "street", "earn_date", "pe_fwd"]
+}

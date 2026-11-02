@@ -32,6 +32,16 @@ python src/generic_utils/tv_scan_cli.py risk --holdings config/holdings_scoring/
 
 Recipe (ladder sizes, not eligibility): `config/generic_utils/book_risk.json`.
 
+**Downside (how much further can it fall):** `python src/generic_utils/tv_scan_cli.py downside --pack PACK --line` (PACK/downside, refresh
+suite `downside`; `generic_utils/downside_risk.py`, knobs `config/generic_utils/downside_risk.json`). From the panel store: `steps` (the
+cap-weighted US floor, the median name, the AI cluster and today's Book at today's weights, with drawdowns), `windows` / `dist` (1-56 day
+windows: quantiles, worst, `n_indep`), `episodes` + `replay` (the store's deepest drawdowns and each Book line through them), `lines`
+(store beta, down-session beta, TradingView beta, one-month volatility, own 28-day q05 / worst, levels under the close with dollars,
+`mkt<k>_usd`), `scenarios` (a market move -> the Book's dollars at each beta) and `plans` (each capital plan's beta dollars;
+`spec.plans_after`). Read `beta_nav_pct` first: a Book at 185% moves about 1.85x the market whatever its cash. The store holds no 10%
+index fall, so its tails are a floor for the bad case; pair them with OUTSIDE index levels and base rates. Page pattern:
+`logs/canvases/20261030/1924_update/downside-risk-20261030.json` (hand spec; a `chart` block draws `steps` drawdowns).
+
 ## Deliverables (same turn — do not announce then stop)
 
 RISK is a canvas-first suite, like DAILY and MOVERS (3M).

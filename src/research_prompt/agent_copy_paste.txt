@@ -180,7 +180,12 @@ Manual: briefing_pack.duckdb + overview.log next to the pack JSON.
 
 
 --- BEST TRADES (DAILY + MOVERS + PLAYBOOK + GMV, short to mid term, canvas) ---
-Fresh data, all four pages, outside wisdom, best trades long and short.
+Fresh data, every page, outside wisdom, best trades long and short. This is the daily super suite: the same run
+also covers yesterday's calls (play review), pre-earnings plays tonight / this week / next week (week plays),
+the catalyst outlook and month leaders as a regime guide, the alpha model and signal lab state, the Book's
+deterioration (price-only drawdown vs deterioration beyond price, cut / hold / double-down with both paths),
+the pathway (factor tilt vs what pays, picking vs industry, stages with regime triggers),
+capital allocation and recycle, and a dated findings_log entry.
 One command does the refresh, opens the run folder and fills the prompt:
   python src/run_operator_day.py --agent --mode full                 # headless Claude run
   python src/run_operator_day.py --agent --mode full --print-prompt  # refresh, then paste the printed prompt here
@@ -719,6 +724,181 @@ Write courses and pages.gmv blocks (focus_0 stats, focus_1 callout, focus_2 tabl
 evidence_0) into the day judgment, then:
   python src/generic_utils/tv_scan_cli.py page --template gmv --day YYYYMMDD --judgment JUDGMENT --out-dir RUN_DIR --strict
 EXCHANGE:TICKER everywhere. Daily budget still binds. No logs/_tmp_*.py.
+
+
+--- EARNINGS WEEK (every print this week + next: slot, run-up, value, past reactions, suite joins) ---
+Earnings-week scan. Event plays use the Daily's event budget (0-2). Not a second NEW budget, not a 0-100.
+
+Output: canvas output
+
+@.claude/skills/earnings-week/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
+
+Names I care about: <tickers>
+1. python src/generic_utils/tv_scan_cli.py page-run --day YYYYMMDD --mode ide   (RUN_DIR)
+2. python src/generic_utils/tv_scan_cli.py earnings-week --pack latest --ids <names> --line
+3. Read PACK/earnings_week with named --db ... --line and the page orders (no ad-hoc SQL). Pick the focus set;
+   name-levels --ids <focus> --out-dir PACK/earnings_week/name_levels --quiet.
+4. OUTSIDE: dates, guidance, consensus and narrative for the named and focus names (dated, linked).
+5. judgment-skeleton --templates earnings_week --out RUN_DIR/judgment.json; fill courses, picks, named_ids,
+   focus_ids, capital_plan (preview with capital-plan --judgment ... --out-dir RUN_DIR/capital_plan_event).
+6. page --template earnings_week --day YYYYMMDD --judgment RUN_DIR/judgment.json --out-dir RUN_DIR --strict
+EXCHANGE:TICKER everywhere. $5,000 starter / about $1,000 add as advice. No logs/_tmp_*.py.
+
+
+--- WEEK PLAYS (short-term earnings trades for the rest of the week + Book verdicts) ---
+Plays for the rest of the week, entry band, kill, upside and financial risk per name, and a verdict per Book line.
+Uses the Daily's budgets (0-2 NEW, 0-2 event); not a second budget, not a 0-100.
+
+Output: canvas output
+
+@.claude/skills/earnings-week/SKILL.md
+@.claude/skills/alpha-model/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
+
+Names I care about: <tickers>
+1. python src/generic_utils/tv_scan_cli.py page-run --day YYYYMMDD --mode ide   (RUN_DIR)
+2. python src/generic_utils/tv_scan_cli.py week-plays --pack latest --ids <names> --line   (the refresh already wrote PACK/week_plays)
+   python src/generic_utils/tv_scan_cli.py play-review --pack latest --line   (yesterday's list and courses vs this pack; fill review_read / review_lessons)
+3. Read documentation/market_insights/regime_playbook.md section 3 and earnings_playbook.md; then the page screens
+   (best pre-print cell, post-print by react_fx, Book, Month leaders: month_ind / month) with named --db PACK/week_plays/week_plays.duckdb --table plays|book|month --line.
+4. OUTSIDE: Fed / macro calendar and the shortlist's guidance (dated, linked); timing and Grade only.
+5. Fill logs/canvases/YYYYMMDD/judgment.json: courses, pages.week_plays.play_ids and blocks (plays, notes, verdicts,
+   sequence, rules, stats, read, cash, macro, book_read, sources), capital_plan.capital_plan_week; preview with
+   capital-plan --judgment J --key capital_plan_week --pack PACK/briefing_pack.json --out-dir PACK/capital_plan_week.
+6. page-all --day YYYYMMDD --judgment J --out-dir RUN_DIR --strict
+EXCHANGE:TICKER everywhere. $5,000 starter / about $1,000 add as advice. No logs/_tmp_*.py.
+
+
+--- DETERIORATION (Book drawdowns: only price, or the business too; cut / hold / double-down) ---
+For every Book line and the names I name: the drawdown from the 52-week high, the letters beyond price
+(E EPS estimate cut, R revenue estimate cut, C negative FCF, S last EPS miss), what that state did next on
+the panel store (mean excess, the bad case, odds of a further -10% and of regaining half the gap), the
+dollars that is on the line, the recovery and kill levels, and a verdict with both paths.
+Not a second budget, not a 0-100.
+
+Output: canvas output
+
+@.claude/skills/deterioration/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
+
+Names I care about: <tickers>
+1. python src/generic_utils/tv_scan_cli.py page-run --day YYYYMMDD --mode ide   (RUN_DIR)
+2. python src/generic_utils/tv_scan_cli.py deterioration --pack latest --ids <names> --line
+   (the refresh already wrote PACK/deterioration for the Book; record this call in the judgment `scans`)
+3. Read documentation/market_insights/deterioration_playbook.md; the Evidence tab cells (count, market, 12M run, letters).
+4. OUTSIDE on the names with letters or a print inside 7 days (dated, linked); timing and Grade only.
+5. Fill pages.deterioration blocks (stats, read, verdicts, concentration, path, rules, the tab callouts) and courses;
+   capital_plan rows for any cut, run through capital-plan.
+6. page-all --day YYYYMMDD --judgment J --out-dir RUN_DIR --strict
+EXCHANGE:TICKER everywhere. No logs/_tmp_*.py.
+
+
+--- PATHWAY (the investing path from here: tilt vs what pays, picking vs industry, stages with triggers) ---
+Where the Book leans by factor and what each lean paid, whether the return gap is the industries or the picks,
+whether the factor tape is turning, which trims and starters move the tilt toward what pays, and a staged plan
+with regime triggers. Not a second budget, not a 0-100.
+
+Output: canvas output
+
+@.claude/skills/pathway/SKILL.md
+@.claude/skills/deterioration/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
+
+Candidates I care about: <tickers>
+1. python src/generic_utils/tv_scan_cli.py page-run --day YYYYMMDD --mode ide   (RUN_DIR)
+2. python src/generic_utils/tv_scan_cli.py pathway --pack latest --ids <candidates> --line   (record the call in `scans`)
+3. Read documentation/market_insights/investing_pathway.md and regime_playbook.md section 5.
+4. Price the diversifiers: name-levels --pack latest --ids <shortlist> --quiet (bands, kills); courses for each.
+5. Fill pages.pathway (stages, triggers, stats, read, checkpoints, rules, tab callouts, sources);
+   capital_plan.capital_plan_pathway rows, then capital-plan --judgment J --key capital_plan_pathway --pack PACK/briefing_pack.json.
+6. page-all --day YYYYMMDD --judgment J --out-dir RUN_DIR --strict
+EXCHANGE:TICKER everywhere. One NEW per Daily stays the budget. No logs/_tmp_*.py.
+
+
+--- CATALYST OUTLOOK (earnings + catalysts today / this week / next week; build-up and 4-6 week positioning) ---
+Shortlist in chat, detail on the page. Uses the Daily's budgets (0-2 NEW, 0-2 event); next week's events and the
+build queue are WATCH / NEW (queue) lines, not a second budget. Not a 0-100.
+
+Output: canvas output
+
+@.claude/skills/catalyst-outlook/SKILL.md
+@.claude/skills/earnings-week/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
+
+Names I care about: <tickers>
+1. python src/generic_utils/tv_scan_cli.py page-run --day YYYYMMDD --mode ide   (RUN_DIR)
+2. python src/generic_utils/tv_scan_cli.py outlook --pack latest --ids <names> --line   (the refresh already wrote PACK/outlook)
+3. OUTSIDE: dated catalysts the day files cannot see (central banks, CPI / jobs, index reviews, PDUFA, conferences);
+   append each to config/generic_utils/catalyst_calendar.json with status and source, then re-run step 2.
+4. Read the page views (This week, Next week, Build-up, Other catalysts, Overlooked, Positioning) with
+   named --db PACK/outlook/outlook.duckdb --table names --ids ... --line; never print whole tables.
+5. Fill logs/canvases/YYYYMMDD/judgment.json pages.outlook (ids, stats, read, shortlist, positioning, outside, rules,
+   per-tab texts, sources) and courses; page-all --day YYYYMMDD --judgment J --out-dir RUN_DIR --strict.
+EXCHANGE:TICKER everywhere. No logs/_tmp_*.py.
+
+
+--- PRINT NIGHT (deep dive on tonight's reporters: pre-earnings decision matrix, then the digest) ---
+Every name whose print reaction lands on the next session, with the measured pointers it sits on. Uses the Daily's
+event budget; everything else is WATCH with the post-print band. Arrows and counts are measured cells, not a score.
+
+Output: canvas output
+
+@.claude/skills/catalyst-outlook/SKILL.md
+@.claude/skills/earnings-week/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
+
+Names I care about: <tickers>
+1. python src/generic_utils/tv_scan_cli.py page-run --day YYYYMMDD --mode ide   (RUN_DIR)
+2. python src/generic_utils/tv_scan_cli.py print-night --pack latest --ids <names> --line
+   (--react-on today the morning after; --sessions 5 for the week; the refresh already wrote PACK/print_night)
+3. Read the page's Tonight screens (Hold 28d leans up, 7d leans up, Leans down, Book lines printing, Quiet past prints),
+   then for each candidate the families, the down list, tail_starter_usd / own_move_starter_usd and the bounce band.
+4. Book lines printing: hold vs DERISK into the print (earnings_playbook How to use 4-5); polar rule and sticky DERISK bind.
+5. Fill pages.outlook.blocks.tonight_read / tonight (and digest_read after the print) and courses.
+6. Print brief page: python src/generic_utils/tv_scan_cli.py print-brief --pack latest --ids <names> --line. For the Book's prints and
+   the names that could take capital only, add pages.print_brief.notes {id: [OUTSIDE lines with date and source]}: the guide,
+   consensus by source, report-date conflicts, what the print has to show. Set pages.print_brief.ids (Focus order), read, stats, sources.
+7. page-all --day YYYYMMDD --judgment J --out-dir RUN_DIR --strict.
+EXCHANGE:TICKER everywhere. No logs/_tmp_*.py.
+
+
+--- SIGNAL LAB (what has worked: feature IC, prints, pack lists) ---
+Backward evidence. Pointers change Grade or reading order, never a filter, size or second budget. Not a 0-100.
+
+Output: canvas output
+
+@.claude/skills/signal-lab/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
+
+Question: <what to test, e.g. does last_surprise lead 7d returns; did the BOUNCE class pay>
+1. python src/generic_utils/tv_scan_cli.py page-run --day YYYYMMDD --mode ide   (RUN_DIR)
+2. python src/generic_utils/tv_scan_cli.py signal-lab --pack latest --line   (add --first-day / --studies to narrow)
+3. Read PACK/signal_lab/highlights.log, then the tables the question needs (grep queries.txt; no ad-hoc SQL on
+   the store; a new feature is a SQL line in config/generic_utils/panel_store.json, a new list one in signal_lab.json).
+4. judgment-skeleton --templates signal_lab --out RUN_DIR/judgment.json; fill pages.signal_lab.blocks (read,
+   pointers with t and n_indep, sources).
+5. page --template signal_lab --day YYYYMMDD --judgment RUN_DIR/judgment.json --out-dir RUN_DIR --strict
+EXCHANGE:TICKER everywhere. No logs/_tmp_*.py.
+
+
+--- ALPHA MODEL (walk-forward forecast, bands, model view on named / Book names) ---
+Forecast per horizon with its own track record. pred is its own order: never summed with rr / bo / left, never
+a gate or a size; NEW / ADD / event stay inside the Daily's one budget. Not a 0-100.
+
+Output: canvas output
+
+@.claude/skills/alpha-model/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
+
+Names I care about: <tickers>
+1. python src/generic_utils/tv_scan_cli.py page-run --day YYYYMMDD --mode ide   (RUN_DIR)
+2. python src/generic_utils/tv_scan_cli.py alpha-model --pack latest --ids <names> --line
+3. Read state first (lean on a horizon only when OK and beats_baselines), then deciles, weights, the named rows.
+4. judgment-skeleton --templates alpha_model --out RUN_DIR/judgment.json; fill pages.alpha_model.blocks (read,
+   stats, sources) and named_ids; courses only for names you would act on (polar rule stands).
+5. page --template alpha_model --day YYYYMMDD --judgment RUN_DIR/judgment.json --out-dir RUN_DIR --strict
+EXCHANGE:TICKER everywhere. $5,000 starter / about $1,000 add as advice. No logs/_tmp_*.py.
 
 
 --- DEEP DIVE (named themes / tickers: discount, bounce band, kill, add, trim) ---

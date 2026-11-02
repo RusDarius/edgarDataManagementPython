@@ -4,18 +4,10 @@
   "portfolio_currency": "USD",
   "description": "Current book — set invested_sum/average_price in their currencies; portfolio aggregates in USD. Use optional symbol (EXCHANGE:TICKER) when ticker alone is ambiguous. Optional instrument_type is stock (default) or etf; ETFs join the latest ETF analysis scan.",
   "cash_position": {
-    "value": 12400,
+    "value": 25000,
     "currency": "USD"
   },
   "holdings": [
-    {
-      "ticker": "UNH",
-      "sleeve": "core",
-      "invested_sum": 12004.7,
-      "invested_currency": "USD",
-      "average_price": 320,
-      "price_currency": "USD"
-    },
     {
       "ticker": "MU",
       "sleeve": "core",
@@ -78,34 +70,44 @@
       "notes": "First Solar"
     },
     {
-      "ticker": "MMS",
-      "symbol": "NYSE:MMS",
+      "ticker": "RMBS",
+      "symbol": "NASDAQ:RMBS",
       "sleeve": "core",
       "invested_sum": 7000,
       "invested_currency": "USD",
-      "average_price": 61.17,
+      "average_price": 90.4,
       "price_currency": "USD",
-      "notes": "MMS"
+      "notes": "RMBS"
     },
     {
-      "ticker": "DOX",
-      "symbol": "NASDAQ:DOX",
-      "sleeve": "core",
-      "invested_sum": 5000,
-      "invested_currency": "USD",
-      "average_price": 62.78,
-      "price_currency": "USD",
-      "notes": "Amdocs"
-    },
-    {
-      "ticker": "BRBR",
-      "symbol": "NYSE:BRBR",
+      "ticker": "GOOG",
+      "symbol": "NASDAQ:GOOG",
       "sleeve": "core",
       "invested_sum": 7000,
       "invested_currency": "USD",
-      "average_price": 9.56,
+      "average_price": 309.16,
       "price_currency": "USD",
-      "notes": "BRBR"
+      "notes": "GOOG"
+    },
+    {
+      "ticker": "STRL",
+      "symbol": "NASDAQ:STRL",
+      "sleeve": "core",
+      "invested_sum": 8000,
+      "invested_currency": "USD",
+      "average_price": 384.5,
+      "price_currency": "USD",
+      "notes": "STRL"
+    },
+    {
+      "ticker": "GEV",
+      "symbol": "NYSE:GEV",
+      "sleeve": "core",
+      "invested_sum": 7000,
+      "invested_currency": "USD",
+      "average_price": 989.5,
+      "price_currency": "USD",
+      "notes": "GEV"
     },
     {
       "ticker": "VUAA",

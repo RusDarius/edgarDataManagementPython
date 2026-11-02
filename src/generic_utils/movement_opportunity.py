@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from generic_utils.derive import apply_derived, leftover_carrier, pct_vs
+from generic_utils.print_pointers import snapshot_pointers
 from generic_utils.ranking import group_capped_top_n, to_float
 from generic_utils.run_export import load_json_recipe
 from generic_utils.setup import attach_setup
@@ -58,6 +59,15 @@ LOAD_FIELDS: tuple[str, ...] = (
     "earnings_release_next_date",
     "earnings_release_next_trading_date_fq",
     "earnings_release_next_calendar_date",
+    "earnings_release_next_time",
+    "earnings_release_date",
+    "eps_surprise_percent_fq",
+    "earnings_per_share_fq",
+    "earnings_per_share_forecast_fq",
+    "total_revenue_fq",
+    "revenue_forecast_fq",
+    "earnings_per_share_forecast_next_fq",
+    "revenue_forecast_next_fq",
     "price_earnings_ttm",
     "net_income_ttm",
     "net_income_yoy_growth_ttm",
@@ -851,6 +861,8 @@ def prepare_tape(
     )
     derived = apply_derived(joined, refresh=True)
     dated = attach_dte(derived, scan_day)
+    for row in dated:
+        row.update(snapshot_pointers({**row, "earn_next": row.get("earn")}, scan_day))
     spanned = attach_span(dated, span_rows)
     setup = attach_setup(spanned, peer_rows=peer_rows)
     return score_tape(setup, spec)

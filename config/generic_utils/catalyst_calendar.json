@@ -1,0 +1,169 @@
+{
+  "_note": "Dated non-earnings catalysts (OUTSIDE). Earnings, ex-dividend and IPO lockup dates come from the day files; this file holds what they cannot see: macro releases, central banks, index reviews, regulatory decisions, conferences. One row per event: date (YYYY-MM-DD, the session it lands in), kind (macro / central_bank / policy / index / regulatory / conference / commodity / market), event, status (confirmed / estimated / disputed), source (where the date was read, with the read date), optional symbols (EXCHANGE:TICKER the event is about) and read (what it moves). Append, do not rewrite; mark a moved date 'disputed' with both sources. Timing and Grade only: never a sort key or a size.",
+  "events": [
+    {
+      "date": "2026-10-28",
+      "kind": "central_bank",
+      "event": "FOMC held 3.75-4.00% (10-2: Cook and Hammack dissented for a hike); statement: activity 'expanding at a strong pace', inflation elevated",
+      "status": "confirmed",
+      "source": "CNBC / Yahoo Finance live, read 2026-10-28 18:10 UTC",
+      "read": "Hawkish hold: December hike odds (about 75-77%) more likely up than down; long-duration growth and the 10-year (5.0%) are the tell."
+    },
+    {
+      "date": "2026-10-29",
+      "kind": "central_bank",
+      "event": "ECB decision",
+      "status": "confirmed",
+      "source": "Admiral Markets central-banks week, read 2026-10-28",
+      "read": "EUR, European banks (BME:SAN printed B/B)."
+    },
+    {
+      "date": "2026-10-30",
+      "kind": "central_bank",
+      "event": "Bank of Japan decision",
+      "status": "confirmed",
+      "source": "Admiral Markets central-banks week, read 2026-10-28",
+      "read": "Yen carry, global long yields."
+    },
+    {
+      "date": "2026-11-01",
+      "kind": "commodity",
+      "event": "OPEC+ (seven countries) monthly meeting on December output",
+      "status": "confirmed",
+      "source": "OPEC press release 4 Oct 2026",
+      "read": "Brent above $100; oil producers and refiners lead the month read."
+    },
+    {
+      "date": "2026-11-03",
+      "kind": "policy",
+      "event": "US midterm elections",
+      "status": "confirmed",
+      "source": "Ameriprise / CMC Markets, read 2026-10-28",
+      "read": "Healthcare, energy, defense; uncertainty fades into the vote historically."
+    },
+    {
+      "date": "2026-11-04",
+      "kind": "macro",
+      "event": "Treasury quarterly refunding announcement",
+      "status": "estimated",
+      "source": "first-Wednesday-of-November pattern; not checked",
+      "read": "Term premium; 10-year near 5%."
+    },
+    {
+      "date": "2026-11-06",
+      "kind": "macro",
+      "event": "October jobs report (Employment Situation)",
+      "status": "estimated",
+      "source": "first-Friday pattern; BLS schedule not checked",
+      "read": "December hike odds (about 77%)."
+    },
+    {
+      "date": "2026-11-10",
+      "kind": "macro",
+      "event": "October CPI 8:30 ET",
+      "status": "confirmed",
+      "source": "financecalendar / thriveinmarkets citing BLS, read 2026-10-28",
+      "read": "December hike odds; September CPI was 3.7%."
+    },
+    {
+      "date": "2026-11-11",
+      "kind": "index",
+      "event": "MSCI November index review announcement (effective 1 Dec)",
+      "status": "confirmed",
+      "source": "MSCI review dates via Asianet, read 2026-10-28",
+      "read": "Adds / deletes trade into the 30 Nov close."
+    },
+    {
+      "date": "2026-11-14",
+      "kind": "regulatory",
+      "event": "PDUFA: ivonescimab + chemo, EGFR-mutated NSCLC (Saturday target date)",
+      "status": "confirmed",
+      "source": "theraradar / company release, read 2026-10-28",
+      "symbols": [
+        "NASDAQ:SMMT"
+      ],
+      "read": "Binary for the name; read-through to PD-1 x VEGF bispecifics."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "earnings_outside",
+      "event": "NASDAQ:NVDA Q3 FY2027 results expected (not yet confirmed by the company)",
+      "status": "estimated",
+      "source": "days.to / financecalendar, read 2026-10-28",
+      "symbols": [
+        "NASDAQ:NVDA"
+      ],
+      "read": "AI capex chain: NASDAQ:MU, NASDAQ:WDC, NYSE:VRT, NYSE:GEV, NASDAQ:STRL."
+    },
+    {
+      "date": "2026-11-20",
+      "kind": "market",
+      "event": "Monthly options expiration (third Friday)",
+      "status": "confirmed",
+      "source": "exchange calendar",
+      "read": "Pinning and gamma unwinds into the close."
+    },
+    {
+      "date": "2026-11-22",
+      "kind": "regulatory",
+      "event": "PDUFA: molgramostim (moved from 22 Aug)",
+      "status": "confirmed",
+      "source": "regardsofwallstreet FDA calendar, read 2026-10-28",
+      "symbols": [
+        "NASDAQ:SVRA"
+      ],
+      "read": "Binary for the name."
+    },
+    {
+      "date": "2026-11-26",
+      "kind": "market",
+      "event": "US Thanksgiving: markets closed (27 Nov half day)",
+      "status": "confirmed",
+      "source": "NYSE holiday calendar",
+      "read": "Thin trading; holiday-sales read on 27-30 Nov."
+    },
+    {
+      "date": "2026-11-30",
+      "kind": "conference",
+      "event": "AWS re:Invent 30 Nov - 4 Dec (Las Vegas)",
+      "status": "confirmed",
+      "source": "AWS event listings via cxtoday, read 2026-10-28",
+      "symbols": [
+        "NASDAQ:AMZN"
+      ],
+      "read": "AI infrastructure and agent tooling; capex chain read-through."
+    },
+    {
+      "date": "2026-11-30",
+      "kind": "index",
+      "event": "MSCI review changes trade at the close (effective 1 Dec)",
+      "status": "confirmed",
+      "source": "MSCI review dates via Asianet, read 2026-10-28",
+      "read": "Index flows."
+    },
+    {
+      "date": "2026-12-04",
+      "kind": "macro",
+      "event": "November jobs report",
+      "status": "estimated",
+      "source": "first-Friday pattern; BLS schedule not checked",
+      "read": "Last labour read before the December FOMC."
+    },
+    {
+      "date": "2026-12-09",
+      "kind": "central_bank",
+      "event": "FOMC decision (8-9 Dec); December hike about 77% priced on 28 Oct",
+      "status": "confirmed",
+      "source": "CNBC / CME FedWatch, read 2026-10-28",
+      "read": "The regime event: a hike confirmed keeps the defensive tilt; priced out turns it up."
+    },
+    {
+      "date": "2026-12-10",
+      "kind": "macro",
+      "event": "November CPI",
+      "status": "confirmed",
+      "source": "eco3min citing BLS, read 2026-10-28",
+      "read": "Inflation path into 2027."
+    }
+  ]
+}

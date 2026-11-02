@@ -42,6 +42,9 @@ python src/generic_utils/tv_scan_cli.py session --prior-db PRIOR.duckdb --curren
 3. Outside headlines only after the table, tagged `OUTSIDE`. They can time a line. They do not reorder the dump.
 4. A full sale into the intraday hole is a different ticket from the cash close and from the after-hours print. Say that once when a book name is in the cohort. Do not build the page around one fill.
 5. Canvas `post-earn-YYYYMMDD` with Prints / After hours / Lesson / Ledger. One Ledger.
+6. On the print night, put each name on the measured cells (PACK/week_plays `plays`, `phase` post): `setrx_*` (set-up x reaction drift), `big_*`, `ah_q_*` (next close vs the after-hours read), and check `rev_posted` before reading the mix. Rules (earnings_playbook "How to use", 4-7): decide at the cash close, not after hours; a hold-through's kill does not fire on the reaction close in the set-ups whose sell-offs drift (re-armed at the reaction session's low from the second close, unless `thesis_kill`); ran into + previous print up is the exception.
+
+A post-close UPDATE (`run_daily_refresh.py --update-day D --no-producers` after a fresh focused scan) flags these names in `update.md` (`after-hours ±x% (printed after the close)`); the session diff for the page is `session --prior-run <the pack's intraday run> --current-run <the post-close run> --earn-on D`. Example: `logs/canvases/20261028/2141_update/post-earn-20261028.json`.
 
 ## Generic vs domain
 

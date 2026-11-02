@@ -16,7 +16,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 SRC_ROOT = Path(__file__).resolve().parents[1]
 if str(SRC_ROOT) not in sys.path:
@@ -289,13 +289,15 @@ def _cmd_focus(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _cmd_named(args: argparse.Namespace) -> dict[str, Any]:
-    from generic_utils.series import alias_fields, parse_csv_list, parse_rename, select_named_rows
+    from generic_utils.series import alias_fields, parse_csv_list, parse_equals, parse_rename, select_named_rows
     from generic_utils.scan_sources import rows_from_csv, rows_to_csv
 
     columns = parse_csv_list(args.fields)
     if args.csv:
         fetched = select_named_rows(rows_from_csv(args.csv), columns=columns, id_field=args.id_field,
-                                    ids=parse_csv_list(args.ids), source=args.csv)
+                                    ids=parse_csv_list(args.ids), filter_field=args.filter_field,
+                                    filter_values=parse_csv_list(args.filter_values), equals=parse_equals(args.equals),
+                                    source=args.csv)
     elif not (args.db and args.table):
         raise SystemExit("named needs --csv, or --db and --table")
     else:
@@ -1618,6 +1620,348 @@ def _cmd_theme_slice(args: argparse.Namespace) -> dict[str, Any]:
     return payload
 
 
+def _cmd_earnings_week(args: argparse.Namespace) -> dict[str, Any]:
+    from generic_utils.earnings_week import build_earnings_week, load_recipe, write_earnings_week
+    from generic_utils.series import parse_csv_list
+
+    pack = _resolve_pack_dir(args.pack)
+    recipe = load_recipe(args.recipe)
+    if args.weeks:
+        recipe["weeks"] = args.weeks
+    if args.min_mcap is not None:
+        recipe["min_market_cap_usd"] = args.min_mcap
+    if args.markets:
+        recipe["markets"] = parse_csv_list(args.markets)
+    ids = _theme_or_ids(args) if (args.ids or args.theme) else []
+    payload = build_earnings_week(database=args.db, pack=pack, ids=ids, recipe=recipe)
+    exported = write_earnings_week(payload, args.out_dir or f"{pack}/earnings_week")
+    spec = payload["spec"]
+    if args.line:
+        named = [r for r in payload["calendar"] if r.get("named")]
+        cols = ["symbol", "earn_utc", "slot", "react_on", "printed", "day", "w", "runup", "pt_up", "eps_q_step", "last_surprise",
+                "pe_nfy", "pe_nfy_vs_ind", "pe_nfy_vs_own", "eps_rev_3m", "react_hist", "lenses", "cons_w", "left", "rr"]
+        print(_row_lines(named, cols))
+    miss = f" missing={','.join(spec['missing_ids'])}" if spec["missing_ids"] else ""
+    weeks = {w: sum(1 for r in payload["calendar"] if r.get("week") == w) for w in ("W0", "W1")}
+    print(f"n={spec['n']} W0={weeks['W0']} W1={weeks['W1']} prints={spec['n_prints']}{miss} "
+          f"window={spec['week_start']}..{spec['week_end']} scan={spec['run_id']} out={exported['out_dir']}")
+    if not args.quiet and not args.line:
+        print(_dumps({"spec": spec, "export": exported}))
+    return {"spec": spec, "export": exported}
+
+
+def _cmd_week_plays(args: argparse.Namespace) -> dict[str, Any]:
+    from generic_utils.week_plays import build_week_plays, load_recipe, write_week_plays
+
+    pack = _resolve_pack_dir(args.pack)
+    ids = _theme_or_ids(args) if (args.ids or args.theme) else []
+    payload = build_week_plays(pack, recipe=load_recipe(args.recipe), ids=ids, database=args.db)
+    exported = write_week_plays(payload, args.out_dir or f"{pack}/week_plays")
+    spec = payload["spec"]
+    if args.line:
+        cols = ["symbol", "phase", "earn_dow", "slot", "close", "runup", "react_last", "eps_rev_3m", "dec_7d", "dec_28d",
+                "b7d_q20", "b7d_q80", "entry_low", "entry_high", "kill_px", "mark_vs_band", "pt", "fcf_margin", "nd_ebitda",
+                "vol_d", "setup_cell", "setup_mean", "setup_t", "mix_cell", "mix_mean", "big_cell", "big_mean"]
+        wanted = set(ids)
+        rows = [r for r in payload["plays"] if not wanted or r["symbol"] in wanted or r["symbol"].split(":")[-1] in wanted]
+        print(_row_lines(rows, cols))
+    print(f"plays={spec['n_plays']} book={spec['n_book']} entry_rows={spec['entry_rows']} alpha={spec['alpha']} "
+          f"lab={spec['lab']} mkt_day={spec['mkt_day']} scan_day={spec['scan_day']} out={exported['out_dir']}")
+    if not args.quiet and not args.line:
+        print(_dumps({"spec": spec, "export": exported}))
+    return {"spec": spec, "export": exported}
+
+
+def _cmd_deterioration(args: argparse.Namespace) -> dict[str, Any]:
+    from generic_utils.deterioration import build_deterioration, load_recipe, write_deterioration
+
+    pack = _resolve_pack_dir(args.pack)
+    ids = _theme_or_ids(args) if (args.ids or args.theme) else []
+    recipe = load_recipe(args.recipe)
+    if args.first_day:
+        recipe.setdefault("study", {})["first_day"] = args.first_day
+    payload = build_deterioration(pack, recipe=recipe, ids=ids, store=args.store)
+    exported = write_deterioration(payload, args.out_dir or f"{pack}/deterioration")
+    spec = payload["spec"]
+    if args.line:
+        cols = ["symbol", "book_usd", "book_vs_cost", "close", "hi_prox", "dd", "det", "vs200", "r_1m", "r_3m", "eps_rev_3m",
+                "rev_rev_3m", "pt_rev_1m", "opm_chg_q", "rev_yoy_chg_q", "fcf_margin", "cnt_cell", "cnt_fx_28d_mean", "cnt_fx_28d_t",
+                "cnt_p_dn_28d", "cnt_p_half_56d", "carry_28d_usd", "tail_28d_usd", "pred_28d", "dec_28d", "kill_px", "earn_date"]
+        rows = [r for r in payload["names"] if r["in_book"] or r["named"]]
+        print(_row_lines(rows, cols))
+    miss = f" missing={','.join(spec['missing_ids'])}" if spec["missing_ids"] else ""
+    print(f"names={spec['n_names']} cells={spec['n_cells']} day={spec['day']} mkt_regime={spec['mkt_regime']} "
+          f"frame={spec['frame']['first']}..{spec['frame']['last']} rows={spec['frame']['rows']}{miss} out={exported['out_dir']}")
+    if not args.quiet and not args.line:
+        print(_dumps({"spec": spec, "export": exported}))
+    return {"spec": spec, "export": exported}
+
+
+def _cmd_recovery(args: argparse.Namespace) -> dict[str, Any]:
+    from generic_utils.recovery_ladder import build_recovery_ladder, load_recipe, write_recovery_ladder
+
+    pack = _resolve_pack_dir(args.pack)
+    ids = _theme_or_ids(args) if (args.ids or args.theme) else []
+    payload = build_recovery_ladder(pack, recipe=load_recipe(args.recipe), ids=ids)
+    exported = write_recovery_ladder(payload, args.out_dir or f"{pack}/recovery_ladder")
+    spec = payload["spec"]
+    if args.line:
+        print(_row_lines(payload["lines"], ["symbol", "value_usd", "pnl_usd", "pnl_pct", "close", "avg_px", "be_from_close_pct",
+                                            "gain10_from_close_pct", "sma50", "half_px", "street_px", "bounce_low", "bounce_high",
+                                            "bounce_kill", "det_seen", "let_fx_28d_mean", "let_p_half_56d", "solve_at_px",
+                                            "add_be_at_sma50_usd", "add_be_at_half_px_usd", "add_be_at_street_px_usd"]))
+    miss = f" missing={','.join(spec['missing_ids'])}" if spec["missing_ids"] else ""
+    print(f"lines={spec['n_lines']} ladder={spec['n_ladder']} adds={spec['add_usd']} at={spec['add_levels']}{miss} out={exported['out_dir']}")
+    if not args.quiet and not args.line:
+        print(_dumps({"spec": spec, "export": exported}))
+    return {"spec": spec, "export": exported}
+
+
+def _cmd_downside(args: argparse.Namespace) -> dict[str, Any]:
+    from generic_utils.downside_risk import build_downside_risk, load_recipe, write_downside_risk
+
+    pack = _resolve_pack_dir(args.pack)
+    payload = build_downside_risk(pack, recipe=load_recipe(args.recipe), store=args.store)
+    exported = write_downside_risk(payload, args.out_dir or f"{pack}/downside")
+    spec = payload["spec"]
+    if args.line:
+        print(_row_lines(payload["lines"], ["symbol", "value_usd", "wt_nav", "in_cluster", "beta_store", "down_beta_store", "beta_tv",
+                                            "vol_1m_pct", "own_q05_28d_pct", "maxdd_store_pct", "to_sma200_pct", "to_lo52_pct",
+                                            "to_kill_px_pct", "cnt_p_dn_56d", "mkt10_usd"]))
+        print(_row_lines(payload["scenarios"], ["cap_move_pct", "book_usd_store", "nav_pct_store", "book_usd_down", "nav_pct_down",
+                                                "cluster_usd_down"], id_field="cap_move_pct"))
+        print(_row_lines([d for d in payload["dist"] if d["series"] in ("cap", "book")],
+                         ["horizon_d", "series", "n_windows", "n_indep", "q05_pct", "q10_pct", "worst_pct", "worst_start", "q05_usd", "worst_usd"], id_field="series"))
+        print(_row_lines(payload["episodes"], ["series", "peak", "trough", "depth_pct", "recovered_on", "book_usd", "book_nav_pct",
+                                               "cluster_pct", "cap_pct"], id_field="episode"))
+        print(_row_lines(payload["plans"], ["plan", "course", "delta_usd", "beta_used", "beta_src", "beta_delta_usd", "in_cluster"]))
+        print(f"plans_after={spec['plans_after']} to_levels={spec['to_levels']}")
+    print(f"store={spec['first_file']}..{spec['last_file']} files={spec['n_files']} nav=${spec['nav_usd']} beta_nav={spec['beta_nav_pct']}% "
+          f"down_beta_nav={spec['down_beta_nav_pct']}% cluster={spec['cluster_nav_pct']}% book_vol_1m={spec['book_vol_1m_pct']}% "
+          f"dd_now={spec['dd_now']} out={exported['out_dir']}")
+    if not args.quiet and not args.line:
+        print(_dumps({"spec": spec, "export": exported}))
+    return {"spec": spec, "export": exported}
+
+
+def _cmd_pathway(args: argparse.Namespace) -> dict[str, Any]:
+    from generic_utils.pathway import build_pathway, load_recipe, write_pathway
+
+    pack = _resolve_pack_dir(args.pack)
+    ids = _theme_or_ids(args) if (args.ids or args.theme) else []
+    payload = build_pathway(pack, recipe=load_recipe(args.recipe), ids=ids, store=args.store)
+    exported = write_pathway(payload, args.out_dir or f"{pack}/pathway")
+    spec = payload["spec"]
+    if args.line:
+        print(_row_lines(payload["exposure"], ["factor", "book_pctl", "gap", "ic_28d", "verdict_28d", "ic_month", "ic_prev_month",
+                                               "ic_tape", "ic_tape_prev", "tape_pos", "tilt_month", "tilt_tape", "coverage_pct"], id_field="factor"))
+        print(_row_lines(payload["attribution"], ["horizon", "mkt", "book_rel", "book_ind_part", "book_stock_part", "rel_usd",
+                                                  "ind_part_usd", "stock_part_usd", "coverage_pct"], id_field="horizon"))
+    print(f"factors={len(spec['factors'])} book=${spec['book_usd']} in_store=${spec['store_usd']} candidates={spec['n_candidates']} "
+          f"day={spec['day']} lab={spec['lab']} out={exported['out_dir']}")
+    if not args.quiet and not args.line:
+        print(_dumps({"spec": spec, "export": exported}))
+    return {"spec": spec, "export": exported}
+
+
+def _cmd_outlook(args: argparse.Namespace) -> dict[str, Any]:
+    from generic_utils.catalyst_outlook import build_outlook, load_recipe, write_outlook
+
+    pack = _resolve_pack_dir(args.pack)
+    ids = _theme_or_ids(args) if (args.ids or args.theme) else []
+    payload = build_outlook(pack, recipe=load_recipe(args.recipe), ids=ids, database=args.db)
+    exported = write_outlook(payload, args.out_dir or f"{pack}/outlook")
+    spec = payload["spec"]
+    if args.line:
+        cols = ["symbol", "close", "day", "m1", "rsi", "rng", "vs50", "tape_state", "next_kind", "next_date", "earn_date", "earn_slot",
+                "setup_cell", "entry_low", "entry_high", "kill_px", "bounce_low", "bounce_high", "bounce_kill", "last_surprise",
+                "surprise_mix", "react_last", "pe_nfy", "pe_nfy_vs_ind", "fcf_margin", "pt_up", "eps_rev_3m", "dec_28d", "pred_28d",
+                "lenses", "analysts", "pack_lists"]
+        wanted = set(ids)
+        rows = [r for r in payload["names"] if r["symbol"] in wanted or r["symbol"].split(":")[-1] in wanted]
+        print(_row_lines(rows, cols))
+    print(f"names={spec['n_names']} events={spec['n_events']} outside={spec['n_outside']} levels={spec['n_levels']} "
+          f"{spec['scan_day']}..{spec['end']} catalyst_run={spec['catalyst_run']} out={exported['out_dir']}")
+    if not args.quiet and not args.line:
+        print(_dumps({"spec": spec, "export": exported}))
+    return {"spec": spec, "export": exported}
+
+
+def _cmd_print_night(args: argparse.Namespace) -> dict[str, Any]:
+    from generic_utils.print_night import build_print_night, load_recipe, write_print_night
+
+    pack = _resolve_pack_dir(args.pack)
+    ids = _theme_or_ids(args) if (args.ids or args.theme) else []
+    payload = build_print_night(pack, recipe=load_recipe(args.recipe), ids=ids, react_on=args.react_on, sessions=args.sessions,
+                                store=args.store)
+    exported = write_print_night(payload, args.out_dir or f"{pack}/print_night")
+    spec = payload["spec"]
+    if args.line:
+        cols = ["symbol", "phase", "slot", "mcap_b", "close", "runup", "react_abs_mean", "rx_up", "rx_dn", "h7_up", "h7_dn", "h28_up",
+                "h28_dn", "h28_fam_up", "h28_up_list", "h28_dn_list", "ac_up", "ac_dn", "d28_up", "d28_dn", "setup_cell", "setup_rx_q10",
+                "setup_rx_q90", "tail_starter_usd", "dec_7d", "dec_7d_fx", "bounce_low", "bounce_high", "bounce_kill", "book_usd"]
+        rows = payload["names"]
+        if ids:
+            wanted = set(ids)
+            rows = [r for r in rows if r["symbol"] in wanted or r["symbol"].split(":")[-1] in wanted]
+        print(_row_lines(rows, cols))
+    print(f"names={spec['n_names']} pre={spec['n_pre']} post={spec['n_post']} sessions={','.join(spec['sessions'])} "
+          f"arrows={spec['n_arrows']}/{spec['n_cells']} prints={spec['n_events']} features={spec['feature_day']} out={exported['out_dir']}")
+    if not args.quiet and not args.line:
+        print(_dumps({"spec": spec, "export": exported}))
+    return {"spec": spec, "export": exported}
+
+
+def _cmd_print_brief(args: argparse.Namespace) -> dict[str, Any]:
+    from generic_utils.print_brief import build_print_brief, load_recipe, write_print_brief
+
+    pack = _resolve_pack_dir(args.pack)
+    payload = build_print_brief(pack, recipe=load_recipe(args.recipe))
+    exported = write_print_brief(payload, args.out_dir or f"{pack}/print_brief")
+    spec = payload["spec"]
+    if args.ids:
+        wanted = {i.strip() for i in args.ids.split(",") if i.strip()}
+        for card in payload["cards"]:
+            if card["symbol"] in wanted or card["symbol"].split(":")[-1] in wanted:
+                print(f"{card['symbol']}: {card['headline']}")
+                if args.line:
+                    for field in ("setup_text", "value_text", "quarter_text", "peers_text", "pointers_text", "levels_text", "print_text"):
+                        if card.get(field):
+                            print(f"  {field}: {card[field]}")
+    print(f"cards={spec['n_cards']} printed={spec['n_post']} industries={spec['n_industries']} sessions={','.join(spec['sessions'])} "
+          f"out={exported['out_dir']}")
+    if not args.quiet and not args.ids:
+        print(_dumps({"spec": spec, "export": exported}))
+    return {"spec": spec, "export": exported}
+
+
+def _cmd_play_review(args: argparse.Namespace) -> dict[str, Any]:
+    from generic_utils.play_review import build_play_review, prior_judgment_for, write_play_review
+
+    pack = _resolve_pack_dir(args.pack)
+    judgment = args.judgment or prior_judgment_for(pack, before=args.before)
+    if not judgment:
+        raise SystemExit("No prior judgment.json under logs/canvases: pass --judgment")
+    ids = _theme_or_ids(args) if (args.ids or args.theme) else []
+    payload = build_play_review(judgment, pack_dir=pack, prior_pack_dir=args.prior_pack, ids=ids)
+    exported = write_play_review(payload, args.out_dir or f"{pack}/play_review")
+    spec = payload["spec"]
+    if args.line:
+        cols = ["symbol", "course", "play_rank", "prior_close", "close", "ret_pct", "ret_fx", "bounce_low", "bounce_high",
+                "bounce_kill", "open_state", "min_state", "close_state", "now_phase", "now_react_fx", "now_surprise_mix", "now_dec_28d"]
+        rows = [r for r in payload["calls"] if r["play_rank"] is not None or ids]
+        print(_row_lines(sorted(rows, key=lambda r: r["play_rank"] or 999), cols))
+        print(_row_lines(payload["by_course"], ["course", "n", "ret_fx_mean", "ret_fx_median", "up_share"]))
+    print(f"calls={spec['n_calls']} priced={spec['n_priced']} play_ids={spec['n_play_ids']} mkt_ret={spec['mkt_ret']} "
+          f"{spec['prior_day']}->{spec['later_day']} judgment={spec['judgment']} out={exported['out_dir']}")
+    if not args.quiet and not args.line:
+        print(_dumps({"spec": spec, "export": exported}))
+    return {"spec": spec, "export": exported}
+
+
+def _stamp_dir(kind: str) -> Path:
+    from datetime import datetime, timezone
+    import uuid
+
+    root = Path(__file__).resolve().parents[2] / "logs" / "tradingview_analysis" / kind / "runs"
+    return root / f"{kind}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}_utc_{uuid.uuid4().hex[:8]}"
+
+
+def _store_line(summary: Mapping[str, Any]) -> str:
+    labels = " ".join(f"{k}={v}" for k, v in (summary.get("labels") or {}).items())
+    return (f"store days={summary.get('days')} rows={summary.get('rows')} symbols={summary.get('symbols')} "
+            f"{summary.get('first')}..{summary.get('last')} pred_days={summary.get('pred_days')} prints={summary.get('prints')} labels: {labels}")
+
+
+def _cmd_panel_store(args: argparse.Namespace) -> dict[str, Any]:
+    from generic_utils.panel_store import load_store_recipe, update_store
+
+    out = update_store(load_store_recipe(args.recipe), store=args.store, root=args.root, rebuild=args.rebuild,
+                       derived=not args.no_derived, predictions=not args.no_predictions, refresh_derived=args.derived)
+    print(f"ingested={len(out['ingested'])} kept={out['kept']} pred_joined={out['pred_joined']} derived={out['derived']} "
+          f"{_store_line(out['summary'])} out={out['store']}")
+    if out["skipped"] or out["pred_missing"]:
+        print(f"skipped={[s['as_of'] for s in out['skipped']]} pred_missing={out['pred_missing'][:12]}")
+    if not args.quiet:
+        print(_dumps(out))
+    return out
+
+
+def _cmd_signal_lab(args: argparse.Namespace) -> dict[str, Any]:
+    from generic_utils.panel_store import load_store_recipe, update_store
+    from generic_utils.series import parse_csv_list
+    from generic_utils.signal_lab import build_signal_lab, highlights_text, load_lab_recipe, write_signal_lab
+
+    store_recipe = load_store_recipe(args.store_recipe)
+    if not args.no_update:
+        update_store(store_recipe, store=args.store)
+    lab = load_lab_recipe(args.recipe)
+    if args.horizons:
+        lab["horizons"] = parse_csv_list(args.horizons)
+    if args.features:
+        lab["features"] = parse_csv_list(args.features)
+    if args.min_mcap is not None:
+        lab["study"]["min_market_cap_usd"] = args.min_mcap
+    if args.first_day:
+        lab["study"]["first_day"] = args.first_day
+    if args.last_day:
+        lab["study"]["last_day"] = args.last_day
+    studies = parse_csv_list(args.studies) or ["factor", "prints", "scans"]
+    payload = build_signal_lab(store=args.store, lab=lab, store_recipe=store_recipe, studies=studies)
+    pack = None if args.pack == "none" else _resolve_pack_dir(args.pack)
+    out_dir = args.out_dir or (f"{pack}/signal_lab" if pack else _stamp_dir("signal_lab").as_posix())
+    exported = write_signal_lab(payload, out_dir, store=args.store)
+    spec = payload["spec"]
+    verdicts = {}
+    for row in payload["tables"].get("factor_summary") or []:
+        verdicts[row.get("verdict")] = verdicts.get(row.get("verdict"), 0) + 1
+    print(f"days={spec['frame']['days']} {spec['frame']['first']}..{spec['frame']['last']} tests={spec['n_tests']} "
+          f"chance_t2={spec['expected_false_at_t2']} verdicts={verdicts} prints={len(payload['tables'].get('print_events') or [])} "
+          f"packs={len(payload['tables'].get('scan_packs') or [])} out={exported['out_dir']}")
+    if args.line:
+        print(highlights_text(payload))
+    elif not args.quiet:
+        print(_dumps({"spec": spec, "export": exported}))
+    return {"spec": spec, "export": exported}
+
+
+def _cmd_alpha_model(args: argparse.Namespace) -> dict[str, Any]:
+    from generic_utils.alpha_model import build_alpha_model, highlights_text, load_model_recipe, log_live, write_alpha_model
+    from generic_utils.panel_store import load_store_recipe, update_store
+    from generic_utils.series import parse_csv_list
+
+    store_recipe = load_store_recipe(args.store_recipe)
+    if not args.no_update:
+        update_store(store_recipe, store=args.store)
+    recipe = load_model_recipe(args.recipe)
+    if args.horizons:
+        recipe["horizons"] = parse_csv_list(args.horizons)
+    pack = None if args.pack == "none" else _resolve_pack_dir(args.pack)
+    payload = build_alpha_model(store=args.store, recipe=recipe, store_recipe=store_recipe, pack=pack)
+    logged = None if args.no_log else log_live(payload, recipe, store=args.store)
+    out_dir = args.out_dir or (f"{pack}/alpha_model" if pack else _stamp_dir("alpha_model").as_posix())
+    exported = write_alpha_model(payload, out_dir, store=args.store, live_log=logged)
+    spec = payload["spec"]
+    states = " ".join(f"{s['horizon']}={s['state']}(ic {s['ic_mean']}, recent {s['ic_recent']})" for s in payload["tables"]["state"])
+    print(f"live={spec['live_day']} names={len(payload['tables']['live'])} {states} "
+          f"logged_days={(logged or {}).get('logged_days')} out={exported['out_dir']}")
+    if args.ids:
+        from generic_utils.symbol_identity import ticker_map
+
+        live = payload["tables"]["live"]
+        by_ticker = ticker_map(r["symbol"] for r in live)
+        wanted = [i if ":" in i else by_ticker.get(i.upper(), i) for i in parse_csv_list(args.ids)]
+        rows = [r for w in wanted for r in live if r["symbol"] == w]
+        cols = ["symbol", "close"] + [f"{k}_{h}" for h in spec["horizons"] for k in ("pred", "dec")] + \
+               ["b7d_q20", "b7d_q80", "b28d_q20", "b28d_q50", "b28d_q80", "why_28d"]
+        print(_row_lines(rows, cols))
+    if args.line:
+        print(highlights_text(payload))
+    elif not args.quiet and not args.ids:
+        print(_dumps({"spec": spec, "export": exported}))
+    return {"spec": spec, "export": exported}
+
+
 def _cmd_judgment_skeleton(args: argparse.Namespace) -> dict[str, Any]:
     from generic_utils.canvas_page import load_template
     from generic_utils.canvas_runs import judgment_path
@@ -2368,6 +2712,160 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     ts_p.add_argument("--out", default=None, help="Default PACK/analysis_scans/theme_slice.csv.")
     ts_p.add_argument("--line", action="store_true", help="Also print one compact line per row.")
     ts_p.set_defaults(func=_cmd_theme_slice)
+
+    ew_p = sub.add_parser("earnings-week", help="Every print this week and next: calendar slot, tape into the print, estimates, value, past reactions, suite joins.")
+    ew_p.add_argument("--pack", default="latest")
+    ew_p.add_argument("--db", default=None, help="All-fields day file (default: the newest).")
+    ew_p.add_argument("--ids", default=None, help="Comma ids always kept (bare tickers resolve inside the recipe floor).")
+    ew_p.add_argument("--theme", default=None, help="Comma theme names from config/generic_utils/themes.json.")
+    ew_p.add_argument("--weeks", type=int, default=None, help="Weeks from this Monday (recipe default 2).")
+    ew_p.add_argument("--min-mcap", type=float, default=None, help="USD floor (recipe default 1e9).")
+    ew_p.add_argument("--markets", default=None, help="Comma TradingView markets (recipe default US + Europe).")
+    ew_p.add_argument("--recipe", default=None, help="Default config/generic_utils/earnings_week.json.")
+    ew_p.add_argument("--out-dir", default=None, help="Default PACK/earnings_week.")
+    ew_p.add_argument("--line", action="store_true", help="One line per named id.")
+    ew_p.add_argument("--quiet", action="store_true", help="Print one summary line.")
+    ew_p.set_defaults(func=_cmd_earnings_week)
+
+    wp_p = sub.add_parser("week-plays", help="Earnings-week names and the Book with the day's suites side by side: calendar, alpha deciles and bands, entry band / kill, signal-lab print cells.")
+    wp_p.add_argument("--pack", default="latest")
+    wp_p.add_argument("--ids", default=None, help="Comma ids (bare tickers resolve); default every calendar name.")
+    wp_p.add_argument("--theme", default=None, help="Comma theme names from config/generic_utils/themes.json.")
+    wp_p.add_argument("--db", default=None, help="All-fields day file for Book fundamentals (default the newest).")
+    wp_p.add_argument("--recipe", default=None, help="Default config/generic_utils/week_plays.json.")
+    wp_p.add_argument("--out-dir", default=None, help="Default PACK/week_plays.")
+    wp_p.add_argument("--line", action="store_true", help="One line per play row (the --ids rows when given).")
+    wp_p.add_argument("--quiet", action="store_true", help="Print the summary line only.")
+    wp_p.set_defaults(func=_cmd_week_plays)
+
+    dt_p = sub.add_parser("deterioration", help="Drawdown x deterioration study on the panel store (what a drawdown did next, split by estimate / target / trend / cash letters) and every name's state now, with the Book's cell dollars.")
+    dt_p.add_argument("--pack", default="latest")
+    dt_p.add_argument("--ids", default=None, help="Comma ids kept in whatever the floor; bare tickers resolve.")
+    dt_p.add_argument("--theme", default=None, help="Comma theme names from config/generic_utils/themes.json.")
+    dt_p.add_argument("--store", default=None, help="Panel store DuckDB (panel_store.json path by default).")
+    dt_p.add_argument("--recipe", default=None, help="Default config/generic_utils/deterioration.json.")
+    dt_p.add_argument("--first-day", default=None, help="YYYY-MM-DD: backward cells from this store day (a regime check).")
+    dt_p.add_argument("--out-dir", default=None, help="Default PACK/deterioration.")
+    dt_p.add_argument("--line", action="store_true", help="One line per Book / named row plus the summary.")
+    dt_p.add_argument("--quiet", action="store_true", help="Print the summary line only.")
+    dt_p.set_defaults(func=_cmd_deterioration)
+
+    rl_p = sub.add_parser("recovery", help="Recovery ladder per Book line: average cost after an add at the close / bounce band, the rise back to break even and to a gain, the add that makes the 50-day / half-way / street price break the line even, and the add's loss at the kill.")
+    rl_p.add_argument("--pack", default="latest")
+    rl_p.add_argument("--ids", default=None, help="Comma Book ids (default every Book line); bare tickers resolve.")
+    rl_p.add_argument("--theme", default=None, help="Comma theme names from config/generic_utils/themes.json.")
+    rl_p.add_argument("--recipe", default=None, help="Default config/generic_utils/recovery_ladder.json.")
+    rl_p.add_argument("--out-dir", default=None, help="Default PACK/recovery_ladder.")
+    rl_p.add_argument("--line", action="store_true", help="One line per Book line plus the summary.")
+    rl_p.add_argument("--quiet", action="store_true", help="Print the summary line only.")
+    rl_p.set_defaults(func=_cmd_recovery)
+
+    dn_p = sub.add_parser("downside", help="Downside risk: the store's cap-weighted market, median name, cluster and today's Book (today's weights) step by step, their windows, worst drawdowns and the Book lines replayed through them, betas per line and the Book's loss for each market move.")
+    dn_p.add_argument("--pack", default="latest")
+    dn_p.add_argument("--store", default=None, help="Panel store DuckDB (panel_store.json path by default).")
+    dn_p.add_argument("--recipe", default=None, help="Default config/generic_utils/downside_risk.json.")
+    dn_p.add_argument("--out-dir", default=None, help="Default PACK/downside.")
+    dn_p.add_argument("--line", action="store_true", help="One line per Book line, scenario, cap / Book horizon and episode, plus the summary.")
+    dn_p.add_argument("--quiet", action="store_true", help="Print the summary line only.")
+    dn_p.set_defaults(func=_cmd_downside)
+
+    pw_p = sub.add_parser("pathway",help="Investing pathway: the Book's factor tilt vs what each factor paid (signal-lab IC, this month, the trailing tape), 1M / 3M return split into market / industry / stock, the regime series, and each trim's or starter's effect on the tilt.")
+    pw_p.add_argument("--pack", default="latest")
+    pw_p.add_argument("--ids", default=None, help="Comma ids kept among the candidates whatever the floor; bare tickers resolve.")
+    pw_p.add_argument("--theme", default=None, help="Comma theme names from config/generic_utils/themes.json.")
+    pw_p.add_argument("--store", default=None, help="Panel store DuckDB (panel_store.json path by default).")
+    pw_p.add_argument("--recipe", default=None, help="Default config/generic_utils/pathway.json.")
+    pw_p.add_argument("--out-dir", default=None, help="Default PACK/pathway.")
+    pw_p.add_argument("--line", action="store_true", help="One line per factor and per attribution horizon plus the summary.")
+    pw_p.add_argument("--quiet", action="store_true", help="Print the summary line only.")
+    pw_p.set_defaults(func=_cmd_pathway)
+
+    ol_p = sub.add_parser("outlook", help="Catalyst outlook: every US name on the floor with its catalysts over the horizon (earnings + slot, ex-dividend, IPO lockup, dated OUTSIDE events) and the day's suites, columns grouped technical / setup / surprise / value / progression.")
+    ol_p.add_argument("--pack", default="latest")
+    ol_p.add_argument("--ids", default=None, help="Comma ids kept in (and priced) whatever the floor; bare tickers resolve.")
+    ol_p.add_argument("--theme", default=None, help="Comma theme names from config/generic_utils/themes.json.")
+    ol_p.add_argument("--db", default=None, help="All-fields day file (default the newest).")
+    ol_p.add_argument("--recipe", default=None, help="Default config/generic_utils/catalyst_outlook.json.")
+    ol_p.add_argument("--out-dir", default=None, help="Default PACK/outlook.")
+    ol_p.add_argument("--line", action="store_true", help="One line per --ids row plus the summary.")
+    ol_p.add_argument("--quiet", action="store_true", help="Print the summary line only.")
+    ol_p.set_defaults(func=_cmd_outlook)
+
+    pn_p = sub.add_parser("print-night", help="Print night: every name whose print reaction lands on one session (default the next: tonight's AMC and tomorrow's BMO) with its measured pointers: the quintile it sits in per pre-print field, what that quintile did on past prints (reaction, hold-through) and the arrow where the lift is clear; the post-print digest once printed.")
+    pn_p.add_argument("--pack", default="latest")
+    pn_p.add_argument("--react-on", default=None, help="Reaction session YYYY-MM-DD, 'today' (digest the prints reacting on the scan day) or 'next' (default).")
+    pn_p.add_argument("--sessions", type=int, default=1, help="Reaction sessions from --react-on on (default 1; 5 = the rest of the week).")
+    pn_p.add_argument("--ids", default=None, help="Comma ids added to the session's names (a name printing on another day); with --line, the rows printed. Bare tickers resolve.")
+    pn_p.add_argument("--theme", default=None, help="Comma theme names from config/generic_utils/themes.json.")
+    pn_p.add_argument("--store", default=None, help="Panel store DuckDB (recipe path by default).")
+    pn_p.add_argument("--recipe", default=None, help="Default config/generic_utils/print_night.json.")
+    pn_p.add_argument("--out-dir", default=None, help="Default PACK/print_night.")
+    pn_p.add_argument("--line", action="store_true", help="One line per name (or per --ids row) plus the summary.")
+    pn_p.add_argument("--quiet", action="store_true", help="Print the summary line only.")
+    pn_p.set_defaults(func=_cmd_print_night)
+
+    pb_p = sub.add_parser("print-brief", help="Print brief: one card per print-night reporter (PACK/print_night): a short written read from the pack's numbers (into the print, value to peers and its own history, what the quarter has to show, the industry's prints this season, the pointers, the levels) and what to read on the print.")
+    pb_p.add_argument("--pack", default="latest")
+    pb_p.add_argument("--ids", default=None, help="Comma ids (bare tickers match): print their headlines (--line: every text).")
+    pb_p.add_argument("--recipe", default=None, help="Default config/generic_utils/print_brief.json.")
+    pb_p.add_argument("--out-dir", default=None, help="Default PACK/print_brief.")
+    pb_p.add_argument("--line", action="store_true", help="With --ids, every text of each named card.")
+    pb_p.add_argument("--quiet", action="store_true", help="Print the summary line only.")
+    pb_p.set_defaults(func=_cmd_print_brief)
+
+    pr_p = sub.add_parser("play-review", help="A prior day's judgment courses and published levels against a later pack: ret vs the tape, band / kill state on opens and closes, print state now.")
+    pr_p.add_argument("--pack", default="latest", help="The later pack (default newest).")
+    pr_p.add_argument("--judgment", default=None, help="Prior judgment.json (default the newest logs/canvases/<day>/judgment.json before the pack's scan day).")
+    pr_p.add_argument("--before", default=None, help="YYYYMMDD: pick the newest judgment strictly before this day instead of the pack's scan day.")
+    pr_p.add_argument("--prior-pack", default=None, help="Default the judgment's reviewed_pack / pack.")
+    pr_p.add_argument("--ids", default=None, help="Comma ids (bare tickers match); default every prior course.")
+    pr_p.add_argument("--theme", default=None, help="Comma theme names from config/generic_utils/themes.json.")
+    pr_p.add_argument("--out-dir", default=None, help="Default PACK/play_review.")
+    pr_p.add_argument("--line", action="store_true", help="One line per week-plays name (or --ids row) plus the by-course summary.")
+    pr_p.add_argument("--quiet", action="store_true", help="Print the summary line only.")
+    pr_p.set_defaults(func=_cmd_play_review)
+
+    ps_p = sub.add_parser("panel-store", help="Append new all-fields day files (and their prediction runs) to the point-in-time panel store; rebuild prints, labels, features.")
+    ps_p.add_argument("--recipe", default=None, help="Default config/generic_utils/panel_store.json.")
+    ps_p.add_argument("--store", default=None, help="Store DuckDB (recipe path by default).")
+    ps_p.add_argument("--root", default=None, help="All-fields root (recipe default).")
+    ps_p.add_argument("--rebuild", action="store_true", help="Re-ingest every day file.")
+    ps_p.add_argument("--no-derived", action="store_true", help="Ingest only; leave series / prints / labels / features.")
+    ps_p.add_argument("--derived", action="store_true", help="Rebuild series / prints / labels / features even when nothing new was ingested (after a measure change).")
+    ps_p.add_argument("--no-predictions", action="store_true", help="Skip joining move-prediction runs.")
+    ps_p.add_argument("--quiet", action="store_true", help="Print the summary line only.")
+    ps_p.set_defaults(func=_cmd_panel_store)
+
+    sl_p = sub.add_parser("signal-lab", help="Backward evidence on the panel store: feature IC by horizon, print event study, briefing-pack list returns.")
+    sl_p.add_argument("--pack", default="latest", help="Output beside a pack (PACK/signal_lab); 'none' for a stamped run folder.")
+    sl_p.add_argument("--out-dir", default=None)
+    sl_p.add_argument("--studies", default=None, help="Comma of factor,prints,scans (default all).")
+    sl_p.add_argument("--horizons", default=None, help="Comma horizon names from panel_store.json (default the lab recipe's).")
+    sl_p.add_argument("--features", default=None, help="Comma feature names (default all).")
+    sl_p.add_argument("--min-mcap", type=float, default=None, help="Study floor in USD (recipe default 1e9).")
+    sl_p.add_argument("--first-day", default=None)
+    sl_p.add_argument("--last-day", default=None)
+    sl_p.add_argument("--recipe", default=None, help="Default config/generic_utils/signal_lab.json.")
+    sl_p.add_argument("--store-recipe", default=None)
+    sl_p.add_argument("--store", default=None)
+    sl_p.add_argument("--no-update", action="store_true", help="Read the store as it is (the refresh producer already updated it).")
+    sl_p.add_argument("--line", action="store_true", help="Print the highlights digest.")
+    sl_p.add_argument("--quiet", action="store_true")
+    sl_p.set_defaults(func=_cmd_signal_lab)
+
+    am_p = sub.add_parser("alpha-model", help="Walk-forward excess-return forecast per horizon with out-of-sample track record, baselines, deciles and price bands.")
+    am_p.add_argument("--pack", default="latest", help="Joins and output beside a pack (PACK/alpha_model); 'none' for a stamped run folder.")
+    am_p.add_argument("--out-dir", default=None)
+    am_p.add_argument("--horizons", default=None, help="Comma horizon names (default the model recipe's).")
+    am_p.add_argument("--ids", default=None, help="Comma ids: one line each (bare tickers resolve).")
+    am_p.add_argument("--recipe", default=None, help="Default config/generic_utils/alpha_model.json.")
+    am_p.add_argument("--store-recipe", default=None)
+    am_p.add_argument("--store", default=None)
+    am_p.add_argument("--no-update", action="store_true", help="Read the store as it is (the refresh producer already updated it).")
+    am_p.add_argument("--no-log", action="store_true", help="Do not append today's forecasts to the live log.")
+    am_p.add_argument("--line", action="store_true", help="Print the highlights digest.")
+    am_p.add_argument("--quiet", action="store_true")
+    am_p.set_defaults(func=_cmd_alpha_model)
 
     sk_p = sub.add_parser("judgment-skeleton", help="Day judgment skeleton: template block ids with shapes, carried courses and scans.")
     sk_p.add_argument("--day", required=True)

@@ -36,9 +36,42 @@
     "cover_/_invalidation",
     "cover",
     "horizon_tag",
-    "class"
+    "class",
+    "thesis",
+    "what_breaks_it",
+    "read_through",
+    "how_to_proceed",
+    "levels",
+    "why_(data)",
+    "company",
+    "path",
+    "leaders",
+    "grade",
+    "Catalyst",
+    "When",
+    "Names",
+    "Theme",
+    "Catalyst path",
+    "recovery_path",
+    "deterioration_path",
+    "state",
+    "Stage",
+    "Trigger to move on",
+    "Size / cash",
+    "Now",
+    "Lean back into the AI cluster when",
+    "Go more defensive when",
+    "Read",
+    "pointers"
   ],
   "free_text_headers": [
+    "Stage",
+    "Trigger to move on",
+    "Size / cash",
+    "Now",
+    "Lean back into the AI cluster when",
+    "Go more defensive when",
+    "Read",
     "symbol",
     "ticker",
     "name",
@@ -60,10 +93,84 @@
     "sources",
     "field",
     "field_or_value",
-    "meaning"
+    "meaning",
+    "thesis",
+    "what_breaks_it",
+    "read_through",
+    "how_to_proceed",
+    "levels",
+    "why_(data)",
+    "setup_cell",
+    "rev_q_cell",
+    "runup_q_cell",
+    "ptup_q_cell",
+    "mix_cell",
+    "rx_q_cell",
+    "big_cell",
+    "ah_q_cell",
+    "setrx_cell",
+    "setup_rx_cell",
+    "path",
+    "leaders",
+    "book",
+    "catalysts",
+    "detail",
+    "read",
+    "other",
+    "largest_earnings",
+    "book_earnings",
+    "dividend",
+    "lockup",
+    "event",
+    "columns",
+    "pack_lists",
+    "status",
+    "Catalyst",
+    "When",
+    "Names",
+    "Theme",
+    "Catalyst path",
+    "recovery_path",
+    "deterioration_path",
+    "state",
+    "cnt_cell",
+    "crun_cell",
+    "cmkt_cell",
+    "ctr_cell",
+    "cdir_cell",
+    "let_cell",
+    "cell",
+    "keys",
+    "study",
+    "rx_up_list",
+    "rx_dn_list",
+    "h7_up_list",
+    "h7_dn_list",
+    "h28_up_list",
+    "h28_dn_list",
+    "ac_up_list",
+    "ac_dn_list",
+    "d28_up_list",
+    "d28_dn_list",
+    "label",
+    "pointers",
+    "headline",
+    "setup_text",
+    "value_text",
+    "quarter_text",
+    "peers_text",
+    "pointers_text",
+    "levels_text",
+    "history_text",
+    "print_text",
+    "watch_items",
+    "tonight",
+    "season_latest"
   ],
   "letter_coded_headers": {
-    "mesh": "FCPDT"
+    "mesh": "FCPDT",
+    "det": "ERCS",
+    "det_seen": "ERCS?"
   },
   "entries": [
     {
@@ -2701,6 +2808,3870 @@
       ],
       "group": "GMV lens",
       "meaning": "FADE floor: the weakest of 1 - M, 1 - E and 1 - P for this name (0-1). That profile sorts on it."
+    },
+    {
+      "key": "earn_utc",
+      "aliases": [
+        "earn_utc"
+      ],
+      "group": "Earnings week",
+      "meaning": "Print time in UTC from TradingView earnings_release_next_date (or the just-reported earnings_release_date)."
+    },
+    {
+      "key": "earn_date",
+      "aliases": [
+        "earn_date"
+      ],
+      "group": "Earnings week",
+      "meaning": "Print date (UTC)."
+    },
+    {
+      "key": "earn_dow",
+      "aliases": [
+        "earn_dow"
+      ],
+      "group": "Earnings week",
+      "meaning": "Weekday of the print (UTC)."
+    },
+    {
+      "key": "slot",
+      "aliases": [
+        "slot"
+      ],
+      "group": "Earnings week",
+      "meaning": "BMO before the open / AMC after the close from TradingView's time code (-1 / 1). BMO~ / AMC~ means the code was empty and the slot is inferred from the UTC hour (13:00 or later is AMC~)."
+    },
+    {
+      "key": "BMO",
+      "aliases": [
+        "BMO"
+      ],
+      "group": "Earnings week",
+      "meaning": "Before market open: the move shows in that day's session."
+    },
+    {
+      "key": "AMC",
+      "aliases": [
+        "AMC"
+      ],
+      "group": "Earnings week",
+      "meaning": "After market close: the move shows in the next weekday's session."
+    },
+    {
+      "key": "BMO~",
+      "aliases": [
+        "BMO~"
+      ],
+      "group": "Earnings week",
+      "meaning": "BMO inferred from the UTC hour (no TradingView time code)."
+    },
+    {
+      "key": "AMC~",
+      "aliases": [
+        "AMC~"
+      ],
+      "group": "Earnings week",
+      "meaning": "AMC inferred from the UTC hour (no TradingView time code)."
+    },
+    {
+      "key": "W0",
+      "aliases": [
+        "W0"
+      ],
+      "group": "Earnings week",
+      "meaning": "Print falls this week (Monday of the scan week to Sunday)."
+    },
+    {
+      "key": "W1",
+      "aliases": [
+        "W1"
+      ],
+      "group": "Earnings week",
+      "meaning": "Print falls next week."
+    },
+    {
+      "key": "react_on",
+      "aliases": [
+        "react_on"
+      ],
+      "group": "Earnings week",
+      "meaning": "The session the print's move shows in: the print date for BMO, the next weekday for AMC."
+    },
+    {
+      "key": "printed",
+      "aliases": [
+        "printed"
+      ],
+      "group": "Earnings week",
+      "meaning": "True when the print time is before the scan time: the row's tape already holds the reaction (or TradingView's date is stale)."
+    },
+    {
+      "key": "mcap_b",
+      "aliases": [
+        "mcap_b"
+      ],
+      "group": "Earnings week",
+      "meaning": "Market cap in USD billions (market_cap_basic)."
+    },
+    {
+      "key": "runup",
+      "aliases": [
+        "runup"
+      ],
+      "group": "Earnings week",
+      "meaning": "Percent change of the close over about two weeks (14 days, day files) into this print. Negative = sold into the print."
+    },
+    {
+      "key": "pt_up",
+      "aliases": [
+        "pt_up"
+      ],
+      "group": "Earnings week",
+      "meaning": "Percent from close to the street average target in the quote currency (price_target_1y; outside the US price_target_average is USD)."
+    },
+    {
+      "key": "pt_low_up",
+      "aliases": [
+        "pt_low_up"
+      ],
+      "group": "Earnings week",
+      "meaning": "Percent from close to the lowest street target (quote currency)."
+    },
+    {
+      "key": "pt_high_up",
+      "aliases": [
+        "pt_high_up"
+      ],
+      "group": "Earnings week",
+      "meaning": "Percent from close to the highest street target (quote currency)."
+    },
+    {
+      "key": "pt_drift_1m",
+      "aliases": [
+        "pt_drift_1m"
+      ],
+      "group": "Earnings week",
+      "meaning": "Percent change of the street average target over about 30 days of day files."
+    },
+    {
+      "key": "eps_q_step",
+      "aliases": [
+        "eps_q_step"
+      ],
+      "group": "Earnings week",
+      "meaning": "Consensus EPS for the coming quarter versus the last reported quarter, percent (sequential, not year over year)."
+    },
+    {
+      "key": "rev_q_step",
+      "aliases": [
+        "rev_q_step"
+      ],
+      "group": "Earnings week",
+      "meaning": "Consensus revenue for the coming quarter versus the last reported quarter, percent (sequential)."
+    },
+    {
+      "key": "last_surprise",
+      "aliases": [
+        "last_surprise"
+      ],
+      "group": "Earnings week",
+      "meaning": "EPS surprise percent of the last reported quarter (eps_surprise_percent_fq)."
+    },
+    {
+      "key": "eps_nfy_g",
+      "aliases": [
+        "eps_nfy_g"
+      ],
+      "group": "Earnings week",
+      "meaning": "Next-FY consensus EPS versus trailing diluted EPS, percent."
+    },
+    {
+      "key": "pe_nfy_own_med",
+      "aliases": [
+        "pe_nfy_own_med"
+      ],
+      "group": "Earnings week",
+      "meaning": "Median of close / next-FY EPS over the name's day-file history."
+    },
+    {
+      "key": "pe_nfy_vs_own",
+      "aliases": [
+        "pe_nfy_vs_own"
+      ],
+      "group": "Earnings week",
+      "meaning": "Today's close / next-FY EPS versus its own history median, percent. Negative = cheaper than usual on forward earnings."
+    },
+    {
+      "key": "react",
+      "aliases": [
+        "react"
+      ],
+      "group": "Earnings week",
+      "meaning": "Reaction session change percent for one past print (the TradingView change on the reaction file)."
+    },
+    {
+      "key": "react_px",
+      "aliases": [
+        "react_px"
+      ],
+      "group": "Earnings week",
+      "meaning": "Reaction close versus the previous file's close, percent (cross-check of react across file gaps)."
+    },
+    {
+      "key": "react_relvol",
+      "aliases": [
+        "react_relvol"
+      ],
+      "group": "Earnings week",
+      "meaning": "Relative volume (10-day) on the reaction file."
+    },
+    {
+      "key": "react_file",
+      "aliases": [
+        "react_file"
+      ],
+      "group": "Earnings week",
+      "meaning": "Day file the reaction was read from."
+    },
+    {
+      "key": "print_date",
+      "aliases": [
+        "print_date"
+      ],
+      "group": "Earnings week",
+      "meaning": "Date of a past print (UTC)."
+    },
+    {
+      "key": "drift",
+      "aliases": [
+        "drift"
+      ],
+      "group": "Earnings week",
+      "meaning": "Close four day files after the reaction versus the reaction close, percent."
+    },
+    {
+      "key": "rev_surprise",
+      "aliases": [
+        "rev_surprise"
+      ],
+      "group": "Earnings week",
+      "meaning": "Revenue surprise percent TradingView recorded for that print."
+    },
+    {
+      "key": "react_hist",
+      "aliases": [
+        "react_hist"
+      ],
+      "group": "Earnings week",
+      "meaning": "Past prints newest first: MM-DD slot reaction% (s EPS surprise%). From the day files since March."
+    },
+    {
+      "key": "react_abs_mean",
+      "aliases": [
+        "react_abs_mean"
+      ],
+      "group": "Earnings week",
+      "meaning": "Mean absolute reaction over the past prints in the history (size of the usual move, not its direction)."
+    },
+    {
+      "key": "react_up",
+      "aliases": [
+        "react_up"
+      ],
+      "group": "Earnings week",
+      "meaning": "Past prints with an up reaction / prints measured."
+    },
+    {
+      "key": "cons_d",
+      "aliases": [
+        "cons_d"
+      ],
+      "group": "Earnings week",
+      "meaning": "Prediction earnings consensus score, days horizon (earnings_priority_consensus_rows)."
+    },
+    {
+      "key": "cons_w",
+      "aliases": [
+        "cons_w"
+      ],
+      "group": "Earnings week",
+      "meaning": "Prediction earnings consensus score, weeks horizon. Positive leans up; a separate column, never added to others."
+    },
+    {
+      "key": "cons_m",
+      "aliases": [
+        "cons_m"
+      ],
+      "group": "Earnings week",
+      "meaning": "Prediction earnings consensus score, months horizon."
+    },
+    {
+      "key": "cons_w_dir",
+      "aliases": [
+        "cons_w_dir"
+      ],
+      "group": "Earnings week",
+      "meaning": "Direction label of the weeks consensus (Up / Neutral / Down)."
+    },
+    {
+      "key": "cons_w_conf",
+      "aliases": [
+        "cons_w_conf"
+      ],
+      "group": "Earnings week",
+      "meaning": "Confidence of the weeks consensus (0-100, profile agreement)."
+    },
+    {
+      "key": "p_breakout_w",
+      "aliases": [
+        "p_breakout_w"
+      ],
+      "group": "Earnings week",
+      "meaning": "Prediction profile breakout_long_v1, weeks score."
+    },
+    {
+      "key": "p_fwd_edge_w",
+      "aliases": [
+        "p_fwd_edge_w"
+      ],
+      "group": "Earnings week",
+      "meaning": "Prediction profile forward_edge_active_v2, weeks score."
+    },
+    {
+      "key": "p_asym_value_w",
+      "aliases": [
+        "p_asym_value_w"
+      ],
+      "group": "Earnings week",
+      "meaning": "Prediction profile asymmetric_value, weeks score."
+    },
+    {
+      "key": "p_fragility_w",
+      "aliases": [
+        "p_fragility_w"
+      ],
+      "group": "Earnings week",
+      "meaning": "Prediction profile fragility_short, weeks score (higher = more fragile)."
+    },
+    {
+      "key": "edge_up_score",
+      "aliases": [
+        "edge_up_score"
+      ],
+      "group": "Earnings week",
+      "meaning": "Edge suite upside_prediction_score."
+    },
+    {
+      "key": "edge_fwd_up",
+      "aliases": [
+        "edge_fwd_up"
+      ],
+      "group": "Earnings week",
+      "meaning": "Edge suite forward valuation upside percent."
+    },
+    {
+      "key": "edge_hist_win",
+      "aliases": [
+        "edge_hist_win"
+      ],
+      "group": "Earnings week",
+      "meaning": "Edge suite historical validation win rate."
+    },
+    {
+      "key": "edge_med_5d",
+      "aliases": [
+        "edge_med_5d"
+      ],
+      "group": "Earnings week",
+      "meaning": "Edge suite median 5-day forward return in the name's setup."
+    },
+    {
+      "key": "edge_safety",
+      "aliases": [
+        "edge_safety"
+      ],
+      "group": "Earnings week",
+      "meaning": "Edge suite safety bucket."
+    },
+    {
+      "key": "pack_play",
+      "aliases": [
+        "pack_play"
+      ],
+      "group": "Earnings week",
+      "meaning": "The pack's earnings lane play for the name (curated upside / downside lanes), when it is in them."
+    },
+    {
+      "key": "book_vs_cost",
+      "aliases": [
+        "book_vs_cost"
+      ],
+      "group": "Earnings week",
+      "meaning": "Held line: percent versus average cost (pack book)."
+    },
+    {
+      "key": "n_10b",
+      "aliases": [
+        "n_10b"
+      ],
+      "group": "Earnings week",
+      "meaning": "Names in the group with market cap of $10B or more."
+    },
+    {
+      "key": "largest",
+      "aliases": [
+        "largest"
+      ],
+      "group": "Earnings week",
+      "meaning": "Largest names in the group by market cap."
+    },
+    {
+      "key": "med_day",
+      "aliases": [
+        "med_day"
+      ],
+      "group": "Earnings week",
+      "meaning": "Group median day change."
+    },
+    {
+      "key": "med_w",
+      "aliases": [
+        "med_w"
+      ],
+      "group": "Earnings week",
+      "meaning": "Group median week return."
+    },
+    {
+      "key": "med_runup",
+      "aliases": [
+        "med_runup"
+      ],
+      "group": "Earnings week",
+      "meaning": "Group median runup into the print."
+    },
+    {
+      "key": "med_pt_up",
+      "aliases": [
+        "med_pt_up"
+      ],
+      "group": "Earnings week",
+      "meaning": "Group median street upside."
+    },
+    {
+      "key": "med_pe_nfy_vs_ind",
+      "aliases": [
+        "med_pe_nfy_vs_ind"
+      ],
+      "group": "Earnings week",
+      "meaning": "Group median pe_nfy_vs_ind."
+    },
+    {
+      "key": "med_pe_nfy_vs_own",
+      "aliases": [
+        "med_pe_nfy_vs_own"
+      ],
+      "group": "Earnings week",
+      "meaning": "Group median pe_nfy_vs_own."
+    },
+    {
+      "key": "med_eps_rev_3m",
+      "aliases": [
+        "med_eps_rev_3m"
+      ],
+      "group": "Earnings week",
+      "meaning": "Group median 3-month next-FY EPS revision."
+    },
+    {
+      "key": "med_react_abs_mean",
+      "aliases": [
+        "med_react_abs_mean"
+      ],
+      "group": "Earnings week",
+      "meaning": "Group median of react_abs_mean."
+    },
+    {
+      "key": "Print",
+      "aliases": [
+        "Print"
+      ],
+      "group": "Earnings week",
+      "meaning": "When the name reports: weekday, date and slot (BMO / AMC)."
+    },
+    {
+      "key": "Entry",
+      "aliases": [
+        "Entry"
+      ],
+      "group": "Earnings week",
+      "meaning": "Where the judgment buys: a limit band (buy-in-red) or a reclaim, never the mark before a print."
+    },
+    {
+      "key": "Kill",
+      "aliases": [
+        "Kill"
+      ],
+      "group": "Earnings week",
+      "meaning": "The close that ends the entry (from name-levels bounce_kill or the Daily's kill)."
+    },
+    {
+      "key": "surprise_mix",
+      "aliases": [
+        "surprise_mix"
+      ],
+      "group": "Print pointers",
+      "meaning": "Last print, EPS then revenue: B = beat (surprise >= 0), M = miss, - = not reported. B/B is a beat on both."
+    },
+    {
+      "key": "dsp",
+      "aliases": [
+        "dsp"
+      ],
+      "group": "Print pointers",
+      "meaning": "Days since the last print (scan day minus earnings_release_date)."
+    },
+    {
+      "key": "earn_slot",
+      "aliases": [
+        "earn_slot"
+      ],
+      "group": "Print pointers",
+      "meaning": "Next print: BMO / AMC from the time code, BMO~ / AMC~ inferred from the UTC hour."
+    },
+    {
+      "key": "react_last",
+      "aliases": [
+        "react_last"
+      ],
+      "group": "Print pointers",
+      "meaning": "The last print's reaction-session change, percent (closes across a file gap)."
+    },
+    {
+      "key": "since_print",
+      "aliases": [
+        "since_print"
+      ],
+      "group": "Print pointers",
+      "meaning": "Close now against the close of the last reaction session, percent."
+    },
+    {
+      "key": "n_prints",
+      "aliases": [
+        "n_prints"
+      ],
+      "group": "Print pointers",
+      "meaning": "Prints measured in the day files since March."
+    },
+    {
+      "key": "feature",
+      "aliases": [
+        "feature",
+        "a",
+        "b"
+      ],
+      "group": "Signal lab",
+      "meaning": "A point-in-time input from the panel store (config/generic_utils/panel_store.json features; _ri = minus the industry median). a / b are the two features of a pair."
+    },
+    {
+      "key": "family",
+      "aliases": [
+        "family"
+      ],
+      "group": "Signal lab",
+      "meaning": "Feature group: momentum, trend, volume, size, risk, value, growth, quality, street, revision, print, screener (move-prediction scores), *_vs_ind."
+    },
+    {
+      "key": "label",
+      "aliases": [
+        "label"
+      ],
+      "group": "Signal lab",
+      "meaning": "What the feature measures, in words."
+    },
+    {
+      "key": "verdict",
+      "aliases": [
+        "verdict"
+      ],
+      "group": "Signal lab",
+      "meaning": "Evidence label from the recipe t bands: STRONG, CONSISTENT, REGIME or WEAK. Not a gate and not a weight."
+    },
+    {
+      "key": "STRONG",
+      "aliases": [
+        "STRONG"
+      ],
+      "group": "Signal lab",
+      "meaning": "|t| >= 3 (the smaller of t_nw and t_indep), both halves of the sample the same sign, no flip between up and down markets."
+    },
+    {
+      "key": "CONSISTENT",
+      "aliases": [
+        "CONSISTENT"
+      ],
+      "group": "Signal lab",
+      "meaning": "As STRONG at |t| >= 2."
+    },
+    {
+      "key": "REGIME",
+      "aliases": [
+        "REGIME"
+      ],
+      "group": "Signal lab",
+      "meaning": "Clears |t| 2 but flips between the two halves, or flips between up and down markets."
+    },
+    {
+      "key": "WEAK",
+      "aliases": [
+        "WEAK"
+      ],
+      "group": "Signal lab",
+      "meaning": "Signal lab: no reliable lead. Alpha model state: a positive out-of-sample IC that has not reached t 2."
+    },
+    {
+      "key": "ic",
+      "aliases": [
+        "ic"
+      ],
+      "group": "Signal lab",
+      "meaning": "Mean daily rank IC: Spearman between the feature (or forecast) and the later excess return. Positive = higher value, higher later return."
+    },
+    {
+      "key": "ic_t_nw",
+      "aliases": [
+        "ic_t_nw"
+      ],
+      "group": "Signal lab",
+      "meaning": "t of the mean IC with a Newey-West variance (lag = horizon files - 1). Optimistic when the lag nears the sample size."
+    },
+    {
+      "key": "ic_t_indep",
+      "aliases": [
+        "ic_t_indep"
+      ],
+      "group": "Signal lab",
+      "meaning": "t on non-overlapping periods only (plain t / sqrt(horizon files)): the conservative t."
+    },
+    {
+      "key": "ic_ind",
+      "aliases": [
+        "ic_ind"
+      ],
+      "group": "Signal lab",
+      "meaning": "Industry-neutral IC: both ranks demeaned inside the industry (5+ names)."
+    },
+    {
+      "key": "spread",
+      "aliases": [
+        "spread"
+      ],
+      "group": "Signal lab",
+      "meaning": "Top-quantile minus bottom-quantile mean excess return, percent (model: top minus bottom decile)."
+    },
+    {
+      "key": "top",
+      "aliases": [
+        "top"
+      ],
+      "group": "Signal lab",
+      "meaning": "Mean excess return of the top quantile (model: top decile), percent."
+    },
+    {
+      "key": "bottom",
+      "aliases": [
+        "bottom"
+      ],
+      "group": "Signal lab",
+      "meaning": "Mean excess return of the bottom quantile (model: bottom decile), percent."
+    },
+    {
+      "key": "top_hit",
+      "aliases": [
+        "top_hit"
+      ],
+      "group": "Signal lab",
+      "meaning": "Share of top-quantile names with a positive excess return."
+    },
+    {
+      "key": "ic_h1",
+      "aliases": [
+        "ic_h1"
+      ],
+      "group": "Signal lab",
+      "meaning": "Mean IC over the first half of the dates."
+    },
+    {
+      "key": "ic_h2",
+      "aliases": [
+        "ic_h2"
+      ],
+      "group": "Signal lab",
+      "meaning": "Mean IC over the second half of the dates."
+    },
+    {
+      "key": "ic_recent",
+      "aliases": [
+        "ic_recent"
+      ],
+      "group": "Signal lab",
+      "meaning": "Mean IC over the most recent dates (signal lab recent_days, alpha model state.recent_days)."
+    },
+    {
+      "key": "ic_up_mkt",
+      "aliases": [
+        "ic_up_mkt"
+      ],
+      "group": "Signal lab",
+      "meaning": "Mean IC on days the universe's trailing month was up (point-in-time regime)."
+    },
+    {
+      "key": "ic_down_mkt",
+      "aliases": [
+        "ic_down_mkt"
+      ],
+      "group": "Signal lab",
+      "meaning": "Mean IC on days the universe's trailing month was flat or down."
+    },
+    {
+      "key": "n_up",
+      "aliases": [
+        "n_up"
+      ],
+      "group": "Signal lab",
+      "meaning": "Days in the up-market regime."
+    },
+    {
+      "key": "n_down",
+      "aliases": [
+        "n_down"
+      ],
+      "group": "Signal lab",
+      "meaning": "Days in the down-market regime."
+    },
+    {
+      "key": "n_indep",
+      "aliases": [
+        "n_indep"
+      ],
+      "group": "Signal lab",
+      "meaning": "Non-overlapping periods: scored days / horizon files."
+    },
+    {
+      "key": "study",
+      "aliases": [
+        "study"
+      ],
+      "group": "Signal lab",
+      "meaning": "Which grouping of the print events."
+    },
+    {
+      "key": "cell",
+      "aliases": [
+        "cell"
+      ],
+      "group": "Signal lab",
+      "meaning": "The group inside a study (Qk [lo, hi) is the k-th quintile and its edges)."
+    },
+    {
+      "key": "react_mean",
+      "aliases": [
+        "react_mean",
+        "react_med"
+      ],
+      "group": "Signal lab",
+      "meaning": "Mean / median reaction-session move of the group, percent."
+    },
+    {
+      "key": "react_hit",
+      "aliases": [
+        "react_hit"
+      ],
+      "group": "Signal lab",
+      "meaning": "Share of the group that reacted up."
+    },
+    {
+      "key": "react_fx",
+      "aliases": [
+        "react_fx",
+        "react_fx_mean"
+      ],
+      "group": "Signal lab",
+      "meaning": "Reaction minus the universe median change that day, percent (mean for a group)."
+    },
+    {
+      "key": "drift_fx_7d",
+      "aliases": [
+        "drift_fx_7d",
+        "drift_fx_7d_mean",
+        "drift_fx_7d_med",
+        "drift_fx_7d_hit",
+        "drift_fx_7d_t",
+        "drift_fx_28d_mean",
+        "drift_fx_28d_med",
+        "drift_fx_28d_hit",
+        "drift_fx_28d_t",
+        "drift_fx_28d"
+      ],
+      "group": "Signal lab",
+      "meaning": "Excess return from the reaction close over the next 7 / 28 days, percent: mean, median, share positive (hit), t (prints treated as independent)."
+    },
+    {
+      "key": "hold_fx_28d",
+      "aliases": [
+        "hold_fx_28d",
+        "hold_fx_7d_mean",
+        "hold_fx_7d_med",
+        "hold_fx_7d_hit",
+        "hold_fx_7d_t",
+        "hold_fx_28d_mean",
+        "hold_fx_28d_med",
+        "hold_fx_28d_hit",
+        "hold_fx_28d_t",
+        "hold_fx_7d"
+      ],
+      "group": "Signal lab",
+      "meaning": "Excess return from the close before the print over 7 / 28 days, percent: the pre-print entry held through."
+    },
+    {
+      "key": "prev_react",
+      "aliases": [
+        "prev_react"
+      ],
+      "group": "Signal lab",
+      "meaning": "The name's previous print reaction, percent."
+    },
+    {
+      "key": "list",
+      "aliases": [
+        "list"
+      ],
+      "group": "Signal lab",
+      "meaning": "Briefing-pack list: radar_25 / radar_50 (curated radar), earnings_up / earnings_down (curated lanes), short_15, book, courses (suggested courses by bucket), movers (horizon:tail:class), movers_class (tail:class), tape (the whole US $2B tape)."
+    },
+    {
+      "key": "sub",
+      "aliases": [
+        "sub"
+      ],
+      "group": "Signal lab",
+      "meaning": "Sub-list: the course bucket, or horizon:tail:class for movers; all = the whole list."
+    },
+    {
+      "key": "side",
+      "aliases": [
+        "side"
+      ],
+      "group": "Signal lab",
+      "meaning": "long = a positive excess is the call working; short = a negative excess is; - = read by the sub-list."
+    },
+    {
+      "key": "n_obs",
+      "aliases": [
+        "n_obs"
+      ],
+      "group": "Signal lab",
+      "meaning": "Name-days scored."
+    },
+    {
+      "key": "fx_mean",
+      "aliases": [
+        "fx_mean"
+      ],
+      "group": "Signal lab",
+      "meaning": "Mean excess return over the horizon, percent (scans: equal weight per pack day, then the mean of days; model deciles: mean over all name-days)."
+    },
+    {
+      "key": "fx_t_nw",
+      "aliases": [
+        "fx_t_nw"
+      ],
+      "group": "Signal lab",
+      "meaning": "Newey-West t of the daily list means."
+    },
+    {
+      "key": "fx_med",
+      "aliases": [
+        "fx_med"
+      ],
+      "group": "Signal lab",
+      "meaning": "Median excess return over all name-days, percent."
+    },
+    {
+      "key": "hit",
+      "aliases": [
+        "hit"
+      ],
+      "group": "Signal lab",
+      "meaning": "Share of name-days with a positive excess return."
+    },
+    {
+      "key": "first",
+      "aliases": [
+        "first"
+      ],
+      "group": "Signal lab",
+      "meaning": "First day in the sample."
+    },
+    {
+      "key": "last",
+      "aliases": [
+        "last"
+      ],
+      "group": "Signal lab",
+      "meaning": "Last day in the sample."
+    },
+    {
+      "key": "rho",
+      "aliases": [
+        "rho"
+      ],
+      "group": "Signal lab",
+      "meaning": "Average daily rank correlation between two features: near 1 means they rank names the same way."
+    },
+    {
+      "key": "mkt_1d",
+      "aliases": [
+        "mkt_1d"
+      ],
+      "group": "Signal lab",
+      "meaning": "Universe (US $1B+) median day change, percent."
+    },
+    {
+      "key": "mkt_regime",
+      "aliases": [
+        "mkt_regime"
+      ],
+      "group": "Signal lab",
+      "meaning": "Universe median trailing 1-month return, percent (the regime field)."
+    },
+    {
+      "key": "mkt_fwd_7d",
+      "aliases": [
+        "mkt_fwd_7d",
+        "mkt_fwd_28d",
+        "mkt_fwd_1d",
+        "mkt_fwd_14d",
+        "mkt_fwd_56d"
+      ],
+      "group": "Signal lab",
+      "meaning": "Universe median forward return over the horizon, percent."
+    },
+    {
+      "key": "state",
+      "aliases": [
+        "state"
+      ],
+      "group": "Alpha model",
+      "meaning": "Horizon health: OK, WEAK, DEGRADED, FAILING or NO_TRACK from the out-of-sample record."
+    },
+    {
+      "key": "OK",
+      "aliases": [
+        "OK"
+      ],
+      "group": "Alpha model",
+      "meaning": "Out-of-sample IC t >= 2 on non-overlapping periods and a positive recent IC."
+    },
+    {
+      "key": "DEGRADED",
+      "aliases": [
+        "DEGRADED"
+      ],
+      "group": "Alpha model",
+      "meaning": "Positive out-of-sample IC overall, negative over the recent days."
+    },
+    {
+      "key": "FAILING",
+      "aliases": [
+        "FAILING"
+      ],
+      "group": "Alpha model",
+      "meaning": "Out-of-sample IC at or below zero overall."
+    },
+    {
+      "key": "NO_TRACK",
+      "aliases": [
+        "NO_TRACK"
+      ],
+      "group": "Alpha model",
+      "meaning": "Fewer than 10 scored out-of-sample days."
+    },
+    {
+      "key": "oos_days",
+      "aliases": [
+        "oos_days"
+      ],
+      "group": "Alpha model",
+      "meaning": "Days with an out-of-sample forecast whose label exists."
+    },
+    {
+      "key": "best_baseline",
+      "aliases": [
+        "best_baseline",
+        "best_baseline_ic"
+      ],
+      "group": "Alpha model",
+      "meaning": "The better walk-forward baseline (ew_sign or best_single) and its out-of-sample IC: the fair bar."
+    },
+    {
+      "key": "beats_baselines",
+      "aliases": [
+        "beats_baselines"
+      ],
+      "group": "Alpha model",
+      "meaning": "Model out-of-sample IC above the better walk-forward baseline."
+    },
+    {
+      "key": "best_fixed",
+      "aliases": [
+        "best_fixed",
+        "best_fixed_ic"
+      ],
+      "group": "Alpha model",
+      "meaning": "The best fixed feature from the recipe baselines and its out-of-sample IC; picked from the full-sample lab, so it carries hindsight."
+    },
+    {
+      "key": "method",
+      "aliases": [
+        "method"
+      ],
+      "group": "Alpha model",
+      "meaning": "model = the forecast; ew_sign = equal weight of every feature by the sign of its trailing IC; best_single = the feature with the largest trailing |t|; a feature name = that feature alone."
+    },
+    {
+      "key": "ic_pos",
+      "aliases": [
+        "ic_pos"
+      ],
+      "group": "Alpha model",
+      "meaning": "Share of scored days with a positive IC."
+    },
+    {
+      "key": "decile",
+      "aliases": [
+        "decile"
+      ],
+      "group": "Alpha model",
+      "meaning": "Forecast decile inside the day (10 = highest forecast)."
+    },
+    {
+      "key": "u_q20",
+      "aliases": [
+        "u_q20",
+        "u_q50",
+        "u_q80"
+      ],
+      "group": "Alpha model",
+      "meaning": "The 20th / 50th / 80th percentile of out-of-sample excess / (own daily volatility x sqrt(horizon files)) for the decile: the band multipliers."
+    },
+    {
+      "key": "pred_28d",
+      "aliases": [
+        "pred_28d",
+        "pred_1d",
+        "pred_7d",
+        "pred_14d",
+        "pred_28d",
+        "pred_56d"
+      ],
+      "group": "Alpha model",
+      "meaning": "Forecast excess return over the horizon against the US $1B+ median, percent (slope x standardized composite rank; tops out near +-1.73 x slope). One order, never summed with rr / bo / left."
+    },
+    {
+      "key": "dec_28d",
+      "aliases": [
+        "dec_28d",
+        "dec_1d",
+        "dec_7d",
+        "dec_14d",
+        "dec_28d",
+        "dec_56d"
+      ],
+      "group": "Alpha model",
+      "meaning": "The forecast decile today (10 = highest)."
+    },
+    {
+      "key": "b28d_q20",
+      "aliases": [
+        "b28d_q20",
+        "b1d_q20",
+        "b1d_q50",
+        "b1d_q80",
+        "b7d_q20",
+        "b7d_q50",
+        "b7d_q80",
+        "b14d_q20",
+        "b14d_q50",
+        "b14d_q80",
+        "b28d_q20",
+        "b28d_q50",
+        "b28d_q80",
+        "b56d_q20",
+        "b56d_q50",
+        "b56d_q80"
+      ],
+      "group": "Alpha model",
+      "meaning": "Price band for the horizon: close x (1 + decile quantile x own volatility over the horizon), q20 / q50 / q80, in a flat market. Shift it by the market move."
+    },
+    {
+      "key": "move_28d",
+      "aliases": [
+        "move_28d",
+        "move_1d",
+        "move_7d",
+        "move_14d",
+        "move_28d",
+        "move_56d"
+      ],
+      "group": "Alpha model",
+      "meaning": "One standard deviation of the move over the horizon, percent (daily realized volatility x sqrt(horizon files))."
+    },
+    {
+      "key": "why_28d",
+      "aliases": [
+        "why_28d",
+        "why_1d",
+        "why_7d",
+        "why_14d",
+        "why_28d",
+        "why_56d"
+      ],
+      "group": "Alpha model",
+      "meaning": "Largest contributions to the forecast, percent to first order (weight x standardized rank)."
+    },
+    {
+      "key": "coef",
+      "aliases": [
+        "coef"
+      ],
+      "group": "Alpha model",
+      "meaning": "Weight in use today: trailing rank IC from past-known days, age-decayed, shrunk by t^2 / (t^2 + c); zero under select_t."
+    },
+    {
+      "key": "coef_raw",
+      "aliases": [
+        "coef_raw"
+      ],
+      "group": "Alpha model",
+      "meaning": "The unshrunk trailing IC."
+    },
+    {
+      "key": "coef_20d_ago",
+      "aliases": [
+        "coef_20d_ago"
+      ],
+      "group": "Alpha model",
+      "meaning": "The weight 20 fitted days earlier."
+    },
+    {
+      "key": "flips_60d",
+      "aliases": [
+        "flips_60d"
+      ],
+      "group": "Alpha model",
+      "meaning": "Sign changes of the weight over the last 60 fitted days."
+    },
+    {
+      "key": "cover_today",
+      "aliases": [
+        "cover_today"
+      ],
+      "group": "Alpha model",
+      "meaning": "Share of today's names that carry the feature."
+    },
+    {
+      "key": "n_train",
+      "aliases": [
+        "n_train"
+      ],
+      "group": "Alpha model",
+      "meaning": "Past days whose labels were known at the forecast (the training window)."
+    },
+    {
+      "key": "ic_model",
+      "aliases": [
+        "ic_model",
+        "ic_best_single",
+        "ic_ew_sign"
+      ],
+      "group": "Alpha model",
+      "meaning": "That day out-of-sample rank IC of the model, the best single feature, the equal-weight signs."
+    },
+    {
+      "key": "slope",
+      "aliases": [
+        "slope"
+      ],
+      "group": "Alpha model",
+      "meaning": "Percent excess per one standard deviation of the composite rank, from the newest known days."
+    },
+    {
+      "key": "ic_pearson",
+      "aliases": [
+        "ic_pearson"
+      ],
+      "group": "Alpha model",
+      "meaning": "Pearson correlation of logged live forecasts with the later return."
+    },
+    {
+      "key": "top_fx",
+      "aliases": [
+        "top_fx",
+        "bottom_fx"
+      ],
+      "group": "Alpha model",
+      "meaning": "Mean excess return of the logged top / bottom decile, percent."
+    },
+    {
+      "key": "setup_cell",
+      "aliases": [
+        "setup_cell"
+      ],
+      "group": "Week plays",
+      "meaning": "Signal-lab print cell (study 'run-up x previous reaction') the row sits in now, pre-print rows only: sold into / ran into the print (runup < 0 or >= 0) & previous print down / up (react_last <= 0 or > 0). Empty off-phase or when an input field is missing. A label from the measured cells, not a score."
+    },
+    {
+      "key": "setup_mean",
+      "aliases": [
+        "setup_mean"
+      ],
+      "group": "Week plays",
+      "meaning": "That cell's mean 28-day hold-through from the close before the print, percent over the US $1B+ median (signal lab print_cells hold_fx_28d_mean). Evidence, not a forecast for this name."
+    },
+    {
+      "key": "setup_t",
+      "aliases": [
+        "setup_t"
+      ],
+      "group": "Week plays",
+      "meaning": "t-stat of setup_mean, prints treated as independent (they cluster in earnings season, so optimistic)."
+    },
+    {
+      "key": "setup_n",
+      "aliases": [
+        "setup_n"
+      ],
+      "group": "Week plays",
+      "meaning": "Number of measured prints behind setup_mean."
+    },
+    {
+      "key": "rev_q_cell",
+      "aliases": [
+        "rev_q_cell"
+      ],
+      "group": "Week plays",
+      "meaning": "Signal-lab print cell (study 'revision quintile before') the row sits in now, pre-print rows only: next-FY EPS revision over 3 months (eps_rev_3m) quintile of all measured prints, label Qk [low, high). Empty off-phase or when an input field is missing. A label from the measured cells, not a score."
+    },
+    {
+      "key": "rev_q_mean",
+      "aliases": [
+        "rev_q_mean"
+      ],
+      "group": "Week plays",
+      "meaning": "That cell's mean 28-day hold-through from the close before the print, percent over the US $1B+ median (signal lab print_cells hold_fx_28d_mean). Evidence, not a forecast for this name."
+    },
+    {
+      "key": "rev_q_t",
+      "aliases": [
+        "rev_q_t"
+      ],
+      "group": "Week plays",
+      "meaning": "t-stat of rev_q_mean, prints treated as independent (they cluster in earnings season, so optimistic)."
+    },
+    {
+      "key": "rev_q_n",
+      "aliases": [
+        "rev_q_n"
+      ],
+      "group": "Week plays",
+      "meaning": "Number of measured prints behind rev_q_mean."
+    },
+    {
+      "key": "runup_q_cell",
+      "aliases": [
+        "runup_q_cell"
+      ],
+      "group": "Week plays",
+      "meaning": "Signal-lab print cell (study 'run-up into the print quintile') the row sits in now, pre-print rows only: run-up into the print quintile, label Qk [low, high). Empty off-phase or when an input field is missing. A label from the measured cells, not a score."
+    },
+    {
+      "key": "runup_q_mean",
+      "aliases": [
+        "runup_q_mean"
+      ],
+      "group": "Week plays",
+      "meaning": "That cell's mean 28-day hold-through from the close before the print, percent over the US $1B+ median (signal lab print_cells hold_fx_28d_mean). Evidence, not a forecast for this name."
+    },
+    {
+      "key": "runup_q_t",
+      "aliases": [
+        "runup_q_t"
+      ],
+      "group": "Week plays",
+      "meaning": "t-stat of runup_q_mean, prints treated as independent (they cluster in earnings season, so optimistic)."
+    },
+    {
+      "key": "runup_q_n",
+      "aliases": [
+        "runup_q_n"
+      ],
+      "group": "Week plays",
+      "meaning": "Number of measured prints behind runup_q_mean."
+    },
+    {
+      "key": "ptup_q_cell",
+      "aliases": [
+        "ptup_q_cell"
+      ],
+      "group": "Week plays",
+      "meaning": "Signal-lab print cell (study 'street upside quintile before') the row sits in now, pre-print rows only: street target upside (pt_up) quintile, label Qk [low, high). Empty off-phase or when an input field is missing. A label from the measured cells, not a score."
+    },
+    {
+      "key": "ptup_q_mean",
+      "aliases": [
+        "ptup_q_mean"
+      ],
+      "group": "Week plays",
+      "meaning": "That cell's mean 28-day hold-through from the close before the print, percent over the US $1B+ median (signal lab print_cells hold_fx_28d_mean). Evidence, not a forecast for this name."
+    },
+    {
+      "key": "ptup_q_t",
+      "aliases": [
+        "ptup_q_t"
+      ],
+      "group": "Week plays",
+      "meaning": "t-stat of ptup_q_mean, prints treated as independent (they cluster in earnings season, so optimistic)."
+    },
+    {
+      "key": "ptup_q_n",
+      "aliases": [
+        "ptup_q_n"
+      ],
+      "group": "Week plays",
+      "meaning": "Number of measured prints behind ptup_q_mean."
+    },
+    {
+      "key": "mix_cell",
+      "aliases": [
+        "mix_cell"
+      ],
+      "group": "Week plays",
+      "meaning": "Signal-lab print cell (study 'surprise mix (EPS/revenue)') the row sits in now, post-print rows only: surprise_mix of the print just out (B/B, B/M, M/B, M/M; - = not reported). Empty off-phase or when an input field is missing. A label from the measured cells, not a score."
+    },
+    {
+      "key": "mix_mean",
+      "aliases": [
+        "mix_mean"
+      ],
+      "group": "Week plays",
+      "meaning": "That cell's mean 28-day drift from the reaction close, percent over the US $1B+ median (signal lab print_cells drift_fx_28d_mean). Evidence, not a forecast for this name."
+    },
+    {
+      "key": "mix_t",
+      "aliases": [
+        "mix_t"
+      ],
+      "group": "Week plays",
+      "meaning": "t-stat of mix_mean, prints treated as independent (they cluster in earnings season, so optimistic)."
+    },
+    {
+      "key": "mix_n",
+      "aliases": [
+        "mix_n"
+      ],
+      "group": "Week plays",
+      "meaning": "Number of measured prints behind mix_mean."
+    },
+    {
+      "key": "rx_q_cell",
+      "aliases": [
+        "rx_q_cell"
+      ],
+      "group": "Week plays",
+      "meaning": "Signal-lab print cell (study 'reaction vs market quintile') the row sits in now, post-print rows only: react_fx quintile, label Qk [low, high). Empty off-phase or when an input field is missing. A label from the measured cells, not a score."
+    },
+    {
+      "key": "rx_q_mean",
+      "aliases": [
+        "rx_q_mean"
+      ],
+      "group": "Week plays",
+      "meaning": "That cell's mean 28-day drift from the reaction close, percent over the US $1B+ median (signal lab print_cells drift_fx_28d_mean). Evidence, not a forecast for this name."
+    },
+    {
+      "key": "rx_q_t",
+      "aliases": [
+        "rx_q_t"
+      ],
+      "group": "Week plays",
+      "meaning": "t-stat of rx_q_mean, prints treated as independent (they cluster in earnings season, so optimistic)."
+    },
+    {
+      "key": "rx_q_n",
+      "aliases": [
+        "rx_q_n"
+      ],
+      "group": "Week plays",
+      "meaning": "Number of measured prints behind rx_q_mean."
+    },
+    {
+      "key": "big_cell",
+      "aliases": [
+        "big_cell"
+      ],
+      "group": "Week plays",
+      "meaning": "Signal-lab print cell (study 'big reaction vs surprise') the row sits in now, post-print rows only: beat or miss crossed with a reaction 5%+ above or below the tape; 'inside the band' otherwise. Empty off-phase or when an input field is missing. A label from the measured cells, not a score."
+    },
+    {
+      "key": "big_mean",
+      "aliases": [
+        "big_mean"
+      ],
+      "group": "Week plays",
+      "meaning": "That cell's mean 28-day drift from the reaction close, percent over the US $1B+ median (signal lab print_cells drift_fx_28d_mean). Evidence, not a forecast for this name."
+    },
+    {
+      "key": "big_t",
+      "aliases": [
+        "big_t"
+      ],
+      "group": "Week plays",
+      "meaning": "t-stat of big_mean, prints treated as independent (they cluster in earnings season, so optimistic)."
+    },
+    {
+      "key": "big_n",
+      "aliases": [
+        "big_n"
+      ],
+      "group": "Week plays",
+      "meaning": "Number of measured prints behind big_mean."
+    },
+    {
+      "key": "phase",
+      "aliases": [
+        "phase"
+      ],
+      "group": "Week plays",
+      "meaning": "pre = the print is not out yet at the scan; post = printed before the scan; none = no print in the earnings-week window (Book lines)."
+    },
+    {
+      "key": "bmid",
+      "aliases": [
+        "bmid"
+      ],
+      "group": "Week plays",
+      "meaning": "Middle of the bounce band: (bounce_low + bounce_high) / 2."
+    },
+    {
+      "key": "bmid_vs_close_pct",
+      "aliases": [
+        "bmid_vs_close_pct"
+      ],
+      "group": "Week plays",
+      "meaning": "Bounce band middle against the close, percent (negative = the band sits under the mark)."
+    },
+    {
+      "key": "bkill_vs_bmid_pct",
+      "aliases": [
+        "bkill_vs_bmid_pct"
+      ],
+      "group": "Week plays",
+      "meaning": "bounce_kill against the bounce band middle, percent: the loss to the kill from a mid-band fill. Sets the size, not the order."
+    },
+    {
+      "key": "q80_7d_vs_bmid_pct",
+      "aliases": [
+        "q80_7d_vs_bmid_pct"
+      ],
+      "group": "Week plays",
+      "meaning": "Alpha model 7-day 80th-percentile price (b7d_q80) against the bounce band middle, percent: the upper 1-week outcome from a fill, on a flat market."
+    },
+    {
+      "key": "q80_28d_vs_bmid_pct",
+      "aliases": [
+        "q80_28d_vs_bmid_pct"
+      ],
+      "group": "Week plays",
+      "meaning": "Alpha model 28-day 80th-percentile price (b28d_q80) against the bounce band middle, percent."
+    },
+    {
+      "key": "street_vs_bmid_pct",
+      "aliases": [
+        "street_vs_bmid_pct"
+      ],
+      "group": "Week plays",
+      "meaning": "Street average target (pt) against the bounce band middle, percent. Shown, not ranked on (street upside failed in October)."
+    },
+    {
+      "key": "q20_7d_pct",
+      "aliases": [
+        "q20_7d_pct"
+      ],
+      "group": "Week plays",
+      "meaning": "Alpha model 7-day 20th-percentile price against the close, percent."
+    },
+    {
+      "key": "q80_7d_pct",
+      "aliases": [
+        "q80_7d_pct"
+      ],
+      "group": "Week plays",
+      "meaning": "Alpha model 7-day 80th-percentile price against the close, percent."
+    },
+    {
+      "key": "q20_28d_pct",
+      "aliases": [
+        "q20_28d_pct"
+      ],
+      "group": "Week plays",
+      "meaning": "Alpha model 28-day 20th-percentile price against the close, percent (the lower outcome to plan a hold around)."
+    },
+    {
+      "key": "q80_28d_pct",
+      "aliases": [
+        "q80_28d_pct"
+      ],
+      "group": "Week plays",
+      "meaning": "Alpha model 28-day 80th-percentile price against the close, percent."
+    },
+    {
+      "key": "pt",
+      "aliases": [
+        "pt"
+      ],
+      "group": "Week plays",
+      "meaning": "Street average price target (1-year, quote currency)."
+    },
+    {
+      "key": "fcf_margin",
+      "aliases": [
+        "fcf_margin",
+        "FCF margin"
+      ],
+      "group": "Week plays",
+      "meaning": "Free-cash-flow margin, trailing 12 months, percent of revenue (TradingView free_cash_flow_margin_ttm)."
+    },
+    {
+      "key": "Bounce band",
+      "aliases": [
+        "Bounce band",
+        "bounce_band"
+      ],
+      "group": "Week plays",
+      "meaning": "The buy-in-red band under the close (bounce_low to bounce_high, safety band) with the mark in brackets; a limit goes only inside it."
+    },
+    {
+      "key": "Upside",
+      "aliases": [
+        "Upside",
+        "upside"
+      ],
+      "group": "Week plays",
+      "meaning": "Three separate reads, never summed: the alpha 7-day 80th-percentile price (q80) and its distance from the band middle, the name's mean absolute print reaction (react_abs_mean, either direction), and the street average target."
+    },
+    {
+      "key": "Financial risk",
+      "aliases": [
+        "Financial risk",
+        "financial_risk"
+      ],
+      "group": "Week plays",
+      "meaning": "Balance sheet and volatility: net debt / EBITDA (negative = net cash, x), free-cash-flow margin, operating margin and daily volatility (vol_d, %/day). Decides size, not order."
+    },
+    {
+      "key": "NAV %",
+      "aliases": [
+        "NAV %",
+        "nav_%"
+      ],
+      "group": "Week plays",
+      "meaning": "The line's current value as a percent of NAV including cash (wt_nav)."
+    },
+    {
+      "key": "play_rank",
+      "aliases": [
+        "play_rank"
+      ],
+      "group": "Play review",
+      "meaning": "Position of the name in the prior judgment's week-plays reading order (pages.week_plays.play_ids); empty when it was not on that list."
+    },
+    {
+      "key": "prior_close",
+      "aliases": [
+        "prior_close"
+      ],
+      "group": "Play review",
+      "meaning": "Close at the prior pack's scan (US $2B tape row, else its week-plays / Book row). A scan price: intraday when that scan ran in session."
+    },
+    {
+      "key": "ret_pct",
+      "aliases": [
+        "ret_pct"
+      ],
+      "group": "Play review",
+      "meaning": "Later scan close / prior scan close - 1, percent."
+    },
+    {
+      "key": "ret_fx",
+      "aliases": [
+        "ret_fx"
+      ],
+      "group": "Play review",
+      "meaning": "ret_pct less the median of the same return over every symbol on both US $2B tapes, percent (the move against the market)."
+    },
+    {
+      "key": "path",
+      "aliases": [
+        "path"
+      ],
+      "group": "Play review",
+      "meaning": "Each later day file as MM-DD o<open> c<close>: open = close / (1 + change_from_open), close at the file's newest run. The day files hold no session low or high."
+    },
+    {
+      "key": "open_state",
+      "aliases": [
+        "open_state"
+      ],
+      "group": "Play review",
+      "meaning": "The first later open against the prior pack's published bounce band (bounce_low..bounce_high) and bounce_kill: ABOVE_BAND, IN_BAND, UNDER_BAND or UNDER_KILL; empty without a band."
+    },
+    {
+      "key": "min_state",
+      "aliases": [
+        "min_state"
+      ],
+      "group": "Play review",
+      "meaning": "The lowest open or close on the path against the prior pack's published bounce band (bounce_low..bounce_high) and bounce_kill (a fill check on opens and closes only)."
+    },
+    {
+      "key": "close_state",
+      "aliases": [
+        "close_state"
+      ],
+      "group": "Play review",
+      "meaning": "The later scan close against the prior pack's published bounce band (bounce_low..bounce_high) and bounce_kill."
+    },
+    {
+      "key": "entry_state",
+      "aliases": [
+        "entry_state"
+      ],
+      "group": "Play review",
+      "meaning": "The later scan close against the prior entry book 50-day band (entry_low..entry_high) and kill_px, same four values."
+    },
+    {
+      "key": "close_vs_bhigh_pct",
+      "aliases": [
+        "close_vs_bhigh_pct"
+      ],
+      "group": "Play review",
+      "meaning": "Later close against bounce_high, percent (negative = under the top of the buy band)."
+    },
+    {
+      "key": "ABOVE_BAND",
+      "aliases": [
+        "ABOVE_BAND"
+      ],
+      "group": "Play review",
+      "meaning": "Price above the top of the published buy band: a limit inside the band would not have filled at that point."
+    },
+    {
+      "key": "IN_BAND",
+      "aliases": [
+        "IN_BAND"
+      ],
+      "group": "Play review",
+      "meaning": "Price inside the published buy band (low to high, inclusive)."
+    },
+    {
+      "key": "UNDER_BAND",
+      "aliases": [
+        "UNDER_BAND"
+      ],
+      "group": "Play review",
+      "meaning": "Price under the bottom of the band but above its kill."
+    },
+    {
+      "key": "UNDER_KILL",
+      "aliases": [
+        "UNDER_KILL"
+      ],
+      "group": "Play review",
+      "meaning": "Price under the published kill: the entry thesis is off on a close."
+    },
+    {
+      "key": "now_phase",
+      "aliases": [
+        "now_phase"
+      ],
+      "group": "Play review",
+      "meaning": "Print phase in the later pack's week plays (pre / post / none)."
+    },
+    {
+      "key": "now_react_fx",
+      "aliases": [
+        "now_react_fx"
+      ],
+      "group": "Play review",
+      "meaning": "The print reaction against the tape in the later pack (week plays react_fx), percent."
+    },
+    {
+      "key": "now_surprise_mix",
+      "aliases": [
+        "now_surprise_mix"
+      ],
+      "group": "Play review",
+      "meaning": "EPS / revenue beat-miss pair of the print just out (B/B, B/M, M/B, M/M), later pack."
+    },
+    {
+      "key": "now_mix_mean",
+      "aliases": [
+        "now_mix_mean"
+      ],
+      "group": "Play review",
+      "meaning": "Measured 28-day drift of that surprise-mix cell (signal lab), percent over the US $1B+ median."
+    },
+    {
+      "key": "prior_dec_28d",
+      "aliases": [
+        "prior_dec_28d"
+      ],
+      "group": "Play review",
+      "meaning": "Alpha model 28-day decile at the prior scan."
+    },
+    {
+      "key": "now_dec_28d",
+      "aliases": [
+        "now_dec_28d"
+      ],
+      "group": "Play review",
+      "meaning": "Alpha model 28-day decile at the later scan."
+    },
+    {
+      "key": "ret_fx_mean",
+      "aliases": [
+        "ret_fx_mean"
+      ],
+      "group": "Play review",
+      "meaning": "Mean ret_fx of the names in that prior course group, percent."
+    },
+    {
+      "key": "ret_fx_median",
+      "aliases": [
+        "ret_fx_median"
+      ],
+      "group": "Play review",
+      "meaning": "Median ret_fx of the names in that prior course group, percent."
+    },
+    {
+      "key": "up_share",
+      "aliases": [
+        "up_share"
+      ],
+      "group": "Play review",
+      "meaning": "Share of the group with ret_fx above zero (0 to 1)."
+    },
+    {
+      "key": "pred_28d_med",
+      "aliases": [
+        "pred_28d_med"
+      ],
+      "group": "Month leaders",
+      "meaning": "Industry median of the alpha model's 28-day forecast pred_28d (percent excess return; a fitted forecast, never a gate or a size)."
+    },
+    {
+      "key": "dec_28d_mean",
+      "aliases": [
+        "dec_28d_mean"
+      ],
+      "group": "Month leaders",
+      "meaning": "Industry mean of the 28-day decile (1 = weakest tenth of the universe, 10 = strongest)."
+    },
+    {
+      "key": "dec10_share",
+      "aliases": [
+        "dec10_share"
+      ],
+      "group": "Month leaders",
+      "meaning": "Share of the industry's names in 28-day decile 10 (0 to 1)."
+    },
+    {
+      "key": "dec1_share",
+      "aliases": [
+        "dec1_share"
+      ],
+      "group": "Month leaders",
+      "meaning": "Share of the industry's names in 28-day decile 1 (0 to 1)."
+    },
+    {
+      "key": "r_1m_med",
+      "aliases": [
+        "r_1m_med"
+      ],
+      "group": "Month leaders",
+      "meaning": "Industry median trailing 1-month return, percent."
+    },
+    {
+      "key": "p_def_med",
+      "aliases": [
+        "p_def_med"
+      ],
+      "group": "Month leaders",
+      "meaning": "Industry median p_def (defensive_fortress_v2 score, the lab's strongest feature in this regime)."
+    },
+    {
+      "key": "leaders",
+      "aliases": [
+        "leaders"
+      ],
+      "group": "Month leaders",
+      "meaning": "The three names in the industry with the highest pred_28d (one order, no cutoff)."
+    },
+    {
+      "key": "book_usd",
+      "aliases": [
+        "book_usd"
+      ],
+      "group": "Month leaders",
+      "meaning": "Book line value in USD when the name is held; empty otherwise."
+    },
+    {
+      "key": "p_def",
+      "aliases": [
+        "p_def"
+      ],
+      "group": "Month leaders",
+      "meaning": "defensive_fortress_v2 move-prediction score (signal lab 7d IC +0.060 STRONG, more in down markets)."
+    },
+    {
+      "key": "p_dvc",
+      "aliases": [
+        "p_dvc"
+      ],
+      "group": "Month leaders",
+      "meaning": "durable_value_compounder_v1 move-prediction score (signal lab 7d IC +0.088, regime-proof so far)."
+    },
+    {
+      "key": "pe_nfy_vs_ind",
+      "aliases": [
+        "pe_nfy_vs_ind"
+      ],
+      "group": "Month leaders",
+      "meaning": "Next-FY P/E against the industry median, percent (negative = cheaper than peers)."
+    },
+    {
+      "key": "next_kind",
+      "aliases": [
+        "next_kind"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Kind of the name's first catalyst inside the horizon: earnings, ex_dividend, ipo_lockup, or an OUTSIDE calendar kind (macro, central_bank, policy, index, regulatory, conference, commodity, market, earnings_outside). Empty = none inside the horizon."
+    },
+    {
+      "key": "next_date",
+      "aliases": [
+        "next_date"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Date of that first catalyst (the session it lands in)."
+    },
+    {
+      "key": "next_dow",
+      "aliases": [
+        "next_dow"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Weekday of next_date."
+    },
+    {
+      "key": "next_days",
+      "aliases": [
+        "next_days"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Calendar days from the scan day to next_date."
+    },
+    {
+      "key": "catalysts",
+      "aliases": [
+        "catalysts"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Every catalyst of the name inside the horizon as kind MM-DD (and slot for earnings), in date order."
+    },
+    {
+      "key": "earn_days",
+      "aliases": [
+        "earn_days"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Calendar days from the scan day to earn_date."
+    },
+    {
+      "key": "earn_week",
+      "aliases": [
+        "earn_week"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Week of the print: W0 = the scan day's Monday-Sunday week, W1 the next, up to W6."
+    },
+    {
+      "key": "W2",
+      "aliases": [
+        "W2"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Week index: the second week after the scan week (Monday-Sunday)."
+    },
+    {
+      "key": "W3",
+      "aliases": [
+        "W3"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Week index: the third week after the scan week."
+    },
+    {
+      "key": "W4",
+      "aliases": [
+        "W4"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Week index: the fourth week after the scan week."
+    },
+    {
+      "key": "W5",
+      "aliases": [
+        "W5"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Week index: the fifth week after the scan week."
+    },
+    {
+      "key": "W6",
+      "aliases": [
+        "W6"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Week index: the sixth week after the scan week."
+    },
+    {
+      "key": "hi52_days",
+      "aliases": [
+        "hi52_days"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Days since the 52-week high (price_52_week_high_date)."
+    },
+    {
+      "key": "analysts",
+      "aliases": [
+        "analysts"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Analysts covering the name (TradingView recommendation_total; full-scan run). Thin coverage is a reading of 'overlooked', not a score."
+    },
+    {
+      "key": "rating",
+      "aliases": [
+        "rating"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Consensus analyst rating (TradingView recommendation_mark: 1 strong buy ... 3 hold ... 5 strong sell)."
+    },
+    {
+      "key": "pack_lists",
+      "aliases": [
+        "pack_lists"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "The pack lists the name is on: radar50#k (Build-50 rank), earn_up / earn_down (earnings lanes), short15, payoff10, a suggested stance (ADD, NEW, DERISK_INTO_PRINT, SHORT_WAIT ...), '<horizon> <tail>' movers tails, book. Empty = on no pack list."
+    },
+    {
+      "key": "div_yield",
+      "aliases": [
+        "div_yield"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Current dividend yield, percent (dividends_yield_current)."
+    },
+    {
+      "key": "ex_date",
+      "aliases": [
+        "ex_date"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Upcoming ex-dividend date inside the horizon."
+    },
+    {
+      "key": "dividend",
+      "aliases": [
+        "dividend"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Upcoming dividend: amount per share and yield when the day file has them."
+    },
+    {
+      "key": "lockup_date",
+      "aliases": [
+        "lockup_date"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Estimated IPO lockup expiry: IPO offer date + lockup_days (recipe, 180). Not company-confirmed."
+    },
+    {
+      "key": "lockup",
+      "aliases": [
+        "lockup"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "The IPO offer date and the lockup length used."
+    },
+    {
+      "key": "event_date",
+      "aliases": [
+        "event_date"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Date of the OUTSIDE calendar row."
+    },
+    {
+      "key": "event_kind",
+      "aliases": [
+        "event_kind"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Kind of the OUTSIDE calendar row (macro, central_bank, policy, index, regulatory, conference, commodity, market, earnings_outside)."
+    },
+    {
+      "key": "event",
+      "aliases": [
+        "event"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "The OUTSIDE calendar row's text."
+    },
+    {
+      "key": "detail",
+      "aliases": [
+        "detail"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Event text: dividend amount / yield, lockup basis, or the OUTSIDE calendar description."
+    },
+    {
+      "key": "status",
+      "aliases": [
+        "status"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Date status of an event: day file (from the scan), estimated (pattern or projection), confirmed (company / agency / exchange), disputed (two sources differ)."
+    },
+    {
+      "key": "read",
+      "aliases": [
+        "read"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "What the event moves (OUTSIDE calendar note). Timing and Grade only."
+    },
+    {
+      "key": "dow",
+      "aliases": [
+        "dow"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Weekday."
+    },
+    {
+      "key": "n_earnings",
+      "aliases": [
+        "n_earnings"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Names on the universe floor printing that session."
+    },
+    {
+      "key": "n_ex_dividend",
+      "aliases": [
+        "n_ex_dividend"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Names going ex-dividend that session."
+    },
+    {
+      "key": "n_ipo_lockup",
+      "aliases": [
+        "n_ipo_lockup"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Estimated IPO lockup expiries that session."
+    },
+    {
+      "key": "largest_earnings",
+      "aliases": [
+        "largest_earnings"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "The largest names printing that session by market cap, with slot (recipe names_per_day)."
+    },
+    {
+      "key": "book_earnings",
+      "aliases": [
+        "book_earnings"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Book lines printing that session."
+    },
+    {
+      "key": "other",
+      "aliases": [
+        "other"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "OUTSIDE calendar events that session (catalyst_calendar.json)."
+    },
+    {
+      "key": "group",
+      "aliases": [
+        "group"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Column group name (catalyst_outlook.json column_groups)."
+    },
+    {
+      "key": "columns",
+      "aliases": [
+        "columns"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "Fields in that group, in table order."
+    },
+    {
+      "key": "AVOID",
+      "aliases": [
+        "AVOID"
+      ],
+      "group": "Action words",
+      "meaning": "Do not own or buy: the data says the name is on the wrong side of the regime (model bottom decile, supply event such as a lockup, falling estimates). Not a short call; a short needs SHORT_WAIT and its trigger."
+    },
+    {
+      "key": "Target",
+      "aliases": [
+        "Target"
+      ],
+      "group": "Catalyst outlook",
+      "meaning": "The upside reference quoted on a judgment row: the street average target unless the cell names another source (trim zone, model band). Shown, not ranked on."
+    },
+    {
+      "key": "react_fx_q10",
+      "aliases": [
+        "react_fx_q10",
+        "react_fx_q90",
+        "react_q10",
+        "react_q90"
+      ],
+      "group": "Signal lab",
+      "meaning": "10th / 90th percentile of the group's print reaction (vs the market for react_fx), percent: the overnight tail a hold-through takes, not a forecast."
+    },
+    {
+      "key": "hold_fx_28d_q10",
+      "aliases": [
+        "hold_fx_28d_q10",
+        "hold_fx_28d_q90",
+        "hold_fx_7d_q10",
+        "hold_fx_7d_q90",
+        "drift_fx_28d_q10",
+        "drift_fx_28d_q90",
+        "drift_fx_7d_q10",
+        "drift_fx_7d_q90"
+      ],
+      "group": "Signal lab",
+      "meaning": "10th / 90th percentile of the group's hold-through (from the close before the print) or drift (from the reaction close), percent over the US $1B+ median."
+    },
+    {
+      "key": "ah_read",
+      "aliases": [
+        "ah_read"
+      ],
+      "group": "Signal lab",
+      "meaning": "After-hours change against the cash close on the print night, percent. AMC prints only, and only when the print-day file was scanned at least prints.ah_after_close_minutes (30) after the 16:00 New York close; a session-time scan carries the previous evening and is left empty."
+    },
+    {
+      "key": "ah_to_close",
+      "aliases": [
+        "ah_to_close",
+        "ah_to_close_mean",
+        "ah_to_close_med",
+        "ah_to_close_hit",
+        "ah_to_close_t",
+        "ah_to_close_q10",
+        "ah_to_close_q90",
+        "ah_to_close_n"
+      ],
+      "group": "Signal lab",
+      "meaning": "Reaction close minus the after-hours read, percentage points (mean, median, share positive, t, 10th / 90th percentile, n): positive = the next cash close came back above the after-hours print. Thin: only post-close scans count."
+    },
+    {
+      "key": "react_gap",
+      "aliases": [
+        "react_gap"
+      ],
+      "group": "Signal lab",
+      "meaning": "Opening gap of the reaction session, percent; empty when the reaction file is not that session (file gap)."
+    },
+    {
+      "key": "react_oc",
+      "aliases": [
+        "react_oc",
+        "react_oc_mean",
+        "react_oc_med",
+        "react_oc_hit",
+        "react_oc_t",
+        "react_oc_q10",
+        "react_oc_q90",
+        "react_oc_n"
+      ],
+      "group": "Signal lab",
+      "meaning": "Open to close of the reaction session, percent ((1 + react) / (1 + gap) - 1): what the tape did after the gap. Positive after a gap down = bought after the open."
+    },
+    {
+      "key": "setup_rx_cell",
+      "aliases": [
+        "setup_rx_cell"
+      ],
+      "group": "Week plays",
+      "meaning": "Same label as setup_cell (study 'run-up x previous reaction', pre-print rows only), carried for its reaction-night measure (setup_rx_*)."
+    },
+    {
+      "key": "setup_rx_mean",
+      "aliases": [
+        "setup_rx_mean",
+        "setup_rx_t",
+        "setup_rx_n"
+      ],
+      "group": "Week plays",
+      "meaning": "That set-up cell's mean reaction vs the market on the reaction day, percent, its t (prints independent: optimistic) and n (print_cells react_fx). Near a coin flip for every set-up: the cells earn their edge over 7-28 days, not overnight."
+    },
+    {
+      "key": "setup_rx_q10",
+      "aliases": [
+        "setup_rx_q10",
+        "setup_rx_q90"
+      ],
+      "group": "Week plays",
+      "meaning": "10th / 90th percentile reaction vs the market in that set-up cell, percent: the overnight tail to size a hold-through against."
+    },
+    {
+      "key": "rx_tail_usd",
+      "aliases": [
+        "rx_tail_usd"
+      ],
+      "group": "Week plays",
+      "meaning": "The line's dollars (book_usd, or the Book's value_usd) times setup_rx_q10 / 100: the cell's 10th-percentile reaction on this line, dollars. A size read for DERISK into the print, not a stop and not a forecast. Pre-print rows only."
+    },
+    {
+      "key": "setrx_cell",
+      "aliases": [
+        "setrx_cell"
+      ],
+      "group": "Week plays",
+      "meaning": "Signal-lab cell (study 'set-up x reaction'): the set-up before the print (sold into / ran into & previous print down / up) | the reaction vs the market (sold 5%+ / inside the band / bought 5%+, prints.big_react_pct). Post rows on the print night only, with the after-hours read standing in for the reaction."
+    },
+    {
+      "key": "setrx_mean",
+      "aliases": [
+        "setrx_mean",
+        "setrx_t",
+        "setrx_n"
+      ],
+      "group": "Week plays",
+      "meaning": "That cell's mean 28-day drift from the reaction close, percent over the US $1B+ median, its t and n (print_cells drift_fx_28d). Evidence for hold vs exit after the reaction, not a forecast for this name."
+    },
+    {
+      "key": "ah_q_cell",
+      "aliases": [
+        "ah_q_cell"
+      ],
+      "group": "Week plays",
+      "meaning": "Signal-lab cell (study 'after-hours read quintile (AMC)'): the AMC row's after-hours change quintile of the measured post-close reads, label Qk [low, high). Print night only."
+    },
+    {
+      "key": "ah_q_mean",
+      "aliases": [
+        "ah_q_mean",
+        "ah_q_t",
+        "ah_q_n",
+        "ah_q_q10",
+        "ah_q_q90"
+      ],
+      "group": "Week plays",
+      "meaning": "That cell's mean, t, n and 10th / 90th percentile of the reaction close minus the after-hours read, percentage points (print_cells ah_to_close): positive = the cash close came back above the after-hours print. Thin sample."
+    },
+    {
+      "key": "rev_posted",
+      "aliases": [
+        "rev_posted"
+      ],
+      "group": "Week plays",
+      "meaning": "False when the print's revenue actual is not posted yet: total_revenue_fq still equals the last day file before the print while the forecast has rolled to the new quarter (TradingView can lag a day). rev_surprise then shows TradingView's own revenue surprise or stays empty, surprise_mix carries '-' for revenue and no mix cell is looked up. True = posted; empty = cannot tell."
+    },
+    {
+      "key": "post_chg",
+      "aliases": [
+        "post_chg"
+      ],
+      "group": "Signal lab",
+      "meaning": "After-hours change against the regular-session close, percent (TradingView postmarket_change). Only a scan taken after the close carries tonight's move; during the session it is the evening before."
+    },
+    {
+      "key": "post_px",
+      "aliases": [
+        "post_px"
+      ],
+      "group": "Signal lab",
+      "meaning": "The cash close moved by post_chg: the after-hours price implied by a post-close scan (session --ids). Not a fill; decide held lines at the next cash close."
+    },
+    {
+      "key": "post_usd",
+      "aliases": [
+        "post_usd"
+      ],
+      "group": "Signal lab",
+      "meaning": "Dollar move of the Book line after hours: book_usd x post_chg / 100 (page derive, generic_utils.derive.move_usd). Empty when the line has no after-hours read (EU listings)."
+    },
+    {
+      "key": "post_value_usd",
+      "aliases": [
+        "post_value_usd"
+      ],
+      "group": "Signal lab",
+      "meaning": "The Book line's value after hours: book_usd + post_usd. Equals book_usd when the line has no after-hours read."
+    },
+    {
+      "key": "session_day",
+      "aliases": [
+        "session_day"
+      ],
+      "group": "Signal lab",
+      "meaning": "The later scan's day change, percent (tv_scan_cli.py session): on a post-close scan, the cash session of the print day."
+    },
+    {
+      "key": "react_fx_hit",
+      "aliases": [
+        "react_fx_hit"
+      ],
+      "group": "Signal lab",
+      "meaning": "Share of the group whose reaction beat the market that day (react_fx > 0)."
+    },
+    {
+      "key": "dd",
+      "aliases": [
+        "dd"
+      ],
+      "group": "Deterioration",
+      "meaning": "Drawdown bucket from the 52-week high: dd 0-10, dd 10-20, dd 20-35, dd 35-50, dd 50+ (percent under the high; edges in config/generic_utils/deterioration.json). A label beside dd52_pct, not a score."
+    },
+    {
+      "key": "dd52_pct",
+      "aliases": [
+        "dd52_pct"
+      ],
+      "group": "Deterioration",
+      "meaning": "Close vs the 52-week high (TradingView price_52_week_high), %. 0 = at the high. Not the GMV hi_prox (91-day high)."
+    },
+    {
+      "key": "det",
+      "aliases": [
+        "det"
+      ],
+      "group": "Deterioration",
+      "meaning": "Deterioration letters beyond the price, written in order E R C S, only the ones on; - = none on. Empty when any letter's field is unknown (the cells need every letter known). Letter rules are on the page Ledger."
+    },
+    {
+      "key": "det_seen",
+      "aliases": [
+        "det_seen"
+      ],
+      "group": "Deterioration",
+      "meaning": "det on the known fields, then one ? per letter whose field is empty (no estimate, no FCF margin). - = none on and all known."
+    },
+    {
+      "key": "n_det",
+      "aliases": [
+        "n_det"
+      ],
+      "group": "Deterioration",
+      "meaning": "Count of det letters: 0, 1, 2 or 3+ (3 and 4 share one label). Empty when det is empty. A count with stated rules, not a score."
+    },
+    {
+      "key": "r_12m",
+      "aliases": [
+        "r_12m"
+      ],
+      "group": "Deterioration",
+      "meaning": "12-month return, % (TradingView Perf.Y)."
+    },
+    {
+      "key": "eps_chg_3m",
+      "aliases": [
+        "eps_chg_3m",
+        "eps_chg_1m"
+      ],
+      "group": "Deterioration",
+      "meaning": "Next-FY EPS estimate now vs the panel row about 3 months (1 month) earlier, %; empty across a split or when either estimate is not positive (panel feature eps_rev_3m / eps_rev_1m)."
+    },
+    {
+      "key": "rev_chg_3m",
+      "aliases": [
+        "rev_chg_3m",
+        "rev_chg_1m"
+      ],
+      "group": "Deterioration",
+      "meaning": "Next-FY revenue estimate now vs about 3 months (1 month) earlier, % (panel feature rev_rev_3m / rev_rev_1m)."
+    },
+    {
+      "key": "pt_chg_1m",
+      "aliases": [
+        "pt_chg_1m",
+        "pt_rev_1m"
+      ],
+      "group": "Deterioration",
+      "meaning": "Street 1-year target now vs about 1 month earlier, % (panel feature pt_rev_1m). Follows the price; a split, not a letter."
+    },
+    {
+      "key": "opm_chg_q",
+      "aliases": [
+        "opm_chg_q",
+        "rev_yoy_chg_q",
+        "fcf_margin_chg_q"
+      ],
+      "group": "Deterioration",
+      "meaning": "Operating margin (revenue growth, FCF margin) now minus the panel value on q_ago_on (about 91 days earlier), percentage points. Negative = worse than a quarter ago."
+    },
+    {
+      "key": "q_ago_on",
+      "aliases": [
+        "q_ago_on"
+      ],
+      "group": "Deterioration",
+      "meaning": "Store day used for the quarter-ago reads (the newest panel row at least 91 days before the scan)."
+    },
+    {
+      "key": "sma200",
+      "aliases": [
+        "sma200"
+      ],
+      "group": "Deterioration",
+      "meaning": "200-day simple moving average price from the day file (sma50: the 50-day, Book risk row)."
+    },
+    {
+      "key": "hi52",
+      "aliases": [
+        "hi52",
+        "lo52"
+      ],
+      "group": "Deterioration",
+      "meaning": "52-week high (low) price from the day file."
+    },
+    {
+      "key": "half_px",
+      "aliases": [
+        "half_px"
+      ],
+      "group": "Deterioration",
+      "meaning": "Half-way back to the 52-week high: close + (hi52 - close) / 2. The level p_half measures."
+    },
+    {
+      "key": "to_sma50_pct",
+      "aliases": [
+        "to_sma50_pct",
+        "to_sma200_pct",
+        "to_half_px_pct",
+        "to_hi52_pct",
+        "to_lo52_pct"
+      ],
+      "group": "Deterioration",
+      "meaning": "That level vs the close, %: positive = above the close (the move needed to reach it), negative = below."
+    },
+    {
+      "key": "cnt_cell",
+      "aliases": [
+        "cnt_cell"
+      ],
+      "group": "Deterioration",
+      "meaning": "Measured cell (study 'drawdown x deterioration count') the row sits in now: dd | n_det. Empty when det is unknown."
+    },
+    {
+      "key": "crun_cell",
+      "aliases": [
+        "crun_cell"
+      ],
+      "group": "Deterioration",
+      "meaning": "Cell 'drawdown x count x 12m run': dd | n_det | 12-month run (12M down, 12M 0-50, 12M 50-100, 12M 100+). The crowded-winner read."
+    },
+    {
+      "key": "cmkt_cell",
+      "aliases": [
+        "cmkt_cell"
+      ],
+      "group": "Deterioration",
+      "meaning": "Cell 'drawdown x count x market': dd | n_det | mkt up / mkt down (universe median trailing month above / at or under 0 at the scan)."
+    },
+    {
+      "key": "ctr_cell",
+      "aliases": [
+        "ctr_cell"
+      ],
+      "group": "Deterioration",
+      "meaning": "Cell 'drawdown x count x trend': dd | n_det | under 200d / over 200d."
+    },
+    {
+      "key": "cdir_cell",
+      "aliases": [
+        "cdir_cell"
+      ],
+      "group": "Deterioration",
+      "meaning": "Cell 'drawdown x count x 1m direction': dd | n_det | 1M up / 1M down (already turning or still falling)."
+    },
+    {
+      "key": "let_cell",
+      "aliases": [
+        "let_cell"
+      ],
+      "group": "Deterioration",
+      "meaning": "Cell 'drawdown x letters': dd | the exact det letters."
+    },
+    {
+      "key": "day_chg",
+      "aliases": [
+        "day_chg"
+      ],
+      "group": "Deterioration",
+      "meaning": "Change on the scan day against the prior close, % (an intraday scan carries the move so far)."
+    },
+    {
+      "key": "pnl_pct",
+      "aliases": [
+        "pnl_pct"
+      ],
+      "group": "Recovery ladder",
+      "meaning": "The Book line's value against its cost, %: the paper gain or loss (generic_utils.recovery_ladder)."
+    },
+    {
+      "key": "avg_px",
+      "aliases": [
+        "avg_px"
+      ],
+      "group": "Recovery ladder",
+      "meaning": "Average buy price of the line in its quote currency (holdings file): the break-even price."
+    },
+    {
+      "key": "be_from_close_pct",
+      "aliases": [
+        "be_from_close_pct"
+      ],
+      "group": "Recovery ladder",
+      "meaning": "Rise from the close back to the average price (break-even), % with no add; negative = the line is in profit."
+    },
+    {
+      "key": "gain_px",
+      "aliases": [
+        "gain10_px",
+        "gain5_px",
+        "gain20_px"
+      ],
+      "group": "Recovery ladder",
+      "meaning": "The price at which the line makes the named gain on its (new) average: average x (1 + g/100). gain10 = +10% on the whole line."
+    },
+    {
+      "key": "gain_from_close_pct",
+      "aliases": [
+        "gain10_from_close_pct",
+        "gain10_from_add_pct",
+        "gain5_from_close_pct",
+        "gain20_from_close_pct"
+      ],
+      "group": "Recovery ladder",
+      "meaning": "Rise needed from the close (or, _from_add, from the add's buy price) to reach gain<g>_px, %."
+    },
+    {
+      "key": "add_be_at_level_usd",
+      "aliases": [
+        "add_be_at_sma50_usd",
+        "add_be_at_half_px_usd",
+        "add_be_at_street_px_usd"
+      ],
+      "group": "Recovery ladder",
+      "meaning": "USD to add at solve_at_px (the bounce band top, else the close) so that a return to the named level breaks the whole line even. 0 = the level is already above the average; empty = the level is not above the buy price, so no add can do it."
+    },
+    {
+      "key": "add_at",
+      "aliases": [
+        "add_at"
+      ],
+      "group": "Recovery ladder",
+      "meaning": "The price the scenario add buys at: close (today's mark), bounce_high (top of the buy-in-red band), bounce_low (bottom of it)."
+    },
+    {
+      "key": "new_avg",
+      "aliases": [
+        "new_avg"
+      ],
+      "group": "Recovery ladder",
+      "meaning": "The line's average price after buying add_usd at add_px (quote currency)."
+    },
+    {
+      "key": "avg_cut_pct",
+      "aliases": [
+        "avg_cut_pct"
+      ],
+      "group": "Recovery ladder",
+      "meaning": "How much the add lowers the average, % (new_avg vs the old average)."
+    },
+    {
+      "key": "be_from_add_pct",
+      "aliases": [
+        "be_from_add_pct"
+      ],
+      "group": "Recovery ladder",
+      "meaning": "Rise from the add's buy price back to the new average (break-even after the add), %."
+    },
+    {
+      "key": "be_vs_level_pct",
+      "aliases": [
+        "be_vs_sma50_pct",
+        "be_vs_half_px_pct",
+        "be_vs_street_px_pct"
+      ],
+      "group": "Recovery ladder",
+      "meaning": "The new break-even against the named level, %: under 0 = a return to that level repairs the line."
+    },
+    {
+      "key": "add_kill_usd",
+      "aliases": [
+        "add_kill_usd"
+      ],
+      "group": "Recovery ladder",
+      "meaning": "USD the add alone loses if the price falls from add_px to the kill."
+    },
+    {
+      "key": "line_kill_usd",
+      "aliases": [
+        "line_kill_usd"
+      ],
+      "group": "Recovery ladder",
+      "meaning": "USD the whole line (old shares plus the add) loses from add_px to the kill."
+    },
+    {
+      "key": "solve_at_px",
+      "aliases": [
+        "solve_at_px",
+        "solve_at"
+      ],
+      "group": "Recovery ladder",
+      "meaning": "The buy price (and its source level) used to solve add_be_at_<level>_usd."
+    },
+    {
+      "key": "trend",
+      "aliases": [
+        "trend"
+      ],
+      "group": "Deterioration",
+      "meaning": "Close against its 200-day average (vs200 cut at 0): 'over 200d' or 'under 200d'. Empty when there is no 200-day average (config/generic_utils/deterioration.json)."
+    },
+    {
+      "key": "cell_fx_28d_mean",
+      "aliases": [
+        "cnt_fx_28d_mean",
+        "crun_fx_28d_mean",
+        "cmkt_fx_28d_mean",
+        "ctr_fx_28d_mean",
+        "cdir_fx_28d_mean",
+        "let_fx_28d_mean",
+        "let_fx_56d_mean",
+        "fx_28d_mean",
+        "cnt_fx_7d_mean",
+        "crun_fx_7d_mean",
+        "cmkt_fx_7d_mean",
+        "fx_7d_mean",
+        "cnt_fx_56d_mean",
+        "crun_fx_56d_mean",
+        "cmkt_fx_56d_mean",
+        "fx_56d_mean"
+      ],
+      "group": "Deterioration",
+      "meaning": "That cell's mean excess return over the horizon (7d / 28d / 56d), percent over the day's US $2B+ median, winsorized. Evidence for the state, not a forecast for the name."
+    },
+    {
+      "key": "cell_fx_28d_t",
+      "aliases": [
+        "cnt_fx_28d_t",
+        "crun_fx_28d_t",
+        "cmkt_fx_28d_t",
+        "let_fx_28d_t",
+        "fx_28d_t",
+        "fx_7d_t",
+        "fx_56d_t"
+      ],
+      "group": "Deterioration",
+      "meaning": "t of the cell's daily mean excess on non-overlapping days only (a day, not a row, is the unit: names of one day move together). Empty under 3 such days; 56d is direction only."
+    },
+    {
+      "key": "cell_fx_28d_t_nw",
+      "aliases": [
+        "fx_28d_t_nw",
+        "fx_7d_t_nw",
+        "fx_56d_t_nw"
+      ],
+      "group": "Deterioration",
+      "meaning": "t of the cell's daily means over every day, Newey-West lag = the horizon in files. Higher than the non-overlapping t; trust the smaller."
+    },
+    {
+      "key": "cell_n_indep",
+      "aliases": [
+        "fx_28d_n_indep",
+        "cnt_fx_28d_n_indep",
+        "crun_fx_28d_n_indep",
+        "cmkt_fx_28d_n_indep",
+        "fx_7d_n_indep",
+        "fx_56d_n_indep"
+      ],
+      "group": "Deterioration",
+      "meaning": "How many non-overlapping days back the t (one per horizon length)."
+    },
+    {
+      "key": "cell_fx_28d_hit",
+      "aliases": [
+        "cnt_fx_28d_hit",
+        "crun_fx_28d_hit",
+        "cmkt_fx_28d_hit",
+        "let_fx_28d_hit",
+        "fx_28d_hit",
+        "fx_7d_hit",
+        "fx_56d_hit"
+      ],
+      "group": "Deterioration",
+      "meaning": "Share of the cell's rows that beat the median over the horizon."
+    },
+    {
+      "key": "cell_fx_28d_q10",
+      "aliases": [
+        "cnt_fx_28d_q10",
+        "crun_fx_28d_q10",
+        "cmkt_fx_28d_q10",
+        "let_fx_28d_q10",
+        "fx_28d_q10",
+        "fx_28d_q90",
+        "cnt_fx_28d_q90",
+        "fx_7d_q10",
+        "fx_56d_q10"
+      ],
+      "group": "Deterioration",
+      "meaning": "10th (90th) percentile of the cell's excess return over the horizon, percent: the bad (good) case."
+    },
+    {
+      "key": "cell_p_dn_28d",
+      "aliases": [
+        "cnt_p_dn_28d",
+        "crun_p_dn_28d",
+        "cmkt_p_dn_28d",
+        "p_dn_28d",
+        "p_dn_7d",
+        "p_dn_56d",
+        "cnt_p_dn_56d",
+        "let_p_dn_56d"
+      ],
+      "group": "Deterioration",
+      "meaning": "Share of the cell whose raw return over the horizon was -10% or worse (further deterioration in price)."
+    },
+    {
+      "key": "cell_p_up_28d",
+      "aliases": [
+        "cnt_p_up_28d",
+        "p_up_28d",
+        "p_up_7d",
+        "p_up_56d"
+      ],
+      "group": "Deterioration",
+      "meaning": "Share of the cell whose raw return over the horizon was +10% or better."
+    },
+    {
+      "key": "cell_p_half_56d",
+      "aliases": [
+        "cnt_p_half_56d",
+        "crun_p_half_56d",
+        "let_p_half_56d",
+        "p_half_56d",
+        "p_half_28d",
+        "p_half_7d"
+      ],
+      "group": "Deterioration",
+      "meaning": "Share of the cell that regained half the gap to its 52-week high by the horizon (close at or above half_px). How often a drawdown repairs inside two months."
+    },
+    {
+      "key": "cell_n_28d",
+      "aliases": [
+        "cnt_n_28d",
+        "crun_n_28d",
+        "cmkt_n_28d",
+        "let_n_28d",
+        "n_28d",
+        "n_7d",
+        "n_56d",
+        "days"
+      ],
+      "group": "Deterioration",
+      "meaning": "Rows (name-days) in the cell with a 28-day (7d / 56d) label; days = distinct store days in the cell."
+    },
+    {
+      "key": "fwd_28d_mean",
+      "aliases": [
+        "fwd_28d_mean",
+        "fwd_7d_mean",
+        "fwd_56d_mean"
+      ],
+      "group": "Deterioration",
+      "meaning": "That cell's mean raw return over the horizon, percent (not against the market)."
+    },
+    {
+      "key": "carry_28d_usd",
+      "aliases": [
+        "carry_28d_usd",
+        "carry_56d_usd"
+      ],
+      "group": "Deterioration",
+      "meaning": "Book dollars x the cnt cell's mean excess over the horizon / 100: what the median-relative drift of this state was worth on the line, dollars. Negative = the state cost money against the market. Not a forecast, not a size."
+    },
+    {
+      "key": "tail_28d_usd",
+      "aliases": [
+        "tail_28d_usd",
+        "tail_56d_usd"
+      ],
+      "group": "Deterioration",
+      "meaning": "Book dollars x the cnt cell's q10 excess over the horizon / 100: the bad case on this line, dollars."
+    },
+    {
+      "key": "cost_usd",
+      "aliases": [
+        "cost_usd",
+        "pnl_usd"
+      ],
+      "group": "Deterioration",
+      "meaning": "Book line cost in USD (unrealized P&L in USD) from the pack book."
+    },
+    {
+      "key": "rvol_20",
+      "aliases": [
+        "rvol_20"
+      ],
+      "group": "Deterioration",
+      "meaning": "Realized daily volatility over the last 20 day files, %."
+    },
+    {
+      "key": "factor",
+      "aliases": [
+        "factor"
+      ],
+      "group": "Pathway",
+      "meaning": "A panel-store feature (config/generic_utils/panel_store.json features) read as a factor: its cross-sectional rank on the floor and its signal-lab IC."
+    },
+    {
+      "key": "book_pctl",
+      "aliases": [
+        "book_pctl"
+      ],
+      "group": "Pathway",
+      "meaning": "The Book's NAV-weighted cross-sectional percentile of the factor (0..1) among the store day's US $2B+ names; 0.5 = the median name. US store lines only (coverage_pct)."
+    },
+    {
+      "key": "gap",
+      "aliases": [
+        "gap"
+      ],
+      "group": "Pathway",
+      "meaning": "book_pctl - 0.5: how far the Book leans high (+) or low (-) on the factor against the median name."
+    },
+    {
+      "key": "coverage_pct",
+      "aliases": [
+        "coverage_pct"
+      ],
+      "group": "Pathway",
+      "meaning": "Share of the Book's dollars the read covers, %: lines in the US store (and, per factor, with a value). XETR / OMXCOP lines have no percentile."
+    },
+    {
+      "key": "ic_28d",
+      "aliases": [
+        "ic_28d",
+        "verdict_28d",
+        "t_indep_28d"
+      ],
+      "group": "Pathway",
+      "meaning": "The factor's full-sample signal-lab IC at 28 days (daily Spearman vs the later excess return), its verdict and non-overlapping t (factor_summary)."
+    },
+    {
+      "key": "ic_month",
+      "aliases": [
+        "ic_month",
+        "ic_prev_month"
+      ],
+      "group": "Pathway",
+      "meaning": "Mean daily 7-day IC in the newest calendar month with labels (month) and the month before (factor_month): what the factor paid lately."
+    },
+    {
+      "key": "ic_tape",
+      "aliases": [
+        "ic_tape",
+        "ic_tape_prev",
+        "tape_last"
+      ],
+      "group": "Pathway",
+      "meaning": "Mean daily 7-day IC over the last 20 labelled days (ending tape_last; labels lag a week) and the 20 days before: is the factor's payoff turning."
+    },
+    {
+      "key": "tape_pos",
+      "aliases": [
+        "tape_pos"
+      ],
+      "group": "Pathway",
+      "meaning": "Share of those last 20 days with a positive IC."
+    },
+    {
+      "key": "tilt_month",
+      "aliases": [
+        "tilt_month",
+        "tilt_tape"
+      ],
+      "group": "Pathway",
+      "meaning": "gap x ic_month (x ic_tape): + = the Book's lean on this factor was paid lately, - = it cost. One factor at a time; never summed into a score."
+    },
+    {
+      "key": "mkt",
+      "aliases": [
+        "mkt",
+        "mkt_r_1m",
+        "mkt_r_3m"
+      ],
+      "group": "Pathway",
+      "meaning": "Median return of the store day's US $2B+ names over the horizon, %."
+    },
+    {
+      "key": "ind_r_1m",
+      "aliases": [
+        "ind_r_1m",
+        "ind_r_3m"
+      ],
+      "group": "Pathway",
+      "meaning": "Median return of the line's industry on the floor over the horizon, % (industries with fewer than 5 names: empty)."
+    },
+    {
+      "key": "rel_r_1m",
+      "aliases": [
+        "rel_r_1m",
+        "rel_r_3m",
+        "book_rel"
+      ],
+      "group": "Pathway",
+      "meaning": "Return minus the market median, percentage points (book_rel: NAV-weighted over the Book's US lines)."
+    },
+    {
+      "key": "ind_part_r_1m",
+      "aliases": [
+        "ind_part_r_1m",
+        "ind_part_r_3m",
+        "book_ind_part"
+      ],
+      "group": "Pathway",
+      "meaning": "Industry part: the industry median minus the market median, pp. What being in that industry did (book_ind_part: NAV-weighted)."
+    },
+    {
+      "key": "stock_part_r_1m",
+      "aliases": [
+        "stock_part_r_1m",
+        "stock_part_r_3m",
+        "book_stock_part"
+      ],
+      "group": "Pathway",
+      "meaning": "Stock part: the line's return minus its industry median, pp. What the pick did inside its industry (book_stock_part: NAV-weighted)."
+    },
+    {
+      "key": "rel_usd",
+      "aliases": [
+        "rel_usd",
+        "ind_part_usd",
+        "stock_part_usd"
+      ],
+      "group": "Pathway",
+      "meaning": "Today's line dollars x that part / 100, summed over the Book's US lines: an approximation of what the part cost or earned (today's weights, not the path)."
+    },
+    {
+      "key": "pctl_beta",
+      "aliases": [
+        "pctl_beta",
+        "pctl_pt_up",
+        "pctl_rvol_20",
+        "pctl_p_dvc",
+        "pctl_p_def",
+        "pctl_fcf_margin",
+        "pctl_r_12m"
+      ],
+      "group": "Pathway",
+      "meaning": "The name's cross-sectional percentile (0..1) of that factor on the store day's floor."
+    },
+    {
+      "key": "d_beta_trim",
+      "aliases": [
+        "d_beta_trim",
+        "d_pt_up_trim",
+        "d_rvol_20_trim",
+        "d_p_dvc_trim",
+        "d_fcf_margin_trim",
+        "d_p_def_trim",
+        "d_r_12m_trim"
+      ],
+      "group": "Pathway",
+      "meaning": "Change in the Book's book_pctl for that factor if a third of this line were sold (trim_frac in pathway.json). Negative on beta = the trim lowers the Book's beta."
+    },
+    {
+      "key": "d_beta_add",
+      "aliases": [
+        "d_beta_add",
+        "d_pt_up_add",
+        "d_rvol_20_add",
+        "d_p_dvc_add",
+        "d_fcf_margin_add",
+        "d_p_def_add",
+        "d_r_12m_add"
+      ],
+      "group": "Pathway",
+      "meaning": "Change in the Book's book_pctl for that factor if a $5,000 line in this name were added (starter_usd in pathway.json)."
+    },
+    {
+      "key": "mkt_1m",
+      "aliases": [
+        "mkt_1m"
+      ],
+      "group": "Pathway",
+      "meaning": "Median 1-month return of the floor that store day, % (the regime field: above 0 = up month); mkt_1d is the median day change."
+    },
+    {
+      "key": "breadth_1d",
+      "aliases": [
+        "breadth_1d"
+      ],
+      "group": "Pathway",
+      "meaning": "Share of the floor up on the day."
+    },
+    {
+      "key": "above_200d",
+      "aliases": [
+        "above_200d"
+      ],
+      "group": "Pathway",
+      "meaning": "Share of the floor closing above its 200-day average."
+    },
+    {
+      "key": "med_rvol_20",
+      "aliases": [
+        "med_rvol_20",
+        "med_hi_prox"
+      ],
+      "group": "Pathway",
+      "meaning": "Median realized 20-day volatility, % (median close vs the 52-week high, %) of the floor."
+    },
+    {
+      "key": "trail_beta",
+      "aliases": [
+        "trail_beta",
+        "trail_pt_up",
+        "trail_rvol_20",
+        "trail_r_12m",
+        "trail_hi_prox",
+        "trail_p_dvc",
+        "trail_fcf_margin",
+        "trail_ey_fwd"
+      ],
+      "group": "Pathway",
+      "meaning": "Mean of that factor's daily 7-day IC over the 20 labelled days ending that day: positive = high values have been leading."
+    },
+    {
+      "key": "ind_pred_28d",
+      "aliases": [
+        "ind_pred_28d",
+        "ind_dec_28d",
+        "ind_r_1m_med"
+      ],
+      "group": "Pathway",
+      "meaning": "The name's industry in the alpha model's month-ahead read (week_plays month_ind): median pred_28d, mean decile, median trailing month. A regime guide, not a buy list."
+    },
+    {
+      "key": "x_<pointer>",
+      "aliases": [
+        "x_runup",
+        "x_r_1m",
+        "x_r_3m",
+        "x_rsi",
+        "x_vs50",
+        "x_hi_prox",
+        "x_rvol_20",
+        "x_beta",
+        "x_prev_react",
+        "x_last_surprise",
+        "x_slot",
+        "x_eps_rev_3m",
+        "x_eps_rev_1m",
+        "x_rev_rev_3m",
+        "x_eps_q_step",
+        "x_rev_q_step",
+        "x_pt_up",
+        "x_pt_rev_1m",
+        "x_ey_fwd",
+        "x_fcf_margin",
+        "x_p_dvc",
+        "x_p_cons_w",
+        "x_peer_rx",
+        "x_eps_surprise",
+        "x_rev_surprise",
+        "x_surprise_mix",
+        "x_ah_read",
+        "x_react_fx"
+      ],
+      "group": "Print night",
+      "meaning": "Pointer cell (print-night matrix): the lift, in percentage points, of the quintile (category for slot / mix) this name sits in on that pointer, against every other past print, on the row's measure. ▲ / ▼ = the direction is clear; a bare number = measured but not clear; empty = no value, or the pointer is not read on that measure (a field is never measured on itself; the print rewrites estimates and the last surprise, so those are empty on printed rows). The field, bucket edges and the cell's n / mean / hit are on the Pointer evidence tab."
+    },
+    {
+      "key": "▲ / ▼",
+      "aliases": [
+        "▲",
+        "▼"
+      ],
+      "group": "Print night",
+      "meaning": "The pointer's cell points up / down: |lift_t| at or above t_min (recipe, 2.0) on at least min_n prints (40), the same sign in both halves of the sample (split at the median print date) and the cell's hit rate moving the same way as its mean (so a few large moves cannot set it). Green / red shading is the arrow, not Heat. Many cells are tested and prints cluster by date and industry: an arrow is a measured lean, not a forecast."
+    },
+    {
+      "key": "<m>_up / <m>_dn",
+      "aliases": [
+        "rx_up",
+        "rx_dn",
+        "h7_up",
+        "h7_dn",
+        "h28_up",
+        "h28_dn",
+        "ac_up",
+        "ac_dn",
+        "d28_up",
+        "d28_dn",
+        "ptr_up",
+        "ptr_dn"
+      ],
+      "group": "Print night",
+      "meaning": "Count of pointers whose cell points up (▲) / down (▼) on one measure: rx = the reaction session vs the market; h7 / h28 = held from the close before the print for 7 / 28 days, excess; ac = the reaction close minus the after-hours read (AMC); d28 = drift 28 days from the reaction close. ptr_up / ptr_dn = the same count on a matrix row. A count of measured cells, not a score and not a sum of lifts."
+    },
+    {
+      "key": "<m>_fam_up / <m>_fam_dn",
+      "aliases": [
+        "rx_fam_up",
+        "rx_fam_dn",
+        "h7_fam_up",
+        "h7_fam_dn",
+        "h28_fam_up",
+        "h28_fam_dn",
+        "ac_fam_up",
+        "ac_fam_dn",
+        "d28_fam_up",
+        "d28_fam_dn",
+        "fam_up",
+        "fam_dn"
+      ],
+      "group": "Print night",
+      "meaning": "How many pointer families (Tape, History, Estimates, Street, Value, Model, Peers; Print, Session after the print) the up / down pointers come from. Run-up, the month, RSI and the 50-day distance are one family and often point together: 3 up from one family is one bet, 3 from three families is three."
+    },
+    {
+      "key": "<m>_up_list / <m>_dn_list",
+      "aliases": [
+        "rx_up_list",
+        "rx_dn_list",
+        "h7_up_list",
+        "h7_dn_list",
+        "h28_up_list",
+        "h28_dn_list",
+        "ac_up_list",
+        "ac_dn_list",
+        "d28_up_list",
+        "d28_dn_list"
+      ],
+      "group": "Print night",
+      "meaning": "The pointers behind the up / down count, by key (their fields on the Pointer evidence tab)."
+    },
+    {
+      "key": "pointer",
+      "aliases": [
+        "pointer"
+      ],
+      "group": "Print night",
+      "meaning": "A field known at the time (before the print: tape, history, estimates, street, value, model, peers; after it: surprise, mix, after-hours read, reaction) cut into quintiles on the lab's past prints; recipe config/generic_utils/print_night.json."
+    },
+    {
+      "key": "bucket",
+      "aliases": [
+        "bucket"
+      ],
+      "group": "Print night",
+      "meaning": "The quintile (Q1 lowest .. Q5 highest, with its edges [low, high) from the past prints) or the category (slot, mix) a value sits in."
+    },
+    {
+      "key": "measure",
+      "aliases": [
+        "measure",
+        "code"
+      ],
+      "group": "Print night",
+      "meaning": "What a cell is measured on: react_fx (rx), hold_fx_7d (h7), hold_fx_28d (h28) before the print; react_fx, ah_to_close (ac), drift_fx_28d (d28) after it. code is the short name used in the count columns."
+    },
+    {
+      "key": "lift",
+      "aliases": [
+        "lift"
+      ],
+      "group": "Print night",
+      "meaning": "The cell's mean minus the mean of every other past print on the same measure, percentage points. Positive = prints in this cell did better than the rest."
+    },
+    {
+      "key": "lift_t",
+      "aliases": [
+        "lift_t"
+      ],
+      "group": "Print night",
+      "meaning": "Welch t of the lift (cell vs the rest). Prints are treated as independent, so it is optimistic; the halves and hit rules guard it."
+    },
+    {
+      "key": "half1_lift / half2_lift",
+      "aliases": [
+        "half1_lift",
+        "half2_lift"
+      ],
+      "group": "Print night",
+      "meaning": "The lift inside the earlier and the later half of the sample (split at the median print date). An arrow needs both on the same side as the full lift."
+    },
+    {
+      "key": "hit_lift",
+      "aliases": [
+        "hit_lift"
+      ],
+      "group": "Print night",
+      "meaning": "The cell's share of positive prints minus the rest's. An arrow needs it on the same side as the lift: the typical print moved, not only the average."
+    },
+    {
+      "key": "dir",
+      "aliases": [
+        "dir"
+      ],
+      "group": "Print night",
+      "meaning": "up / down = the cell's direction is clear (see ▲ / ▼); - = measured without a clear direction; empty = no cell (no value, or fewer prints than a bucket needs)."
+    },
+    {
+      "key": "peer_rx",
+      "aliases": [
+        "peer_rx",
+        "peer_n"
+      ],
+      "group": "Print night",
+      "meaning": "Mean reaction vs the market of the same industry's prints that reacted in the prior 35 days (the name excluded), and how many there were (at least 3 for a value): how the market is paying this industry's prints this season. Measured as a pointer like the others."
+    },
+    {
+      "key": "tail_starter_usd / up_starter_usd / own_move_starter_usd",
+      "aliases": [
+        "tail_starter_usd",
+        "up_starter_usd",
+        "own_move_starter_usd"
+      ],
+      "group": "Print night",
+      "meaning": "A $5,000 starter (recipe starter_usd) times the set-up cell's 10th / 90th percentile reaction vs the market (setup_rx_q10 / q90): the overnight bad and good case in dollars of buying before the print; the same for every name in one set-up cell. own_move_starter_usd = the starter times the name's own mean absolute past reaction (react_abs_mean): its typical move either way. Size reads, not stops."
+    },
+    {
+      "key": "dec_<h>_fx / dec_<h>_hit",
+      "aliases": [
+        "dec_1d_fx",
+        "dec_7d_fx",
+        "dec_1d_hit",
+        "dec_7d_hit"
+      ],
+      "group": "Print night",
+      "meaning": "What the alpha model's decile the name sits in today returned out of sample (mean excess, share positive) at that horizon (alpha_model deciles.csv). Read with state_<h>: a FAILING or WEAK horizon's decile is context, not a lean."
+    },
+    {
+      "key": "state_<h>",
+      "aliases": [
+        "state_1d",
+        "state_7d"
+      ],
+      "group": "Print night",
+      "meaning": "The alpha model horizon's health from its out-of-sample record (OK, WEAK, DEGRADED, FAILING, NO_TRACK)."
+    },
+    {
+      "key": "in_store",
+      "aliases": [
+        "in_store"
+      ],
+      "group": "Print night",
+      "meaning": "True when the name is in the US panel store today, so its pointer values come from the same store features the past prints were measured on; false = values from the earnings-week calendar where a field exists (Europe and names off the store floor)."
+    },
+    {
+      "key": "market",
+      "aliases": [
+        "market"
+      ],
+      "group": "Print night",
+      "meaning": "TradingView market of the listing (america, germany, uk, ...)."
+    },
+    {
+      "key": "headline",
+      "aliases": [
+        "headline"
+      ],
+      "group": "Print brief",
+      "meaning": "One line per reporter built from the pack: the set-up into the print, forward P/E against the industry and its own median, the 28-day / 7-day pointer counts, its average print move (after the print: the mix, the surprises, the reaction)."
+    },
+    {
+      "key": "setup_text",
+      "aliases": [
+        "setup_text"
+      ],
+      "group": "Print brief",
+      "meaning": "Going into the print: run-up, month, quarter, distance to the 50-day, RSI, place in the 52-week range; the previous print and how many past prints rose; the set-up cell's measured hold and overnight tail; the deterioration cell and letters beyond price."
+    },
+    {
+      "key": "value_text",
+      "aliases": [
+        "value_text"
+      ],
+      "group": "Print brief",
+      "meaning": "Forward P/E against the industry median and its own median, EV/EBITDA against the industry, FCF and operating margins, net debt / EBITDA, the street target (range, one-month drift), margin of safety to its own P/E median and to peers."
+    },
+    {
+      "key": "quarter_text",
+      "aliases": [
+        "quarter_text"
+      ],
+      "group": "Print brief",
+      "meaning": "What the quarter has to show: consensus EPS and revenue against last quarter's reported numbers, next-FY EPS revisions and the quintile of past prints they sit in (with that cell's measured 28-day hold lift), last quarter's surprise and mix, growth."
+    },
+    {
+      "key": "peers_text",
+      "aliases": [
+        "peers_text"
+      ],
+      "group": "Print brief",
+      "meaning": "The industry's US $2B+ peers (outlook names): median forward P/E, month and quarter, the name's month rank, the largest peers; the industry's prints in the prior 35 days (count, mean reaction vs the market, how many rose, the latest); peers printing the same session."
+    },
+    {
+      "key": "pointers_text",
+      "aliases": [
+        "pointers_text"
+      ],
+      "group": "Print brief",
+      "meaning": "The print-night pointer counts and lists per horizon (28-day, 7-day hold, reaction), the alpha model's 7d / 28d deciles with the decile's measured return and state, the model's 28-day drivers, the industry's season reaction."
+    },
+    {
+      "key": "levels_text",
+      "aliases": [
+        "levels_text"
+      ],
+      "group": "Print brief",
+      "meaning": "The buy-in-red band and its kill, the 50-day band and its kill, the first target, the starter's overnight bad case and own typical move in dollars, and the Book position."
+    },
+    {
+      "key": "history_text",
+      "aliases": [
+        "history_text"
+      ],
+      "group": "Print brief",
+      "meaning": "The name's past prints from the day files, newest first: date, slot, reaction, EPS surprise."
+    },
+    {
+      "key": "print_text",
+      "aliases": [
+        "print_text"
+      ],
+      "group": "Print brief",
+      "meaning": "After the print: the surprises, the mix (and whether revenue is posted), the after-hours or session move, the mix cell's measured reaction and drift lift, the print pointers, the set-up x reaction cell."
+    },
+    {
+      "key": "watch_items",
+      "aliases": [
+        "watch_items"
+      ],
+      "group": "Print brief",
+      "meaning": "What to read on the print: the quarter's bar, the measured mix and after-hours cells, the slot and set-up notes (recipe text from the earnings playbook), the starter's overnight size, the down pointers."
+    },
+    {
+      "key": "peer_count / peer_pe_med / peer_m1_med / peer_m3_med",
+      "aliases": [
+        "peer_count",
+        "peer_pe_med",
+        "peer_m1_med",
+        "peer_m3_med"
+      ],
+      "group": "Print brief",
+      "meaning": "The industry's US $2B+ peers in the outlook (the name excluded): how many, their median forward P/E (positive only), month and quarter, percent."
+    },
+    {
+      "key": "m1_rank",
+      "aliases": [
+        "m1_rank"
+      ],
+      "group": "Print brief",
+      "meaning": "The name's trailing-month rank among its industry peers (1 = the best month)."
+    },
+    {
+      "key": "n_tonight / tonight",
+      "aliases": [
+        "n_tonight",
+        "tonight"
+      ],
+      "group": "Print brief",
+      "meaning": "How many of the session's reporters are in the industry, and which."
+    },
+    {
+      "key": "season_n / season_rx / season_up / season_latest",
+      "aliases": [
+        "season_n",
+        "season_rx",
+        "season_up",
+        "season_latest"
+      ],
+      "group": "Print brief",
+      "meaning": "The industry's lab prints that reacted in the prior 35 days: how many, their mean reaction vs the market (pp), the share that rose, the latest four (id, MM-DD, reaction)."
+    },
+    {
+      "key": "in_cluster",
+      "aliases": [
+        "in_cluster"
+      ],
+      "group": "Downside risk",
+      "meaning": "True when the Book line sits in the recipe cluster (theme industries + ids: AI build-out industries, hyperscalers, NASDAQ:GOOG)."
+    },
+    {
+      "key": "beta_store",
+      "aliases": [
+        "beta_store"
+      ],
+      "group": "Downside risk",
+      "meaning": "Slope of the line's store steps (close to close between day files) on the cap-weighted US floor's step: how many % the line moved per 1% of the market, measured in the store (since 29 Mar 2026)."
+    },
+    {
+      "key": "down_beta_store",
+      "aliases": [
+        "down_beta_store"
+      ],
+      "group": "Downside risk",
+      "meaning": "beta_store measured only on steps where the cap-weighted market fell: the line's sensitivity in down sessions."
+    },
+    {
+      "key": "beta_tv",
+      "aliases": [
+        "beta_tv",
+        "beta"
+      ],
+      "group": "Downside risk",
+      "meaning": "TradingView 1-year beta (for a non-US line: against its home market; XETR:VUAA set to 1, it tracks the S&P 500)."
+    },
+    {
+      "key": "beta_used",
+      "aliases": [
+        "beta_used"
+      ],
+      "group": "Downside risk",
+      "meaning": "The beta the scenarios use: beta_store, else beta_tv, else 1 (beta_src says which)."
+    },
+    {
+      "key": "beta_src",
+      "aliases": [
+        "beta_src"
+      ],
+      "group": "Downside risk",
+      "meaning": "Where beta_used came from: store (measured), tv (TradingView, line not in the US store), one (no beta)."
+    },
+    {
+      "key": "corr_cap",
+      "aliases": [
+        "corr_cap"
+      ],
+      "group": "Downside risk",
+      "meaning": "Correlation of the line's store steps with the cap-weighted market step (1 = moves with the market every session)."
+    },
+    {
+      "key": "steps_n",
+      "aliases": [
+        "steps_n"
+      ],
+      "group": "Downside risk",
+      "meaning": "Store steps (day-file pairs) the line has; the betas need at least the recipe's beta_min_steps."
+    },
+    {
+      "key": "vol_1m_pct",
+      "aliases": [
+        "vol_1m_pct"
+      ],
+      "group": "Downside risk",
+      "meaning": "One-month volatility: standard deviation of the line's store steps x sqrt(21), %. One sigma, so about 1 month in 6 moves more than this down."
+    },
+    {
+      "key": "own_q05_28d_pct",
+      "aliases": [
+        "own_q05_28d_pct"
+      ],
+      "group": "Downside risk",
+      "meaning": "The line's own 5th-percentile 28-day return in the store (1 window in 20 was at or under it), %."
+    },
+    {
+      "key": "own_worst_28d_pct",
+      "aliases": [
+        "own_worst_28d_pct"
+      ],
+      "group": "Downside risk",
+      "meaning": "The line's worst 28-day return in the store, %."
+    },
+    {
+      "key": "maxdd_store_pct",
+      "aliases": [
+        "maxdd_store_pct"
+      ],
+      "group": "Downside risk",
+      "meaning": "The line's deepest peak-to-trough drawdown inside the store (since 29 Mar 2026), %."
+    },
+    {
+      "key": "dd_store_now_pct",
+      "aliases": [
+        "dd_store_now_pct"
+      ],
+      "group": "Downside risk",
+      "meaning": "The line now against its store high, %."
+    },
+    {
+      "key": "to_kill_px_pct",
+      "aliases": [
+        "to_kill_px_pct",
+        "to_bounce_kill_pct"
+      ],
+      "group": "Downside risk",
+      "meaning": "The level against the close, % (negative = the level is under the close: the fall to it; positive = already under the level)."
+    },
+    {
+      "key": "mkt_move_usd",
+      "aliases": [
+        "mkt_move_usd",
+        "mkt3_usd",
+        "mkt5_usd",
+        "mkt7_usd",
+        "mkt10_usd",
+        "mkt15_usd",
+        "mkt20_usd"
+      ],
+      "group": "Downside risk",
+      "meaning": "mkt<k>_usd: the line's dollars if the cap-weighted US market falls k% (value x beta_used x -k%). Linear: a cluster shock runs past it."
+    },
+    {
+      "key": "cap_move_pct",
+      "aliases": [
+        "cap_move_pct"
+      ],
+      "group": "Downside risk",
+      "meaning": "Scenario: the cap-weighted US floor's move (an S&P 500-like index), %."
+    },
+    {
+      "key": "book_usd_store",
+      "aliases": [
+        "book_usd_store",
+        "book_usd_down",
+        "book_usd_tv"
+      ],
+      "group": "Downside risk",
+      "meaning": "The Book's dollars in the scenario at store beta (_store), down-session beta (_down) or TradingView beta (_tv)."
+    },
+    {
+      "key": "nav_pct_store",
+      "aliases": [
+        "nav_pct_store",
+        "nav_pct_down",
+        "nav_pct_tv"
+      ],
+      "group": "Downside risk",
+      "meaning": "That loss as % of NAV (equity + cash)."
+    },
+    {
+      "key": "cluster_usd_store",
+      "aliases": [
+        "cluster_usd_store",
+        "cluster_usd_down",
+        "cluster_usd_tv"
+      ],
+      "group": "Downside risk",
+      "meaning": "The cluster lines' share of the scenario loss, $."
+    },
+    {
+      "key": "horizon_d",
+      "aliases": [
+        "horizon_d"
+      ],
+      "group": "Downside risk",
+      "meaning": "Window length in calendar days (start file to the first file at least that far)."
+    },
+    {
+      "key": "series",
+      "aliases": [
+        "series"
+      ],
+      "group": "Downside risk",
+      "meaning": "cap = cap-weighted US floor ($2B+, an S&P 500-like index); med = the median name; cluster = cap-weighted cluster names; book = today's Book with today's dollars held through the window."
+    },
+    {
+      "key": "n_windows",
+      "aliases": [
+        "n_windows"
+      ],
+      "group": "Downside risk",
+      "meaning": "Windows (overlapping, one per start file) behind the row."
+    },
+    {
+      "key": "q05_pct",
+      "aliases": [
+        "q05_pct",
+        "q01_pct",
+        "q10_pct",
+        "q25_pct",
+        "q50_pct"
+      ],
+      "group": "Downside risk",
+      "meaning": "qNN_pct: NN-th percentile of the window returns, % (q05 = 1 window in 20 was at or under it; q50 the median)."
+    },
+    {
+      "key": "q05_usd",
+      "aliases": [
+        "q05_usd",
+        "q01_usd",
+        "q10_usd",
+        "q25_usd",
+        "q50_usd"
+      ],
+      "group": "Downside risk",
+      "meaning": "The Book's qNN window in dollars (today's values)."
+    },
+    {
+      "key": "worst_pct",
+      "aliases": [
+        "worst_pct"
+      ],
+      "group": "Downside risk",
+      "meaning": "The worst window return, %; worst_start = the file it started on."
+    },
+    {
+      "key": "worst_start",
+      "aliases": [
+        "worst_start"
+      ],
+      "group": "Downside risk",
+      "meaning": "Start file of the worst window."
+    },
+    {
+      "key": "worst_usd",
+      "aliases": [
+        "worst_usd"
+      ],
+      "group": "Downside risk",
+      "meaning": "The Book's worst window in dollars (today's values)."
+    },
+    {
+      "key": "p_le_10",
+      "aliases": [
+        "p_le_10",
+        "p_le_5",
+        "p_le_15",
+        "p_le_20"
+      ],
+      "group": "Downside risk",
+      "meaning": "p_le_k: share of windows that fell k% or more (0.10 = 1 window in 10)."
+    },
+    {
+      "key": "mean_pct",
+      "aliases": [
+        "mean_pct"
+      ],
+      "group": "Downside risk",
+      "meaning": "Mean window return, %."
+    },
+    {
+      "key": "episode",
+      "aliases": [
+        "episode"
+      ],
+      "group": "Downside risk",
+      "meaning": "Drawdown id: series_rank (cap_1 = the cap-weighted market's deepest store drawdown)."
+    },
+    {
+      "key": "peak",
+      "aliases": [
+        "peak"
+      ],
+      "group": "Downside risk",
+      "meaning": "Store file of the high before the drawdown."
+    },
+    {
+      "key": "trough",
+      "aliases": [
+        "trough"
+      ],
+      "group": "Downside risk",
+      "meaning": "Store file of the low."
+    },
+    {
+      "key": "depth_pct",
+      "aliases": [
+        "depth_pct"
+      ],
+      "group": "Downside risk",
+      "meaning": "Peak-to-trough fall of the episode's series, %."
+    },
+    {
+      "key": "recovered_on",
+      "aliases": [
+        "recovered_on"
+      ],
+      "group": "Downside risk",
+      "meaning": "First file back at the old high; empty = still under it."
+    },
+    {
+      "key": "book_pct",
+      "aliases": [
+        "book_pct"
+      ],
+      "group": "Downside risk",
+      "meaning": "Today's Book over that window, % of equity."
+    },
+    {
+      "key": "book_nav_pct",
+      "aliases": [
+        "book_nav_pct"
+      ],
+      "group": "Downside risk",
+      "meaning": "Today's Book over that window, % of NAV."
+    },
+    {
+      "key": "cap_pct",
+      "aliases": [
+        "cap_pct",
+        "med_pct",
+        "cluster_pct"
+      ],
+      "group": "Downside risk",
+      "meaning": "The cap-weighted market, the median name and the cluster over the same window, %."
+    },
+    {
+      "key": "usd",
+      "aliases": [
+        "usd"
+      ],
+      "group": "Downside risk",
+      "meaning": "The line's dollars over the window (today's value x ret_pct)."
+    },
+    {
+      "key": "proxied_steps",
+      "aliases": [
+        "proxied_steps"
+      ],
+      "group": "Downside risk",
+      "meaning": "Steps in the window where the line had no store close and took beta x the market step."
+    },
+    {
+      "key": "cap_dd_pct",
+      "aliases": [
+        "cap_dd_pct",
+        "med_dd_pct",
+        "cluster_dd_pct",
+        "book_dd_pct"
+      ],
+      "group": "Downside risk",
+      "meaning": "Series under its running store high, % (book: today's Book held at today's weights)."
+    },
+    {
+      "key": "proxy_usd",
+      "aliases": [
+        "proxy_usd"
+      ],
+      "group": "Downside risk",
+      "meaning": "Book dollars in lines without a store step at that step (beta x market used)."
+    },
+    {
+      "key": "n_floor",
+      "aliases": [
+        "n_floor",
+        "n_cluster"
+      ],
+      "group": "Downside risk",
+      "meaning": "Names on the floor (cluster) in the step."
+    },
+    {
+      "key": "start",
+      "aliases": [
+        "start",
+        "end"
+      ],
+      "group": "Downside risk",
+      "meaning": "Window start and end files."
+    },
+    {
+      "key": "nxt",
+      "aliases": [
+        "nxt"
+      ],
+      "group": "Downside risk",
+      "meaning": "Store step end file (the step runs from as_of to nxt)."
+    },
+    {
+      "key": "to_level_usd",
+      "aliases": [
+        "to_level_usd",
+        "to_bounce_kill_usd",
+        "to_lo52_usd",
+        "to_sma200_usd",
+        "to_sma50_usd",
+        "to_kill_px_usd"
+      ],
+      "group": "Downside risk",
+      "meaning": "to_<level>_usd: the line's dollars if it moves from the close to that level (value x to_<level>_pct)."
+    },
+    {
+      "key": "cmkt_p_dn_56d",
+      "aliases": [
+        "cmkt_p_dn_56d"
+      ],
+      "group": "Downside risk",
+      "meaning": "Odds of a further -10% (raw) within 56 days in the line's drawdown x letters x market-regime cell (deterioration)."
+    },
+    {
+      "key": "plan",
+      "aliases": [
+        "plan"
+      ],
+      "group": "Downside risk",
+      "meaning": "The capital plan a row belongs to: capital_plan (today), capital_plan_queue (later, in band), capital_plan_derisk (triggered), capital_plan_pathway."
+    },
+    {
+      "key": "delta_usd",
+      "aliases": [
+        "delta_usd"
+      ],
+      "group": "Downside risk",
+      "meaning": "Dollars the plan row moves on the line (value after - value now; negative = sold)."
+    },
+    {
+      "key": "beta_delta_usd",
+      "aliases": [
+        "beta_delta_usd"
+      ],
+      "group": "Downside risk",
+      "meaning": "delta_usd x beta_used: the market exposure the row adds (+) or removes (-), in beta dollars."
     }
   ]
 }

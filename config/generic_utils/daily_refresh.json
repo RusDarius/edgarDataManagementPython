@@ -53,6 +53,20 @@
         "python",
         "src/run_market_timing_policy.py"
       ]
+    },
+    {
+      "name": "panel_store",
+      "after": [
+        "allfields",
+        "prediction"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "panel-store",
+        "--quiet"
+      ]
     }
   ],
   "compile": {
@@ -123,6 +137,24 @@
         "2000000000",
         "--out-dir",
         "{PACK}/intraday",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "earnings_week",
+      "after": [
+        "gmv",
+        "movers"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "earnings-week",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/earnings_week",
         "--quiet"
       ]
     },
@@ -283,6 +315,195 @@
         "{PLAYBOOK}/mesh_band",
         "--quiet"
       ]
+    },
+    {
+      "name": "alpha_model",
+      "after": [
+        "earnings_week"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "alpha-model",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/alpha_model",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "signal_lab",
+      "after": [
+        "alpha_model"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "signal-lab",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/signal_lab",
+        "--no-update",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "week_plays",
+      "after": [
+        "signal_lab"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "week-plays",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/week_plays",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "play_review",
+      "after": [
+        "week_plays"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "play-review",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/play_review",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "outlook",
+      "after": [
+        "week_plays"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "outlook",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/outlook",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "print_night",
+      "after": [
+        "week_plays"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "print-night",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/print_night",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "print_brief",
+      "after": [
+        "print_night",
+        "outlook"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "print-brief",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/print_brief",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "deterioration",
+      "after": [
+        "week_plays"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "deterioration",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/deterioration",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "recovery",
+      "after": [
+        "deterioration"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "recovery",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/recovery_ladder",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "downside",
+      "after": [
+        "deterioration"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "downside",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/downside",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "pathway",
+      "after": [
+        "deterioration"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "pathway",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/pathway",
+        "--quiet"
+      ]
     }
   ],
   "diff_fields": [
@@ -303,6 +524,13 @@
     "down_class",
     "mesh"
   ],
+  "after_hours": {
+    "csv": "{PACK}/earnings_week/calendar.csv",
+    "min_abs_pct": 3.0
+  },
+  "deterioration": {
+    "db": "{PACK}/deterioration/deterioration.duckdb"
+  },
   "diff_thresholds": {
     "close_pct": 2.0,
     "left": 5.0,
@@ -393,7 +621,15 @@
     "movers",
     "playbook",
     "gmv",
-    "wisdom"
+    "wisdom",
+    "earnings_week",
+    "alpha_model",
+    "signal_lab",
+    "week_plays",
+    "outlook",
+    "print_brief",
+    "deterioration",
+    "pathway"
   ],
   "review_courses": [
     "NEW",

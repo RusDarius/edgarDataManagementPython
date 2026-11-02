@@ -1,0 +1,1459 @@
+{
+ "name": "outlook-{DAY}",
+ "page_key": "outlook",
+ "requires": "{PACK}/outlook/outlook.duckdb",
+ "title": "Catalyst outlook {DAY}",
+ "subtitle": "Every US $2B+ name with its catalysts over the next six weeks (earnings with slot, ex-dividend, IPO lockups, dated OUTSIDE events) and the day's suites side by side. Columns run in one order on every table: technical, setup, earnings surprise, value, progression, lists. Each table is one order; nothing is a sum.",
+ "column_groups_from": "config/generic_utils/catalyst_outlook.json",
+ "sources_extra": [
+  "outlook {PACK}/outlook (tv_scan_cli.py outlook --pack {PACK} --quiet)",
+  "OUTSIDE dated events config/generic_utils/catalyst_calendar.json"
+ ],
+ "tone_map": {
+  "BUY_PRE": "good",
+  "NEW": "good",
+  "ADD": "good",
+  "BUY_DIP_AFTER": "good",
+  "BUILD": "good",
+  "HOLD_THROUGH": "info",
+  "HOLD": "info",
+  "WATCH": "neutral",
+  "WAIT": "neutral",
+  "NEW (queue)": "info",
+  "DERISK": "warning",
+  "DERISK_INTO_PRINT": "warning",
+  "TRIM": "warning",
+  "HOLD_NO_ADD": "warning",
+  "SELL_THE_NEWS": "warning",
+  "PASS": "bad",
+  "STAND_ASIDE": "bad",
+  "SHORT_WAIT": "bad",
+  "AVOID": "bad",
+  "EXIT": "bad"
+ },
+ "tabs": [
+  {
+   "label": "Plan",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "update.banner"
+    },
+    {
+     "type": "stats",
+     "from": "pages.outlook.blocks.stats"
+    },
+    {
+     "type": "callout",
+     "from": "pages.outlook.blocks.read"
+    },
+    {
+     "type": "table",
+     "title": "Top 20 plays, this week and next (judgment, reading order)",
+     "headers": [
+      "#",
+      "Symbol",
+      "Catalyst",
+      "When",
+      "Course",
+      "Entry",
+      "Kill",
+      "Evidence",
+      "Why"
+     ],
+     "from": "pages.outlook.blocks.top20"
+    },
+    {
+     "type": "table",
+     "title": "Shortlist: earnings and catalysts, today to next week (judgment)",
+     "headers": [
+      "Symbol",
+      "Catalyst",
+      "When",
+      "Course",
+      "Entry",
+      "Kill",
+      "Upside",
+      "Evidence",
+      "Why"
+     ],
+     "from": "pages.outlook.blocks.shortlist"
+    },
+    {
+     "type": "table",
+     "title": "Positioning for the next 4-5 weeks (judgment)",
+     "headers": [
+      "Symbol",
+      "Theme",
+      "Course",
+      "Entry",
+      "Kill",
+      "Target",
+      "Catalyst path",
+      "Why"
+     ],
+     "from": "pages.outlook.blocks.positioning"
+    },
+    {
+     "type": "table",
+     "title": "Other catalysts that move the Book or the shortlist (judgment, OUTSIDE)",
+     "headers": [
+      "Date",
+      "Catalyst",
+      "Names",
+      "Read",
+      "Source"
+     ],
+     "from": "pages.outlook.blocks.outside"
+    },
+    {
+     "type": "list",
+     "from": "pages.outlook.blocks.rules"
+    }
+   ]
+  },
+  {
+   "label": "Tonight",
+   "requires": "{PACK}/print_night/print_night.duckdb",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.outlook.blocks.tonight_read"
+    },
+    {
+     "type": "table",
+     "title": "Tonight's calls (judgment)",
+     "headers": [
+      "Symbol",
+      "Slot",
+      "Course",
+      "Entry",
+      "Kill",
+      "Size",
+      "Pointers",
+      "Why"
+     ],
+     "from": "pages.outlook.blocks.tonight"
+    },
+    {
+     "type": "text",
+     "text": "One row per name whose print reaction lands on the session in `PACK/print_night` (default the next one: tonight's AMC and tomorrow's BMO). Counts are measured pointers up / down per horizon (rx reaction, h7 / h28 hold from the close before the print); the lists name them; the set-up cell gives the overnight tail. Start with a screen; the Guide tab has the steps. On demand: `tv_scan_cli.py print-night --pack PACK --line` (`--react-on YYYY-MM-DD`, `--sessions 5` for the week)."
+    },
+    {
+     "type": "table",
+     "title": "Decision matrix: every reporter of the session, pointers up / down per horizon, the overnight tail and the levels",
+     "source": {
+      "duckdb": "{PACK}/print_night/print_night.duckdb",
+      "sql": "SELECT symbol, phase, slot, mcap_b, close, day, runup, react_abs_mean, react_up, rx_up, rx_dn, h7_up, h7_dn, h28_up, h28_dn, h28_fam_up, h28_fam_dn, h28_up_list, h28_dn_list, h7_up_list, h7_dn_list, rx_up_list, rx_dn_list, setup_cell, setup_mean, setup_rx_mean, setup_rx_q10, setup_rx_q90, tail_starter_usd, up_starter_usd, own_move_starter_usd, peer_rx, peer_n, dec_7d, dec_7d_fx, state_7d, pt_up, pe_nfy_vs_ind, pe_nfy_vs_own, eps_rev_3m, last_surprise, bounce_low, bounce_high, bounce_kill, entry_low, entry_high, kill_px, book_usd, in_store FROM names ORDER BY book_usd DESC NULLS LAST, h28_up - h28_dn DESC, mcap_b DESC",
+      "drop_missing_columns": true
+     },
+     "column_groups": [
+      [
+       "Name",
+       [
+        "symbol",
+        "phase",
+        "slot",
+        "mcap_b"
+       ]
+      ],
+      [
+       "Tape",
+       [
+        "close",
+        "day",
+        "runup"
+       ]
+      ],
+      [
+       "Past prints",
+       [
+        "react_abs_mean",
+        "react_up"
+       ]
+      ],
+      [
+       "Pointers",
+       [
+        "rx_up",
+        "rx_dn",
+        "h7_up",
+        "h7_dn",
+        "h28_up",
+        "h28_dn",
+        "h28_fam_up",
+        "h28_fam_dn",
+        "h28_up_list",
+        "h28_dn_list",
+        "h7_up_list",
+        "h7_dn_list",
+        "rx_up_list",
+        "rx_dn_list"
+       ]
+      ],
+      [
+       "Set-up cell",
+       [
+        "setup_cell",
+        "setup_mean",
+        "setup_rx_mean",
+        "setup_rx_q10",
+        "setup_rx_q90",
+        "tail_starter_usd",
+        "up_starter_usd",
+        "own_move_starter_usd"
+       ]
+      ],
+      [
+       "Context",
+       [
+        "peer_rx",
+        "peer_n",
+        "dec_7d",
+        "dec_7d_fx",
+        "state_7d",
+        "pt_up",
+        "pe_nfy_vs_ind",
+        "pe_nfy_vs_own",
+        "eps_rev_3m",
+        "last_surprise"
+       ]
+      ],
+      [
+       "Levels",
+       [
+        "bounce_low",
+        "bounce_high",
+        "bounce_kill",
+        "entry_low",
+        "entry_high",
+        "kill_px"
+       ]
+      ],
+      [
+       "Book",
+       [
+        "book_usd",
+        "in_store"
+       ]
+      ]
+     ],
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses",
+     "screens": [
+      {
+       "label": "Hold 28d leans up",
+       "filters": {
+        "h28_up": ">=3",
+        "h28_dn": "<=1",
+        "h28_fam_up": ">=2"
+       },
+       "sort": "-h28_up",
+       "explain": "3+ pointers up on the 28-day hold, at most 1 down, from 2+ families. A pre-print entry held through has had the wind behind it; still check the tail (tail_starter_usd) and the down list before entering."
+      },
+      {
+       "label": "7d leans up",
+       "filters": {
+        "h7_up": ">=2",
+        "h7_dn": "=0"
+       },
+       "sort": "-h7_up",
+       "explain": "2+ pointers up on the 7-day hold and none down: the short event trade. Enter as a limit, kill on a close, size from the event budget."
+      },
+      {
+       "label": "Both horizons up",
+       "filters": {
+        "h7_up": ">=1",
+        "h7_dn": "=0",
+        "h28_up": ">=2",
+        "h28_dn": "<=1"
+       },
+       "sort": "-h28_up,-h7_up",
+       "explain": "Up on both hold horizons with nothing (7d) or one (28d) against: the strongest pre-print lean the counts can show."
+      },
+      {
+       "label": "Leans down",
+       "filters": {
+        "h28_dn": ">=4",
+        "h28_up": "<=1"
+       },
+       "sort": "-h28_dn",
+       "explain": "4+ pointers down on the 28-day hold, at most 1 up: wait for the print (buy the reaction in the bounce band if it holds) or DERISK a held line into it."
+      },
+      {
+       "label": "Reaction arrows",
+       "filters": {
+        "rx_up": ">=1",
+        "rx_dn": "=0"
+       },
+       "sort": "-rx_up",
+       "explain": "Any pointer up on the reaction session itself and none down. Few cells call the reaction before a print; treat this as a tilt, not a call."
+      },
+      {
+       "label": "Book lines printing",
+       "filters": {
+        "book_usd": ">0"
+       },
+       "sort": "-book_usd",
+       "explain": "Held lines in the session: read the down list and tail_starter_usd (and rx_tail_usd on Week plays) to decide hold vs DERISK into the print."
+      },
+      {
+       "label": "Quiet past prints",
+       "filters": {
+        "react_abs_mean": "<4"
+       },
+       "sort": "react_abs_mean",
+       "explain": "The name's own past prints moved less than 4% on average either way (react_abs_mean; own_move_starter_usd in dollars of a $5,000 starter). The set-up cell's tail (tail_starter_usd) is the same for every name in one cell, so this is the name-level size read."
+      }
+     ]
+    },
+    {
+     "type": "table",
+     "title": "Session base: what every past print did (each pointer's lift is measured against the rest of these prints)",
+     "source": {
+      "duckdb": "{PACK}/print_night/print_night.duckdb",
+      "sql": "SELECT phase, measure, label, n, mean, median, hit, q10, q90 FROM base ORDER BY phase DESC, measure"
+     }
+    }
+   ]
+  },
+  {
+   "label": "Tonight pointers",
+   "requires": "{PACK}/print_night/print_night.duckdb",
+   "blocks": [
+    {
+     "type": "text",
+     "text": "Each column is one pointer: the lift (pp) of the quintile the name sits in against every other past print. ▲ / ▼ = the direction is clear (t, n, both halves, hit rate); a bare number = measured, not clear; empty = no value. Families are the group headers: arrows from several families are more independent evidence than three from Tape."
+    },
+    {
+     "type": "table",
+     "title": "Hold 28 days from the close before the print: lift per pointer (pp)",
+     "source": {
+      "duckdb": "{PACK}/print_night/print_night.duckdb",
+      "sql": "SELECT m.symbol, n.slot, n.mcap_b, m.ptr_up, m.ptr_dn, m.fam_up, m.fam_dn, m.x_runup, m.x_r_1m, m.x_r_3m, m.x_rsi, m.x_vs50, m.x_hi_prox, m.x_rvol_20, m.x_beta, m.x_prev_react, m.x_last_surprise, m.x_slot, m.x_eps_rev_3m, m.x_eps_rev_1m, m.x_rev_rev_3m, m.x_eps_q_step, m.x_rev_q_step, m.x_pt_up, m.x_pt_rev_1m, m.x_ey_fwd, m.x_fcf_margin, m.x_p_dvc, m.x_p_cons_w, m.x_peer_rx, n.book_usd FROM matrix m JOIN names n USING (symbol) WHERE m.side = 'pre' AND m.measure = 'hold_fx_28d' ORDER BY m.ptr_up - m.ptr_dn DESC, n.mcap_b DESC",
+      "drop_missing_columns": true
+     },
+     "column_groups": [
+      [
+       "Name",
+       [
+        "symbol",
+        "slot",
+        "mcap_b"
+       ]
+      ],
+      [
+       "Counts",
+       [
+        "ptr_up",
+        "ptr_dn",
+        "fam_up",
+        "fam_dn"
+       ]
+      ],
+      [
+       "Tape",
+       [
+        "x_runup",
+        "x_r_1m",
+        "x_r_3m",
+        "x_rsi",
+        "x_vs50",
+        "x_hi_prox",
+        "x_rvol_20",
+        "x_beta"
+       ]
+      ],
+      [
+       "History",
+       [
+        "x_prev_react",
+        "x_last_surprise",
+        "x_slot"
+       ]
+      ],
+      [
+       "Estimates",
+       [
+        "x_eps_rev_3m",
+        "x_eps_rev_1m",
+        "x_rev_rev_3m",
+        "x_eps_q_step",
+        "x_rev_q_step"
+       ]
+      ],
+      [
+       "Street",
+       [
+        "x_pt_up",
+        "x_pt_rev_1m"
+       ]
+      ],
+      [
+       "Value",
+       [
+        "x_ey_fwd",
+        "x_fcf_margin",
+        "x_p_dvc"
+       ]
+      ],
+      [
+       "Model",
+       [
+        "x_p_cons_w"
+       ]
+      ],
+      [
+       "Peers",
+       [
+        "x_peer_rx"
+       ]
+      ],
+      [
+       "Book",
+       [
+        "book_usd"
+       ]
+      ]
+     ],
+     "extra_columns": [
+      "Course"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses",
+     "screens": [
+      {
+       "label": "3+ up, 1 or less down",
+       "filters": {
+        "ptr_up": ">=3",
+        "ptr_dn": "<=1"
+       },
+       "sort": "-ptr_up",
+       "explain": "Names where at least three pointers point up on the 28-day hold and at most one down; read the families across the row."
+      }
+     ]
+    },
+    {
+     "type": "table",
+     "title": "Hold 7 days from the close before the print: lift per pointer (pp)",
+     "source": {
+      "duckdb": "{PACK}/print_night/print_night.duckdb",
+      "sql": "SELECT m.symbol, n.slot, n.mcap_b, m.ptr_up, m.ptr_dn, m.fam_up, m.fam_dn, m.x_runup, m.x_r_1m, m.x_r_3m, m.x_rsi, m.x_vs50, m.x_hi_prox, m.x_rvol_20, m.x_beta, m.x_prev_react, m.x_last_surprise, m.x_slot, m.x_eps_rev_3m, m.x_eps_rev_1m, m.x_rev_rev_3m, m.x_eps_q_step, m.x_rev_q_step, m.x_pt_up, m.x_pt_rev_1m, m.x_ey_fwd, m.x_fcf_margin, m.x_p_dvc, m.x_p_cons_w, m.x_peer_rx, n.book_usd FROM matrix m JOIN names n USING (symbol) WHERE m.side = 'pre' AND m.measure = 'hold_fx_7d' ORDER BY m.ptr_up - m.ptr_dn DESC, n.mcap_b DESC",
+      "drop_missing_columns": true
+     },
+     "column_groups": [
+      [
+       "Name",
+       [
+        "symbol",
+        "slot",
+        "mcap_b"
+       ]
+      ],
+      [
+       "Counts",
+       [
+        "ptr_up",
+        "ptr_dn",
+        "fam_up",
+        "fam_dn"
+       ]
+      ],
+      [
+       "Tape",
+       [
+        "x_runup",
+        "x_r_1m",
+        "x_r_3m",
+        "x_rsi",
+        "x_vs50",
+        "x_hi_prox",
+        "x_rvol_20",
+        "x_beta"
+       ]
+      ],
+      [
+       "History",
+       [
+        "x_prev_react",
+        "x_last_surprise",
+        "x_slot"
+       ]
+      ],
+      [
+       "Estimates",
+       [
+        "x_eps_rev_3m",
+        "x_eps_rev_1m",
+        "x_rev_rev_3m",
+        "x_eps_q_step",
+        "x_rev_q_step"
+       ]
+      ],
+      [
+       "Street",
+       [
+        "x_pt_up",
+        "x_pt_rev_1m"
+       ]
+      ],
+      [
+       "Value",
+       [
+        "x_ey_fwd",
+        "x_fcf_margin",
+        "x_p_dvc"
+       ]
+      ],
+      [
+       "Model",
+       [
+        "x_p_cons_w"
+       ]
+      ],
+      [
+       "Peers",
+       [
+        "x_peer_rx"
+       ]
+      ],
+      [
+       "Book",
+       [
+        "book_usd"
+       ]
+      ]
+     ],
+     "extra_columns": [
+      "Course"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses",
+     "screens": [
+      {
+       "label": "2+ up, none down",
+       "filters": {
+        "ptr_up": ">=2",
+        "ptr_dn": "=0"
+       },
+       "sort": "-ptr_up",
+       "explain": "At least two pointers up on the 7-day hold and none down."
+      }
+     ]
+    },
+    {
+     "type": "table",
+     "title": "Reaction session vs the market: lift per pointer (pp)",
+     "source": {
+      "duckdb": "{PACK}/print_night/print_night.duckdb",
+      "sql": "SELECT m.symbol, n.slot, n.mcap_b, m.ptr_up, m.ptr_dn, m.fam_up, m.fam_dn, m.x_runup, m.x_r_1m, m.x_r_3m, m.x_rsi, m.x_vs50, m.x_hi_prox, m.x_rvol_20, m.x_beta, m.x_prev_react, m.x_last_surprise, m.x_slot, m.x_eps_rev_3m, m.x_eps_rev_1m, m.x_rev_rev_3m, m.x_eps_q_step, m.x_rev_q_step, m.x_pt_up, m.x_pt_rev_1m, m.x_ey_fwd, m.x_fcf_margin, m.x_p_dvc, m.x_p_cons_w, m.x_peer_rx, n.book_usd FROM matrix m JOIN names n USING (symbol) WHERE m.side = 'pre' AND m.measure = 'react_fx' ORDER BY m.ptr_up - m.ptr_dn DESC, n.mcap_b DESC",
+      "drop_missing_columns": true
+     },
+     "column_groups": [
+      [
+       "Name",
+       [
+        "symbol",
+        "slot",
+        "mcap_b"
+       ]
+      ],
+      [
+       "Counts",
+       [
+        "ptr_up",
+        "ptr_dn",
+        "fam_up",
+        "fam_dn"
+       ]
+      ],
+      [
+       "Tape",
+       [
+        "x_runup",
+        "x_r_1m",
+        "x_r_3m",
+        "x_rsi",
+        "x_vs50",
+        "x_hi_prox",
+        "x_rvol_20",
+        "x_beta"
+       ]
+      ],
+      [
+       "History",
+       [
+        "x_prev_react",
+        "x_last_surprise",
+        "x_slot"
+       ]
+      ],
+      [
+       "Estimates",
+       [
+        "x_eps_rev_3m",
+        "x_eps_rev_1m",
+        "x_rev_rev_3m",
+        "x_eps_q_step",
+        "x_rev_q_step"
+       ]
+      ],
+      [
+       "Street",
+       [
+        "x_pt_up",
+        "x_pt_rev_1m"
+       ]
+      ],
+      [
+       "Value",
+       [
+        "x_ey_fwd",
+        "x_fcf_margin",
+        "x_p_dvc"
+       ]
+      ],
+      [
+       "Model",
+       [
+        "x_p_cons_w"
+       ]
+      ],
+      [
+       "Peers",
+       [
+        "x_peer_rx"
+       ]
+      ],
+      [
+       "Book",
+       [
+        "book_usd"
+       ]
+      ]
+     ],
+     "extra_columns": [
+      "Course"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses",
+     "screens": [
+      {
+       "label": "Any arrow",
+       "filters": {
+        "ptr_up": ">=1"
+       },
+       "sort": "-ptr_up",
+       "explain": "Names with a reaction arrow up. Few cells call the reaction before the print: read it beside the hold tables, not alone."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Tonight digest",
+   "requires": "{PACK}/print_night/print_night.duckdb",
+   "blocks": [
+    {
+     "type": "text",
+     "text": "After the print. Rows appear once the print is in the day file: the post-close all-fields scan, then `run_daily_refresh.py --update-day D --no-producers` (or `tv_scan_cli.py print-night --pack PACK --react-on today` the next morning). The print's own pointers (surprise, mix, after-hours read, reaction) are measured on the reaction (rx), the reaction close minus the after-hours read (ac) and the 28-day drift (d28). Decide held lines at the cash close."
+    },
+    {
+     "type": "callout",
+     "from": "pages.outlook.blocks.digest_read"
+    },
+    {
+     "type": "table",
+     "title": "Printed: the print's pointers and the week-plays post cells",
+     "source": {
+      "duckdb": "{PACK}/print_night/print_night.duckdb",
+      "sql": "SELECT symbol, slot, rev_posted, close, day, post_chg, react_fx, last_surprise, rev_surprise, surprise_mix, rx_up, rx_dn, ac_up, ac_dn, d28_up, d28_dn, rx_up_list, rx_dn_list, d28_up_list, d28_dn_list, mix_cell, mix_mean, setrx_cell, setrx_mean, setrx_t, ah_q_cell, ah_q_mean, ah_q_q10, ah_q_q90, bounce_low, bounce_high, bounce_kill, book_usd FROM names WHERE phase = 'post' ORDER BY book_usd DESC NULLS LAST, react_fx",
+      "drop_missing_columns": true
+     },
+     "column_groups": [
+      [
+       "Name",
+       [
+        "symbol",
+        "slot",
+        "rev_posted"
+       ]
+      ],
+      [
+       "Session",
+       [
+        "close",
+        "day",
+        "post_chg",
+        "react_fx"
+       ]
+      ],
+      [
+       "Print",
+       [
+        "last_surprise",
+        "rev_surprise",
+        "surprise_mix"
+       ]
+      ],
+      [
+       "Pointers",
+       [
+        "rx_up",
+        "rx_dn",
+        "ac_up",
+        "ac_dn",
+        "d28_up",
+        "d28_dn",
+        "rx_up_list",
+        "rx_dn_list",
+        "d28_up_list",
+        "d28_dn_list"
+       ]
+      ],
+      [
+       "Week-plays cells",
+       [
+        "mix_cell",
+        "mix_mean",
+        "setrx_cell",
+        "setrx_mean",
+        "setrx_t",
+        "ah_q_cell",
+        "ah_q_mean",
+        "ah_q_q10",
+        "ah_q_q90"
+       ]
+      ],
+      [
+       "Levels",
+       [
+        "bounce_low",
+        "bounce_high",
+        "bounce_kill"
+       ]
+      ],
+      [
+       "Book",
+       [
+        "book_usd"
+       ]
+      ]
+     ],
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses",
+     "screens": [
+      {
+       "label": "Drift leans up",
+       "filters": {
+        "d28_up": ">=1",
+        "d28_dn": "=0"
+       },
+       "sort": "-d28_up",
+       "explain": "A print pointer points up on the 28-day drift and none down: a candidate to hold or add on a dip, in the bounce band."
+      },
+      {
+       "label": "Sold, drift not down",
+       "filters": {
+        "react_fx": "<-5",
+        "d28_dn": "=0"
+       },
+       "sort": "react_fx",
+       "explain": "Sold 5%+ vs the market with no drift pointer down: the recovery candidates (earnings playbook: full bounce band, wait for a close inside it on a CONTINUE_DOWN tape)."
+      },
+      {
+       "label": "After-hours tends to close better",
+       "filters": {
+        "ac_up": ">=1"
+       },
+       "sort": "post_chg",
+       "explain": "AMC rows whose after-hours read sits in a cell where the reaction close beat the after-hours print: do not act on the after-hours number."
+      }
+     ]
+    },
+    {
+     "type": "table",
+     "title": "Printed: lift per print pointer (pp), by measure",
+     "source": {
+      "duckdb": "{PACK}/print_night/print_night.duckdb",
+      "sql": "SELECT m.symbol, m.measure, m.ptr_up, m.ptr_dn, m.x_eps_surprise, m.x_rev_surprise, m.x_surprise_mix, m.x_ah_read, m.x_react_fx FROM matrix m WHERE m.side = 'post' ORDER BY m.symbol, m.measure",
+      "drop_missing_columns": true
+     },
+     "column_groups": [
+      [
+       "Name",
+       [
+        "symbol",
+        "measure"
+       ]
+      ],
+      [
+       "Counts",
+       [
+        "ptr_up",
+        "ptr_dn"
+       ]
+      ],
+      [
+       "Print",
+       [
+        "x_eps_surprise",
+        "x_rev_surprise",
+        "x_surprise_mix"
+       ]
+      ],
+      [
+       "Session",
+       [
+        "x_ah_read",
+        "x_react_fx"
+       ]
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Pointer evidence",
+   "requires": "{PACK}/print_night/print_night.duckdb",
+   "blocks": [
+    {
+     "type": "text",
+     "text": "The backtest behind every arrow: each pointer's quintiles (categories for slot and mix) on the lab's past prints, what they did next and how far from the rest. Check n, both halves and hit_lift before trusting a cell; many cells are tested, so a few arrows are chance. Prefer arrows in the end quintiles (Q1 / Q5) that agree across families."
+    },
+    {
+     "type": "table",
+     "title": "Every measured pointer cell",
+     "source": {
+      "duckdb": "{PACK}/print_night/print_night.duckdb",
+      "sql": "SELECT pointer, family, bucket, measure, n, mean, hit, q10, q90, lift, lift_t, half1_lift, half2_lift, hit_lift, dir, label FROM cells ORDER BY measure, pointer, bucket"
+     },
+     "screens": [
+      {
+       "label": "Arrows only",
+       "filters": {
+        "dir": "=up|=down"
+       },
+       "sort": "-lift_t",
+       "explain": "The cells that set an arrow; sort by lift_t or lift to see the strongest."
+      },
+      {
+       "label": "Hold 28d arrows",
+       "filters": {
+        "dir": "=up|=down",
+        "measure": "=hold_fx_28d"
+       },
+       "sort": "-lift",
+       "explain": "What the 28-day hold-through rewarded and punished before the print."
+      },
+      {
+       "label": "Reaction arrows",
+       "filters": {
+        "dir": "=up|=down",
+        "measure": "=react_fx"
+       },
+       "sort": "-lift",
+       "explain": "What called the reaction session itself (before the print: few cells; after it: the surprise, the mix and the after-hours read)."
+      }
+     ]
+    },
+    {
+     "type": "table",
+     "title": "Per name: every arrow behind the counts (value, bucket, the cell's evidence)",
+     "source": {
+      "duckdb": "{PACK}/print_night/print_night.duckdb",
+      "sql": "SELECT symbol, side, measure, pointer, family, value, bucket, n, mean, hit, lift, lift_t, half1_lift, half2_lift, hit_lift, dir FROM pointers WHERE dir IN ('up', 'down') ORDER BY symbol, measure, dir, pointer"
+     }
+    },
+    {
+     "type": "table",
+     "title": "The reporters' own past prints (store; excess reads where the print is on the lab floor)",
+     "source": {
+      "duckdb": "{PACK}/print_night/print_night.duckdb",
+      "sql": "SELECT symbol, print_date, slot, runup, prev_react, eps_surprise, rev_surprise, react, react_fx, ah_read, ah_to_close, hold_fx_7d, hold_fx_28d, drift_fx_28d FROM history ORDER BY symbol, print_date DESC"
+     }
+    }
+   ]
+  },
+  {
+   "label": "Shortlist data",
+   "blocks": [
+    {
+     "type": "text",
+     "text": "The judgment's shortlist and positioning names in reading order, every column group."
+    },
+    {
+     "type": "table",
+     "title": "Shortlist and positioning names",
+     "source": {
+      "duckdb": "{PACK}/outlook/outlook.duckdb",
+      "sql": "SELECT n.symbol, n.ind, n.mcap_b, n.close, n.day, n.m1, n.rsi, n.rng, n.vs50, n.tape_state, n.next_kind, n.next_date, n.earn_date, n.earn_slot, n.bounce_low, n.bounce_high, n.bounce_kill, n.entry_low, n.entry_high, n.kill_px, n.b28d_q20, n.b28d_q80, n.last_surprise, n.rev_surprise, n.surprise_mix, n.react_last, n.react_abs_mean, n.pe_nfy, n.pe_nfy_vs_ind, n.pe_nfy_vs_own, n.fcf_margin, n.nd_ebitda, n.pt_up, n.eps_rev_3m, n.pt_drift_3m, n.dec_7d, n.dec_28d, n.pred_28d, n.lenses, n.analysts, n.pack_lists, n.book_usd FROM names n WHERE TRUE ORDER BY n.mcap_b DESC LIMIT 400",
+      "drop_missing_columns": true
+     },
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses",
+     "ids_from": "pages.outlook.ids"
+    }
+   ]
+  },
+  {
+   "label": "Calendar",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.outlook.blocks.calendar_0"
+    },
+    {
+     "type": "table",
+     "title": "Sessions with catalysts: counts, the largest prints, Book prints, other events",
+     "source": {
+      "duckdb": "{PACK}/outlook/outlook.duckdb",
+      "sql": "SELECT date, dow, week, n_earnings, n_ex_dividend, n_ipo_lockup, largest_earnings, book_earnings, other FROM days ORDER BY date"
+     }
+    },
+    {
+     "type": "table",
+     "title": "Dated OUTSIDE catalysts (catalyst_calendar.json): status and source on every row",
+     "source": {
+      "duckdb": "{PACK}/outlook/outlook.duckdb",
+      "sql": "SELECT date, dow, week, kind, symbol, detail, status, read, source FROM events WHERE kind NOT IN ('earnings', 'ex_dividend', 'ipo_lockup') ORDER BY date"
+     }
+    }
+   ]
+  },
+  {
+   "label": "This week",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.outlook.blocks.week0_0"
+    },
+    {
+     "type": "table",
+     "title": "Printing this week, not yet out, $2B+: in print order",
+     "source": {
+      "duckdb": "{PACK}/outlook/outlook.duckdb",
+      "sql": "SELECT n.symbol, n.ind, n.mcap_b, n.close, n.day, n.m1, n.rsi, n.rng, n.vs50, n.tape_state, n.earn_date, n.earn_slot, n.setup_cell, n.setup_mean, n.bounce_low, n.bounce_high, n.bounce_kill, n.entry_low, n.entry_high, n.kill_px, n.last_surprise, n.rev_surprise, n.surprise_mix, n.react_last, n.react_abs_mean, n.pe_nfy, n.pe_nfy_vs_ind, n.pe_nfy_vs_own, n.fcf_margin, n.nd_ebitda, n.pt_up, n.eps_rev_3m, n.pt_drift_3m, n.dec_7d, n.dec_28d, n.pred_28d, n.lenses, n.analysts, n.pack_lists, n.book_usd FROM names n WHERE n.earn_week = 'W0' AND (n.phase IS NULL OR n.phase <> 'post') AND n.mcap_b >= 2 ORDER BY n.earn_date, n.earn_slot, n.mcap_b DESC LIMIT 250",
+      "drop_missing_columns": true
+     },
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses",
+     "screens": [
+      {
+       "label": "Sold into, last print down",
+       "filters": {
+        "setup_cell": "\"sold into\" \"print down\""
+       },
+       "sort": "-setup_mean",
+       "explain": "The earnings playbook's best pre-print set-up: sold into the print after a down print (second best: sold into after an up print). Then check revisions are not in the top quintile (priced) and street upside is wide; enter as a limit in the buy-in-red band."
+      },
+      {
+       "label": "Cheap to own history, estimates rising",
+       "filters": {
+        "pe_nfy_vs_own": "<-10",
+        "eps_rev_3m": ">0"
+       },
+       "sort": "pe_nfy_vs_own",
+       "explain": "Forward P/E 10%+ under the name's own median with the next-FY EPS estimate rising over 3 months: value into the print."
+      },
+      {
+       "label": "Book prints",
+       "filters": {
+        "book_usd": ">0"
+       },
+       "sort": "earn_date",
+       "explain": "Held lines printing this week, in print order: the hold vs DERISK read is on the Tonight tab (for tonight) and Week plays."
+      }
+     ]
+    },
+    {
+     "type": "table",
+     "title": "Printed this week (reaction known), $2B+: reaction vs the tape ascending",
+     "source": {
+      "duckdb": "{PACK}/outlook/outlook.duckdb",
+      "sql": "SELECT n.symbol, n.ind, n.mcap_b, n.close, n.day, n.m1, n.rsi, n.rng, n.vs50, n.tape_state, n.earn_date, n.earn_slot, n.react_fx, n.mix_cell, n.mix_mean, n.big_cell, n.big_mean, n.bounce_low, n.bounce_high, n.bounce_kill, n.last_surprise, n.rev_surprise, n.surprise_mix, n.react_last, n.react_abs_mean, n.pe_nfy, n.pe_nfy_vs_ind, n.pe_nfy_vs_own, n.fcf_margin, n.nd_ebitda, n.pt_up, n.eps_rev_3m, n.pt_drift_3m, n.dec_7d, n.dec_28d, n.pred_28d, n.lenses, n.analysts, n.pack_lists, n.book_usd FROM names n WHERE n.phase = 'post' AND n.mcap_b >= 2 ORDER BY n.react_fx NULLS LAST LIMIT 120",
+      "drop_missing_columns": true
+     },
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses",
+     "screens": [
+      {
+       "label": "Sold 5%+, beat",
+       "filters": {
+        "react_fx": "<-5",
+        "last_surprise": ">0"
+       },
+       "sort": "react_fx",
+       "explain": "Beat and still sold 5%+ vs the market: the recovery candidates; the big_cell column has that cell's drift."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Next week",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.outlook.blocks.week1_0"
+    },
+    {
+     "type": "table",
+     "title": "Printing next week, $3B+: in print order",
+     "source": {
+      "duckdb": "{PACK}/outlook/outlook.duckdb",
+      "sql": "SELECT n.symbol, n.ind, n.mcap_b, n.close, n.day, n.m1, n.rsi, n.rng, n.vs50, n.tape_state, n.earn_date, n.earn_slot, n.setup_cell, n.setup_mean, n.bounce_low, n.bounce_high, n.bounce_kill, n.entry_low, n.entry_high, n.kill_px, n.last_surprise, n.rev_surprise, n.surprise_mix, n.react_last, n.react_abs_mean, n.pe_nfy, n.pe_nfy_vs_ind, n.pe_nfy_vs_own, n.fcf_margin, n.nd_ebitda, n.pt_up, n.eps_rev_3m, n.pt_drift_3m, n.dec_7d, n.dec_28d, n.pred_28d, n.lenses, n.analysts, n.pack_lists, n.book_usd FROM names n WHERE n.earn_week = 'W1' AND n.mcap_b >= 3 ORDER BY n.earn_date, n.earn_slot, n.mcap_b DESC LIMIT 400",
+      "drop_missing_columns": true
+     },
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses",
+     "screens": [
+      {
+       "label": "Set-up cell positive",
+       "filters": {
+        "setup_mean": ">0"
+       },
+       "sort": "-setup_mean",
+       "explain": "Names whose current set-up cell (run-up x previous reaction) held through better than zero on past prints."
+      },
+      {
+       "label": "Book prints",
+       "filters": {
+        "book_usd": ">0"
+       },
+       "sort": "earn_date",
+       "explain": "Held lines printing next week."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Build-up (wk 3-6)",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.outlook.blocks.buildup_0"
+    },
+    {
+     "type": "table",
+     "title": "Printing in weeks 3-6, alpha 28d decile 8+, $3B+: in print order (names to build into a later print)",
+     "source": {
+      "duckdb": "{PACK}/outlook/outlook.duckdb",
+      "sql": "SELECT n.symbol, n.ind, n.mcap_b, n.close, n.day, n.m1, n.rsi, n.rng, n.vs50, n.tape_state, n.next_kind, n.next_date, n.earn_date, n.earn_slot, n.bounce_low, n.bounce_high, n.bounce_kill, n.entry_low, n.entry_high, n.kill_px, n.b28d_q20, n.b28d_q80, n.last_surprise, n.rev_surprise, n.surprise_mix, n.react_last, n.react_abs_mean, n.pe_nfy, n.pe_nfy_vs_ind, n.pe_nfy_vs_own, n.fcf_margin, n.nd_ebitda, n.pt_up, n.eps_rev_3m, n.pt_drift_3m, n.dec_7d, n.dec_28d, n.pred_28d, n.lenses, n.analysts, n.pack_lists, n.book_usd FROM names n WHERE n.earn_week IN ('W2', 'W3', 'W4', 'W5', 'W6') AND n.dec_28d >= 8 AND n.mcap_b >= 3 ORDER BY n.earn_date, n.dec_28d DESC LIMIT 200",
+      "drop_missing_columns": true
+     },
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    }
+   ]
+  },
+  {
+   "label": "Other catalysts",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.outlook.blocks.other_0"
+    },
+    {
+     "type": "table",
+     "title": "Ex-dividend inside the horizon, $2B+: yield descending",
+     "source": {
+      "duckdb": "{PACK}/outlook/outlook.duckdb",
+      "sql": "SELECT e.date AS ex_date, e.detail AS dividend, n.symbol, n.div_yield, n.ind, n.mcap_b, n.close, n.day, n.m1, n.rsi, n.rng, n.vs50, n.tape_state, n.next_kind, n.earn_date, n.bounce_low, n.bounce_high, n.bounce_kill, n.last_surprise, n.rev_surprise, n.surprise_mix, n.react_last, n.react_abs_mean, n.pe_nfy, n.pe_nfy_vs_ind, n.pe_nfy_vs_own, n.fcf_margin, n.nd_ebitda, n.pt_up, n.eps_rev_3m, n.pt_drift_3m, n.dec_7d, n.dec_28d, n.pred_28d, n.lenses, n.analysts, n.pack_lists, n.book_usd FROM events e JOIN names n USING (symbol) WHERE e.kind = 'ex_dividend' AND n.mcap_b >= 2 ORDER BY n.div_yield DESC NULLS LAST LIMIT 80",
+      "drop_missing_columns": true
+     },
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    },
+    {
+     "type": "table",
+     "title": "IPO lockups inside the horizon (offer date + 180 days, estimated)",
+     "source": {
+      "duckdb": "{PACK}/outlook/outlook.duckdb",
+      "sql": "SELECT e.date AS lockup_date, e.detail AS lockup, n.symbol, n.ind, n.mcap_b, n.close, n.day, n.m1, n.rsi, n.rng, n.vs50, n.tape_state, n.next_kind, n.earn_date, n.bounce_low, n.bounce_high, n.bounce_kill, n.last_surprise, n.rev_surprise, n.surprise_mix, n.react_last, n.react_abs_mean, n.pe_nfy, n.pe_nfy_vs_ind, n.pe_nfy_vs_own, n.fcf_margin, n.nd_ebitda, n.pt_up, n.eps_rev_3m, n.pt_drift_3m, n.dec_7d, n.dec_28d, n.pred_28d, n.lenses, n.analysts, n.pack_lists, n.book_usd FROM events e JOIN names n USING (symbol) WHERE e.kind = 'ipo_lockup' ORDER BY e.date LIMIT 60",
+      "drop_missing_columns": true
+     },
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    },
+    {
+     "type": "table",
+     "title": "Names an OUTSIDE catalyst row points at",
+     "source": {
+      "duckdb": "{PACK}/outlook/outlook.duckdb",
+      "sql": "SELECT e.date AS event_date, e.kind AS event_kind, e.detail AS event, n.symbol, n.ind, n.mcap_b, n.close, n.day, n.m1, n.rsi, n.rng, n.vs50, n.tape_state, n.next_kind, n.earn_date, n.bounce_low, n.bounce_high, n.bounce_kill, n.last_surprise, n.rev_surprise, n.surprise_mix, n.react_last, n.react_abs_mean, n.pe_nfy, n.pe_nfy_vs_ind, n.pe_nfy_vs_own, n.fcf_margin, n.nd_ebitda, n.pt_up, n.eps_rev_3m, n.pt_drift_3m, n.dec_7d, n.dec_28d, n.pred_28d, n.lenses, n.analysts, n.pack_lists, n.book_usd FROM events e JOIN names n USING (symbol) WHERE e.kind NOT IN ('earnings', 'ex_dividend', 'ipo_lockup') ORDER BY e.date LIMIT 60",
+      "drop_missing_columns": true
+     },
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses",
+     "optional": true
+    }
+   ]
+  },
+  {
+   "label": "Overlooked",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.outlook.blocks.overlooked_0"
+    },
+    {
+     "type": "table",
+     "title": "On no pack list, alpha 28d decile 9+, last print beat, $3B+: pred_28d descending",
+     "source": {
+      "duckdb": "{PACK}/outlook/outlook.duckdb",
+      "sql": "SELECT n.symbol, n.ind, n.mcap_b, n.close, n.day, n.m1, n.rsi, n.rng, n.vs50, n.tape_state, n.next_kind, n.next_date, n.earn_date, n.earn_slot, n.bounce_low, n.bounce_high, n.bounce_kill, n.entry_low, n.entry_high, n.kill_px, n.b28d_q20, n.b28d_q80, n.last_surprise, n.rev_surprise, n.surprise_mix, n.react_last, n.react_abs_mean, n.pe_nfy, n.pe_nfy_vs_ind, n.pe_nfy_vs_own, n.fcf_margin, n.nd_ebitda, n.pt_up, n.eps_rev_3m, n.pt_drift_3m, n.dec_7d, n.dec_28d, n.pred_28d, n.lenses, n.analysts, n.pack_lists, n.book_usd FROM names n WHERE n.pack_lists IS NULL AND n.dec_28d >= 9 AND n.last_surprise > 0 AND n.mcap_b >= 3 ORDER BY n.pred_28d DESC LIMIT 80",
+      "drop_missing_columns": true
+     },
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses",
+     "screens": [
+      {
+       "label": "Cheap vs industry",
+       "filters": {
+        "pe_nfy_vs_ind": "<-20"
+       },
+       "sort": "pe_nfy_vs_ind",
+       "explain": "Forward P/E 20%+ under the industry median among the overlooked names."
+      }
+     ]
+    },
+    {
+     "type": "table",
+     "title": "Thin coverage (8 analysts or fewer), alpha 28d decile 9+, $2B+: pred_28d descending",
+     "source": {
+      "duckdb": "{PACK}/outlook/outlook.duckdb",
+      "sql": "SELECT n.symbol, n.ind, n.mcap_b, n.close, n.day, n.m1, n.rsi, n.rng, n.vs50, n.tape_state, n.next_kind, n.next_date, n.earn_date, n.earn_slot, n.bounce_low, n.bounce_high, n.bounce_kill, n.entry_low, n.entry_high, n.kill_px, n.b28d_q20, n.b28d_q80, n.last_surprise, n.rev_surprise, n.surprise_mix, n.react_last, n.react_abs_mean, n.pe_nfy, n.pe_nfy_vs_ind, n.pe_nfy_vs_own, n.fcf_margin, n.nd_ebitda, n.pt_up, n.eps_rev_3m, n.pt_drift_3m, n.dec_7d, n.dec_28d, n.pred_28d, n.lenses, n.analysts, n.pack_lists, n.book_usd FROM names n WHERE TRY_CAST(n.analysts AS DOUBLE) <= 8 AND n.dec_28d >= 9 AND n.mcap_b >= 2 ORDER BY n.pred_28d DESC LIMIT 60",
+      "drop_missing_columns": true
+     },
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    }
+   ]
+  },
+  {
+   "label": "Positioning 4-5 wk",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.outlook.blocks.positioning_0"
+    },
+    {
+     "type": "table",
+     "title": "Strongest 28-day read, decile 10 with 56d decile 8+, $5B+: pred_28d descending",
+     "source": {
+      "duckdb": "{PACK}/outlook/outlook.duckdb",
+      "sql": "SELECT n.symbol, n.ind, n.mcap_b, n.close, n.day, n.m1, n.rsi, n.rng, n.vs50, n.tape_state, n.next_kind, n.next_date, n.earn_date, n.earn_slot, n.bounce_low, n.bounce_high, n.bounce_kill, n.entry_low, n.entry_high, n.kill_px, n.b28d_q20, n.b28d_q80, n.last_surprise, n.rev_surprise, n.surprise_mix, n.react_last, n.react_abs_mean, n.pe_nfy, n.pe_nfy_vs_ind, n.pe_nfy_vs_own, n.fcf_margin, n.nd_ebitda, n.pt_up, n.eps_rev_3m, n.pt_drift_3m, n.dec_7d, n.dec_28d, n.pred_28d, n.lenses, n.analysts, n.pack_lists, n.book_usd FROM names n WHERE n.dec_28d >= 10 AND n.dec_56d >= 8 AND n.mcap_b >= 5 ORDER BY n.pred_28d DESC LIMIT 80",
+      "drop_missing_columns": true
+     },
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    },
+    {
+     "type": "table",
+     "title": "Weakest 28-day read (decile 1), $5B+: what the regime is selling",
+     "source": {
+      "duckdb": "{PACK}/outlook/outlook.duckdb",
+      "sql": "SELECT n.symbol, n.ind, n.mcap_b, n.close, n.day, n.m1, n.rsi, n.rng, n.vs50, n.tape_state, n.next_kind, n.next_date, n.earn_date, n.earn_slot, n.bounce_low, n.bounce_high, n.bounce_kill, n.entry_low, n.entry_high, n.kill_px, n.b28d_q20, n.b28d_q80, n.last_surprise, n.rev_surprise, n.surprise_mix, n.react_last, n.react_abs_mean, n.pe_nfy, n.pe_nfy_vs_ind, n.pe_nfy_vs_own, n.fcf_margin, n.nd_ebitda, n.pt_up, n.eps_rev_3m, n.pt_drift_3m, n.dec_7d, n.dec_28d, n.pred_28d, n.lenses, n.analysts, n.pack_lists, n.book_usd FROM names n WHERE n.dec_28d <= 1 AND n.mcap_b >= 5 ORDER BY n.pred_28d LIMIT 40",
+      "drop_missing_columns": true
+     },
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    }
+   ]
+  },
+  {
+   "label": "Book",
+   "blocks": [
+    {
+     "type": "text",
+     "from": "pages.outlook.blocks.book_0"
+    },
+    {
+     "type": "table",
+     "title": "Book lines: every column group",
+     "source": {
+      "duckdb": "{PACK}/outlook/outlook.duckdb",
+      "sql": "SELECT n.symbol, n.ind, n.mcap_b, n.close, n.day, n.m1, n.rsi, n.rng, n.vs50, n.tape_state, n.next_kind, n.next_date, n.earn_date, n.earn_slot, n.bounce_low, n.bounce_high, n.bounce_kill, n.entry_low, n.entry_high, n.kill_px, n.b28d_q20, n.b28d_q80, n.last_surprise, n.rev_surprise, n.surprise_mix, n.react_last, n.react_abs_mean, n.pe_nfy, n.pe_nfy_vs_ind, n.pe_nfy_vs_own, n.fcf_margin, n.nd_ebitda, n.pt_up, n.eps_rev_3m, n.pt_drift_3m, n.dec_7d, n.dec_28d, n.pred_28d, n.lenses, n.analysts, n.pack_lists, n.book_usd FROM names n WHERE n.book_usd IS NOT NULL ORDER BY n.book_usd DESC LIMIT 40",
+      "drop_missing_columns": true
+     },
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "tone_field": "Course",
+     "extra_from": "courses"
+    }
+   ]
+  },
+  {
+   "label": "Columns",
+   "blocks": [
+    {
+     "type": "text",
+     "text": "The column groups every table follows (config/generic_utils/catalyst_outlook.json `column_groups`). Tables show a subset in the same order; PACK/outlook/outlook.duckdb `names` holds all of them."
+    },
+    {
+     "type": "table",
+     "title": "Column groups",
+     "source": {
+      "duckdb": "{PACK}/outlook/outlook.duckdb",
+      "sql": "SELECT \"group\", n, columns FROM groups"
+     },
+     "column_groups": []
+    }
+   ]
+  },
+  {
+   "label": "Sources",
+   "blocks": [
+    {
+     "type": "list",
+     "from": "pages.outlook.blocks.sources"
+    }
+   ]
+  }
+ ],
+ "guide": {
+  "intro": "What each tab answers, how to work it, and the one-click screens. Tables are data; Course / Reason and the Plan tab are judgment. Nothing is a score: every column is its own order, and counts of arrows count measured cells.",
+  "sections": [
+   {
+    "title": "Tabs",
+    "headers": [
+     "Tab",
+     "Answers",
+     "Start with"
+    ],
+    "rows": [
+     [
+      "Plan",
+      "The day's judgment: top plays, the shortlist, positioning for 4-5 weeks, OUTSIDE catalysts.",
+      "The read callout, then Top 20."
+     ],
+     [
+      "Tonight",
+      "Every name whose print reaction lands on the next session: measured pointers up / down per horizon, the overnight tail, levels.",
+      "A screen (Hold 28d leans up, 7d leans up, Leans down, Book lines printing), then the lists, the families and the tail."
+     ],
+     [
+      "Tonight pointers",
+      "The same names, one column per pointer, grouped by family: which quintile and how that quintile did.",
+      "Read a row left to right; green = measured up, red = measured down, a bare number = no clear direction."
+     ],
+     [
+      "Tonight digest",
+      "After the print: what this surprise, mix, after-hours read and reaction did next.",
+      "Empty until the print is in the day file; read it at the cash close."
+     ],
+     [
+      "Pointer evidence",
+      "The backtest behind every arrow (cells), every arrow per name, and the reporters' own past prints.",
+      "Arrows only; check n, both halves and hit_lift."
+     ],
+     [
+      "Shortlist data",
+      "Every column group for the judgment's shortlist and positioning names.",
+      "The ids the Plan tab names."
+     ],
+     [
+      "Calendar",
+      "Sessions with catalysts and the dated OUTSIDE events.",
+      "The next five sessions."
+     ],
+     [
+      "This week / Next week",
+      "Prints in print order with the set-up cell, levels, value and progression; printed rows by reaction.",
+      "Screens: Sold into, last print down; Cheap to own history; Book prints."
+     ],
+     [
+      "Build-up (wk 3-6)",
+      "Names printing in 3-6 weeks with a strong 28-day read: build before a later print.",
+      "Sort by earn_date."
+     ],
+     [
+      "Other catalysts",
+      "Ex-dividend, IPO lockups and names an OUTSIDE row points at.",
+      "The OUTSIDE rows first."
+     ],
+     [
+      "Overlooked",
+      "Names on no pack list or with thin coverage and a strong 28-day read.",
+      "Screen Cheap vs industry."
+     ],
+     [
+      "Positioning 4-5 wk",
+      "The strongest and weakest 28-day reads: what the regime is buying and selling.",
+      "Read with the pathway page."
+     ],
+     [
+      "Book",
+      "Every Book line in every column group.",
+      "Next catalyst and the levels."
+     ]
+    ]
+   },
+   {
+    "title": "Tonight: pre-print entry, step by step",
+    "headers": [
+     "Step",
+     "What to do"
+    ],
+    "rows": [
+     [
+      "1. Base",
+      "The Session base table is what an average print did: the reaction is close to a coin flip with a wide tail both ways. A pointer only shifts those odds; it never removes the tail."
+     ],
+     [
+      "2. Screen",
+      "Start with Hold 28d leans up or 7d leans up. The reaction column (rx) rarely has arrows: fields known before a print have barely called the reaction session itself; they have called the hold-through."
+     ],
+     [
+      "3. Families",
+      "Read h28_fam_up: up pointers from one family (Tape: run-up, month, RSI, 50-day) are one bet; from three families, three bets."
+     ],
+     [
+      "4. Down list",
+      "Any ▼ in Estimates or History is a reason to wait for the print and buy the reaction instead."
+     ],
+     [
+      "5. Tail",
+      "tail_starter_usd is what a $5,000 starter took overnight in the set-up cell's bad case (10th percentile). If that is more than you accept, wait: the bounce band after the print is the alternative entry."
+     ],
+     [
+      "6. Context",
+      "dec_7d_fx with state_7d (WEAK / FAILING = context only); peer_rx = how this industry's prints are being paid this season; valuation to the industry and to its own history."
+     ],
+     [
+      "7. Entry",
+      "Earnings playbook: a limit between the alpha 7d q20 and the top of the bounce band (not the band middle), a kill on a close, size from the Daily's event budget; decide at the cash close, not after hours."
+     ],
+     [
+      "8. Book lines",
+      "A held line with ▼ on the hold horizons and a wide tail: DERISK into the print to the dollars you accept (rx_tail_usd on Week plays). Price-only damage after the print is held (deterioration playbook)."
+     ]
+    ]
+   },
+   {
+    "title": "After the print: digest",
+    "items": [
+     "Read `rev_posted` before the mix: false means the revenue actual is not in the scan yet, so B/M or M/M can be an artefact.",
+     "The digest's arrows say which way prints with this surprise, mix, after-hours read or reaction went next (rx reaction, ac reaction close vs after hours, d28 drift); the week-plays cells beside them are the set-up x reaction and after-hours quintile cells.",
+     "On an AMC night decide at the cash close: an ac arrow up means such after-hours reads closed better than they printed.",
+     "A deep sell-off with no d28 arrow down is a recovery candidate for the bounce band; the kill re-arms at the reaction session's low."
+    ]
+   },
+   {
+    "title": "How a pointer is measured",
+    "items": [
+     "Each pointer is a field known at the time, cut into quintiles on the signal lab's past prints (store features at each print's pre-print file); slot and mix use their categories.",
+     "lift = the cell's mean minus every other print's mean on the same measure; lift_t = Welch t (prints treated as independent: optimistic).",
+     "▲ / ▼ needs |lift_t| at or above t_min (2.0) on at least min_n (40) prints, the same sign in both halves of the sample and the hit rate moving the same way (recipe config/generic_utils/print_night.json).",
+     "About 400 cells are tested: expect a few arrows by chance. Middle-quintile arrows often mirror a U-shape (the ends did better); end-quintile arrows that agree across families carry more weight.",
+     "The sample is one market regime (spring to autumn 2026); hold-through cells need 28 days of labels, so the newest prints are not in them yet."
+    ]
+   }
+  ]
+ },
+ "ledger": {
+  "auto": true,
+  "standard": [
+   "▲ / ▼"
+  ],
+  "entries": [
+   {
+    "group": "Print night (this page)",
+    "rows": [
+     [
+      "mean",
+      "The cell's mean of its measure over its prints (pp); on the base table, every past print's."
+     ],
+     [
+      "median",
+      "Median of the measure over every past print (pp)."
+     ],
+     [
+      "hit",
+      "Share of the cell's prints (or of every print) with a positive value of the measure."
+     ],
+     [
+      "q10 / q90",
+      "10th / 90th percentile of the measure over the cell's prints: the bad and the good case."
+     ],
+     [
+      "family",
+      "Pointer family: Tape, History, Estimates, Street, Value, Model, Peers before the print; Print, Session after it."
+     ],
+     [
+      "label",
+      "What the pointer or measure is, in words."
+     ],
+     [
+      "value",
+      "The name's value of that pointer now (category text for slot and mix)."
+     ],
+     [
+      "side",
+      "pre = a pointer known before the print; post = a field of the print itself."
+     ]
+    ]
+   }
+  ]
+ }
+}

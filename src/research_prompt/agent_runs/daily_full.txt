@@ -1,6 +1,8 @@
-BEST TRADES: DAILY + MOVERS + PLAYBOOK + GMV, canvas output, with global market wisdom. Day {DAY}.
+BEST TRADES: DAILY + MOVERS + PLAYBOOK + GMV + WEEK PLAYS + OUTLOOK + DETERIORATION, canvas output, with global market wisdom. Day {DAY}.
 Goal: the best trades and positions for the short term (1-10 sessions) and the mid term
-(3-12 weeks), long and short, for a book that holds a lot of cash.
+(3-12 weeks), long and short; how yesterday's calls did; pre-earnings plays for tonight, the
+rest of the week and next week; the month ahead per industry as a regime guide; and, for every
+Book line, whether a drawdown is only price or the business is deteriorating, with both paths.
 
 The runner (src/run_operator_day.py) already refreshed every scan, compiled the pack
 and wrote every suite dump. Pack: {PACK}. Do not rerun producers or compile.
@@ -20,7 +22,20 @@ Also follow, as the steps need them (read the SKILL.md only when you reach that 
 
 1. DATA FIRST (deterministic orders before any news)
    Read {PACK}/briefing_pack.md once: regime, breadth, industries_5d, Book, suggested_courses.
+   Read documentation/market_insights/regime_playbook.md section 3 and deterioration_playbook.md "How to use".
    Prior calls: the newest logs/tradingview_analysis/operator_briefing/runs/brief_history_*/digest.md
+   Yesterday's calls against today: python src/generic_utils/tv_scan_cli.py play-review --pack {PACK} --line
+     (fills pages.week_plays.blocks.review_read / review_lessons: what filled, what ran above the band,
+     which kill printed; check the holdings file against yesterday's plan and say what was not taken).
+   Model and lab state: {PACK}/alpha_model/highlights.log (state per horizon) and {PACK}/signal_lab/highlights.log;
+     the factor month (signal_lab factor_month, 7d) says which styles paid this month and whether the Book is on them.
+   Book deterioration: python src/generic_utils/tv_scan_cli.py deterioration --pack {PACK} --ids <named + candidates> --line
+     (deterioration skill): per line the drawdown bucket, the letters beyond price (E R C S), the measured cell and
+     its dollars, the recovery and kill levels. Record the call in `scans`.
+   Pathway: python src/generic_utils/tv_scan_cli.py pathway --pack {PACK} --ids <diversifier candidates> --line
+     (pathway skill): the Book's factor tilt vs what each factor paid, the 1M / 3M gap split into industry and
+     stock parts, the regime series, and each trade's effect on the tilt. Re-read the judgment's stage triggers;
+     a NEW that moves the tilt toward what pays is preferred over one that deepens the lean that costs.
    Per name that could take capital: python src/operator_briefing/example_entry.py stance SYM ... --line
 
 2. OUTSIDE RESEARCH (tag OUTSIDE, date and link every line; timing and Grade only)
@@ -59,7 +74,19 @@ Also follow, as the steps need them (read the SKILL.md only when you reach that 
      short term (1-10 sessions): tape / bounce / event trades with a trigger, a kill and a
        first target; earnings both ways; forming and opportune opens.
      mid term (3-12 weeks): leftover + weeks bo + mesh + peer discount, with an entry band.
+   Earnings: {PACK}/week_plays (`plays` pre / post, `book`) for tonight, the rest of the week and next week:
+     size into a print by rx_tail_usd, read print-night rows on setrx / ah_q and rev_posted, decide at the cash
+     close (earnings_playbook "How to use"). Tonight's reporters: {PACK}/print_night (catalyst-outlook skill, Print night):
+     pointers up / down per horizon, families, the tail; fill pages.outlook.blocks.tonight_read / tonight. Print brief page:
+     pages.print_brief ids (Book prints first), read, and OUTSIDE notes for the Book's prints and names that could take capital.
+     {PACK}/outlook for weeks 3-6 and overlooked names (low analyst
+     count, decile 9-10). Month leaders ({PACK}/week_plays month / month_ind) are a regime guide, not a buy list.
+   Deterioration (every Book line and every double-down ask): price-only damage (no letter) is held, not cut;
+     a line with 2+ letters under its bounce kill is cut; a crowded winner (12M 100%+, 10-35% off the high) is not
+     added; cap the correlated cluster by NAV, not the line. Fill pages.deterioration (verdicts with both paths).
    Answer explicitly:
+     - what not cutting the losers has cost on the measured cells, and which lines earn a cut
+     - double-down asks: evidence for each (state cell, print cell, valuation) and the condition
      - rebound: allocate more now, or do better trades stand in line or come soon? Name the
        condition that would change the answer (a level, a print, a date).
      - capital allocation and recycle from EXIT / TRIM into the named starters
@@ -85,7 +112,9 @@ Also follow, as the steps need them (read the SKILL.md only when you reach that 
 
 6. RENDER every page in one call and fix every Ledger warning (it also lists unfilled block ids):
      python src/generic_utils/tv_scan_cli.py page-all --day {DAY} --judgment {JUDGMENT} --out-dir {RUN_DIR} --strict
-   (daily_focus, movers, playbook, gmv, wisdom). Wisdom needs the named levels first:
+   (daily_focus, movers, playbook, gmv, wisdom, earnings_week, alpha_model, signal_lab, week_plays, outlook, deterioration, pathway;
+   earnings_week reads {PACK}/earnings_week and its
+   event plays come out of the Daily's event budget, see the earnings-week skill). Wisdom needs the named levels first:
      python src/generic_utils/tv_scan_cli.py name-levels --pack {PACK} --theme <themes> --ids <book + picks> --quiet
    (themes in config/generic_utils/themes.json; record it in `scans`), then fill pages.wisdom blocks and the
    book_ids / focus_ids / session_ids lists. Never hand-write page spec JSON; a one-off page on named groups is
@@ -93,9 +122,14 @@ Also follow, as the steps need them (read the SKILL.md only when you reach that 
 
 7. Priors: python src/generic_utils/tv_scan_cli.py priors --day {DAY} --notes "<one plan line>"
    (keys EXCHANGE:TICKER, from the judgment; never hand-write the priors JSON).
+   Insights: append a dated entry to documentation/market_insights/findings_log.md (what the lab, the deterioration
+   cells, the play review and the factor month said today, with t and n); update regime_playbook.md section 2 when
+   the regime read changes. Facts and measured numbers only; the playbooks hold the rules.
 
 8. FINAL MESSAGE, short: bias, the short-term and mid-term trade cards (5-8 actions with
-   bands and kills), cash after, best shorts, the rebound answer, page links, sources.
+   bands and kills), cash after, best shorts, yesterday's calls in two lines, the Book's deterioration
+   verdicts (price-only vs letters, what earns a cut, the double-down answers), the rebound answer,
+   page links, sources.
    Close with 3-5 changes that would widen what the scans can see or test (a missing
    field, a universe gap, a backtest family that should exist), grounded in what this run
    could not answer. The newest backtests run (family_metrics.csv) is the starting point.

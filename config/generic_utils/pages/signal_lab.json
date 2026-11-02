@@ -1,0 +1,113 @@
+{
+ "name": "signal-lab-{DAY}",
+ "page_key": "signal_lab",
+ "requires": "{PACK}/signal_lab/signal_lab.duckdb",
+ "title": "Signal lab {DAY}",
+ "subtitle": "Backward evidence from the panel store (all-fields day files since 2026-03-29, US $1B+): which features led later excess returns and how reliably, what prints did before and after, and how each briefing-pack list did afterwards. Evidence for weighting and questions, never a gate.",
+ "sources_extra": [
+  "panel store logs/tradingview_analysis/signal_lab/panel_store.duckdb (tv_scan_cli.py panel-store)",
+  "signal lab {PACK}/signal_lab (tv_scan_cli.py signal-lab --pack {PACK})"
+ ],
+ "tone_map": {
+  "STRONG": "good",
+  "CONSISTENT": "info",
+  "REGIME": "warning",
+  "WEAK": "neutral"
+ },
+ "tabs": [
+  {
+   "label": "Read",
+   "blocks": [
+    {"type": "callout", "from": "update.banner"},
+    {"type": "stats", "from": "pages.signal_lab.blocks.stats"},
+    {"type": "callout", "from": "pages.signal_lab.blocks.read"},
+    {"type": "list", "from": "pages.signal_lab.blocks.pointers"},
+    {"type": "text", "text": "IC is the daily rank correlation between a feature and the later excess return (the return minus that day's US $1B+ median). t_indep counts only non-overlapping periods; the verdict uses the smaller of t_nw and t_indep. About 5% of tests clear |t| 2 by chance, so trust STRONG over CONSISTENT, and a 56-day result least."},
+    {"type": "table", "title": "Features that led later excess returns (STRONG or CONSISTENT, |t_indep| descending per horizon)",
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT horizon, feature, family, verdict, ic_mean, ic_t_nw, ic_t_indep, ic_ind, spread, top_hit, ic_h1, ic_h2, ic_up_mkt, ic_down_mkt, n_days, n_indep, label FROM factor_summary WHERE verdict IN ('STRONG', 'CONSISTENT') ORDER BY CAST(replace(horizon, 'd', '') AS INTEGER), abs(ic_t_indep) DESC"},
+     "tone_field": "verdict"}
+   ]
+  },
+  {
+   "label": "1d and 7d",
+   "blocks": [
+    {"type": "table", "title": "Every feature against the next file's excess return (ic_mean descending)",
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT feature, family, verdict, ic_mean, ic_t_indep, ic_ind, spread, top_hit, ic_recent, ic_up_mkt, ic_down_mkt, n_days FROM factor_summary WHERE horizon = '1d' AND n_days > 0 ORDER BY ic_mean DESC"},
+     "tone_field": "verdict"},
+    {"type": "table", "title": "Every feature against the 7-day excess return (ic_mean descending)",
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT feature, family, verdict, ic_mean, ic_t_nw, ic_t_indep, ic_ind, spread, top, bottom, top_hit, ic_h1, ic_h2, ic_recent, ic_up_mkt, ic_down_mkt, n_days FROM factor_summary WHERE horizon = '7d' AND n_days > 0 ORDER BY ic_mean DESC"},
+     "tone_field": "verdict"}
+   ]
+  },
+  {
+   "label": "14d and 28d",
+   "blocks": [
+    {"type": "table", "title": "Every feature against the 28-day excess return (ic_mean descending)",
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT feature, family, verdict, ic_mean, ic_t_nw, ic_t_indep, ic_ind, spread, top, bottom, top_hit, ic_h1, ic_h2, ic_recent, ic_up_mkt, ic_down_mkt, n_days, n_indep FROM factor_summary WHERE horizon = '28d' AND n_days > 0 ORDER BY ic_mean DESC"},
+     "tone_field": "verdict"},
+    {"type": "table", "title": "Every feature against the 14-day excess return (ic_mean descending)",
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT feature, family, verdict, ic_mean, ic_t_indep, ic_ind, spread, top_hit, ic_h1, ic_h2, ic_recent, n_days FROM factor_summary WHERE horizon = '14d' AND n_days > 0 ORDER BY ic_mean DESC"},
+     "tone_field": "verdict"}
+   ]
+  },
+  {
+   "label": "56d and regime",
+   "blocks": [
+    {"type": "text", "text": "56 days of history after each sample leaves about one to three independent periods: read these as direction only."},
+    {"type": "table", "title": "Every feature against the 56-day excess return (ic_mean descending)",
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT feature, family, verdict, ic_mean, ic_t_nw, ic_t_indep, ic_ind, spread, top_hit, ic_h1, ic_h2, n_days, n_indep FROM factor_summary WHERE horizon = '56d' AND n_days > 0 ORDER BY ic_mean DESC"},
+     "tone_field": "verdict"},
+    {"type": "table", "title": "Features whose IC turns with the market (verdict REGIME, |ic_up_mkt - ic_down_mkt| descending)",
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT horizon, feature, family, ic_mean, ic_t_indep, ic_up_mkt, n_up, ic_down_mkt, n_down, ic_h1, ic_h2 FROM factor_summary WHERE verdict = 'REGIME' ORDER BY abs(ic_up_mkt - ic_down_mkt) DESC LIMIT 40"}}
+   ]
+  },
+  {
+   "label": "Prints",
+   "blocks": [
+    {"type": "text", "text": "One row per print on the $1B floor since April. react is the reaction session's move, react_fx the same against the market that day. drift_fx runs from the reaction close; hold_fx from the close before the print (the pre-print entry). t treats prints as independent; they cluster in earnings season, so read it as optimistic."},
+    {"type": "table", "title": "Surprise and the drift after the print",
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT study, cell, n, react_mean, react_hit, react_fx_mean, drift_fx_7d_mean, drift_fx_7d_t, drift_fx_28d_mean, drift_fx_28d_med, drift_fx_28d_hit, drift_fx_28d_t FROM print_cells WHERE study IN ('all prints', 'surprise mix (EPS/revenue)', 'EPS surprise quintile', 'revenue surprise quintile') ORDER BY study, cell"}},
+    {"type": "table", "title": "The reaction and the drift after it",
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT study, cell, n, drift_fx_7d_mean, drift_fx_7d_t, drift_fx_28d_mean, drift_fx_28d_med, drift_fx_28d_hit, drift_fx_28d_t FROM print_cells WHERE study IN ('reaction vs market quintile', 'reaction x surprise', 'big reaction vs surprise') ORDER BY study, cell"}},
+    {"type": "table", "title": "Into the print: the state before and the hold-through from the close before",
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT study, cell, n, react_mean, react_hit, react_fx_mean, hold_fx_7d_mean, hold_fx_28d_mean, hold_fx_28d_med, hold_fx_28d_hit, hold_fx_28d_t FROM print_cells WHERE study IN ('run-up into the print quintile', 'next-FY EPS revision 3m before', 'revision quintile before', 'street upside quintile before', 'previous reaction', 'run-up x previous reaction', 'earnings-week set-up') ORDER BY study, cell"}},
+    {"type": "table", "title": "The reaction night: set-up x reaction, opening gap, after-hours read (AMC), and what followed",
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT study, cell, n, react_fx_mean, react_fx_hit, react_fx_q10, react_fx_q90, react_oc_mean, react_oc_t, ah_to_close_mean, ah_to_close_t, drift_fx_7d_mean, drift_fx_28d_mean, drift_fx_28d_hit, drift_fx_28d_t, hold_fx_28d_mean, hold_fx_28d_q10 FROM print_cells WHERE study IN ('set-up x reaction', 'opening gap quintile (reaction day)', 'gap x session', 'after-hours read quintile (AMC)') ORDER BY study, cell", "drop_missing_columns": true}},
+    {"type": "table", "title": "Slot and month",
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT study, cell, n, react_mean, react_med, react_hit, react_fx_mean, drift_fx_28d_mean FROM print_cells WHERE study IN ('slot', 'print month') ORDER BY study, cell"}},
+    {"type": "table", "title": "Biggest reactions against the market in the last 30 days", "optional": true,
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT symbol, ind, print_date, slot, react, react_fx, eps_surprise, rev_surprise, surprise_mix, runup, prev_react, drift_fx_7d FROM print_events WHERE CAST(print_date AS DATE) >= (SELECT max(CAST(print_date AS DATE)) FROM print_events) - 30 ORDER BY abs(react_fx) DESC LIMIT 40"}}
+   ]
+  },
+  {
+   "label": "Scans",
+   "blocks": [
+    {"type": "text", "text": "Each day's briefing-pack lists against their later closes: entry at the close the pack saw, excess over the median of the same pack's US $2B tape, equal weight per day. side short means a negative excess is the call working. Few pack days so far: read the 28-day rows as early."},
+    {"type": "table", "title": "Pack lists, 7 days after (fx_mean descending)",
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT list, sub, side, n_days, n_obs, fx_mean, fx_t_nw, fx_med, hit, first, last FROM scan_summary WHERE horizon = '7d' ORDER BY fx_mean DESC"}},
+    {"type": "table", "title": "Pack lists, next file (1d) and 14 days after",
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT list, sub, side, horizon, n_days, n_obs, fx_mean, fx_t_nw, fx_med, hit FROM scan_summary WHERE horizon IN ('1d', '14d') ORDER BY list, sub, horizon"}},
+    {"type": "table", "title": "Pack lists, 28 days after",
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT list, sub, side, n_days, n_obs, fx_mean, fx_t_nw, fx_med, hit, first, last FROM scan_summary WHERE horizon = '28d' ORDER BY fx_mean DESC"}}
+   ]
+  },
+  {
+   "label": "Overlap and months",
+   "blocks": [
+    {"type": "table", "title": "Feature pairs that carry the same ranking (average daily rank correlation, |rho| descending)",
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT a, b, rho, n_days FROM feature_corr ORDER BY abs(rho) DESC LIMIT 40"}},
+    {"type": "table", "title": "Month by month IC of the STRONG / CONSISTENT features at 7d and 28d",
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT m.horizon, m.feature, m.month, m.ic, m.n_days FROM factor_month m JOIN (SELECT DISTINCT feature, horizon FROM factor_summary WHERE verdict IN ('STRONG', 'CONSISTENT') AND horizon IN ('7d', '28d')) s USING (feature, horizon) ORDER BY m.horizon, m.feature, m.month"}},
+    {"type": "table", "title": "Market by day (US $1B+ medians)",
+     "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT as_of, n, mkt_1d, mkt_regime, mkt_fwd_7d, mkt_fwd_28d FROM market ORDER BY as_of DESC LIMIT 40"}}
+   ]
+  },
+  {
+   "label": "Sources",
+   "blocks": [
+    {"type": "list", "from": "pages.signal_lab.blocks.sources"}
+   ]
+  }
+ ],
+ "ledger": {"auto": true}
+}

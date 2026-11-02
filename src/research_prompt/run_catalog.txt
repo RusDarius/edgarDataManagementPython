@@ -331,6 +331,118 @@ Agent: paste --- GMV LENS --- . Not a Daily budget of its own.
 Skill: .claude/skills/gmv-lens/SKILL.md
 
 
+--- EARNINGS WEEK (every print this week + next: slot, run-up, value, past reactions, suite joins) ---
+What: earnings-week on the newest all-fields day file (US + Europe, $1B floor, named ids always in), past print
+      reactions from the day files, joined to pack tape, GMV lens, prediction earnings consensus and edge.
+Manual:
+  python src/generic_utils/tv_scan_cli.py earnings-week --pack PACK --ids RMBS,NPK,SIX:LOGN --line
+  python src/generic_utils/tv_scan_cli.py name-levels --pack PACK --ids <focus> --out-dir PACK/earnings_week/name_levels --quiet
+  python src/generic_utils/tv_scan_cli.py page --template earnings_week --day YYYYMMDD --judgment J --out-dir RUN_DIR --strict
+Folder: PACK/earnings_week/ (earnings_week.duckdb: calendar, prints, by_day, by_industry; queries.txt). The daily refresh
+  runs it as the optional suite earnings_week; page-all renders the template.
+Agent: paste --- EARNINGS WEEK --- . Skill: .claude/skills/earnings-week/SKILL.md
+
+
+--- WEEK PLAYS (this week's earnings trades: bands, kills, model deciles, print cells, balance sheet; Book verdicts) ---
+What: week-plays joins the earnings-week calendar (W0 + W1), the alpha model live bands and deciles, the entry book
+      and safety band (buy-in-red band, kill), the balance sheet, and the signal-lab print cell each name sits in now
+      (with that cell's measured mean, t, n); the same for every Book line. Zero cutoffs; the page owns the screens.
+Manual:
+  python src/generic_utils/tv_scan_cli.py week-plays --pack PACK --ids STRL,GOOG,AIT --line
+  python src/generic_utils/tv_scan_cli.py capital-plan --judgment J --key capital_plan_week --pack PACK/briefing_pack.json --out-dir PACK/capital_plan_week --quiet
+  python src/generic_utils/tv_scan_cli.py page --template week_plays --day YYYYMMDD --judgment J --out-dir RUN_DIR --strict
+Folder: PACK/week_plays/ (week_plays.duckdb: plays, book, cells, month, month_ind; queries.txt). The daily refresh
+  runs it as the optional suite week_plays after signal_lab; page-all renders the template.
+Yesterday's calls: play-review scores the newest prior judgment (courses, week-plays list, published bands and kills)
+  against this pack: ret vs the tape, band / kill state on opens and closes, print state now.
+  python src/generic_utils/tv_scan_cli.py play-review --pack PACK --line
+  Folder: PACK/play_review/ (play_review.duckdb: calls, by_course). The refresh runs it after week_plays.
+Agent: paste --- WEEK PLAYS --- . Skill: .claude/skills/earnings-week/SKILL.md (Week plays section)
+
+
+--- CATALYST OUTLOOK (earnings + other catalysts, six weeks; build-up, overlooked, 4-6 week positioning) ---
+What: outlook puts every US $2B+ name with its catalysts over the horizon (day-file earnings date + slot, ex-dividend,
+      IPO lockup = offer + 180d, dated OUTSIDE rows from config/generic_utils/catalyst_calendar.json) beside the day's
+      suites, columns in one order: technical, setup, earnings surprise, value, progression, pack lists. Zero cutoffs.
+Manual:
+  python src/generic_utils/tv_scan_cli.py outlook --pack PACK --ids NVDA,ZM --line
+  python src/generic_utils/tv_scan_cli.py page --template outlook --day YYYYMMDD --judgment J --out-dir RUN_DIR --strict
+Folder: PACK/outlook/ (outlook.duckdb: names, events, days, groups; queries.txt). The refresh runs it after week_plays.
+Agent: paste --- CATALYST OUTLOOK --- . Skill: .claude/skills/catalyst-outlook/SKILL.md
+
+
+--- PRINT NIGHT (tonight's reporters: measured pointers up / down per horizon, the overnight tail, the digest) ---
+What: every name whose print reaction lands on one session (default the next: tonight's AMC + tomorrow's BMO). Each
+      pointer (a pre-print field, or after the print the surprise / mix / after-hours read / reaction) is cut into
+      quintiles on the signal lab's past prints; per cell the mean, hit, lift vs the rest, Welch t, both halves; an
+      arrow only where all agree (config/generic_utils/print_night.json). Counts per horizon, families, lists, tails.
+Manual:
+  python src/generic_utils/tv_scan_cli.py print-night --pack PACK --line          (--react-on today | YYYY-MM-DD, --sessions N)
+  python src/generic_utils/tv_scan_cli.py page --template outlook --day YYYYMMDD --judgment J --out-dir RUN_DIR --strict
+Output: PACK/print_night (names, matrix, pointers, cells, base, history); the outlook page's Tonight tabs and Guide.
+Brief: python src/generic_utils/tv_scan_cli.py print-brief --pack PACK --ids A,B --line  -> PACK/print_brief (cards, industries) and the
+       print-brief page: one written card per reporter (into the print, value and peers, the quarter's bar, pointers, levels, what to read).
+Agent: paste --- PRINT NIGHT --- . Skill: .claude/skills/catalyst-outlook/SKILL.md
+
+
+--- DETERIORATION (drawdown x letters beyond price: what followed, and every Book line's state now) ---
+What: on the panel store's study frame (US $2B+, excess over the day's median), every name-day gets a drawdown
+      bucket from the 52-week high and the letters beyond price (E EPS estimate cut, R revenue estimate cut,
+      C negative FCF, S last EPS miss; rules in config/generic_utils/deterioration.json), split by the 12-month
+      run, the market's trailing month, the 200-day trend and street target revisions. Cells: mean / hit / q10 of
+      7d / 28d / 56d excess, t on non-overlapping days, odds of a further -10% and of regaining half the gap.
+      Live: every floor name plus the Book and named ids with the same state, its cells, quarter-ago margin /
+      growth / FCF changes, recovery levels, alpha bands, entry book and safety band, and the line's cell dollars.
+Manual:
+  python src/generic_utils/tv_scan_cli.py deterioration --pack PACK --ids GOOG,MU --line
+  python src/generic_utils/tv_scan_cli.py deterioration --pack PACK --first-day 2026-07-01 --out-dir PACK/deterioration_jul   (regime check)
+  python src/generic_utils/tv_scan_cli.py page --template deterioration --day YYYYMMDD --judgment J --out-dir RUN_DIR --strict
+Folder: PACK/deterioration/ (deterioration.duckdb: names, cells, letters; queries.txt). The refresh runs it after week_plays.
+Agent: paste --- DETERIORATION --- . Skill: .claude/skills/deterioration/SKILL.md
+
+
+--- PATHWAY (factor tilt vs what pays, picking vs industry attribution, rebalance deltas, regime series) ---
+What: the Book's NAV-weighted cross-sectional percentile per factor (recipe list) on the newest store day, beside
+      the signal lab's IC for that factor (full sample + verdict, this month, the trailing 20-day tape); the Book's
+      1M / 3M return split into market, industry and stock parts; the daily regime series (breadth, share above
+      the 200-day, the market's month); and each Book trim's / each floor name's starter effect on the tilt.
+Manual:
+  python src/generic_utils/tv_scan_cli.py pathway --pack PACK --ids HIG,EOG --line
+  python src/generic_utils/tv_scan_cli.py page --template pathway --day YYYYMMDD --judgment J --out-dir RUN_DIR --strict
+Folder: PACK/pathway/ (pathway.duckdb: exposure, lines, attribution, regime, factor_tape, candidates; queries.txt).
+  The refresh runs it after deterioration.
+Agent: paste --- PATHWAY --- . Skill: .claude/skills/pathway/SKILL.md
+
+
+--- SIGNAL LAB (backward evidence: feature IC by horizon, print event study, pack-list returns) ---
+What: the panel store (every all-fields day file since 2026-03-29, US $300M+ ingest, newest run per day, the
+      move-prediction run before each scan) -> per-feature rank IC against later excess returns at 1d / 7d / 14d /
+      28d / 56d (Newey-West and non-overlapping t, industry-neutral, halves, up vs down market), one row per print
+      (surprise, reaction, run-up, drift, hold-through), and each pack list's later excess over the US $2B tape.
+Manual:
+  python src/generic_utils/tv_scan_cli.py panel-store --quiet
+  python src/generic_utils/tv_scan_cli.py signal-lab --pack PACK --no-update --line
+  python src/run_signal_lab.py --page
+Folder: logs/tradingview_analysis/signal_lab/panel_store.duckdb (panel, pred, series, prints, labels, features) and
+  PACK/signal_lab/ (signal_lab.duckdb: factor_summary, factor_days, factor_month, feature_corr, print_events,
+  print_cells, scan_summary, scan_days, scan_obs, scan_packs, market; highlights.log; queries.txt). The daily refresh
+  runs panel_store as a producer and signal_lab as an optional suite; page-all renders the template.
+Agent: paste --- SIGNAL LAB --- . Skill: .claude/skills/signal-lab/SKILL.md
+
+
+--- ALPHA MODEL (walk-forward forecast per horizon, OOS record, bands) ---
+What: features and move-prediction scores weighted by their trailing IC on past-known days only (age-decayed,
+      shrunk by their own t), pred_<h> in percent excess over the US $1B+ median, the out-of-sample record against
+      walk-forward baselines, a state per horizon, calibration deciles, volatility-scaled bands, top drivers.
+Manual:
+  python src/generic_utils/tv_scan_cli.py alpha-model --pack PACK --no-update --ids A,B --line
+  python src/run_alpha_model.py --ids A,B --page
+Folder: PACK/alpha_model/ (alpha_model.duckdb: state, oos_summary, oos_days, deciles, weights, coef_days, live,
+  live_track; highlights.log; queries.txt) and logs/tradingview_analysis/alpha_model/live_log.duckdb (every run's
+  forecasts, scored as labels arrive). The daily refresh runs it as the optional suite alpha_model.
+Agent: paste --- ALPHA MODEL --- . Skill: .claude/skills/alpha-model/SKILL.md
+
+
 --- DEEP DIVE (named themes / tickers: discount, bounce band, kill, add, trim) ---
 What: name-levels (tape -> entry book -> GMV lens -> day history -> safety band) for themes in
       config/generic_utils/themes.json and/or ids, then one page with a tab per theme.

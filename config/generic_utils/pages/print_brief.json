@@ -1,0 +1,672 @@
+{
+ "name": "print-brief-{DAY}",
+ "page_key": "print_brief",
+ "requires": "{PACK}/print_brief/print_brief.duckdb",
+ "title": "Print brief {DAY}",
+ "subtitle": "One card per name reporting on the next session: a short read built from the pack's numbers (going into the print, value to peers and its own history, what the quarter has to show, the industry's prints this season, the measured pointers, the levels) and what to read on the print. Notes tagged OUTSIDE are the judgment's.",
+ "sources_extra": [
+  "print brief {PACK}/print_brief (tv_scan_cli.py print-brief --pack {PACK} --quiet)",
+  "print night {PACK}/print_night (tv_scan_cli.py print-night --pack {PACK} --quiet)"
+ ],
+ "tone_map": {
+  "BUY_PRE": "good",
+  "NEW": "good",
+  "ADD": "good",
+  "BUY_DIP_AFTER": "good",
+  "HOLD_THROUGH": "info",
+  "HOLD": "info",
+  "WATCH": "neutral",
+  "WAIT": "neutral",
+  "NEW (queue)": "info",
+  "DERISK": "warning",
+  "DERISK_INTO_PRINT": "warning",
+  "TRIM": "warning",
+  "HOLD_NO_ADD": "warning",
+  "SELL_THE_NEWS": "warning",
+  "PASS": "bad",
+  "STAND_ASIDE": "bad",
+  "AVOID": "bad",
+  "EXIT": "bad"
+ },
+ "tabs": [
+  {
+   "label": "Focus",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "update.banner"
+    },
+    {
+     "type": "stats",
+     "from": "pages.print_brief.blocks.stats"
+    },
+    {
+     "type": "callout",
+     "from": "pages.print_brief.blocks.read"
+    },
+    {
+     "type": "cards",
+     "title": "Focus: the Book's prints and the judgment's names",
+     "source": {
+      "duckdb": "{PACK}/print_brief/print_brief.duckdb",
+      "sql": "SELECT * FROM cards WHERE TRUE ORDER BY book_usd DESC NULLS LAST, mcap_b DESC"
+     },
+     "id_field": "symbol",
+     "subtitle_fields": [
+      "company",
+      "ind",
+      "slot",
+      "earn_date",
+      "mcap_b"
+     ],
+     "headline_field": "headline",
+     "metrics": [
+      "close",
+      "runup",
+      "m1",
+      "pe_nfy",
+      "pe_nfy_vs_ind",
+      "pe_nfy_vs_own",
+      "pt_up",
+      "eps_q_step",
+      "rev_q_step",
+      "eps_rev_3m",
+      "react_abs_mean",
+      "h28_up",
+      "h28_dn",
+      "h7_up",
+      "h7_dn",
+      "dec_28d",
+      "tail_starter_usd",
+      "book_usd"
+     ],
+     "sections": [
+      [
+       "Going into the print",
+       "setup_text"
+      ],
+      [
+       "Value, cash flow and the street",
+       "value_text"
+      ],
+      [
+       "What the quarter has to show",
+       "quarter_text"
+      ],
+      [
+       "Industry and peers",
+       "peers_text"
+      ],
+      [
+       "Pointers and the model",
+       "pointers_text"
+      ],
+      [
+       "Levels and size",
+       "levels_text"
+      ],
+      [
+       "Past prints",
+       "history_text"
+      ],
+      [
+       "After the print",
+       "print_text"
+      ]
+     ],
+     "list_sections": [
+      [
+       "What to read on the print",
+       "watch_items"
+      ]
+     ],
+     "extra_from": "courses",
+     "notes_from": "pages.print_brief.notes",
+     "collapsed": false,
+     "decimals": 1,
+     "ids_from": "pages.print_brief.ids",
+     "limit": 8,
+     "note": "Without a judgment list this shows the Book's prints and the largest reporters."
+    }
+   ]
+  },
+  {
+   "label": "Leans up",
+   "blocks": [
+    {
+     "type": "text",
+     "text": "Reporters whose measured pointers lean up on a hold horizon: 3+ up and at most 1 down on the 28-day hold from 2+ families, or 2+ up and none down on the 7-day. A lean is not a ticket: the tail and the down list decide."
+    },
+    {
+     "type": "cards",
+     "title": "Leaning up on the hold",
+     "source": {
+      "duckdb": "{PACK}/print_brief/print_brief.duckdb",
+      "sql": "SELECT * FROM cards WHERE (h28_up >= 3 AND h28_dn <= 1) OR (h7_up >= 2 AND h7_dn = 0) ORDER BY mcap_b DESC"
+     },
+     "id_field": "symbol",
+     "subtitle_fields": [
+      "company",
+      "ind",
+      "slot",
+      "earn_date",
+      "mcap_b"
+     ],
+     "headline_field": "headline",
+     "metrics": [
+      "close",
+      "runup",
+      "m1",
+      "pe_nfy",
+      "pe_nfy_vs_ind",
+      "pe_nfy_vs_own",
+      "pt_up",
+      "eps_q_step",
+      "rev_q_step",
+      "eps_rev_3m",
+      "react_abs_mean",
+      "h28_up",
+      "h28_dn",
+      "h7_up",
+      "h7_dn",
+      "dec_28d",
+      "tail_starter_usd",
+      "book_usd"
+     ],
+     "sections": [
+      [
+       "Going into the print",
+       "setup_text"
+      ],
+      [
+       "Value, cash flow and the street",
+       "value_text"
+      ],
+      [
+       "What the quarter has to show",
+       "quarter_text"
+      ],
+      [
+       "Industry and peers",
+       "peers_text"
+      ],
+      [
+       "Pointers and the model",
+       "pointers_text"
+      ],
+      [
+       "Levels and size",
+       "levels_text"
+      ],
+      [
+       "Past prints",
+       "history_text"
+      ],
+      [
+       "After the print",
+       "print_text"
+      ]
+     ],
+     "list_sections": [
+      [
+       "What to read on the print",
+       "watch_items"
+      ]
+     ],
+     "extra_from": "courses",
+     "notes_from": "pages.print_brief.notes",
+     "collapsed": true,
+     "decimals": 1
+    }
+   ]
+  },
+  {
+   "label": "Leans down",
+   "blocks": [
+    {
+     "type": "text",
+     "text": "Reporters with 4+ pointers down and at most 1 up on the 28-day hold: no pre-print long; a held line fits DERISK; the reaction can still be bought later in the bounce band."
+    },
+    {
+     "type": "cards",
+     "title": "Leaning down on the hold",
+     "source": {
+      "duckdb": "{PACK}/print_brief/print_brief.duckdb",
+      "sql": "SELECT * FROM cards WHERE h28_dn >= 4 AND h28_up <= 1 ORDER BY mcap_b DESC"
+     },
+     "id_field": "symbol",
+     "subtitle_fields": [
+      "company",
+      "ind",
+      "slot",
+      "earn_date",
+      "mcap_b"
+     ],
+     "headline_field": "headline",
+     "metrics": [
+      "close",
+      "runup",
+      "m1",
+      "pe_nfy",
+      "pe_nfy_vs_ind",
+      "pe_nfy_vs_own",
+      "pt_up",
+      "eps_q_step",
+      "rev_q_step",
+      "eps_rev_3m",
+      "react_abs_mean",
+      "h28_up",
+      "h28_dn",
+      "h7_up",
+      "h7_dn",
+      "dec_28d",
+      "tail_starter_usd",
+      "book_usd"
+     ],
+     "sections": [
+      [
+       "Going into the print",
+       "setup_text"
+      ],
+      [
+       "Value, cash flow and the street",
+       "value_text"
+      ],
+      [
+       "What the quarter has to show",
+       "quarter_text"
+      ],
+      [
+       "Industry and peers",
+       "peers_text"
+      ],
+      [
+       "Pointers and the model",
+       "pointers_text"
+      ],
+      [
+       "Levels and size",
+       "levels_text"
+      ],
+      [
+       "Past prints",
+       "history_text"
+      ],
+      [
+       "After the print",
+       "print_text"
+      ]
+     ],
+     "list_sections": [
+      [
+       "What to read on the print",
+       "watch_items"
+      ]
+     ],
+     "extra_from": "courses",
+     "notes_from": "pages.print_brief.notes",
+     "collapsed": true,
+     "decimals": 1
+    }
+   ]
+  },
+  {
+   "label": "Large caps",
+   "blocks": [
+    {
+     "type": "cards",
+     "title": "$50B and over",
+     "source": {
+      "duckdb": "{PACK}/print_brief/print_brief.duckdb",
+      "sql": "SELECT * FROM cards WHERE mcap_b >= 50 ORDER BY mcap_b DESC"
+     },
+     "id_field": "symbol",
+     "subtitle_fields": [
+      "company",
+      "ind",
+      "slot",
+      "earn_date",
+      "mcap_b"
+     ],
+     "headline_field": "headline",
+     "metrics": [
+      "close",
+      "runup",
+      "m1",
+      "pe_nfy",
+      "pe_nfy_vs_ind",
+      "pe_nfy_vs_own",
+      "pt_up",
+      "eps_q_step",
+      "rev_q_step",
+      "eps_rev_3m",
+      "react_abs_mean",
+      "h28_up",
+      "h28_dn",
+      "h7_up",
+      "h7_dn",
+      "dec_28d",
+      "tail_starter_usd",
+      "book_usd"
+     ],
+     "sections": [
+      [
+       "Going into the print",
+       "setup_text"
+      ],
+      [
+       "Value, cash flow and the street",
+       "value_text"
+      ],
+      [
+       "What the quarter has to show",
+       "quarter_text"
+      ],
+      [
+       "Industry and peers",
+       "peers_text"
+      ],
+      [
+       "Pointers and the model",
+       "pointers_text"
+      ],
+      [
+       "Levels and size",
+       "levels_text"
+      ],
+      [
+       "Past prints",
+       "history_text"
+      ],
+      [
+       "After the print",
+       "print_text"
+      ]
+     ],
+     "list_sections": [
+      [
+       "What to read on the print",
+       "watch_items"
+      ]
+     ],
+     "extra_from": "courses",
+     "notes_from": "pages.print_brief.notes",
+     "collapsed": true,
+     "decimals": 1
+    }
+   ]
+  },
+  {
+   "label": "Printed",
+   "blocks": [
+    {
+     "type": "text",
+     "text": "Names whose print is already in the day file: the After the print section reads the mix, the reaction and the measured cells. Fills after the post-close all-fields scan, or run print-night with --react-on today the next morning, then print-brief."
+    },
+    {
+     "type": "cards",
+     "title": "Printed",
+     "source": {
+      "duckdb": "{PACK}/print_brief/print_brief.duckdb",
+      "sql": "SELECT * FROM cards WHERE phase = 'post' ORDER BY book_usd DESC NULLS LAST, mcap_b DESC"
+     },
+     "id_field": "symbol",
+     "subtitle_fields": [
+      "company",
+      "ind",
+      "slot",
+      "earn_date",
+      "mcap_b"
+     ],
+     "headline_field": "headline",
+     "metrics": [
+      "close",
+      "runup",
+      "m1",
+      "pe_nfy",
+      "pe_nfy_vs_ind",
+      "pe_nfy_vs_own",
+      "pt_up",
+      "eps_q_step",
+      "rev_q_step",
+      "eps_rev_3m",
+      "react_abs_mean",
+      "h28_up",
+      "h28_dn",
+      "h7_up",
+      "h7_dn",
+      "dec_28d",
+      "tail_starter_usd",
+      "book_usd"
+     ],
+     "sections": [
+      [
+       "Going into the print",
+       "setup_text"
+      ],
+      [
+       "Value, cash flow and the street",
+       "value_text"
+      ],
+      [
+       "What the quarter has to show",
+       "quarter_text"
+      ],
+      [
+       "Industry and peers",
+       "peers_text"
+      ],
+      [
+       "Pointers and the model",
+       "pointers_text"
+      ],
+      [
+       "Levels and size",
+       "levels_text"
+      ],
+      [
+       "Past prints",
+       "history_text"
+      ],
+      [
+       "After the print",
+       "print_text"
+      ]
+     ],
+     "list_sections": [
+      [
+       "What to read on the print",
+       "watch_items"
+      ]
+     ],
+     "extra_from": "courses",
+     "notes_from": "pages.print_brief.notes",
+     "collapsed": false,
+     "decimals": 1
+    }
+   ]
+  },
+  {
+   "label": "All reporters",
+   "blocks": [
+    {
+     "type": "text",
+     "text": "Every reporter, one row each, every text as a column (click a text cell to open it). Search, filter and the screens work as on any table."
+    },
+    {
+     "type": "table",
+     "title": "Every reporter of the session",
+     "source": {
+      "duckdb": "{PACK}/print_brief/print_brief.duckdb",
+      "sql": "SELECT symbol, slot, mcap_b, phase, h28_up, h28_dn, h7_up, h7_dn, rx_up, rx_dn, react_abs_mean, pe_nfy_vs_ind, pe_nfy_vs_own, eps_rev_3m, peer_rx, book_usd, headline, setup_text, value_text, quarter_text, peers_text, pointers_text, levels_text, watch_items FROM cards ORDER BY book_usd DESC NULLS LAST, mcap_b DESC"
+     },
+     "extra_columns": [
+      "Course"
+     ],
+     "extra_from": "courses",
+     "screens": [
+      {
+       "label": "Hold 28d leans up",
+       "filters": {
+        "h28_up": ">=3",
+        "h28_dn": "<=1"
+       },
+       "sort": "-h28_up",
+       "explain": "3+ pointers up on the 28-day hold, at most 1 down: read the card's down list, the tail and the bar before any entry."
+      },
+      {
+       "label": "Leans down",
+       "filters": {
+        "h28_dn": ">=4",
+        "h28_up": "<=1"
+       },
+       "sort": "-h28_dn",
+       "explain": "4+ down on the 28-day hold: no pre-print long."
+      },
+      {
+       "label": "Cheap to industry",
+       "filters": {
+        "pe_nfy_vs_ind": "<-20"
+       },
+       "sort": "pe_nfy_vs_ind",
+       "explain": "Forward P/E 20%+ under the industry median: open value_text for its own history and the street."
+      },
+      {
+       "label": "Industry paid this season",
+       "filters": {
+        "peer_rx": ">1"
+       },
+       "sort": "-peer_rx",
+       "explain": "The industry's prints in the prior 35 days averaged more than +1 pp vs the market."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Industries",
+   "blocks": [
+    {
+     "type": "text",
+     "text": "One row per industry with a reporter tonight: the US $2B+ peers' medians and how the industry's prints were paid this season."
+    },
+    {
+     "type": "table",
+     "title": "Industries reporting this session",
+     "source": {
+      "duckdb": "{PACK}/print_brief/print_brief.duckdb",
+      "sql": "SELECT ind, n_tonight, tonight, peer_count, peer_pe_med, peer_m1_med, peer_m3_med, season_n, season_rx, season_up, season_latest FROM industries ORDER BY n_tonight DESC, season_rx"
+     },
+     "screens": [
+      {
+       "label": "Paid this season",
+       "filters": {
+        "season_rx": ">0",
+        "season_n": ">=3"
+       },
+       "sort": "-season_rx",
+       "explain": "Industries whose prints in the prior 35 days beat the market on average (3+ prints)."
+      },
+      {
+       "label": "Punished this season",
+       "filters": {
+        "season_rx": "<-2",
+        "season_n": ">=3"
+       },
+       "sort": "season_rx",
+       "explain": "Industries whose prints were sold 2+ pp vs the market on average: the bar is high; size down or wait."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Sources",
+   "blocks": [
+    {
+     "type": "list",
+     "from": "pages.print_brief.blocks.sources"
+    }
+   ]
+  }
+ ],
+ "guide": {
+  "intro": "A card is a short read of one reporter built only from the pack's numbers; nothing on it is a score. Course, Grade, the Judgment line and Notes (OUTSIDE) are the judgment's.",
+  "sections": [
+   {
+    "title": "Reading a card",
+    "headers": [
+     "Part",
+     "What it tells you"
+    ],
+    "rows": [
+     [
+      "Header",
+      "Id, company, industry, slot (BMO before the open / AMC after the close), print date, market cap in $B, and the judgment's Course / Grade / Horizon."
+     ],
+     [
+      "Headline",
+      "The set-up into the print, forward P/E against the industry and its own median, the pointer counts and the name's average print move."
+     ],
+     [
+      "Metrics",
+      "Hover for the Ledger meaning. Counts h28 / h7 are measured pointers up / down; tail_starter_usd is a $5,000 starter's overnight bad case."
+     ],
+     [
+      "Going into the print",
+      "The tape into the print, the previous print, the set-up cell's measured hold and overnight tail, the deterioration state."
+     ],
+     [
+      "Value, cash flow and the street",
+      "Cheap or rich against the industry and its own history, cash generation, leverage, the street target and how it moved."
+     ],
+     [
+      "What the quarter has to show",
+      "The bar: consensus against last quarter's reported numbers; whether estimates were raised into the print (top quintile = priced) or cut (a lower bar)."
+     ],
+     [
+      "Industry and peers",
+      "Where the name sits among its peers, and how the industry's prints were paid in the last 35 days: a punished industry raises the bar."
+     ],
+     [
+      "Pointers and the model",
+      "Which measured pointers point up / down per horizon, the alpha deciles with their measured record, the model's drivers."
+     ],
+     [
+      "Levels and size",
+      "Where to buy after the print (buy-in-red band), where the thesis dies (kill), the dollars a starter risks overnight."
+     ],
+     [
+      "What to read on the print",
+      "A checklist: the bar, the mix cells, the after-hours rule, the set-up's kill rule, the size, the down pointers."
+     ]
+    ]
+   },
+   {
+    "title": "Before the print, in four steps",
+    "items": [
+     "Focus tab: the Book's prints first. Hold vs DERISK comes from the down pointers, the overnight tail against what you accept, and the bar.",
+     "Leans up: open the card, check the families (Tape pointers move together), the bar (estimates priced?) and the industry's season. A pre-print entry is a hold-through bet, not a reaction call.",
+     "No down pointer in Estimates or History and a tail you accept: an event ticket from the Daily's budget, limit in the band. Otherwise wait for the print and use the bounce band.",
+     "Leans down: no pre-print long; note the bounce band for after the print."
+    ]
+   },
+   {
+    "title": "After the print",
+    "items": [
+     "Re-run print-night and print-brief after the post-close scan (or with --react-on today the next morning): the Printed tab fills.",
+     "Read rev_posted, then the mix and the After the print section; decide at the cash close."
+    ]
+   },
+   {
+    "title": "What the cards do not have yet",
+    "items": [
+     "Management guidance, the earnings release text, call commentary and news: these come only as the judgment's Notes (OUTSIDE), written per name. A filings module (SEC 8-K Item 2.02 press releases) is the planned follow-up."
+    ]
+   }
+  ]
+ },
+ "ledger": {
+  "auto": true
+ }
+}

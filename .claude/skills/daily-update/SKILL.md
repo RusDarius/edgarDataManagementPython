@@ -18,6 +18,8 @@ The first Daily of the day wrote `logs/canvases/YYYYMMDD/judgment.json`. Each up
 3. For each name under **Names to review**, keep or change `courses[symbol]` (Course, Grade, Reason, Horizon) in the judgment file:
    - `THROUGH_KILL`: that entry is finished. A NEW / WAIT becomes PASS, or a new band from entry-book on the new pack. A held line goes through the polar and thesis-kill rules (prior ADD/NEW cannot become EXIT without `thesis_kill`).
    - `band inside->above_band`: not a new fill; WAIT for the band. `->below_band` on a reclaim name: still WAIT.
+   - `after-hours ±x% (printed after the close)` (post-close packs only): the cash close does not hold the print yet. Read the post-earn skill's step 6 (set-up x reaction, `rev_posted`) before changing a held line; the kill does not fire on the after-hours print.
+   - `letters A->B` (deterioration letters beyond price changed, PACK/deterioration): a held line's new E / R / C / S is the review trigger (deterioration skill: 2+ letters under the bounce kill is a cut; a letter turning off can lift HOLD_NO_ADD, stated). Update `pages.deterioration.blocks.verdicts` for that row.
    - Label flips (`up_class`, `down_class`, `peer`, `mix`, `mtp`, `mesh`): re-grade and cite the new value.
    - `close` / `left` / `rr` / `bo` / `rsi` moves: change the Reason only if the course or grade changes.
    - **List moves** `No course yet`: give a course only if the name would take capital; otherwise leave it blank.
