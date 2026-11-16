@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Date | 2026-11-15 (work of 3 to 15 Nov 2026) |
-| Commit | pending; base `4896018` |
+| Commit | `1fd36cb`; base `4896018` |
 | Change set | 102 files at the first review (+17,552 / -138; 50 added, 52 modified). The review added and edited files (section "Files the review added or changed"), which were then staged with the rest: about 114 files, +21,500 / -138. Nothing deleted |
 | Scan | `logs/patch_notes/20261115_staged/inventory.md` (the first 102 files, as reviewed); `logs/patch_notes/20261116_worktree/inventory.md` (everything, with the feature and removal sections) |
 | Tests | 917 passed, 8 skipped (everything, 16 Nov); 3 failures and 4 errors in two older test files, unchanged from the baseline (B6) |
