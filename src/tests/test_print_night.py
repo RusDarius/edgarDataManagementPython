@@ -59,6 +59,36 @@ class PrintNightRuleTests(unittest.TestCase):
         self.assertEqual(peer_reaction(events, "Chips", "2026-10-30", days=35, min_n=3, exclude="NYSE:P3"), (1.0, 3))
         self.assertEqual(peer_reaction(events, "Chips", "2026-10-30", days=35, min_n=5), (None, 4))
 
+    def test_tail_flags_and_own_move(self):
+        from generic_utils.print_night import own_abs_move, tail_flags
+
+        recipe = {"tail_measures": [{"key": "rx_up10", "from": "react_fx", "op": ">=", "value": 10, "code": "u10"},
+                                    {"key": "rx_dn10", "from": "react_fx", "op": "<=", "value": -10, "code": "d10"}]}
+        self.assertEqual(tail_flags({"react_fx": 12.0}, recipe), {"rx_up10": 1.0, "rx_dn10": 0.0})
+        self.assertEqual(tail_flags({"react_fx": -10.0}, recipe), {"rx_up10": 0.0, "rx_dn10": 1.0})
+        self.assertEqual(tail_flags({"react_fx": ""}, recipe), {"rx_up10": None, "rx_dn10": None})
+        bal = {"tail_measures": [{"key": "rx_bal10", "from": "react_fx", "op": "balance", "value": 10, "code": "b10"}]}
+        self.assertEqual([tail_flags({"react_fx": x}, bal)["rx_bal10"] for x in (12.0, 3.0, -10.0)], [1.0, 0.0, -1.0])
+        events = [{"symbol": "NASDAQ:A", "print_date": "2026-05-01", "react_fx": 8.0},
+                  {"symbol": "NASDAQ:A", "print_date": "2026-08-01", "react_fx": -20.0},
+                  {"symbol": "NASDAQ:B", "print_date": "2026-05-01", "react_fx": 50.0}]
+        self.assertEqual(own_abs_move(events, "NASDAQ:A", "2026-08-01"), 8.0)  # only prints before the date
+        self.assertEqual(own_abs_move(events, "NASDAQ:A", "2026-11-04"), 14.0)
+        self.assertIsNone(own_abs_move(events, "NASDAQ:A", "2026-05-01"))
+
+    def test_size_pointer_is_measured_on_tail_measures_only(self):
+        from generic_utils.print_night import pointer_cells
+
+        events = [{"print_date": (date(2026, 4, 1) + timedelta(days=i // 3)).isoformat(), "ptr_own_abs": float(i % 50),
+                   "hold_fx_28d": 0.0, "rx_up10": 1.0 if i % 50 >= 40 and i % 3 else 0.0} for i in range(500)]
+        recipe = {"quantiles": 5, "t_min": 2.0, "min_n": 40, "require_halves": True}
+        cells, _ = pointer_cells(events, [{"key": "own_abs", "family": "Size", "derived": "own_abs", "measures": ["rx_up10"]}],
+                                 [("hold_fx_28d", "h28", "hold"), ("rx_up10", "u10", "odds")], recipe)
+        self.assertEqual({c["measure"] for c in cells}, {"rx_up10"})
+        q5 = next(c for c in cells if c["bucket"].startswith("Q5"))
+        self.assertEqual(q5["dir"], "up")  # the widest past movers carry the big-move odds
+        self.assertAlmostEqual(q5["mean"], q5["hit"], places=3)  # 0/1 measure: odds = share positive
+
     def test_pointer_cells_find_the_quintile_that_paid(self):
         from generic_utils.print_night import pointer_cells
 

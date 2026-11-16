@@ -20,13 +20,14 @@ The first Daily of the day wrote `logs/canvases/YYYYMMDD/judgment.json`. Each up
    - `band inside->above_band`: not a new fill; WAIT for the band. `->below_band` on a reclaim name: still WAIT.
    - `after-hours ±x% (printed after the close)` (post-close packs only): the cash close does not hold the print yet. Read the post-earn skill's step 6 (set-up x reaction, `rev_posted`) before changing a held line; the kill does not fire on the after-hours print.
    - `letters A->B` (deterioration letters beyond price changed, PACK/deterioration): a held line's new E / R / C / S is the review trigger (deterioration skill: 2+ letters under the bounce kill is a cut; a letter turning off can lift HOLD_NO_ADD, stated). Update `pages.deterioration.blocks.verdicts` for that row.
+   - `warn A->B (letters)` (event-risk level changed, PACK/event_risk): a held line, a capital course or any new WARN_STRONG is reviewed. Read the line in `PACK/event_risk/highlights.log` (stress dollars, the event, the crowd's state); a held WARN_STRONG gets a Reason that says what it does about the event (event-risk skill).
    - Label flips (`up_class`, `down_class`, `peer`, `mix`, `mtp`, `mesh`): re-grade and cite the new value.
    - `close` / `left` / `rr` / `bo` / `rsi` moves: change the Reason only if the course or grade changes.
    - **List moves** `No course yet`: give a course only if the name would take capital; otherwise leave it blank.
    Budget, polar, MTP-is-climate, ~$5,000 starter / ~$1,000 add all still bind.
 4. Edit only page blocks whose numbers moved (`pages.<page>.blocks.<id>`: Plan stats, actions table, callouts). Replace `update.banner` with a one-line reviewed note (tone `info`) and set `reviewed_pack` to `pack`.
 5. If a course changed capital, edit `capital_plan.capital_plan` / `capital_plan_queue` rows in the judgment, then `python src/run_daily_refresh.py --no-producers --no-compile --no-suites --update-day YYYYMMDD --run-dir RUN_DIR` (replays capital-plan, re-renders into the same run). Otherwise re-render only:
-   `python src/generic_utils/tv_scan_cli.py page --template daily_focus --day YYYYMMDD --judgment logs/canvases/YYYYMMDD/judgment.json --out-dir RUN_DIR --strict` (same for `movers`, `playbook`).
+   `python src/generic_utils/tv_scan_cli.py page-all --day YYYYMMDD --judgment logs/canvases/YYYYMMDD/judgment.json --out-dir RUN_DIR --strict` (the default pages: brief + board + movers; refresh `pages.movers.blocks` plan_0..plan_3 and the courses of movers that would take capital; add `--set all` only when the day's deep pages were rendered and their blocks changed).
 6. Priors: `python src/generic_utils/tv_scan_cli.py priors --day YYYYMMDD` (merges the judgment into the day's file; keys `EXCHANGE:TICKER`).
 7. Optional OUTSIDE news: one search on the session or after-hours for flagged names only.
 8. Chat: changed names and course flips, cash after (from `capital_plan/summary`), the update.md path, page links. A few lines.

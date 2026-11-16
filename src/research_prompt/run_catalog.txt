@@ -125,6 +125,15 @@ Folder: logs/canvases/YYYYMMDD/HHMM_full/ (pages, prompt.txt, agent.log, judgmen
 Agent: paste --- BEST TRADES --- . Prompt: src/research_prompt/agent_runs/daily_full.txt
 
 
+--- DAILY BASELINE (session-aware start of day: session clock, Book predicament, opportunity by horizon) ---
+What: The same refresh and skeleton as BEST TRADES, read in a fixed order: which markets are pre / live / closed,
+  regime and model state, each Book line's state with the cost of staying (deterioration, recovery clock,
+  recovery ladder, cycle scenarios), then the best trades short / mid / long term, OUTSIDE last.
+Manual:
+  python src/run_operator_day.py --agent --mode baseline [--print-prompt] [--no-producers]
+Folder: logs/canvases/YYYYMMDD/HHMM_baseline/ (pages, prompt.txt, agent.log, judgment.json).
+Agent: paste --- DAILY BASELINE --- . Prompt: src/research_prompt/agent_runs/daily_baseline.txt
+
 --- DAILY (reuse the pack) ---
 What: Same briefing as DAILY, from the newest pack already on disk.
 Manual:
@@ -371,6 +380,19 @@ Folder: PACK/outlook/ (outlook.duckdb: names, events, days, groups; queries.txt)
 Agent: paste --- CATALYST OUTLOOK --- . Skill: .claude/skills/catalyst-outlook/SKILL.md
 
 
+--- LANE BOOK (lanes of opportunity tested on history, catalysts by week, premium vs discount timing, free capital) ---
+What: lane-book makes each lane one SQL condition on the panel store (recipe config/generic_utils/lane_book.json) and gives
+      it a record (raw / excess at 7 / 14 / 28 days, odds of +10% / -10%, block t, halves, months, AI cluster vs the rest)
+      and today's names with band / kill / targets; value quintile x catalyst timing; industry rotation quadrants and their
+      record; the dated events by week; the cash above the floor. Zero cutoffs in code; lanes are recipe knobs.
+Manual:
+  python src/generic_utils/tv_scan_cli.py lane-book --pack PACK --ids SNDK,BE --line
+  python src/generic_utils/tv_scan_cli.py page --template lane_book --day YYYYMMDD --pack PACK --manual --out-dir RUN_DIR --strict
+Folder: PACK/lane_book/ (lane_book.duckdb: lanes, lane_months, names, when_value, when_spread, rotation, industries, timeline,
+        weeks, capital; highlights.log; queries.txt). The refresh runs it after board.
+Agent: paste --- LANE BOOK --- . Skill: .claude/skills/lane-book/SKILL.md
+
+
 --- PRINT NIGHT (tonight's reporters: measured pointers up / down per horizon, the overnight tail, the digest) ---
 What: every name whose print reaction lands on one session (default the next: tonight's AMC + tomorrow's BMO). Each
       pointer (a pre-print field, or after the print the surprise / mix / after-hours read / reaction) is cut into
@@ -384,6 +406,63 @@ Brief: python src/generic_utils/tv_scan_cli.py print-brief --pack PACK --ids A,B
        print-brief page: one written card per reporter (into the print, value and peers, the quarter's bar, pointers, levels, what to read).
 Agent: paste --- PRINT NIGHT --- . Skill: .claude/skills/catalyst-outlook/SKILL.md
 
+
+--- EVENT RISK (dated events vs each line's crowd: stress dollars, letters, WARN level, sell / buy side) ---
+What: every US $2B+ name, Book line and named id gets a crowd (its 15 most-correlated names on the panel store), the
+      crowd's move / drawdown / z, a stress (the crowd's worst 5-step x down-beta, or the line's own worst 5-step),
+      the calendar events that touch it (symbols, exposure maps, market-wide binary policy rows, odds), letters
+      EPRUSBTVD$ and WARN_STRONG / WARN / WATCH from the rules in config/generic_utils/event_risk.json. Plus industry
+      reactions per calendar event, industry crash follow-through and the S / B / T letters checked point-in-time.
+Manual:
+  python src/generic_utils/tv_scan_cli.py event-risk --pack PACK --ids NYSE:FIX,NYSE:PWR --line
+  python src/generic_utils/tv_scan_cli.py event-risk --pack PACK --as-of 2026-11-02 --out-dir DIR   (point-in-time replay)
+Folder: PACK/event_risk/ (event_risk.duckdb: book, names, sell_book, buy_book, events, reactions, crashes, follow,
+        evidence; highlights.log). The refresh runs it after movers / book_risk; deterioration, earnings_week,
+        outlook, pathway and board join warn_level / er_letters; stance / lookup --line end a flagged name with warn=.
+Agent: paste --- EVENT RISK --- . Skill: .claude/skills/event-risk/SKILL.md
+
+--- DEEP DIVE (agent: one name, a suite or a question; dossier + outside read -> verdict, band, trajectory) ---
+What: generic_utils.name_dossier gathers per name the pack's widest row (board) plus forward value, alpha bands and
+      state, peer value, cycle, event-risk crowd, print night, stance; the panel store's daily progression, movement
+      anatomy, prints, analog forward paths (nearest US $2B+ name-days, raw and excess, all floor and same industry),
+      evidence directions per horizon, peers, dated events and a research plan. The agent adds the outside read and
+      writes verdict / band / kill / targets / trajectory per horizon (classed) and the suite order.
+Manual:
+  python src/run_deep_dive.py --ids NYSE:DOW                         (dossier + data-only page)
+  python src/run_deep_dive.py --ids NASDAQ:AMZN,NASDAQ:GOOG --question "..." --agent   (headless agent run)
+  python src/generic_utils/tv_scan_cli.py dossier --ids ... ; tv_scan_cli.py dossier-page --dir DIR --strict
+Folder: logs/tradingview_analysis/name_dossier/<YYYYMMDD_HHMM>_<label>/ (dossier.md, dossier.duckdb + CSVs,
+        dossier.judgment.skeleton.json, prompt.txt, dossier.judgment.json, dossier-<label>.html).
+Agent: paste --- DEEP DIVE --- . Skill: .claude/skills/deep-dive-agent/SKILL.md. Python: src/main.py deep_dive_analysis_agent(...).
+
+--- SYMBOL CHECK (held / named ids that went missing or old: primary-class flips, renames, exchange moves) ---
+What: generic_utils.symbol_resolver puts each id through one order: config/generic_utils/symbol_aliases.json, the
+      newest all-fields run, the panel store's last day; flags ids that look old with candidates (same company under
+      another id, same ticker on another US exchange). Reports only; a confirmed rename goes into the alias file.
+      The holdings scorer uses the same resolver, so a held line missing from the prediction run keeps its mark.
+Manual:
+  python src/generic_utils/tv_scan_cli.py symbol-check --flagged            (every stock line of the holdings config)
+  python src/generic_utils/tv_scan_cli.py symbol-check --ids NASDAQ:GOOG,NYSE:SQ
+When: a pack note / book_missing names a held line, or a name drops off a table.
+
+--- PATCH NOTES (review a change set before a commit; what the project can do; when a feature arrived, changed or went) ---
+What: generic_utils.patch_scan reads a change set from git (staged, working tree, a commit, a range) into
+      logs/patch_notes/<stamp>/inventory.md: files by area, functions added / removed / changed (AST compare), CLI
+      subcommands and flags, recipe keys and named entries, skills, tests, the wiring of each new module, lint and
+      the repo guards; the features touched (new / updated / removed), everything removed with the files that
+      still refer to it, and deprecation wording in added lines; plus patch_note.skeleton.md. It never stages or
+      commits. The numbered notes, the baseline, lifecycle.json (declared on_demand / renamed / deprecated /
+      removal_requested / removed) and the generated capability index, feature register and commit history live
+      in documentation/patch_notes/.
+Manual:
+  python src/generic_utils/patch_scan.py scan                    (staged vs HEAD; --worktree, --commit SHA, --range A..B)
+  python src/generic_utils/patch_scan.py regen                   (rewrite capability_index.md, feature_register.md, commit_history.md)
+  python src/generic_utils/patch_scan.py features                (one of them: features | capabilities | history)
+Agent: "review the staged changes and write the patch note". Skill: .claude/skills/patch-notes/SKILL.md.
+Reuse: Grep documentation/patch_notes/capability_index.md before writing a new tool, and feature_register.md for
+       a feature's status, entry points and the patches that changed it.
+Retire: only on the user's request. Add the entry to lifecycle.json, remove the tool's six parts together, scan:
+       "Removed in this change set" must show no reference left.
 
 --- DETERIORATION (drawdown x letters beyond price: what followed, and every Book line's state now) ---
 What: on the panel store's study frame (US $2B+, excess over the day's median), every name-day gets a drawdown

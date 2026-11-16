@@ -59,6 +59,7 @@ SEC EDGAR / Arelle          TradingView screener API
 | `src/portfolio_performance_tracking/` | Flow-aware fund performance, NAV history, and benchmark reports |
 | `config/` | Profile suites, conviction / regime, holdings, projection scenarios |
 | `documentation/` | Usage guides and research playbooks |
+| `documentation/patch_notes/` | What each commit added and how to use it: a baseline, one note per commit, a generated capability index and commit history (`python src/generic_utils/patch_scan.py`) |
 | `logs/` | Run outputs (DuckDB, CSV, markdown reports) |
 
 Standalone runners (examples): `src/run_edge_research_tools.py`, `src/run_financial_projection.py`, `src/run_market_timing_policy.py`, `src/run_signal_lab.py`, `src/run_alpha_model.py`, upside / historical edge backtest scripts.

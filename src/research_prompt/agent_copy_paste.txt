@@ -196,6 +196,17 @@ Without the runner: tv_scan_cli.py page-run --day YYYYMMDD --mode full, then
 Run folder = the printed run_dir, Judgment = logs/canvases/YYYYMMDD/judgment.json.
 
 
+--- DAILY BASELINE (session-aware start of day, canvas) ---
+The easy start of a day: what this session can say (US premarket / Europe live / Asia closed, or wherever the clock
+is), the Book's predicament (hold / cut / add with the cost of staying), and the best returns short / mid / long term.
+One command does the refresh, opens the run folder and fills the prompt:
+  python src/run_operator_day.py --agent --mode baseline                 # headless Claude run
+  python src/run_operator_day.py --agent --mode baseline --print-prompt  # refresh, then paste the printed prompt here
+Data already fresh: add --no-producers. Prompt: src/research_prompt/agent_runs/daily_baseline.txt
+({DAY} {PACK} {RUN_DIR} {JUDGMENT} filled by the runner). Without the runner: tv_scan_cli.py page-run --day YYYYMMDD
+--mode baseline, then @src/research_prompt/agent_runs/daily_baseline.txt with the four values filled in.
+
+
 --- DAILY (pack already good) ---
 @.claude/skills/daily-operator-scan/SKILL.md
 @logs/tradingview_analysis/operator_briefing/runs/<newest>/briefing_pack.md
@@ -770,6 +781,50 @@ Names I care about: <tickers>
 EXCHANGE:TICKER everywhere. $5,000 starter / about $1,000 add as advice. No logs/_tmp_*.py.
 
 
+--- EVENT RISK (dated policy / election / macro events vs the Book: WARN, sell side, buy side) ---
+For every Book line and the names I name: its crowd on the panel store, what the crowd's worst week costs the line
+in dollars, the dated events that touch it (mapped, market-wide binary, already moved the crowd), its letters and
+WARN level, and for an event that already landed: which industries moved, the sell side and the buy side, and
+what crash steps did next. Every WARN_STRONG Book line gets a course Reason that says what it does about the event.
+Not earnings (print night / beat bar), not a second budget, not a 0-100.
+
+Output: duckdb output
+
+@.claude/skills/event-risk/SKILL.md
+
+Event (optional): <date, what, who wins / who loses, source>
+Names I care about: <tickers>
+1. If an event is named: add or edit its row in config/generic_utils/catalyst_calendar.json (exposure {down|up|either:
+   [themes]}, odds_kind, source and read); add a theme to config/generic_utils/themes.json when no list fits.
+2. python src/generic_utils/tv_scan_cli.py event-risk --pack latest --ids <names> --line
+   (the refresh already wrote PACK/event_risk for the Book; record this call in the judgment `scans`)
+3. Read PACK/event_risk/highlights.log, then sell_book / buy_book / reactions / follow / evidence as the skill says.
+4. OUTSIDE on the event (dated, linked); timing and Grade only.
+5. Courses for the WARN_STRONG / WARN lines; capital_plan rows for any trim, run through capital-plan.
+EXCHANGE:TICKER everywhere. No logs/_tmp_*.py.
+
+
+--- DEEP DIVE (one name, a suite, or a question over them: data + outside read -> verdict, band, trajectory) ---
+Deep research on the names I list (or a theme, or a question such as how trading an IPO would work): everything the
+project measures per name (pack suites, the store's daily progression, movement anatomy, prints, analog forward paths,
+evidence per horizon, peers, dated events) plus your outside read (news, guidance, dated catalysts, regulation,
+competition) checked against the data. Per name: verdict, band, kill, targets, and a SHORT / MID / LONG trajectory, each
+classed DATA_BACKED / MIXED / NARRATIVE. A stated order for the suite. Not a second budget, not a 0-100.
+
+Output: canvas output
+
+@.claude/skills/deep-dive-agent/SKILL.md
+
+Names: <EXCHANGE:TICKER, ...>   Theme (optional): <themes.json name>   Question (optional): <...>
+1. python src/generic_utils/tv_scan_cli.py dossier --ids <names> [--theme T] [--question "Q"]
+   (or python src/run_deep_dive.py --ids <names> [--question "Q"] for the data-only page too)
+2. Read DIR/dossier.md once; run its research plan (WebSearch), every finding OUTSIDE with the link.
+3. Write DIR/dossier.judgment.json from DIR/dossier.judgment.skeleton.json (thesis, bull / bear, classes, trajectory,
+   levels, verdict, plan, size, catalysts, outside; suite order with its key; question_read when a question is set).
+4. python src/generic_utils/tv_scan_cli.py dossier-page --dir DIR --strict
+EXCHANGE:TICKER everywhere. No logs/_tmp_*.py.
+
+
 --- DETERIORATION (Book drawdowns: only price, or the business too; cut / hold / double-down) ---
 For every Book line and the names I name: the drawdown from the 52-week high, the letters beyond price
 (E EPS estimate cut, R revenue estimate cut, C negative FCF, S last EPS miss), what that state did next on
@@ -835,6 +890,28 @@ Names I care about: <tickers>
    named --db PACK/outlook/outlook.duckdb --table names --ids ... --line; never print whole tables.
 5. Fill logs/canvases/YYYYMMDD/judgment.json pages.outlook (ids, stats, read, shortlist, positioning, outside, rules,
    per-tab texts, sources) and courses; page-all --day YYYYMMDD --judgment J --out-dir RUN_DIR --strict.
+EXCHANGE:TICKER everywhere. No logs/_tmp_*.py.
+
+
+--- LANE BOOK (the month's road: lanes tested on history, catalysts by week, premium vs discount timing, free capital) ---
+Broad scan for the free capital this week, next week and the month. Uses the Daily's one budget: everything beyond it is a
+queue / WATCH line with band, kill and target, in a stated order. Not a 0-100.
+
+Output: canvas output
+
+@.claude/skills/lane-book/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
+
+Names I care about: <tickers>
+1. python src/generic_utils/tv_scan_cli.py page-run --day YYYYMMDD --mode ide   (RUN_DIR)
+2. python src/generic_utils/tv_scan_cli.py lane-book --pack latest --ids <names> --line   (the refresh already wrote PACK/lane_book)
+   Read PACK/lane_book/highlights.log; named rows with tv_scan_cli.py named --db PACK/lane_book/lane_book.duckdb --table names --ids ... --line.
+3. Order: the base row, lanes with t 2+ and both halves (split all, then ai vs other), lane_months, when_spread (strong split),
+   rotation precedent, weeks; then today's names per lane (no avoid lane, risk to the kill, model, peers, catalysts).
+4. OUTSIDE: dated catalysts into config/generic_utils/catalyst_calendar.json (status, source); timing and grade only.
+5. Fill logs/canvases/YYYYMMDD/judgment.json pages.lane_book (ids, stats, read, critical, road, tickets, stages, per-tab reads,
+   book, outside, wrong_if, corrections, rules, sources) and courses; capital_plan.capital_plan_lane through
+   capital-plan --key capital_plan_lane; page --template lane_book --day YYYYMMDD --judgment J --out-dir RUN_DIR --strict.
 EXCHANGE:TICKER everywhere. No logs/_tmp_*.py.
 
 

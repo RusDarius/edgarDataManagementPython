@@ -1,0 +1,254 @@
+{
+  "name": "brief-{DAY}",
+  "page_key": "brief",
+  "requires": "{PACK}/board/board.duckdb",
+  "column_groups_from": "config/generic_utils/opportunity_board.json",
+  "title": "Daily brief {DAY}",
+  "subtitle": "The quick daily scan: what moved, the day's highlights, the Book against its levels, who prints this week and what the models project. Everything else is on the board (plan, grids, catalyst book) or on demand (tv_scan_cli.py page-all --set all).",
+  "sources_extra": ["board {PACK}/board (tv_scan_cli.py board); movers and industries {PACK}/briefing_pack.duckdb; alpha model {PACK}/alpha_model; signal lab {PACK}/signal_lab; capital {PACK}/capital_plan", "market sentiment {PACK}/sentiment (tv_scan_cli.py sentiment; OUTSIDE readings config/generic_utils/sentiment_outside.json)"],
+  "tone_map": {
+    "NEW": "good",
+    "NEW (queue)": "info",
+    "ADD": "good",
+    "ADD (queue)": "info",
+    "HOLD": "info",
+    "WATCH": "neutral",
+    "WAIT": "neutral",
+    "HOLD_NO_ADD": "warning",
+    "DERISK": "warning",
+    "DERISK_INTO_PRINT": "warning",
+    "TRIM": "warning",
+    "TRIM (queue)": "warning",
+    "EXIT": "bad",
+    "PASS": "bad"
+  },
+  "tabs": [
+    {
+      "label": "Highlights",
+      "blocks": [
+        {"type": "callout", "from": "update.banner"},
+        {"type": "stats", "from": "pages.brief.blocks.stats"},
+        {"type": "callout", "from": "pages.brief.blocks.read"},
+        {"type": "list", "from": "pages.brief.blocks.highlights"},
+        {
+          "type": "table",
+          "title": "Industries over 5 sessions (US $2B+, 5+ names)",
+          "optional": true,
+          "source": {"duckdb": "{PACK}/briefing_pack.duckdb", "sql": "SELECT ind, n, pct_up, day, d5, m1, rsi FROM industries_5d WHERE n >= 5 ORDER BY d5 DESC"},
+          "screens": [
+            {"label": "5D leaders", "filters": {"d5": ">2"}, "sort": "-d5", "explain": "Industries up 2%+ over five sessions."},
+            {"label": "5D laggards", "filters": {"d5": "<-2"}, "sort": "d5", "explain": "Industries down 2%+ over five sessions."}
+          ]
+        },
+        {
+          "type": "table",
+          "title": "Model state per horizon (alpha model): read a forecast only where the state is OK or WEAK",
+          "optional": true,
+          "source": {"duckdb": "{PACK}/alpha_model/alpha_model.duckdb", "sql": "SELECT horizon, state, oos_days, n_indep, ic_mean, ic_t_indep, ic_recent, spread, beats_baselines, best_fixed, best_fixed_ic FROM state"}
+        }
+      ]
+    },
+    {
+      "label": "Sentiment",
+      "requires": "{PACK}/sentiment/market_sentiment.duckdb",
+      "blocks": [
+        {"type": "callout", "from": "pages.brief.blocks.sentiment_read"},
+        {
+          "type": "text",
+          "text": "The market's mood from the store's day files (tv_scan_cli.py sentiment; also run_market_timing_policy.py). Each reading sits beside its percentile in the store's history and what the market did after days in the same quintile. read_<h> shows ▲ / ▼ only when the measured relation clears its rule (t, both halves, today's lean, the quintile's lift); a bare number is the quintile's lift without a clear direction. Families are counted, never summed. OUTSIDE readings are shown, never measured into an arrow."
+        },
+        {
+          "type": "table",
+          "title": "Measured arrows per family (up / down) by horizon in sessions",
+          "source": {"duckdb": "{PACK}/sentiment/market_sentiment.duckdb", "sql": "SELECT family, n_readings, up_1, dn_1, up_5, dn_5, up_10, dn_10, up_21, dn_21, up_list_5, dn_list_5, up_list_21, dn_list_21 FROM families"}
+        },
+        {
+          "type": "table",
+          "title": "Sentiment readings: today against the store's history and what came next",
+          "source": {"duckdb": "{PACK}/sentiment/market_sentiment.duckdb", "sql": "SELECT indicator, family, label, value, chg_5, pctl, q, read_5, read_10, read_21, ic_5, t_5, ic_21, t_21, n_indep_21, cell_n_21, read_note FROM readings ORDER BY family, indicator", "drop_missing_columns": true},
+          "screens": [
+            {"group": "Family", "label": "Tape", "filters": {"family": "=tape"}, "explain": "The cap-weighted index: day, 5 / 21 sessions, drawdown, megacaps vs the median name."},
+            {"group": "Family", "label": "Breadth", "filters": {"family": "=breadth"}, "explain": "How many names take part: up today, over the 50 / 200-day, near highs vs lows."},
+            {"group": "Family", "label": "Volume", "filters": {"family": "=volume"}, "explain": "Up-volume share, volume pace, distribution and accumulation days."},
+            {"group": "Family", "label": "Stretch", "filters": {"family": "=stretch"}, "explain": "RSI, overbought / oversold shares, dispersion, gaps."},
+            {"group": "Family", "label": "Appetite", "filters": {"family": "=appetite"}, "explain": "Spreads: high vs low beta, prior winners vs losers, defensives, the AI cluster."},
+            {"group": "Family", "label": "Earnings", "filters": {"family": "=earnings"}, "explain": "What beats and misses earn on the reaction session."},
+            {"group": "Family", "label": "Revisions", "filters": {"family": "=revisions"}, "explain": "Street estimates and targets moving, technical ratings."},
+            {"group": "Family", "label": "Model", "filters": {"family": "=model"}, "explain": "The move-prediction scores' medians and the MTP ENTER share."},
+            {"label": "Extreme today", "filters": {"pctl": ">=90|<=10"}, "sort": "-pctl", "explain": "Readings in the top or bottom tenth of the store's history."},
+            {"label": "Measured arrow", "filters": {"read_5": "▲|▼"}, "explain": "A 5-session arrow cleared its rule (stack with a family)."},
+            {"label": "Quintile lift 0.5pp+ (21s)", "filters": {"read_21": ">=0.5|<=-0.5"}, "sort": "-read_21", "explain": "Readings whose quintile today was followed by a 21-session cap return at least 0.5 pp from all days (with or without an arrow: check t_21 and n_indep_21)."}
+          ]
+        },
+        {
+          "type": "table",
+          "title": "Technical patterns: live today, how often, and what the cap index did after",
+          "source": {"duckdb": "{PACK}/sentiment/market_sentiment.duckdb", "sql": "SELECT pattern, family, live, days, episodes, last, n_5, fwd_5, hit_5, lift_5, n_21, fwd_21, hit_21, lift_21, read, \"where\" FROM patterns ORDER BY live DESC, episodes DESC", "drop_missing_columns": true},
+          "screens": [
+            {"label": "Live today", "filters": {"live": "=true"}, "explain": "Patterns today's file matches."},
+            {"label": "3+ episodes", "filters": {"episodes": ">=3"}, "sort": "-episodes", "explain": "Patterns seen in three or more separate runs (still thin)."}
+          ]
+        },
+        {
+          "type": "chart",
+          "title": "Participation, 10-session means and the share over the 50-day (%)",
+          "source": {"duckdb": "{PACK}/sentiment/market_sentiment.duckdb", "sql": "SELECT as_of, adv_10, upvol_10, above50_pct FROM daily ORDER BY as_of"},
+          "x": "as_of",
+          "series": [["adv_10", "Names up (10-session mean)"], ["upvol_10", "Up-volume share (10-session mean)"], ["above50_pct", "Over the 50-day"]],
+          "y_label": "%"
+        },
+        {
+          "type": "chart",
+          "title": "Cap-weighted index under its store high (%) and the AI cluster minus the market over 5 sessions (pp)",
+          "source": {"duckdb": "{PACK}/sentiment/market_sentiment.duckdb", "sql": "SELECT as_of, dd, ai_spread_5 FROM daily ORDER BY as_of"},
+          "x": "as_of",
+          "series": [["dd", "Cap index under its high"], ["ai_spread_5", "AI cluster minus market, 5 sessions"]],
+          "y_label": "% / pp"
+        },
+        {
+          "type": "table",
+          "title": "OUTSIDE readings (dated, sourced; timing and Grade only)",
+          "optional": true,
+          "source": {"duckdb": "{PACK}/sentiment/market_sentiment.duckdb", "sql": "SELECT date, kind, value, unit, chg_prev, pctl_own, n_kind, source, link, read FROM outside ORDER BY date DESC, kind", "drop_missing_columns": true}
+        },
+        {
+          "type": "table",
+          "title": "The daily series, newest first (every reading and the cap index's forward return)",
+          "source": {"duckdb": "{PACK}/sentiment/market_sentiment.duckdb", "sql": "SELECT COLUMNS(c -> c NOT LIKE 'out\\_%' ESCAPE '\\' AND c NOT IN ('cap_level', 'mtp_run')) FROM daily ORDER BY as_of DESC", "drop_missing_columns": true}
+        }
+      ]
+    },
+    {
+      "label": "Moves",
+      "blocks": [
+        {
+          "type": "text",
+          "text": "Top and bottom 25 by day, week, five sessions and month (pack movers). up_class says whether a leader's move is supported (IS_SUPPORTED / MIXED / CHASE); down_class whether a laggard tends to bounce or keep falling. The Book's own moves are on the Book tab."
+        },
+        {
+          "type": "table",
+          "title": "Movers: leaders and laggards with their class",
+          "source": {"duckdb": "{PACK}/briefing_pack.duckdb", "sql": "SELECT horizon, tail, rank, symbol, ind, close, day, w, d5, m1, rsi, relvol, vs50, vs200, up_class, down_class, mix, mtp, \"left\", street_left, val_field, val_vs_ind, peer, dte, last_surprise, react_last FROM movers_tails ORDER BY horizon, tail, rank", "drop_missing_columns": true},
+          "extra_columns": ["Course", "Reason"],
+          "extra_from": "courses",
+          "tone_field": "Course",
+          "screens": [
+            {"label": "Day up", "filters": {"horizon": "=day", "tail": "=leaders"}, "sort": "rank", "explain": "Today's 25 biggest gainers ($2B+)."},
+            {"label": "Day down", "filters": {"horizon": "=day", "tail": "=laggards"}, "sort": "rank", "explain": "Today's 25 biggest losers; down_class BOUNCE vs CONTINUE_DOWN."},
+            {"label": "5D up", "filters": {"horizon": "=d5", "tail": "=leaders"}, "sort": "rank", "explain": "Five-session leaders."},
+            {"label": "5D down", "filters": {"horizon": "=d5", "tail": "=laggards"}, "sort": "rank", "explain": "Five-session laggards."},
+            {"label": "1M up", "filters": {"horizon": "=m1", "tail": "=leaders"}, "sort": "rank", "explain": "Month leaders: in a down regime they gave back about 7% over 28 days (regime playbook 4)."},
+            {"label": "Supported leaders", "filters": {"tail": "=leaders", "up_class": "=is_supported"}, "sort": "-day", "explain": "Leaders whose move the pack's reads support."}
+          ]
+        }
+      ]
+    },
+    {
+      "label": "Book",
+      "blocks": [
+        {
+          "type": "table",
+          "title": "Book update: event risk (warn_level, letters, stress), today's move, the bands, the letters, the print, the model (board)",
+          "source": {"duckdb": "{PACK}/board/board.duckdb", "sql": "SELECT symbol, book_usd, warn_level, er_letters, stress_5s_usd, ev_recent_z, ev_next, ev_binary, close, day, w, m1, rsi, vs50, bounce_low, bounce_high, bounce_kill, to_band_high_pct, kill_dist_pct, det, cnt_cell, cnt_fx_28d_mean, cnt_p_dn_28d, earn_date, earn_slot, c_bar_text, dec_28d, pred_28d, peer_gap_pct, street_left, fv_upside_pct, beta FROM names WHERE in_book ORDER BY book_usd DESC", "drop_missing_columns": true},
+          "extra_columns": ["Course", "Reason"],
+          "extra_from": "courses",
+          "tone_field": "Course"
+        },
+        {
+          "type": "table",
+          "title": "Cash after today's plan (capital-plan)",
+          "optional": true,
+          "source": {"duckdb": "{PACK}/capital_plan/capital_plan.duckdb", "sql": "SELECT cash_start_usd, cash_start_pct, cash_from_sells_usd, cash_to_buys_usd, cash_end_usd, cash_end_pct, starters_left_at_hint FROM summary"}
+        },
+        {
+          "type": "table",
+          "title": "Cash if the whole queue fills (capital-plan)",
+          "optional": true,
+          "source": {"duckdb": "{PACK}/capital_plan_queue/capital_plan.duckdb", "sql": "SELECT cash_start_usd, cash_from_sells_usd, cash_to_buys_usd, cash_end_usd, cash_end_pct, starters_left_at_hint FROM summary"}
+        }
+      ]
+    },
+    {
+      "label": "Earnings",
+      "blocks": [
+        {
+          "type": "text",
+          "text": "Reporters this week and next (W0 / W1, $3B+, plus the Book) with their beat-bar cell: low bar = estimates cut and a weak tape (bar_rev / bar_tape T1), high bar = both T3. c_bar_text is the surprise the cell needed; the c_* columns are what beats and misses did there (day's reaction and the 28-day hold vs the market)."
+        },
+        {
+          "type": "table",
+          "title": "This week's and next week's prints with the bar they face",
+          "source": {"duckdb": "{PACK}/board/board.duckdb", "sql": "SELECT symbol, ind, mcap_b, book_usd, earn_date, earn_week, earn_slot, earn_days, close, day, m1, bar_runup, bar_tape, bar_rev, c_bar_text, c_rx_beat, c_beat_sold, c_h28_beat, c_h28_miss, p_beat, ev_h28, dec_28d, pred_28d, peer_gap_pct, eps_rev_3m, street_left, bounce_low, bounce_high, bounce_kill FROM names WHERE bb_cell IS NOT NULL AND earn_week IN ('W0', 'W1') AND (mcap_b >= 3 OR in_book) ORDER BY earn_date, mcap_b DESC", "drop_missing_columns": true},
+          "extra_columns": ["Course", "Reason"],
+          "extra_from": "courses",
+          "tone_field": "Course",
+          "screens": [
+            {"group": "When", "label": "Tonight / tomorrow", "filters": {"earn_days": "0..1"}, "sort": "-mcap_b", "explain": "Prints whose reaction lands on the next session."},
+            {"group": "When", "label": "This week", "filters": {"earn_week": "=w0"}, "sort": "earn_date", "explain": "Prints this calendar week (W0)."},
+            {"group": "When", "label": "Next week", "filters": {"earn_week": "=w1"}, "sort": "earn_date", "explain": "Prints next week (W1): the event budget of that week's Daily."},
+            {"group": "Bar", "label": "Low bar", "filters": {"bar_rev": "=t1", "bar_tape": "=t1|=t2"}, "sort": "-ev_h28", "explain": "Estimates cut into the print and a weak or middling tape: the cells where beats paid most and misses often held."},
+            {"group": "Bar", "label": "High bar", "filters": {"bar_rev": "=t3", "bar_tape": "=t3"}, "sort": "-mcap_b", "explain": "Estimates raised and a strong tape: about half of beats sold; buy a sold beat in the band, not the print."},
+            {"label": "Model 7+", "filters": {"dec_28d": ">=7"}, "sort": "-pred_28d", "explain": "Alpha model 28-day decile 7 or better (read only in an OK / WEAK state)."},
+            {"label": "Cheap to peers", "filters": {"peer_gap_pct": ">20"}, "sort": "-peer_gap_pct", "explain": "Trades 20%+ under what industry peers with the same growth / quality get (use only the sign that agrees across fits)."},
+            {"label": "Estimates up", "filters": {"eps_rev_3m": ">0"}, "sort": "-eps_rev_3m", "explain": "Next-FY EPS estimate raised over three months."},
+            {"label": "Book prints", "filters": {"book_usd": ">0"}, "sort": "earn_date", "explain": "The Book's lines that print."}
+          ]
+        }
+      ]
+    },
+    {
+      "label": "Projections",
+      "blocks": [
+        {
+          "type": "text",
+          "text": "What the pipelines project, each in its own order: the alpha model's 28-day decile and forecast (read only in the state the Highlights tab shows), the forward-value run's expected IRR against its hurdle and the growth the price assumes, the street target, and the peer gap. Nothing is summed."
+        },
+        {
+          "type": "table",
+          "title": "$10B+: model, forward value, street and peers side by side",
+          "source": {"duckdb": "{PACK}/board/board.duckdb", "sql": "SELECT symbol, ind, mcap_b, close, day, m1, dec_7d, dec_28d, pred_28d, b28d_q20, b28d_q80, dec_56d, irr_exp_pct, hurdle_pct, priced_in_cagr_pct, fv_upside_pct, street_left, peer_gap_pct, eps_rev_3m, det, beta, earn_date FROM names WHERE mcap_b >= 10 AND symbol NOT LIKE '%/%' ORDER BY pred_28d DESC NULLS LAST", "drop_missing_columns": true},
+          "extra_columns": ["Course", "Reason"],
+          "extra_from": "courses",
+          "tone_field": "Course",
+          "screens": [
+            {"group": "Model", "label": "Model decile 10", "filters": {"dec_28d": "=10"}, "sort": "-pred_28d", "explain": "The 28-day top decile."},
+            {"group": "Model", "label": "Model 8+", "filters": {"dec_28d": ">=8"}, "sort": "-pred_28d", "explain": "28-day decile 8 or better."},
+            {"group": "Model", "label": "Model decile 1", "filters": {"dec_28d": "=1"}, "sort": "pred_28d", "explain": "The 28-day bottom decile: avoid or short reads."},
+            {"label": "IRR over hurdle", "filters": {"irr_exp_pct": ">12"}, "sort": "-irr_exp_pct", "explain": "Forward-value expected IRR over 12% a year."},
+            {"label": "Cheap to peers", "filters": {"peer_gap_pct": ">20"}, "sort": "-peer_gap_pct", "explain": "Trades 20%+ under what industry peers with the same growth / quality get (use only the sign that agrees across fits)."},
+            {"label": "Estimates up", "filters": {"eps_rev_3m": ">0"}, "sort": "-eps_rev_3m", "explain": "Next-FY EPS estimate raised over three months."},
+            {"label": "No letters", "filters": {"det": "="}, "explain": "No deterioration letter (E R C S): the drawdown, if any, is price only."}
+          ]
+        },
+        {
+          "type": "table",
+          "title": "Which factors paid this month (signal lab, 7-day IC by month)",
+          "optional": true,
+          "source": {"duckdb": "{PACK}/signal_lab/signal_lab.duckdb", "sql": "SELECT feature, horizon, month, n_days, ic FROM factor_month WHERE horizon = '7d' AND month = (SELECT max(month) FROM factor_month) ORDER BY ic DESC"}
+        }
+      ]
+    },
+    {"label": "Sources", "blocks": [{"type": "list", "from": "pages.brief.blocks.sources"}]}
+  ],
+  "ledger": {
+    "auto": true,
+    "entries": [
+      {
+        "group": "Deterioration letters (det)",
+        "rows": [
+          ["E", "Next-FY EPS estimate cut by more than 1% over about 3 months."],
+          ["R", "Next-FY revenue estimate cut by more than 1% over about 3 months."],
+          ["C", "Free cash flow margin under 0 (cash burn)."],
+          ["S", "Last reported EPS under its estimate."]
+        ]
+      },
+      {
+        "group": "Brief columns",
+        "rows": [
+          ["pct_up", "Share of the industry's names up on the day, %."],
+          ["tail", "leaders = the top 25 of the horizon, laggards = the bottom 25 (pack movers, US $2B+)."], ["value", "Sentiment tab: today's value of the reading (readings) or the value as published (OUTSIDE)."]
+        ]
+      }
+    ]
+  }
+}

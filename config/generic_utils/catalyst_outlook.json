@@ -66,6 +66,7 @@
       "react_last",
       "react_abs_mean",
       "since_print",
+      "dsp",
       "n_prints"
     ],
     "plays": [
@@ -88,6 +89,12 @@
     ],
     "calendar": [
       "pe_nfy_vs_own"
+    ],
+    "risk": [
+      "warn_level",
+      "er_letters",
+      "stress_5s_usd",
+      "ev_next"
     ]
   },
   "entry_fields": [
@@ -174,6 +181,7 @@
         "react_last",
         "react_abs_mean",
         "since_print",
+        "dsp",
         "react_fx",
         "mix_cell",
         "mix_mean",
@@ -234,6 +242,9 @@
       [
         "pack_lists",
         "book_usd",
+        "warn_level",
+        "er_letters",
+        "stress_5s_usd",
         "mix",
         "rr",
         "bo"

@@ -140,7 +140,7 @@ FIELD_MEANINGS: dict[str, str] = {
     "pe": "Trailing price / earnings.",
     "pe_fwd": "Quoted forward PE. Projection next-year PE (fp_pe_y1) when that path or CAGR exists, otherwise TradingView. Do not fill it with EV/Rev.",
     "pe_fwd_tv": "TradingView price_earnings_forward_fy. Empty on recent all-fields scans. Stays empty.",
-    "pe_fwd_source": "fp_path, fp_cagr, tv, or tv_nongaap. Which number pe_fwd used.",
+    "pe_fwd_source": "fp_street (forward value run, street next-FY EPS), fp_path, fp_cagr, tv, or tv_nongaap. Which number pe_fwd used.",
     "pe_fwd_nongaap": "TradingView non-GAAP next-FY PE. Used only when the projection and pe_fwd_tv are empty.",
     "evebitda_fwd": "Forward EV/EBITDA, year 1. Today's EV / projected EBITDA. Same number as fp_evebitda_y1.",
     "fp_horizon_year": "Year used by the fp_*_y5 columns. At most 5.",

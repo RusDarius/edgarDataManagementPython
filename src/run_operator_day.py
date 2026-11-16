@@ -12,7 +12,8 @@ AGENT (same refresh, then a headless Claude Code run with the day's prompt):
     python src/run_operator_day.py --agent --print-prompt  # refresh, then print the prompt to paste in the IDE
     UPDATE skips the agent when nothing moved past a threshold (--force-agent to run it anyway).
 
-Prompts: src/research_prompt/agent_runs/daily_full.txt and daily_update.txt.
+Prompts: src/research_prompt/agent_runs/daily_full.txt, daily_update.txt and daily_baseline.txt (--mode baseline: the
+session-aware start of day, same refresh and skeleton as full).
 Claude CLI: $CLAUDE_CLI, `claude` on PATH, or the IDE extension binary.
 
 Every run gets its own folder, logs/canvases/<day>/<HHMM>_<full|update|manual>/
@@ -68,7 +69,7 @@ def run_manual(day: str, run_dir: Path, *, producers: bool = True, serial: bool 
 def pick_mode(day: str, mode: str) -> str:
     from generic_utils.canvas_runs import judgment_path
 
-    if mode in ("full", "update"):
+    if mode in ("full", "update", "baseline"):
         return mode
     return "update" if judgment_path(day).exists() else "full"
 
@@ -78,13 +79,13 @@ def prepare_agent_data(day: str, mode: str, run_dir: Path, *, producers: bool = 
     from generic_utils.canvas_runs import judgment_path, snapshot
     from run_daily_refresh import run_daily_refresh
 
-    if mode == "full":
+    if mode in ("full", "baseline"):
         snapshot(judgment_path(day), run_dir, "judgment.prev.json")  # a forced full run replaces the live judgment
     return run_daily_refresh(producers=producers, compile_pack=True, suites=True, serial=serial,
                              pages=False, update_day=day if mode == "update" else None, run_dir=run_dir)
 
 
-def write_skeleton(day: str, run_dir: Path, *, pack: str) -> Path | None:
+def write_skeleton(day: str, run_dir: Path, *, pack: str, page_set: str = "all") -> Path | None:
     """Full mode: <run>/judgment.skeleton.json (template block ids + shapes, the prior day's courses and scans carried).
 
     Written in the run folder, never as the live judgment: a live file would turn the next run into UPDATE.
@@ -95,7 +96,10 @@ def write_skeleton(day: str, run_dir: Path, *, pack: str) -> Path | None:
     from generic_utils.page_update import load_refresh_config
 
     prior = previous_judgment(day)
-    templates = [load_template(t) for t in load_refresh_config().get("templates") or []]
+    cfg = load_refresh_config()
+    # Full mode fills every page (templates_all); baseline fills the default pages (brief + board + movers).
+    names = (cfg.get("templates_all") or cfg.get("templates")) if page_set == "all" else cfg.get("templates")
+    templates = [load_template(t) for t in names or []]
     skeleton = build_skeleton(day, pack=pack, templates=templates,
                               prev=load_json(prior[1]) if prior else None, prev_day=prior[0] if prior else None)
     path = run_dir / "judgment.skeleton.json"
@@ -181,8 +185,8 @@ def run_operator_day(
     chosen = pick_mode(day, mode)
     run_dir = new_run_dir(day, chosen)
     record = prepare_agent_data(day, chosen, run_dir, producers=producers, serial=serial)
-    if chosen == "full":
-        write_skeleton(day, run_dir, pack=record["pack"])
+    if chosen in ("full", "baseline"):
+        write_skeleton(day, run_dir, pack=record["pack"], page_set="all" if chosen == "full" else "core")
     prompt = build_agent_prompt(day, chosen, pack=record["pack"], refresh_json=record.get("refresh_json"), run_dir=run_dir)
     (run_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
     out: dict[str, Any] = {"mode": f"agent:{chosen}", "day": day, "run_dir": run_dir.as_posix(), "pack": record["pack"],
@@ -220,7 +224,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     else:
         parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
         parser.add_argument("--agent", action="store_true", help="Agent-prompted run after the refresh.")
-        parser.add_argument("--mode", choices=("auto", "full", "update"), default="auto")
+        parser.add_argument("--mode", choices=("auto", "full", "update", "baseline"), default="auto")
         parser.add_argument("--day", default=None, help="YYYYMMDD (default: today, UTC).")
         parser.add_argument("--no-producers", action="store_true", help="Reuse the newest scans.")
         parser.add_argument("--serial", action="store_true")

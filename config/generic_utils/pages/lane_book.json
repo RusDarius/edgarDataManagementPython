@@ -1,0 +1,1778 @@
+{
+ "name": "lane-book-{DAY}",
+ "page_key": "lane_book",
+ "requires": "{PACK}/lane_book/lane_book.duckdb",
+ "title": "Lane book {DAY}",
+ "subtitle": "The month's road: lanes of opportunity, each one SQL condition tested on the panel store's history and read on today's names, beside the dated catalysts by week, value against catalyst timing (when a discount pays), industry rotation with its record, the Book and the cash above the floor. Every column is its own read; nothing is a sum.",
+ "sources_extra": [
+  "lanes, names, when_value, rotation, timeline: {PACK}/lane_book (tv_scan_cli.py lane-book; recipe config/generic_utils/lane_book.json)",
+  "board joins {PACK}/board; events {PACK}/outlook + config/generic_utils/catalyst_calendar.json; store logs/tradingview_analysis/signal_lab/panel_store.duckdb",
+  "capital {PACK}/capital_plan, capital_plan_queue, capital_plan_catalyst (tv_scan_cli.py capital-plan)"
+ ],
+ "tone_map": {
+  "NEW": "good",
+  "NEW (queue)": "good",
+  "NEW (event)": "good",
+  "NEW (stage)": "good",
+  "ADD": "good",
+  "ADD (queue)": "good",
+  "ADD (stage)": "good",
+  "BUY_PRE": "good",
+  "HOLD": "info",
+  "HOLD_THROUGH": "info",
+  "HOLD_NO_ADD": "warning",
+  "WAIT": "info",
+  "WATCH": "neutral",
+  "PASS": "neutral",
+  "TRIM": "warning",
+  "TRIM (queue)": "warning",
+  "DERISK": "warning",
+  "EXIT": "bad",
+  "AVOID": "bad",
+  "SHORT_WAIT": "bad"
+ },
+ "tabs": [
+  {
+   "label": "Month plan",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "update.banner"
+    },
+    {
+     "type": "stats",
+     "from": "pages.lane_book.blocks.stats"
+    },
+    {
+     "type": "callout",
+     "from": "pages.lane_book.blocks.read"
+    },
+    {
+     "type": "callout",
+     "from": "pages.lane_book.blocks.critical"
+    },
+    {
+     "type": "table",
+     "title": "The road: week by week, what happens, which lanes are in play and what the capital does (judgment)",
+     "headers": [
+      "Week",
+      "Dates",
+      "What happens",
+      "Lanes in play",
+      "Capital action",
+      "Condition / trigger"
+     ],
+     "from": "pages.lane_book.blocks.road"
+    },
+    {
+     "type": "table",
+     "title": "Tickets in reading order: band, kill on a close, target and the lane's measured record (judgment; one budget, queue lines until the Daily spends a slot)",
+     "headers": [
+      "#",
+      "Symbol",
+      "Lane",
+      "Course",
+      "When",
+      "Buy band",
+      "Kill (close)",
+      "Target",
+      "Up %",
+      "Risk %",
+      "Up / risk",
+      "Lane record",
+      "Catalyst",
+      "Why (data)"
+     ],
+     "from": "pages.lane_book.blocks.tickets"
+    },
+    {
+     "type": "list",
+     "from": "pages.lane_book.blocks.stages"
+    },
+    {
+     "type": "table",
+     "title": "Capital: NAV, cash, the floor and what the cash above it buys at the hint sizes (data)",
+     "source": {
+      "duckdb": "{PACK}/lane_book/lane_book.duckdb",
+      "sql": "SELECT nav_usd, cash_usd, cash_pct, equity_usd, unrealized_usd, cash_floor_pct, cash_floor_usd, above_floor_usd, starters_at_hint, starter_usd, adds_at_hint, add_usd, book_lines FROM capital"
+     }
+    },
+    {
+     "type": "table",
+     "title": "Cash after today's tickets (capital-plan)",
+     "optional": true,
+     "source": {
+      "duckdb": "{PACK}/capital_plan/capital_plan.duckdb",
+      "sql": "SELECT cash_start_usd, cash_from_sells_usd, cash_to_buys_usd, cash_end_usd, cash_end_pct, starters_left_at_hint FROM summary"
+     }
+    },
+    {
+     "type": "table",
+     "title": "Cash after the two-week queue (capital-plan)",
+     "optional": true,
+     "source": {
+      "duckdb": "{PACK}/capital_plan_queue/capital_plan.duckdb",
+      "sql": "SELECT cash_start_usd, cash_from_sells_usd, cash_to_buys_usd, cash_end_usd, cash_end_pct, starters_left_at_hint FROM summary"
+     }
+    },
+    {
+     "type": "table",
+     "title": "Cash after every stage of the month (capital-plan)",
+     "optional": true,
+     "source": {
+      "duckdb": "{PACK}/capital_plan_catalyst/capital_plan.duckdb",
+      "sql": "SELECT cash_start_usd, cash_from_sells_usd, cash_to_buys_usd, cash_end_usd, cash_end_pct, starters_left_at_hint FROM summary"
+     }
+    },
+    {
+     "type": "table",
+     "title": "Cash after the lane book's month plan (capital-plan --key capital_plan_lane)",
+     "optional": true,
+     "source": {
+      "duckdb": "{PACK}/capital_plan_lane/capital_plan.duckdb",
+      "sql": "SELECT cash_start_usd, cash_from_sells_usd, cash_to_buys_usd, cash_end_usd, cash_end_pct, starters_left_at_hint FROM summary"
+     }
+    },
+    {
+     "type": "table",
+     "title": "The lane book's month plan, line by line, with industry NAV after (capital-plan)",
+     "optional": true,
+     "source": {
+      "duckdb": "{PACK}/capital_plan_lane/capital_plan.duckdb",
+      "sql": "SELECT * FROM plan"
+     },
+     "drop_missing_columns": true
+    },
+    {
+     "type": "table",
+     "title": "The plan's names on the lane book (data)",
+     "ids_from": "pages.lane_book.ids",
+     "optional": true,
+     "judgment_only": true,
+     "source": {
+      "duckdb": "{PACK}/lane_book/lane_book.duckdb",
+      "drop_missing_columns": true,
+      "sql": "SELECT symbol, ind, ai, lanes, avoid, best_lane, best_xs_28, best_p_up_28, best_p_dn_28, best_t_28, vq, timing, cell_xs_28, cell_p_up_28, close, day, entry_px, bounce_low, bounce_high, bounce_kill, month_up_pct, risk_pct, payoff, street_px, dec_28d, pred_28d, peer_gap_pct, det, warn_level, earn_date, next_kind, next_date FROM names"
+     },
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "extra_from": "courses",
+     "tone_field": "Course"
+    }
+   ]
+  },
+  {
+   "label": "Lanes",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.lane_book.blocks.lanes_read"
+    },
+    {
+     "type": "table",
+     "title": "Every lane on the store, all names: rows, days, excess over the day's median at 7 / 14 / 28 days, block t, hit, odds of +10% / -10%, the two halves, and today's names",
+     "source": {
+      "duckdb": "{PACK}/lane_book/lane_book.duckdb",
+      "sql": "SELECT lane, side, family, label, n_28, n_days, n_names, xs_7, xs_14, xs_28, t_28, n_blk_28, hit_28, p_up_28, p_dn_28, q10_28, q90_28, med_28, xs_28_h1, xs_28_h2, p_up_7, p_dn_7, n_live, live_top FROM lanes WHERE split = 'all'"
+     },
+     "screens": [
+      {
+       "label": "Long lanes",
+       "filters": {
+        "side": "=long"
+       },
+       "sort": "-xs_28",
+       "group": "Side",
+       "explain": "Lanes read as buys."
+      },
+      {
+       "label": "Avoid lanes",
+       "filters": {
+        "side": "=avoid"
+       },
+       "sort": "xs_28",
+       "group": "Side",
+       "explain": "Lanes read as what not to chase (short-side reads)."
+      },
+      {
+       "label": "t 2+",
+       "filters": {
+        "t_28": ">=2"
+       },
+       "sort": "-t_28",
+       "explain": "Block t of the 28-day excess 2 or more: consistent across 28-day blocks."
+      },
+      {
+       "label": "Crash odds 12% or less",
+       "filters": {
+        "p_dn_28": "<=12"
+       },
+       "sort": "p_dn_28",
+       "explain": "A raw -10% inside 28 days in at most 12% of rows (the base is about 16%)."
+      }
+     ]
+    },
+    {
+     "type": "table",
+     "title": "The same lanes in the AI cluster and outside it (the contagion lane reads apart)",
+     "source": {
+      "duckdb": "{PACK}/lane_book/lane_book.duckdb",
+      "sql": "SELECT lane, split, side, n_28, n_days, xs_7, xs_28, t_28, hit_28, p_up_28, p_dn_28, xs_28_h1, xs_28_h2, n_live, live_top FROM lanes WHERE split <> 'all'"
+     },
+     "screens": [
+      {
+       "label": "AI cluster",
+       "filters": {
+        "split": "=ai"
+       },
+       "sort": "-xs_28",
+       "group": "Cluster",
+       "explain": "The AI / data-center cluster (ai_buildout industries and hyperscalers)."
+      },
+      {
+       "label": "Outside AI",
+       "filters": {
+        "split": "=other"
+       },
+       "sort": "-xs_28",
+       "group": "Cluster",
+       "explain": "Every other name on the floor."
+      },
+      {
+       "label": "Long lanes",
+       "filters": {
+        "side": "=long"
+       },
+       "group": "Side",
+       "explain": "Lanes read as buys."
+      },
+      {
+       "label": "Avoid lanes",
+       "filters": {
+        "side": "=avoid"
+       },
+       "group": "Side",
+       "explain": "Lanes read as what not to chase."
+      }
+     ]
+    },
+    {
+     "type": "table",
+     "title": "Lane definitions (recipe): the SQL condition on the store's features and why the lane exists",
+     "source": {
+      "duckdb": "{PACK}/lane_book/lane_book.duckdb",
+      "sql": "SELECT lane, side, family, label, \"where\", why FROM lanes WHERE split = 'all'"
+     }
+    }
+   ]
+  },
+  {
+   "label": "Lane months",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.lane_book.blocks.months_read"
+    },
+    {
+     "type": "chart",
+     "title": "28-day excess by month of entry, all names (pp over the day's median)",
+     "source": {
+      "duckdb": "{PACK}/lane_book/lane_book.duckdb",
+      "sql": "SELECT month, max(CASE WHEN lane = 'base' THEN xs_28 END) AS base, max(CASE WHEN lane = 'quality_repair' THEN xs_28 END) AS quality_repair, max(CASE WHEN lane = 'discount_turn' THEN xs_28 END) AS discount_turn, max(CASE WHEN lane = 'oversold_quality' THEN xs_28 END) AS oversold_quality, max(CASE WHEN lane = 'low_bar_pre_print' THEN xs_28 END) AS low_bar_pre_print, max(CASE WHEN lane = 'chase_big_day' THEN xs_28 END) AS chase_big_day FROM lane_months WHERE split = 'all' AND n_28 > 0 GROUP BY month ORDER BY month"
+     },
+     "x": "month",
+     "series": [
+      [
+       "base",
+       "Every name"
+      ],
+      [
+       "quality_repair",
+       "Quality from depth"
+      ],
+      [
+       "discount_turn",
+       "Cheap to peers, estimates up, turning"
+      ],
+      [
+       "oversold_quality",
+       "Quality washed out"
+      ],
+      [
+       "low_bar_pre_print",
+       "Low bar into the print"
+      ],
+      [
+       "chase_big_day",
+       "Chasing a +7% day"
+      ]
+     ],
+     "y_label": "pp"
+    },
+    {
+     "type": "chart",
+     "title": "Odds of a raw -10% inside 28 days by month of entry (%)",
+     "source": {
+      "duckdb": "{PACK}/lane_book/lane_book.duckdb",
+      "sql": "SELECT month, max(CASE WHEN lane = 'base' THEN p_dn_28 END) AS base, max(CASE WHEN lane = 'discount_turn' THEN p_dn_28 END) AS discount_turn, max(CASE WHEN lane = 'oversold_quality' THEN p_dn_28 END) AS oversold_quality, max(CASE WHEN lane = 'ai_quality_dip' THEN p_dn_28 END) AS ai_quality_dip, max(CASE WHEN lane = 'chase_big_day' THEN p_dn_28 END) AS chase_big_day, max(CASE WHEN lane = 'cash_burn_mover' THEN p_dn_28 END) AS cash_burn_mover FROM lane_months WHERE split = 'all' AND n_28 > 0 GROUP BY month ORDER BY month"
+     },
+     "x": "month",
+     "series": [
+      [
+       "base",
+       "Every name"
+      ],
+      [
+       "discount_turn",
+       "Cheap to peers, turning"
+      ],
+      [
+       "oversold_quality",
+       "Quality washed out"
+      ],
+      [
+       "ai_quality_dip",
+       "AI quality dip"
+      ],
+      [
+       "chase_big_day",
+       "Chasing a +7% day"
+      ],
+      [
+       "cash_burn_mover",
+       "Cash burner after a big move"
+      ]
+     ],
+     "y_label": "%"
+    },
+    {
+     "type": "table",
+     "title": "Lane x month of entry (all names): a lane that paid in one month only is one episode",
+     "source": {
+      "duckdb": "{PACK}/lane_book/lane_book.duckdb",
+      "sql": "SELECT lane, side, month, n_28, n_days, xs_7, xs_28, hit_28, p_up_28, p_dn_28, q10_28, q90_28 FROM lane_months WHERE split = 'all'"
+     },
+     "screens": [
+      {
+       "label": "Quality from depth",
+       "filters": {
+        "lane": "=quality_repair"
+       },
+       "group": "Lane",
+       "explain": "quality_repair by month."
+      },
+      {
+       "label": "Cheap, turning",
+       "filters": {
+        "lane": "=discount_turn"
+       },
+       "group": "Lane",
+       "explain": "discount_turn by month."
+      },
+      {
+       "label": "Washed out",
+       "filters": {
+        "lane": "=oversold_quality"
+       },
+       "group": "Lane",
+       "explain": "oversold_quality by month."
+      },
+      {
+       "label": "Low bar print",
+       "filters": {
+        "lane": "=low_bar_pre_print"
+       },
+       "group": "Lane",
+       "explain": "low_bar_pre_print by month."
+      },
+      {
+       "label": "Street deep value",
+       "filters": {
+        "lane": "=street_deep_value"
+       },
+       "group": "Lane",
+       "explain": "street_deep_value by month."
+      },
+      {
+       "label": "AI quality dip",
+       "filters": {
+        "lane": "=ai_quality_dip"
+       },
+       "group": "Lane",
+       "explain": "ai_quality_dip by month."
+      },
+      {
+       "label": "Chase",
+       "filters": {
+        "lane": "=chase_big_day"
+       },
+       "group": "Lane",
+       "explain": "chase_big_day by month."
+      },
+      {
+       "label": "Base",
+       "filters": {
+        "lane": "=base"
+       },
+       "group": "Lane",
+       "explain": "Every name by month (the regime)."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Live lanes",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.lane_book.blocks.names_read"
+    },
+    {
+     "type": "table",
+     "title": "Today's names in each lane: the best measured lane for the name's cluster, its value x timing cell, band, kill, month upside and risk, model, peers, letters, catalysts",
+     "source": {
+      "duckdb": "{PACK}/lane_book/lane_book.duckdb",
+      "drop_missing_columns": true,
+      "sql": "SELECT symbol, ind, ai, mcap_b, in_book, lanes, avoid, n_lanes, n_avoid, best_lane, best_xs_28, best_p_up_28, best_p_dn_28, best_t_28, vq, timing, cell_xs_28, cell_p_up_28, close, day, w, m1, hi_prox, rsi, entry_px, bounce_low, bounce_high, bounce_kill, band_state, month_up_pct, risk_pct, payoff, street_px, b28d_q80, dec_28d, pred_28d, peer_gap_pct, pe_nfy, eps_rev_3m, fcf_margin, det, warn_level, beta, earn_date, earn_days, next_kind, next_date FROM names"
+     },
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "extra_from": "courses",
+     "tone_field": "Course",
+     "screens": [
+      {
+       "label": "Cheap, estimates up, turning",
+       "filters": {
+        "lanes": "discount_turn"
+       },
+       "sort": "-payoff",
+       "group": "Lane",
+       "explain": "discount_turn: forward earnings yield 2+ points over the industry, estimates up, under the 50-day, up on the week."
+      },
+      {
+       "label": "Quality washed out",
+       "filters": {
+        "lanes": "oversold_quality"
+       },
+       "sort": "-payoff",
+       "group": "Lane",
+       "explain": "oversold_quality: strong business, RSI 35 or under."
+      },
+      {
+       "label": "Quality from depth",
+       "filters": {
+        "lanes": "quality_repair"
+       },
+       "sort": "-payoff",
+       "group": "Lane",
+       "explain": "quality_repair (and its turn / thrust subsets)."
+      },
+      {
+       "label": "Turning from depth",
+       "filters": {
+        "lanes": "quality_repair_turn"
+       },
+       "sort": "-payoff",
+       "group": "Lane",
+       "explain": "quality_repair_turn: week +5%."
+      },
+      {
+       "label": "Street deep value",
+       "filters": {
+        "lanes": "street_deep_value"
+       },
+       "sort": "-payoff",
+       "group": "Lane",
+       "explain": "street_deep_value."
+      },
+      {
+       "label": "Low bar into print",
+       "filters": {
+        "lanes": "low_bar_pre_print"
+       },
+       "sort": "earn_days",
+       "group": "Lane",
+       "explain": "low_bar_pre_print: print in 1-14 days."
+      },
+      {
+       "label": "Build-up",
+       "filters": {
+        "lanes": "build_up_pre_print"
+       },
+       "sort": "earn_days",
+       "group": "Lane",
+       "explain": "build_up_pre_print: print in 8-28 days."
+      },
+      {
+       "label": "Beat sold",
+       "filters": {
+        "lanes": "beat_sold"
+       },
+       "sort": "-payoff",
+       "group": "Lane",
+       "explain": "beat_sold."
+      },
+      {
+       "label": "AI quality dip",
+       "filters": {
+        "lanes": "ai_quality_dip"
+       },
+       "sort": "-payoff",
+       "group": "Lane",
+       "explain": "ai_quality_dip (contagion lane)."
+      },
+      {
+       "label": "In an avoid lane",
+       "filters": {
+        "n_avoid": ">=1"
+       },
+       "sort": "-n_avoid",
+       "group": "Avoid",
+       "explain": "At least one avoid lane today (chasing, momentum at the high, cash burn, rich run-up, estimate cuts)."
+      },
+      {
+       "label": "No avoid lane",
+       "filters": {
+        "n_avoid": "<1"
+       },
+       "group": "Avoid",
+       "explain": "In no avoid lane today."
+      },
+      {
+       "label": "Outside AI",
+       "filters": {
+        "ai": "=0"
+       },
+       "group": "Cluster",
+       "explain": "Not in the AI cluster."
+      },
+      {
+       "label": "AI cluster",
+       "filters": {
+        "ai": "=1"
+       },
+       "group": "Cluster",
+       "explain": "The AI / data-center cluster."
+      },
+      {
+       "label": "Cheapest fifth",
+       "filters": {
+        "vq": "=Q5"
+       },
+       "explain": "Forward earnings yield vs the industry in today's top quintile."
+      },
+      {
+       "label": "Print in 21 days",
+       "filters": {
+        "earn_days": "0..21"
+       },
+       "sort": "earn_days",
+       "explain": "A print inside three weeks: the window where the discount paid most."
+      },
+      {
+       "label": "Up / risk 2+",
+       "filters": {
+        "payoff": ">=2"
+       },
+       "sort": "-payoff",
+       "explain": "Two points of month upside per point of risk to the kill."
+      },
+      {
+       "label": "Risk 10% or less",
+       "filters": {
+        "risk_pct": "<=10"
+       },
+       "sort": "risk_pct",
+       "explain": "The kill within 10% of the entry."
+      },
+      {
+       "label": "Model 8+",
+       "filters": {
+        "dec_28d": ">=8"
+       },
+       "sort": "-pred_28d",
+       "explain": "28-day model decile 8 or higher."
+      },
+      {
+       "label": "The Book",
+       "filters": {
+        "in_book": "=1"
+       },
+       "explain": "Held lines."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "When it matters",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.lane_book.blocks.when_read"
+    },
+    {
+     "type": "table",
+     "title": "Premium vs discount by catalyst timing: the cheapest fifth minus the dearest fifth (Q5 - Q1), per value field, quality split and timing bucket (pp / points)",
+     "source": {
+      "duckdb": "{PACK}/lane_book/lane_book.duckdb",
+      "sql": "SELECT field, split, timing, n_top, n_bottom, xs_7_spread, xs_14_spread, xs_28_spread, p_up_28_spread, p_dn_28_spread, p_up_7_spread FROM when_spread"
+     },
+     "screens": [
+      {
+       "label": "Forward yield vs industry",
+       "filters": {
+        "field": "=ey_fwd_ri"
+       },
+       "group": "Field",
+       "explain": "Forward earnings yield minus the industry median (the peer discount)."
+      },
+      {
+       "label": "Street upside",
+       "filters": {
+        "field": "=pt_up"
+       },
+       "group": "Field",
+       "explain": "Street target upside."
+      },
+      {
+       "label": "Sales yield vs industry",
+       "filters": {
+        "field": "=sales_yield_ri"
+       },
+       "group": "Field",
+       "explain": "Sales yield minus the industry median (for thin or negative earnings)."
+      },
+      {
+       "label": "Strong",
+       "filters": {
+        "split": "=strong"
+       },
+       "group": "Split",
+       "explain": "FCF margin 10%+, estimates not cut, net debt under 2x EBITDA."
+      },
+      {
+       "label": "All",
+       "filters": {
+        "split": "=all"
+       },
+       "group": "Split",
+       "explain": "Every name."
+      },
+      {
+       "label": "Weak",
+       "filters": {
+        "split": "=weak"
+       },
+       "group": "Split",
+       "explain": "Cash burn or estimates cut 2%+."
+      }
+     ]
+    },
+    {
+     "type": "table",
+     "title": "The grid: value quintile x catalyst timing, per field and split (raw / excess, odds of +10% / -10% over 28 days)",
+     "source": {
+      "duckdb": "{PACK}/lane_book/lane_book.duckdb",
+      "sql": "SELECT field, split, timing, vq, n_28, n_days, xs_7, xs_28, t_28, hit_28, p_up_28, p_dn_28, q10_28, q90_28 FROM when_value"
+     },
+     "screens": [
+      {
+       "label": "Forward yield vs industry",
+       "filters": {
+        "field": "=ey_fwd_ri"
+       },
+       "group": "Field",
+       "explain": "The peer discount."
+      },
+      {
+       "label": "Street upside",
+       "filters": {
+        "field": "=pt_up"
+       },
+       "group": "Field",
+       "explain": "Street target upside."
+      },
+      {
+       "label": "Strong",
+       "filters": {
+        "split": "=strong"
+       },
+       "group": "Split",
+       "explain": "Strong businesses."
+      },
+      {
+       "label": "All",
+       "filters": {
+        "split": "=all"
+       },
+       "group": "Split",
+       "explain": "Every name."
+      },
+      {
+       "label": "Ends (Q1 / Q5)",
+       "filters": {
+        "vq": "Q1|Q5"
+       },
+       "explain": "The dearest and the cheapest fifth only."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Timeline",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.lane_book.blocks.timeline_read"
+    },
+    {
+     "type": "table",
+     "title": "The month by week: prints, lane names printing, the Book's prints, the largest prints and the dated OUTSIDE events",
+     "source": {
+      "duckdb": "{PACK}/lane_book/lane_book.duckdb",
+      "sql": "SELECT week, start, \"end\", n_prints, n_lane_prints, lane_prints, book_prints, big_prints, avoid_prints, outside FROM weeks"
+     }
+    },
+    {
+     "type": "table",
+     "title": "Every dated event in the horizon with the lanes of the name it touches",
+     "source": {
+      "duckdb": "{PACK}/lane_book/lane_book.duckdb",
+      "sql": "SELECT date, dow, days, week, kind, symbol, slot, detail, status, mcap_b, in_book, outside, lanes, avoid, best_lane, best_xs_28, \"read\", source FROM timeline"
+     },
+     "screens": [
+      {
+       "label": "This week",
+       "filters": {
+        "week": "=W0"
+       },
+       "group": "Week",
+       "explain": "The scan's week."
+      },
+      {
+       "label": "Next week",
+       "filters": {
+        "week": "=W1"
+       },
+       "group": "Week",
+       "explain": "Next week."
+      },
+      {
+       "label": "Week 3",
+       "filters": {
+        "week": "=W2"
+       },
+       "group": "Week",
+       "explain": "The week after."
+      },
+      {
+       "label": "Weeks 4-6",
+       "filters": {
+        "week": "W3|W4|W5|W6"
+       },
+       "group": "Week",
+       "explain": "Later in the horizon."
+      },
+      {
+       "label": "OUTSIDE events",
+       "filters": {
+        "outside": "=1"
+       },
+       "explain": "Calendar events (not earnings, dividends or lockups)."
+      },
+      {
+       "label": "Lane names",
+       "filters": {
+        "lanes": "_"
+       },
+       "sort": "date",
+       "explain": "Events on names in a long lane today."
+      },
+      {
+       "label": "The Book",
+       "filters": {
+        "in_book": "=1"
+       },
+       "explain": "Events on held lines."
+      },
+      {
+       "label": "$30B and up",
+       "filters": {
+        "mcap_b": ">=30"
+       },
+       "explain": "Large caps."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Rotation",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.lane_book.blocks.rotation_read"
+    },
+    {
+     "type": "table",
+     "title": "Industries today: cap-weighted month vs the floor (x), last week's pace over it (y), quadrant, breadth, revisions, value level, the Book's NAV share and live lane names",
+     "source": {
+      "duckdb": "{PACK}/lane_book/lane_book.duckdb",
+      "sql": "SELECT ind, quad, xq, ai, n, cap_b, r_1w, r_1m, x_1m_xs, y_pace, r_3m_xs, above50_pct, above200_pct, relvol_med, eps_rev_3m_med, ey_fwd_vs_floor, pt_up_med, hi_prox_med, book_nav_pct, n_lane_names, lane_names, quad_xs_28, quad_hit_28 FROM industries"
+     },
+     "screens": [
+      {
+       "label": "Leading",
+       "filters": {
+        "quad": "=leading"
+       },
+       "sort": "-x_1m_xs",
+       "group": "Quadrant",
+       "explain": "Month ahead of the floor, last week ahead of that pace."
+      },
+      {
+       "label": "Improving",
+       "filters": {
+        "quad": "=improving"
+       },
+       "sort": "-y_pace",
+       "group": "Quadrant",
+       "explain": "Month behind the floor, last week catching up."
+      },
+      {
+       "label": "Weakening",
+       "filters": {
+        "quad": "=weakening"
+       },
+       "sort": "y_pace",
+       "group": "Quadrant",
+       "explain": "Month ahead, last week losing pace."
+      },
+      {
+       "label": "Lagging",
+       "filters": {
+        "quad": "=lagging"
+       },
+       "sort": "x_1m_xs",
+       "group": "Quadrant",
+       "explain": "Month behind, last week too."
+      },
+      {
+       "label": "The Book's industries",
+       "filters": {
+        "book_nav_pct": ">0"
+       },
+       "sort": "-book_nav_pct",
+       "explain": "Industries the Book holds."
+      },
+      {
+       "label": "Lane names",
+       "filters": {
+        "n_lane_names": ">=1"
+       },
+       "sort": "-n_lane_names",
+       "explain": "Industries with names in a long lane today."
+      }
+     ]
+    },
+    {
+     "type": "table",
+     "title": "Rotation on the store: did an industry's quadrant or month strength carry into its names' next 7 / 28 days? (industry-days, names equal weight)",
+     "source": {
+      "duckdb": "{PACK}/lane_book/lane_book.duckdb",
+      "sql": "SELECT dim, cell, n_28, n_days, n_names, xs_7, xs_28, t_28, hit_28, p_up_28, p_dn_28, xs_28_h1, xs_28_h2 FROM rotation"
+     },
+     "screens": [
+      {
+       "label": "Quadrant",
+       "filters": {
+        "dim": "=quadrant"
+       },
+       "group": "Dim",
+       "explain": "By today's-style quadrant."
+      },
+      {
+       "label": "Month quintile",
+       "filters": {
+        "dim": "=1m excess quintile"
+       },
+       "group": "Dim",
+       "explain": "By the industry's 1-month excess quintile (X5 = strongest)."
+      },
+      {
+       "label": "Quadrant x quintile",
+       "filters": {
+        "dim": "=quadrant x quintile"
+       },
+       "group": "Dim",
+       "explain": "Both."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Book",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.lane_book.blocks.book_read"
+    },
+    {
+     "type": "table",
+     "title": "Each Book line on the lanes: course and levels (judgment)",
+     "headers": [
+      "Symbol",
+      "Value",
+      "NAV %",
+      "Lanes now",
+      "Course",
+      "Levels",
+      "Why (data)"
+     ],
+     "from": "pages.lane_book.blocks.book"
+    },
+    {
+     "type": "table",
+     "title": "Book lines on the lane book (data)",
+     "source": {
+      "duckdb": "{PACK}/lane_book/lane_book.duckdb",
+      "drop_missing_columns": true,
+      "sql": "SELECT symbol, ind, ai, book_usd, nav_pct, lanes, avoid, best_lane, best_xs_28, best_p_up_28, best_p_dn_28, vq, timing, cell_xs_28, close, day, m1, hi_prox, entry_px, bounce_low, bounce_high, bounce_kill, month_up_pct, risk_pct, payoff, street_px, dec_28d, pred_28d, peer_gap_pct, det, warn_level, earn_date, next_kind, next_date FROM names WHERE in_book = 1"
+     },
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "extra_from": "courses",
+     "tone_field": "Course"
+    }
+   ]
+  },
+  {
+   "label": "Outside",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.lane_book.blocks.outside_read"
+    },
+    {
+     "type": "table",
+     "title": "Outside context, dated and sourced, and what each item changes (OUTSIDE: timing and grade only, never a sort key or a size)",
+     "headers": [
+      "Date",
+      "Item",
+      "Names",
+      "What it changes",
+      "Checked in data",
+      "Source"
+     ],
+     "from": "pages.lane_book.blocks.outside"
+    },
+    {
+     "type": "table",
+     "title": "Market patterns live today on the store (sentiment suite)",
+     "optional": true,
+     "source": {
+      "duckdb": "{PACK}/sentiment/market_sentiment.duckdb",
+      "drop_missing_columns": true,
+      "sql": "SELECT pattern, family, read, live, last, episodes, days, n_5, fwd_5, lift_5, n_21, fwd_21, hit_21, lift_21 FROM patterns ORDER BY live DESC, episodes DESC"
+     }
+    }
+   ]
+  },
+  {
+   "label": "Critical",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.lane_book.blocks.critical_read"
+    },
+    {
+     "type": "list",
+     "from": "pages.lane_book.blocks.wrong_if"
+    },
+    {
+     "type": "list",
+     "from": "pages.lane_book.blocks.corrections"
+    },
+    {
+     "type": "list",
+     "from": "pages.lane_book.blocks.rules"
+    }
+   ]
+  },
+  {
+   "label": "Sources",
+   "blocks": [
+    {
+     "type": "list",
+     "from": "pages.lane_book.blocks.sources"
+    }
+   ]
+  }
+ ],
+ "guide": {
+  "intro": "The lane book answers: which kinds of trade have paid on this store, which names are in them today, when in the catalyst cycle a discount pays, and where the month's dated events fall. Tables are data from tv_scan_cli.py lane-book; the Month plan, Course / Reason and every callout are judgment. A lane's record is in-sample on one regime: read n, days, the halves and the months before trusting a mean.",
+  "sections": [
+   {
+    "title": "Tabs",
+    "headers": [
+     "Tab",
+     "Answers",
+     "Start with"
+    ],
+    "rows": [
+     [
+      "Month plan",
+      "The judgment: the road week by week, the tickets with band / kill / target and the lane's record, the stages and the cash.",
+      "The read and critical callouts, then the road."
+     ],
+     [
+      "Lanes",
+      "What each lane did on the store at 7 / 14 / 28 days, all names and split AI / outside AI; today's live count and names.",
+      "Long lanes, then t 2+ and crash odds 12% or less; then the AI split."
+     ],
+     [
+      "Lane months",
+      "Each lane by month of entry: one good month is one episode.",
+      "The two charts, then a lane's screen."
+     ],
+     [
+      "Live lanes",
+      "Today's names per lane with levels, model, peers, letters and catalysts.",
+      "A lane screen plus Outside AI, No avoid lane and Up / risk 2+ or Risk 10% or less."
+     ],
+     [
+      "When it matters",
+      "Whether being cheap or dear to peers paid, by catalyst timing and business quality.",
+      "Forward yield vs industry + Strong; read xs_28_spread and p_up_28_spread by timing."
+     ],
+     [
+      "Timeline",
+      "The dated catalysts by week and the lanes of the names they touch.",
+      "The weeks table, then This week / Next week + Lane names."
+     ],
+     [
+      "Rotation",
+      "Industries by quadrant today, and whether quadrants or month strength carried on the store.",
+      "The precedent table first: it says whether to chase or fade rotation."
+     ],
+     [
+      "Book",
+      "Each held line's lanes, cell and levels.",
+      "Avoid lanes on a held line are the review trigger."
+     ],
+     [
+      "Outside / Critical",
+      "Dated outside context and what would make the plan wrong.",
+      "Critical before sizing anything."
+     ]
+    ]
+   },
+   {
+    "title": "Reading rules",
+    "headers": [
+     "Rule",
+     "Why"
+    ],
+    "rows": [
+     [
+      "Read xs against the base row, not against 0.",
+      "Mean excess over a median is positive for every name (returns are skewed): the base lane's xs_28 is the zero line."
+     ],
+     [
+      "Trust a lane only when t, both halves and most months agree.",
+      "Windows overlap; t uses calendar blocks of h days, the halves split the store in time."
+     ],
+     [
+      "p_up / p_dn are raw odds of a 10% move.",
+      "They answer 'can this make 10%+ in a month' directly; the base is about 19% up and 16% down."
+     ],
+     [
+      "A name's best lane is the lane's record, not the name's forecast.",
+      "Lanes overlap: the best measured lane is one read, never a sum of lanes."
+     ],
+     [
+      "Value pays at a time: read the When tab before buying a discount.",
+      "The discount's edge moves with the distance to the print."
+     ],
+     [
+      "OUTSIDE news changes timing or grade only.",
+      "It never reorders a table or sizes a ticket."
+     ]
+    ]
+   }
+  ]
+ },
+ "ledger": {
+  "auto": true,
+  "entries": [
+   {
+    "group": "Lane book: lanes",
+    "rows": [
+     [
+      "lane",
+      "The lane's key in config/generic_utils/lane_book.json (one SQL condition on the store's features)."
+     ],
+     [
+      "side",
+      "long = read as a buy; avoid = read as what not to chase (a short-side read); base = every name, the zero line."
+     ],
+     [
+      "family",
+      "The lane's kind: quality / value, moves, trend, catalyst, flow, AI lane, base."
+     ],
+     [
+      "label",
+      "The lane in words."
+     ],
+     [
+      "where",
+      "The lane's SQL condition on the store's features (macros expanded on the store, shown as written in the recipe)."
+     ],
+     [
+      "split",
+      "all = every floor name; ai = the AI / data-center cluster (ai_buildout industries, hyperscalers); other = the rest; strong / weak = business-quality splits on the When tab."
+     ],
+     [
+      "n_7 / n_14 / n_28",
+      "Rows (name-days) with a 7 / 14 / 28-day label in the cell."
+     ],
+     [
+      "n_days",
+      "Store days with at least one row in the cell."
+     ],
+     [
+      "n_names",
+      "Distinct names (or industries on the rotation table) in the cell."
+     ],
+     [
+      "n_rows",
+      "All rows in the cell, labelled or not."
+     ],
+     [
+      "fwd_7 / fwd_14 / fwd_28",
+      "Mean raw return over the next 7 / 14 / 28 calendar days, %, clipped at the recipe's clip_pct."
+     ],
+     [
+      "med_7 / med_14 / med_28",
+      "Median raw return over the next 7 / 14 / 28 days, %."
+     ],
+     [
+      "xs_7 / xs_14 / xs_28",
+      "Mean excess return over the next 7 / 14 / 28 days: the name's return minus that day's median floor name, pp. Read against the base row (about +0.6 at 28 days), not against 0."
+     ],
+     [
+      "hit_7 / hit_14 / hit_28",
+      "Share of rows that beat that day's median floor name, %."
+     ],
+     [
+      "p_up_7 / p_up_14 / p_up_28",
+      "Odds of a raw rise of 10% or more inside 7 / 14 / 28 days, % of rows."
+     ],
+     [
+      "p_dn_7 / p_dn_14 / p_dn_28",
+      "Odds of a raw fall of 10% or more inside 7 / 14 / 28 days, % of rows."
+     ],
+     [
+      "q10_7 / q10_14 / q10_28",
+      "10th percentile raw return (the bad case), %."
+     ],
+     [
+      "q90_7 / q90_14 / q90_28",
+      "90th percentile raw return (the good case), %."
+     ],
+     [
+      "t_7 / t_14 / t_28",
+      "t of the excess across calendar blocks of h days (daily cell means averaged per block; the blocks are the independent pieces). 2+ = consistent across blocks."
+     ],
+     [
+      "n_blk_7 / n_blk_14 / n_blk_28",
+      "Calendar blocks of h days behind t."
+     ],
+     [
+      "xs_7_h1 / xs_14_h1 / xs_28_h1",
+      "Mean excess in the store's first half of labelled days."
+     ],
+     [
+      "xs_7_h2 / xs_14_h2 / xs_28_h2",
+      "Mean excess in the store's second half of labelled days."
+     ],
+     [
+      "n_live",
+      "Names in the lane on the newest store day."
+     ],
+     [
+      "live_top",
+      "The first names in the lane today, in the lane's recipe order."
+     ],
+     [
+      "month",
+      "Month of entry (the store day the row starts)."
+     ]
+    ]
+   },
+   {
+    "group": "Lane book: lane keys (recipe)",
+    "rows": [
+     [
+      "base",
+      "Every name on the floor (the base rate) (base): What the average US $2B+ name did: every lane is read against this row."
+     ],
+     [
+      "quality_repair",
+      "Quality repairing from depth (long): FCF margin 10%+, estimates not cut, net debt under 2x EBITDA, and under the 200-day or 30%+ under the high: the 11 Nov mover study's edge, without a move trigger."
+     ],
+     [
+      "quality_repair_turn",
+      "Quality from depth, turning (week +5%) (long): The same quality-from-depth names once the week turns up 5%+: the repair with price confirmation."
+     ],
+     [
+      "quality_repair_thrust",
+      "Quality from depth after a +7% day (long): The mover-study cell (a big up day on a strong, deep name); thin, read its n."
+     ],
+     [
+      "quality_pullback",
+      "Quality uptrend back at the 50-day (long): Strong names in an uptrend that pulled back to their 50-day: buy-the-dip inside a trend."
+     ],
+     [
+      "discount_turn",
+      "Cheaper than peers, estimates up, turning up (long): Forward earnings yield 2+ points over the industry median, estimates rising, still under the 50-day but up on the week."
+     ],
+     [
+      "unpriced_revisions",
+      "Estimates up 5%+, price down on the month (long): The street raised next-year EPS 5%+ over 3 months while the price fell: revisions the tape has not paid."
+     ],
+     [
+      "street_deep_value",
+      "Street 30%+ over, estimates not cut, cash positive, 25%+ under the high (long): A deep drawdown the street still prices 30%+ higher, with estimates intact and cash coming in."
+     ],
+     [
+      "oversold_quality",
+      "Quality washed out (RSI 35 or under) (long): Strong businesses at an oversold RSI: the washed-out entry."
+     ],
+     [
+      "low_bar_pre_print",
+      "Low bar into the print (sold into it, last print sold, revisions not crowded) (long): The signal lab's best pre-print cell on the store: price down into the print, the last print sold off, revisions under the crowded top quintile."
+     ],
+     [
+      "build_up_pre_print",
+      "Build-up: strong and cheaper than peers, print in 8-28 days (long): Quality cheaper than its industry with a print three to four weeks out: bought before the event, not chased after it."
+     ],
+     [
+      "beat_both_gap",
+      "Beat both and gapped up 3%+ (post-print drift) (long): Printed in the last 3 days, beat EPS and revenue, the reaction day closed up 3%+."
+     ],
+     [
+      "beat_sold",
+      "Beat both, sold 3%+ on the print (long): A beat on both lines that the market sold: the dip after a good print."
+     ],
+     [
+      "quiet_accumulation",
+      "Moving without a print (week +4%, volume up, cheaper than peers) (long): Up 4%+ on the week on above-average volume with no print in 10 days or the next 5, cheaper than peers: buying without a catalyst."
+     ],
+     [
+      "ai_quality_dip",
+      "AI cluster quality 20%+ under the high (long): The AI / data-center cluster's strong names after the drawdown: the contagion lane, read with the cluster triggers."
+     ],
+     [
+      "chase_big_day",
+      "Any +7% day (chasing the move) (avoid): The base for chasing: what a +7% day did next, any name."
+     ],
+     [
+      "momentum_at_high",
+      "Momentum at the high (within 5%, estimates +10%, 3 months +30%) (avoid): The crowded winner: near the high with estimates and price both already up a lot."
+     ],
+     [
+      "pcont_chase",
+      "Big mover the continuation score likes (top fifth) (avoid): A big move the move-prediction continuation score ranks in its top fifth."
+     ],
+     [
+      "cash_burn_mover",
+      "Cash burner after a big move (avoid): A +7% day or +15% week on a business with negative free cash flow."
+     ],
+     [
+      "rich_runup_print",
+      "Rich to peers, up 10%+ on the month into a print within 10 days (avoid): Priced over its industry and run up into the print: the sell-the-news set-up."
+     ],
+     [
+      "cut_downtrend",
+      "Estimates cut 5%+, under the 200-day, month down (avoid): The falling knife: the business and the price going down together (short-side reading)."
+     ],
+     [
+      "TRUE",
+      "The base lane's condition: every name on the floor."
+     ]
+    ]
+   },
+   {
+    "group": "Lane book: names",
+    "rows": [
+     [
+      "ai",
+      "1 = in the AI / data-center cluster (ai_buildout industries, hyperscalers), 0 = not."
+     ],
+     [
+      "lanes",
+      "The long lanes the name is in today (lane keys)."
+     ],
+     [
+      "avoid",
+      "The avoid lanes the name is in today."
+     ],
+     [
+      "n_lanes",
+      "Count of long lanes today (overlapping definitions; a count, never a score)."
+     ],
+     [
+      "n_avoid",
+      "Count of avoid lanes today."
+     ],
+     [
+      "best_lane",
+      "The long lane with the highest measured xs_28 for the name's cluster (all names when the cluster has under min_rows_best rows); 'off the store floor' for a line the store does not carry."
+     ],
+     [
+      "best_xs_28",
+      "That lane's xs_28 (the lane's record, not a forecast for the name)."
+     ],
+     [
+      "best_p_up_28",
+      "That lane's odds of +10% in 28 days, %."
+     ],
+     [
+      "best_p_dn_28",
+      "That lane's odds of -10% in 28 days, %."
+     ],
+     [
+      "best_t_28",
+      "That lane's block t at 28 days."
+     ],
+     [
+      "best_n_28",
+      "That lane's labelled rows at 28 days."
+     ],
+     [
+      "vq",
+      "Today's quintile of forward earnings yield minus the industry median across the floor: Q5 = cheapest to peers, Q1 = dearest."
+     ],
+     [
+      "timing",
+      "Today's catalyst timing bucket (days since the last print dsp, days to the next dte; first match in the recipe)."
+     ],
+     [
+      "cell_xs_28",
+      "The When grid's xs_28 for the name's value quintile x timing bucket (all names)."
+     ],
+     [
+      "cell_p_up_28",
+      "That cell's odds of +10% in 28 days, %."
+     ],
+     [
+      "cell_p_dn_28",
+      "That cell's odds of -10% in 28 days, %."
+     ],
+     [
+      "cell_n_28",
+      "That cell's labelled rows."
+     ],
+     [
+      "named",
+      "1 = named on the command line (kept even when in no lane)."
+     ],
+     [
+      "nav_pct",
+      "The line's value as % of NAV (equity mark + cash)."
+     ],
+     [
+      "Q1",
+      "Value quintile 1: the dearest fifth of the floor on forward earnings yield vs the industry (or the lowest street upside)."
+     ],
+     [
+      "Q2",
+      "Value quintile 2."
+     ],
+     [
+      "Q3",
+      "Value quintile 3 (the middle)."
+     ],
+     [
+      "Q4",
+      "Value quintile 4."
+     ],
+     [
+      "Q5",
+      "Value quintile 5: the cheapest fifth to peers (or the most street upside)."
+     ]
+    ]
+   },
+   {
+    "group": "Lane book: when it matters",
+    "rows": [
+     [
+      "field_label",
+      "What the value field measures."
+     ],
+     [
+      "n_top",
+      "Rows in the cheapest fifth (Q5) of the cell."
+     ],
+     [
+      "n_bottom",
+      "Rows in the dearest fifth (Q1) of the cell."
+     ],
+     [
+      "xs_7_spread / xs_14_spread / xs_28_spread",
+      "Q5 minus Q1 mean excess at 7 / 14 / 28 days, pp: what being cheap rather than dear paid in that timing bucket."
+     ],
+     [
+      "p_up_28_spread / p_up_7_spread / p_up_14_spread",
+      "Q5 minus Q1 odds of a +10% move, points."
+     ],
+     [
+      "p_dn_28_spread / p_dn_7_spread / p_dn_14_spread",
+      "Q5 minus Q1 odds of a -10% move, points (negative = the cheap fifth fell less often)."
+     ]
+    ]
+   },
+   {
+    "group": "Lane book: rotation",
+    "rows": [
+     [
+      "dim",
+      "How the rotation precedent is cut: quadrant, 1-month excess quintile, both, or all industries."
+     ],
+     [
+      "cell",
+      "The quadrant (Leading / Weakening / Lagging / Improving), the quintile (X1-X5) or both."
+     ],
+     [
+      "unit",
+      "What a row is: one industry on one store day; returns are its names' equal-weight means."
+     ],
+     [
+      "quad",
+      "Quadrant: Leading (month ahead of the floor, week ahead of that pace), Weakening (month ahead, week behind pace), Lagging (both behind), Improving (month behind, week catching up)."
+     ],
+     [
+      "xq",
+      "Today's quintile of the industry's 1-month excess across industries: X5 = strongest month."
+     ],
+     [
+      "X1",
+      "1-month excess quintile 1: the weakest fifth of industries."
+     ],
+     [
+      "X2",
+      "1-month excess quintile 2."
+     ],
+     [
+      "X3",
+      "1-month excess quintile 3."
+     ],
+     [
+      "X4",
+      "1-month excess quintile 4."
+     ],
+     [
+      "X5",
+      "1-month excess quintile 5: the strongest fifth of industries."
+     ],
+     [
+      "cap_b",
+      "Industry market cap on the floor, $B."
+     ],
+     [
+      "r_1w",
+      "Cap-weighted 1-week return of the industry, %."
+     ],
+     [
+      "r_1m",
+      "Cap-weighted 1-month return of the industry, %."
+     ],
+     [
+      "x_1m_xs",
+      "The industry's cap-weighted 1-month return minus the floor's, pp (x)."
+     ],
+     [
+      "y_pace",
+      "The industry's 1-week excess minus a week's share (week_share) of its 1-month excess, pp (y): positive = the last week ran ahead of the month's pace."
+     ],
+     [
+      "r_3m_xs",
+      "Cap-weighted 3-month return minus the floor's, pp."
+     ],
+     [
+      "above50_pct",
+      "Share of the industry's names over their 50-day average, %."
+     ],
+     [
+      "above200_pct",
+      "Share of the industry's names over their 200-day average, %."
+     ],
+     [
+      "relvol_med",
+      "Median relative volume (volume vs its 10-day average)."
+     ],
+     [
+      "eps_rev_3m_med",
+      "Median 3-month change in next-FY EPS estimates, %."
+     ],
+     [
+      "ey_fwd_vs_floor",
+      "Median forward earnings yield minus the floor's median, points (positive = cheaper than the market)."
+     ],
+     [
+      "pt_up_med",
+      "Median street target upside, %."
+     ],
+     [
+      "hi_prox_med",
+      "Median distance to the 52-week high, %."
+     ],
+     [
+      "book_nav_pct",
+      "The Book's NAV share in the industry, %."
+     ],
+     [
+      "n_lane_names",
+      "Names in a long lane today."
+     ],
+     [
+      "lane_names",
+      "Up to eight of them."
+     ],
+     [
+      "quad_xs_28",
+      "The quadrant's measured 28-day excess on the store (rotation table)."
+     ],
+     [
+      "quad_hit_28",
+      "The quadrant's share of industry-days that beat the median, %."
+     ]
+    ]
+   },
+   {
+    "group": "Lane book: timeline and capital",
+    "rows": [
+     [
+      "dow",
+      "Day of the week."
+     ],
+     [
+      "days",
+      "Calendar days from the scan day."
+     ],
+     [
+      "W2",
+      "Earnings week two weeks out."
+     ],
+     [
+      "W3",
+      "Three weeks out."
+     ],
+     [
+      "W4",
+      "Four weeks out."
+     ],
+     [
+      "W5",
+      "Five weeks out."
+     ],
+     [
+      "W6",
+      "Six weeks out."
+     ],
+     [
+      "kind",
+      "Event kind: earnings, ex_dividend, ipo_lockup, or the calendar's macro / central_bank / policy / index / regulatory / conference / commodity / market / product / earnings_outside."
+     ],
+     [
+      "outside",
+      "1 = an OUTSIDE calendar event (not earnings, dividends or lockups)."
+     ],
+     [
+      "start",
+      "Monday of the week."
+     ],
+     [
+      "end",
+      "Friday of the week."
+     ],
+     [
+      "n_prints",
+      "Earnings events in the week (floor names on the outlook)."
+     ],
+     [
+      "n_lane_prints",
+      "Of those, names in a long lane today."
+     ],
+     [
+      "lane_prints",
+      "Lane names printing (symbol, day, first lane)."
+     ],
+     [
+      "book_prints",
+      "The Book's prints in the week."
+     ],
+     [
+      "big_prints",
+      "The largest prints by market cap."
+     ],
+     [
+      "avoid_prints",
+      "Names in an avoid lane (and no long lane) printing."
+     ],
+     [
+      "cash_floor_pct",
+      "The recipe's cash floor, % of NAV."
+     ],
+     [
+      "cash_floor_usd",
+      "That floor in USD."
+     ],
+     [
+      "above_floor_usd",
+      "Cash above the floor: what the month can spend without breaking it."
+     ],
+     [
+      "starters_at_hint",
+      "Starters of starter_usd the cash above the floor buys."
+     ],
+     [
+      "starter_usd",
+      "The starter size hint (advice, not a cutoff)."
+     ],
+     [
+      "adds_at_hint",
+      "Adds of add_usd the cash above the floor buys."
+     ],
+     [
+      "add_usd",
+      "The add size hint."
+     ],
+     [
+      "book_lines",
+      "Lines in the Book."
+     ],
+     [
+      "unrealized_usd",
+      "The Book's unrealized P&L, USD."
+     ]
+    ]
+   },
+   {
+    "group": "Month plan (judgment tables)",
+    "rows": [
+     [
+      "Week",
+      "W0 = this week, W1 = next week, and so on."
+     ],
+     [
+      "Dates",
+      "The sessions the row covers."
+     ],
+     [
+      "What happens",
+      "The dated catalysts and prints that week (OUTSIDE rows dated and sourced on the Outside tab)."
+     ],
+     [
+      "Lanes in play",
+      "The lanes whose names have a reason to move that week."
+     ],
+     [
+      "Capital action",
+      "What the cash does that week: stage, queue, hold."
+     ],
+     [
+      "Condition / trigger",
+      "What has to be true (on a close, in the data) for the action to happen."
+     ],
+     [
+      "Lane record",
+      "The lane's measured 28-day excess / odds of +10% / odds of -10% / t, for the name's cluster."
+     ],
+     [
+      "Lanes now",
+      "The Book line's long and avoid lanes today."
+     ],
+     [
+      "Value",
+      "The line's market value, USD."
+     ],
+     [
+      "NAV %",
+      "The line as % of NAV."
+     ],
+     [
+      "Item",
+      "The outside event or reading (OUTSIDE), dated: timing and grade only, never a sort key or a size."
+     ],
+     [
+      "What it changes",
+      "What the outside item changes in the plan: timing or grade only."
+     ],
+     [
+      "Checked in data",
+      "What the pack or the store shows for the same thing, or why it cannot be checked."
+     ],
+     [
+      "Names",
+      "The stocks the outside item touches (EXCHANGE:TICKER)."
+     ]
+    ]
+   },
+   {
+    "group": "Letters (det: deterioration beyond price)",
+    "rows": [
+     [
+      "E",
+      "Next-FY EPS estimate cut by more than 1% over about 3 months."
+     ],
+     [
+      "R",
+      "Next-FY revenue estimate cut by more than 1% over about 3 months."
+     ],
+     [
+      "C",
+      "Free cash flow margin under 0 (cash burn)."
+     ],
+     [
+      "S",
+      "Last reported EPS under its estimate."
+     ]
+    ]
+   },
+   {
+    "group": "Lane book: capital",
+    "rows": [
+     [
+      "nav_usd",
+      "NAV: the Book's equity mark plus cash, USD."
+     ],
+     [
+      "cash_usd",
+      "Cash, USD."
+     ],
+     [
+      "cash_pct",
+      "Cash as % of NAV."
+     ],
+     [
+      "equity_usd",
+      "The Book's equity mark, USD."
+     ]
+    ]
+   }
+  ]
+ },
+ "description": "Operator page template. Data from {PACK}/lane_book (tv_scan_cli.py lane-book); judgment from logs/canvases/{DAY}/judgment.json pages.lane_book. Render: tv_scan_cli.py page --template lane_book --day YYYYMMDD --judgment J --out-dir RUN_DIR --strict (data-only without --judgment)."
+}

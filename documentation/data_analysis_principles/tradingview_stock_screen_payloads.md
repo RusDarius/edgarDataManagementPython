@@ -33,6 +33,18 @@ Because of that, activity and squeeze-style inference can only be partial with t
 ## Reusable Base Universe Block
 Use this as the common payload shell and replace only `columns`, `range`, and `sort` per use case.
 
+`is_primary = true` keeps one listing per company. That drops the second US share class
+(NASDAQ:GOOG / GOOGL, NYSE:BRK.B, NASDAQ:FOXA, NASDAQ:NWSA) and every US ADR or
+cross-listing of a foreign primary (NYSE:TSM, NASDAQ:ASML, NYSE:NVO, NYSE:RY). The chosen
+class can flip between scans: Alphabet moved from GOOG to GOOGL between the 15:36 and 18:32 UTC
+scans on 2 Nov 2026, when the GOOGM / GOOGN preferreds listed. The all-fields export
+therefore uses `data_loaders.api_tradingview_client.with_us_secondary_listings`. It drops the
+legacy `is_primary` filter and adds a `filter2` operand: `is_primary = true` OR (exchange in
+NASDAQ / NYSE / AMEX AND (`typespecs has common` OR `type = dr`)). On 3 Nov 2026 that added
+457 US rows (244 common, 213 DRs), none outside the US and no US preferreds. The added rows
+carry `is_primary = false`, so readers that filter to primary listings (edge dataset builder,
+`ticker_overview` peers, pattern scan) see the same universe as before.
+
 ```json
 {
   "filter": [

@@ -182,6 +182,31 @@ def peer_reaction(events: Sequence[Mapping[str, Any]], ind: str | None, before: 
     return (_r(sum(xs) / len(xs)) if len(xs) >= min_n else None), len(xs)
 
 
+_OPS = {">=": lambda x, v: x >= v, "<=": lambda x, v: x <= v, ">": lambda x, v: x > v, "<": lambda x, v: x < v}
+
+
+def tail_flags(event: Mapping[str, Any], recipe: Mapping[str, Any]) -> dict[str, float | None]:
+    """Recipe ``tail_measures``: 1.0 / 0.0 per print when its ``from`` field passes ``op value`` (None when the field is
+    missing), so a pointer cell's mean is the share of prints that moved that far. The threshold is the recipe's, not a gate."""
+    out: dict[str, float | None] = {}
+    for t in recipe.get("tail_measures") or []:
+        x, v, op = _f(event.get(t["from"])), float(t["value"]), t.get("op", ">=")
+        if x is None:
+            out[t["key"]] = None
+        elif op == "balance":  # +1 at or beyond +value, -1 at or beyond -value, 0 between: the mean is up odds minus down odds
+            out[t["key"]] = 1.0 if x >= v else -1.0 if x <= -v else 0.0
+        else:
+            out[t["key"]] = 1.0 if _OPS[op](x, v) else 0.0
+    return out
+
+
+def own_abs_move(events: Sequence[Mapping[str, Any]], symbol: Any, before: str) -> float | None:
+    """Mean |react_fx| of ``symbol``'s lab prints dated before ``before`` (the name's own size of move, known at the time)."""
+    xs = [abs(float(e["react_fx"])) for e in events
+          if e.get("symbol") == symbol and str(e.get("print_date") or "") < before[:10] and _f(e.get("react_fx")) is not None]
+    return _r(sum(xs) / len(xs)) if xs else None
+
+
 # --- inputs ------------------------------------------------------------------------------------------------
 
 
@@ -213,16 +238,21 @@ def event_rows(pack: Path, store: Path, recipe: Mapping[str, Any]) -> list[dict[
             con.close()
     days, min_n = int(recipe.get("peer_window_days", 35)), int(recipe.get("peer_min_n", 3))
     by_ind: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    by_sym: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for e in events:
         by_ind[str(e.get("ind") or "")].append(e)
+        by_sym[str(e.get("symbol") or "")].append(e)
     out = []
     for e in events:
         rec = dict(e)
+        rec.update(tail_flags(e, recipe))
         f = feats.get((str(e.get("symbol")), str(e.get("pre_file") or "")[:10])) or {}
         for ptr in list(recipe.get("pointers") or []) + list(recipe.get("post_pointers") or []):
             key = ptr["key"]
             if ptr.get("store"):
                 rec[f"ptr_{key}"] = _f(f.get(ptr["store"]))
+            elif ptr.get("derived") == "own_abs":
+                rec[f"ptr_{key}"] = own_abs_move(by_sym.get(str(e.get("symbol") or ""), []), e.get("symbol"), str(e.get("print_date") or ""))
             elif ptr.get("derived") == "peer_rx":
                 rec[f"ptr_{key}"] = peer_reaction(by_ind.get(str(e.get("ind") or ""), []), e.get("ind"), str(e.get("react_on") or ""),
                                                   days=days, min_n=min_n, exclude=e.get("symbol"))[0]
@@ -344,6 +374,11 @@ def build_print_night(pack_dir: str | Path, *, recipe: Mapping[str, Any] | None 
     deciles, states = alpha_reads(pack)
     starter = float(recipe.get("starter_usd") or 5000)
     days, peer_min = int(recipe.get("peer_window_days", 35)), int(recipe.get("peer_min_n", 3))
+    by_sym: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for e in events:
+        by_sym[str(e.get("symbol") or "")].append(e)
+    tail_codes = {t["key"]: t["code"] for t in recipe.get("tail_measures") or []}
+    cell_min_n = int(recipe.get("min_n", 40))
 
     names: list[dict[str, Any]] = []
     matrix: list[dict[str, Any]] = []
@@ -380,6 +415,8 @@ def build_print_night(pack_dir: str | Path, *, recipe: Mapping[str, Any] | None 
                 live[key] = _f(f.get(ptr["store"])) if sym in feats else _f(row.get(ptr.get("calendar") or "")) if ptr.get("calendar") else None
             elif ptr.get("derived") == "peer_rx":
                 live[key] = peer
+            elif ptr.get("derived") == "own_abs":
+                live[key] = own_abs_move(by_sym.get(sym, []), sym, str(row.get("earn_date") or "9999")[:10])
             elif ptr.get("kind") == "category":
                 live[key] = category(key, row.get(ptr["live"]))
             else:
@@ -394,6 +431,7 @@ def build_print_night(pack_dir: str | Path, *, recipe: Mapping[str, Any] | None 
             for measure, code, _ in measures:
                 mrow: dict[str, Any] = {"symbol": sym, "phase": phase, "side": side, "measure": measure, "code": code}
                 ups, downs = [], []
+                best: tuple[float, str] | None = None
                 for ptr in ptrs:
                     key = ptr["key"]
                     value = live.get(key)
@@ -405,6 +443,9 @@ def build_print_night(pack_dir: str | Path, *, recipe: Mapping[str, Any] | None 
                     mrow[f"x_{key}"] = _cell_text(cell)
                     if cell and cell.get("dir") in {"up", "down"}:
                         (ups if cell["dir"] == "up" else downs).append((key, ptr.get("family"), bucket))
+                    if measure in tail_codes and cell and _f(cell.get("mean")) is not None and (_f(cell.get("n")) or 0) >= cell_min_n:
+                        if best is None or float(cell["mean"]) > best[0]:
+                            best = (float(cell["mean"]), key)
                     long_rows.append({"symbol": sym, "side": side, "measure": measure, "code": code, "pointer": key,
                                       "family": ptr.get("family"), "value": value if isinstance(value, str) else _r(value),
                                       "bucket": bucket, "n": (cell or {}).get("n"), "mean": (cell or {}).get("mean"),
@@ -419,6 +460,9 @@ def build_print_night(pack_dir: str | Path, *, recipe: Mapping[str, Any] | None 
                 rec[f"{code}_fam_up"], rec[f"{code}_fam_dn"] = mrow["fam_up"], mrow["fam_dn"]
                 rec[f"{code}_up_list"] = ", ".join(k for k, _, _ in ups) or None
                 rec[f"{code}_dn_list"] = ", ".join(k for k, _, _ in downs) or None
+                if measure in tail_codes:  # the highest odds among the name's measured cells, and which pointer gives it
+                    rec[f"{code}_hi"] = _r(best[0]) if best else None
+                    rec[f"{code}_hi_ptr"] = best[1] if best else None
         names.append(rec)
 
     base = base_rows(events, pre_m, "pre") + base_rows(events, post_m, "post")
@@ -451,6 +495,9 @@ def write_print_night(payload: Mapping[str, Any], out_dir: str | Path) -> dict[s
         "names: <code>_up / _dn = pointers whose cell points up / down for that measure (rx reaction, h7 / h28 hold from the pre-print close, "
         "ac after-hours to close, d28 drift); _fam_up / _fam_dn = how many families they come from; _up_list / _dn_list name them.",
         "matrix: x_<pointer> = ▲ / ▼ and the lift (pp) where the direction is clear, the lift alone otherwise, empty when the name has no value.",
+        "Tail measures (recipe tail_measures): u10 / d10 = 0/1 per print, the reaction at or beyond +10 / -10 pp vs the market; a cell's mean is "
+        "those odds, u10_up / d10_up count pointers that raise them, u10_hi / d10_hi the highest odds among the name's cells (n >= min_n) and "
+        "*_hi_ptr its pointer. Size pointers (own_abs, mcap, rev_yoy) are measured on the tail measures only. Upside lean = u10 up with d10 not up.",
         "Print t-stats treat prints as independent (they cluster by date and industry): optimistic. Many cells are tested; the halves rule is the guard.",
         "Pre-print pointers the print rewrites (estimates, last surprise) are empty on printed rows. Week-plays cells, bands and tails are joined unchanged.",
         "No ranking, no composite, no course.",

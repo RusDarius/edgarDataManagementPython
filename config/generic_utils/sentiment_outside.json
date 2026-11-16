@@ -1,0 +1,167 @@
+{
+ "_note": "Dated OUTSIDE sentiment readings (fear / greed, AAII, VIX, put / call, prediction markets, fund flows). Append with tv_scan_cli.py sentiment-add; one row per kind and date with its source and link. Shown beside the measured readings, never measured into an arrow: OUTSIDE changes timing or Grade, not a sort key or a size.",
+ "rows": [
+  {
+   "date": "2026-10-29",
+   "kind": "options_event_move",
+   "value": 1.2,
+   "unit": "x",
+   "source": "CNBC (options market)",
+   "link": "https://www.cnbc.com/2026/10/29/us-midterms-election-wall-street-options-markets.html",
+   "read": "Implied 4 Nov S&P move as a multiple of a normal day."
+  },
+  {
+   "date": "2026-10-29",
+   "kind": "polymarket_dem_sweep",
+   "value": 66,
+   "unit": "%",
+   "source": "CNBC (Polymarket)",
+   "link": "https://www.cnbc.com/2026/10/29/us-midterms-election-wall-street-options-markets.html",
+   "read": "Odds of a Democratic sweep of both chambers."
+  },
+  {
+   "date": "2026-11-04",
+   "kind": "polymarket_dem_sweep",
+   "value": 100.0,
+   "unit": "pct",
+   "source": "Reuters (result: Democrats won House and Senate)",
+   "link": "https://finance.yahoo.com/energy/articles/ai-data-center-stocks-dip-113427491.html",
+   "read": "Resolved: sweep happened. Futures fell (Nasdaq 100 -2.4% at the low) then recovered."
+  },
+  {
+   "date": "2026-11-06",
+   "kind": "fed_dec_hike_odds",
+   "value": 78.0,
+   "unit": "pct",
+   "source": "Invezz (via search)",
+   "link": "https://invezz.com/in/news/2026/11/06/nasdaq-rebounds-1percent-as-chip-stocks-recover-dow-falls-despite-strong-jobs-data/",
+   "read": "Priced odds of a December Fed hike after payrolls (one report; 70% before)"
+  },
+  {
+   "date": "2026-11-06",
+   "kind": "nfp_oct_k",
+   "value": 165.0,
+   "unit": "thousand",
+   "source": "Yahoo Finance live",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-friday-november-6-dow-sp-500-nasdaq-jobs-report-earnings-135953863.html",
+   "read": "October payrolls +165k vs about 65k expected, unemployment 4.1%, revisions +84k: raises December hike odds"
+  },
+  {
+   "date": "2026-11-06",
+   "kind": "us10y_yield",
+   "value": 4.859,
+   "unit": "pct",
+   "source": "Yahoo Finance live",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-friday-november-6-dow-sp-500-nasdaq-jobs-report-earnings-135953863.html",
+   "read": "10-year Treasury yield intraday after the October payrolls beat"
+  },
+  {
+   "date": "2026-11-06",
+   "kind": "vix_intraday",
+   "value": 24.51,
+   "unit": "index",
+   "source": "Yahoo Finance live",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-friday-november-6-dow-sp-500-nasdaq-jobs-report-earnings-135953863.html",
+   "read": "VIX intraday on 6 Nov, -13% on the day after +61% on 5 Nov"
+  },
+  {
+   "date": "2026-11-09",
+   "kind": "fed_dec_hike_odds",
+   "value": 78.0,
+   "unit": "",
+   "source": "Avalon Capital Research weekly playbook (fed funds futures)",
+   "link": "https://avaloncapitalresearch.substack.com/p/weekly-playbook-fed-funds-futures-0c5",
+   "read": ""
+  },
+  {
+   "date": "2026-11-09",
+   "kind": "us10y_yield",
+   "value": 4.872,
+   "unit": "",
+   "source": "Yahoo Finance live",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-monday-november-9-dow-sp-500-nasdaq-nvidia-090535419.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-09",
+   "kind": "vix_intraday",
+   "value": 20.94,
+   "unit": "",
+   "source": "Yahoo Finance live",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-monday-november-9-dow-sp-500-nasdaq-nvidia-090535419.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-10",
+   "kind": "cpi_core_mom",
+   "value": 0.3,
+   "unit": "",
+   "source": "Yahoo Finance live (BLS October CPI): core +0.3% vs 0.2% expected, headline +0.4%",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-tuesday-november-10-dow-sp-500-nasdaq-inflation-data-cpi-090627830.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-11",
+   "kind": "fed_dec_hike_odds",
+   "value": 100.0,
+   "unit": "pct",
+   "source": "CME FedWatch via Yahoo Finance / Rollingout after the 10 Nov CPI: about 85% for 25 bp and 15% for 50 bp (Fox Business 87.3% for 25 bp)",
+   "link": "https://finance.yahoo.com/economy/policy/article/hotter-than-expected-october-inflation-report-cements-december-rate-hike-for-fed-135331390.html",
+   "read": "Market-implied odds of any hike at the 8-9 Dec FOMC"
+  },
+  {
+   "date": "2026-11-12",
+   "kind": "jobless_claims_k",
+   "value": 200.0,
+   "unit": "thousand",
+   "source": "Yahoo Finance live: 200k for the week to 7 Nov vs 195k expected; continuing about 1.7M",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-thursday-november-12-sp-500-nasdaq-dow-nvidia-invest-110027430.html",
+   "read": "US initial jobless claims"
+  },
+  {
+   "date": "2026-11-12",
+   "kind": "us10y_yield",
+   "value": 5.11,
+   "unit": "pct",
+   "source": "Yahoo Finance live (ticker strip, +11 bp on the day; 5.09% at 16:52 UTC)",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-thursday-november-12-sp-500-nasdaq-dow-nvidia-invest-110027430.html",
+   "read": "US 10-year Treasury yield intraday"
+  },
+  {
+   "date": "2026-11-12",
+   "kind": "vix_intraday",
+   "value": 18.13,
+   "unit": "index",
+   "source": "Yahoo Finance live (ticker strip; 18.26 at 15:30 UTC)",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-thursday-november-12-sp-500-nasdaq-dow-nvidia-invest-110027430.html",
+   "read": "CBOE VIX intraday"
+  },
+  {
+   "date": "2026-11-13",
+   "kind": "ppi_mom",
+   "value": 0.3,
+   "unit": "",
+   "source": "Yahoo Finance live, 13 Nov: October PPI +0.3% m/m vs 0.4% expected; 6.5% y/y",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-friday-november-13-dow-sp-500-nasdaq-nvidia-ppi-141451558.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-13",
+   "kind": "us10y_yield",
+   "value": 5.16,
+   "unit": "",
+   "source": "Yahoo Finance live, 13 Nov (highest since October; 5.10% on 12 Nov)",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-friday-november-13-dow-sp-500-nasdaq-nvidia-ppi-141451558.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-13",
+   "kind": "vix_intraday",
+   "value": 20.0,
+   "unit": "",
+   "source": "Yahoo Finance live, 13 Nov (VIX climbed above 20 in morning trade)",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-friday-november-13-dow-sp-500-nasdaq-nvidia-ppi-141451558.html",
+   "read": ""
+  }
+ ]
+}

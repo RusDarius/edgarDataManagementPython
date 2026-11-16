@@ -226,6 +226,9 @@ def build_outlook(pack_dir: str | Path, *, recipe: Mapping[str, Any] | None = No
     tape = _by_symbol(_csv(pack / "movers" / "us2b_tape.csv"))
     plays = _by_symbol(_csv(pack / "week_plays" / "plays.csv"))
     calendar = _by_symbol(_csv(pack / "earnings_week" / "calendar.csv"))
+    from generic_utils.event_risk import warn_lookup
+
+    risk = warn_lookup(pack)  # the core warning field (PACK/event_risk); empty before that suite has run
     lists = pack_lists(pack)
     joins = recipe.get("joins") or {}
     lockup = int(recipe.get("lockup_days") or 180)
@@ -247,7 +250,7 @@ def build_outlook(pack_dir: str | Path, *, recipe: Mapping[str, Any] | None = No
         rec["earn_slot"] = earn["slot"] if earn else None
         rec["earn_days"] = (earn["date"] - scan_day).days if earn else None
         rec["earn_week"] = week_label(earn["date"], scan_day) if earn else None
-        for source, fields in (("alpha", live), ("lens", lens), ("tape", tape), ("plays", plays), ("calendar", calendar)):
+        for source, fields in (("alpha", live), ("lens", lens), ("tape", tape), ("plays", plays), ("calendar", calendar), ("risk", risk)):
             for f in joins.get(source) or []:
                 if rec.get(f) in (None, ""):
                     rec[f] = (fields.get(sym) or {}).get(f)

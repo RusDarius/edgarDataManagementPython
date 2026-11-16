@@ -1,0 +1,70 @@
+{
+  "description": "Declared status changes of features: what was moved out of the default flow, renamed, deprecated, asked to be removed, or removed. Written by hand in the patch that makes (or is asked to make) the change; read by generic_utils.patch_scan for the feature register and for the scan's guard. Only what was requested or done goes here: a reviewer's opinion that something is old belongs in a patch file's Follow-ups.",
+  "statuses": {
+    "on_demand": "Still supported and tested; no longer part of the default flow. Run it by name.",
+    "renamed": "The old name is gone from new output; say in the note whether readers still accept it.",
+    "deprecated": "Still works; do not build on it. Name the replacement. The scan flags new lines that use it.",
+    "removal_requested": "The user asked for it to go; not removed yet. The note says who asked, when, and what must be true first (no reference left, a replacement in place).",
+    "retired": "A convention or format that is no longer produced; old instances may remain.",
+    "removed": "Gone from the tree in the named patch. Patterns show whether anything still points at it."
+  },
+  "fields": {
+    "names": "The feature keys this entry covers, as the register prints them: a module stem, a CLI subcommand, a page template, a skill, or a free label for a column / convention.",
+    "kind": "module | cli | runner | page | skill | column | recipe_key | convention | file",
+    "status": "One of statuses.",
+    "patch": "The patch number that made the change (0000 = before patch notes started).",
+    "replaced_by": "What to use instead (optional).",
+    "note": "What a user of the feature must know; for a request, who asked and when.",
+    "patterns": "Optional regexes that find a reference to the item. The register counts them in the working tree; with a guarded status the scan flags added lines that match.",
+    "allow": "Optional path prefixes where a reference is expected (a fallback reader, the test of the old behaviour).",
+    "guard": "false = count references in the register but never flag added lines (prose that explains a retirement would match)."
+  },
+  "entries": [
+    {
+      "names": ["daily_focus", "playbook", "gmv", "wisdom", "earnings_week", "alpha_model", "signal_lab", "week_plays", "outlook", "print_brief", "deterioration", "pathway"],
+      "kind": "page",
+      "status": "on_demand",
+      "patch": "0001",
+      "replaced_by": "brief, board (with movers: the three pages of every refresh)",
+      "note": "Left `templates` in daily_refresh.json and stay in `templates_all`. Their suites still run on every refresh; only the render is on demand: `tv_scan_cli.py page-all --set all` or `--templates a,b`. The full Daily (`daily_full.txt`) still fills and renders all of them; baseline and UPDATE fill the three default pages."
+    },
+    {
+      "names": ["event_risk.letters"],
+      "kind": "column",
+      "status": "renamed",
+      "patch": "0001",
+      "replaced_by": "er_letters",
+      "note": "Column of PACK/event_risk `names` / `book`, renamed on 4 Nov 2026. Readers accept the old name on packs written before that: event_risk.warn_lookup and page_update.warn_changes. New code reads `er_letters` only."
+    },
+    {
+      "names": ["portofolio_integration_analysis", "portfolio_management_operations"],
+      "kind": "module",
+      "status": "removed",
+      "patch": "0000",
+      "replaced_by": "src/portfolio_performance_tracking (flow-aware performance, NAV history, benchmark reports)",
+      "note": "Old portfolio management package and its db operations, deleted in commit `1a3d4c9` (26 Aug 2026) with their two test files.",
+      "patterns": ["portofolio_integration_analysis", "portfolio_management_operations"]
+    },
+    {
+      "names": ["AI GENERATED CODE START / END marker blocks", "AI_CODE_DOCUMENTATION_RULES.md"],
+      "kind": "convention",
+      "status": "retired",
+      "patch": "0000",
+      "note": "No new marker blocks (CLAUDE.md, Code conventions). Files written under the old rule keep theirs (`# === AI GENERATED CODE START (...) ===` ... `END ===`); the scan's `text_markers` guard flags a new one, so this entry only counts what is left.",
+      "patterns": ["=== AI GENERATED CODE (?:START|END)"],
+      "allow": ["config/generic_utils/patch_scan.json", "CLAUDE.md", ".claude/skills/", "AI_CODE_DOCUMENTATION_RULES.md"],
+      "guard": false
+    },
+    {
+      "names": ["Cursor .canvas.tsx pages"],
+      "kind": "convention",
+      "status": "retired",
+      "patch": "0000",
+      "replaced_by": "operator HTML pages: a JSON spec or template rendered by `tv_scan_cli.py page` / `page-all` (skill canvas-ledger)",
+      "note": "About 250 old pages stay outside the repo for history. `canvas output` in a paste means the HTML page.",
+      "patterns": ["\\.canvas\\.tsx"],
+      "allow": ["CLAUDE.md", ".claude/skills/", ".cursor/rules/", "src/research_prompt/", "documentation/", "src/generic_utils/canvas_page.py"],
+      "guard": false
+    }
+  ]
+}

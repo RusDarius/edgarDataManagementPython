@@ -1,0 +1,29 @@
+{
+  "_note": "Recovery clock knobs (generic_utils.recovery_clock). States come from config/generic_utils/deterioration.json (drawdown buckets, letters, splits); the rises, checkpoints, windows and the observation floor below are scenarios and reading floors, not cutoffs. Hold / cut / add stays the judgment's (deterioration skill).",
+  "start_every_files": 5,
+  "rises_pct": [5, 10, 15, 20, 25, 30, 40, 50, 60, 75, 100],
+  "checkpoints_days": [28, 56, 91, 126, 182],
+  "windows_days": [28, 56, 91, 126],
+  "window_tolerance_days": 4,
+  "floor_marks_pct": [-10, -20],
+  "winsor_pct": 1.0,
+  "min_obs_rows": 40,
+  "min_obs_names": 10,
+  "studies": [
+    {"study": "drawdown", "keys": ["dd"]},
+    {"study": "drawdown x count", "keys": ["dd", "n_det"]},
+    {"study": "drawdown x 12m run", "keys": ["dd", "run_12m"]},
+    {"study": "drawdown x market", "keys": ["dd", "mkt"]},
+    {"study": "drawdown x count x market", "keys": ["dd", "n_det", "mkt"]}
+  ],
+  "live_cells": [
+    {"col": "dd", "study": "drawdown"},
+    {"col": "cnt", "study": "drawdown x count"},
+    {"col": "run", "study": "drawdown x 12m run"},
+    {"col": "mkt", "study": "drawdown x market"}
+  ],
+  "primary_order": ["cnt", "dd"],
+  "needs": ["cost", "gain10", "sma50", "half", "street", "high"],
+  "line_checkpoints_days": [56, 91, 126, 182],
+  "proxies": {}
+}

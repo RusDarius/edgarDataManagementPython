@@ -1,0 +1,19 @@
+{
+  "_note": "Cycle scenarios knobs (generic_utils.cycle_scenarios). Every value is a scenario setting, not a cutoff: k extra boom years after the street's year 1, then an EPS drop of d from the peak, a trough, a recovery to a normalized level, owner cash per year and a through-cycle exit multiple on the normalized EPS at year H. Whether a name's cycle is near its end is the judgment's.",
+  "horizon_years": 5,
+  "boom_years": [0, 1, 2, 3],
+  "drops": [0.25, 0.5, 0.75],
+  "boom_decay": 0.5,
+  "boom_floor": 0.0,
+  "boom_cap": 0.3,
+  "bust_years": 1,
+  "recover_years": 2,
+  "norm_share_of_drop": 0.5,
+  "cash_conversion": 0.8,
+  "exit_pe": [10, 15, "industry"],
+  "primary_pe": 15,
+  "industry_pe_floor": 6.0,
+  "industry_pe_cap": 35.0,
+  "fallback_rate": 0.12,
+  "drop_solve_max": 1.5
+}

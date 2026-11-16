@@ -9,8 +9,13 @@ Run folder: {RUN_DIR} (update.md, judgment.prev.json and the re-rendered pages a
 @.claude/skills/daily-update/SKILL.md
 
 Start at step 2 of that skill: read {RUN_DIR}/update.md only.
+A `warn A->B` flag is an event-risk level change (PACK/event_risk/highlights.log has the line's letters, stress and event):
+a held line that reaches WARN_STRONG gets a Reason that says what it does about the event.
 Edit courses / page blocks for the flagged names in {JUDGMENT},
-set reviewed_pack, re-render every page in one call (tv_scan_cli.py page-all --day {DAY} --judgment {JUDGMENT} --out-dir {RUN_DIR} --strict), run tv_scan_cli.py priors --day {DAY} for the
+set reviewed_pack, refresh pages.brief (stats, read, highlights), the board's Plan / Catalyst book rows that moved and
+pages.movers (plan_0 stats, plan_1 read, plan_2 rows for the movers that could take capital or a short),
+re-render the three default pages (brief, board, movers) in one call (tv_scan_cli.py page-all --day {DAY} --judgment {JUDGMENT} --out-dir {RUN_DIR} --strict;
+add --set all only if the day's full Daily rendered the deep pages and their blocks changed), run tv_scan_cli.py priors --day {DAY} for the
 changed names only. One OUTSIDE search on the session / after-hours for flagged names is
 allowed. A new line still means about $5,000; adds about $1,000.
 Final message: changed names and course flips, cash after, the update.md path, page links.

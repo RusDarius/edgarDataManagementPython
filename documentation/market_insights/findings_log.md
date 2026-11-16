@@ -291,3 +291,215 @@ revived the AI trade; Philadelphia semis +2.8% on 26 Oct.
 - Plans change beta more than the trims suggest: the morning plan's two high-beta adds (beta 3+) outweighed the trims (185% -> 188%);
   queuing them gave 177%. Read `spec.plans_after` before shipping adds in a sell-off.
 
+## 2026-11-02: what paid going into the midterm week
+
+- Signal lab (144 days): p_def 28d IC +0.106 (t_indep 3.1, STRONG), p_dvc +0.133 (t 2.7); last_surprise leads 1-7 days (t 3.1 / 2.9).
+  Prints: B/B drift +1.0% over 28 days (t 4.4); beat sold 5%+ +1.29% (t 2.4); set-up sold into & previous print down holds +3.11% over
+  28 days (n 594), sold into & previous up +1.38% (n 643), ran into & previous up -0.35% (n 894).
+- Factor month (pathway, 7d IC this month): forward EPS yield +0.136, FCF margin +0.101, p_dvc +0.078; beta -0.164, volatility -0.145,
+  street upside -0.108. The Book sits at the 89th percentile of beta and trails the market by 19.8% over a month (industry part -15.4).
+- GMV walk-forward (28d, 13 days): value lens t 2.14; RERATE t 5.46 (92% positive days), VALUE_TURN t 5.35 (100%); participation t -1.95.
+- Alpha model: 28d WEAK (IC 0.054, t 1.38, 4.4 independent) but now above its walk-forward baseline; 56d FAILING.
+- Deterioration: dd 50+ | 0 +6.43% over 28 days (t 6.18, 18% odds of another -10%); dd 20-35 | 2 +0.84% (t 0.87).
+- Play review (30 Oct calls vs 2 Nov, market +1.8%): the untaken NASDAQ:FSLR trim +5.4% excess, NASDAQ:BIDU exit +1.5%; NYSE:HIG ran 1.4%
+  above its limit. A limit set under the mark on a low-beta name misses in a relief rally.
+- Downside: selling NYSE:UNH (store beta 0.18) raised cash to 17% but left beta at 185% of NAV; today's plan takes it to 176%.
+
+
+## 2026-11-02 (evening): winners anatomy - what the top 5% looked like before they ran
+
+- `tv_scan_cli.py anatomy --pack PACK` (new; recipe `config/generic_utils/anatomy.json`) on pack `briefing_pack_20261102_1642_utc_5762ac21`
+  (144 files, 29 Mar - 2 Nov, US $1B+, top / bottom 5% of each day's later return). Page `logs/canvases/20261102/1802_ide/alpha-hunt-20261102.html`.
+- Winner mix: about half of every horizon's top-5% movers rode a top-quintile industry over the same window (28d 53% vs 19% base; losers 9%).
+  Past industry momentum is not directional (ind_r_1m:hi lifts both tails about 1.4x). A print beat in the window lifts top-5% odds 2.5x at 7d.
+- Raw winner lift is mostly volatility (atrp / rvol_20 legs lift both tails 2.5x); order up-patterns by asym_up = lift_up / lift_dn with an
+  excess t, not by lift.
+- Durable up patterns (positive in every entry month including October): rsi:lo & p_fwd:hi 28d +5.1% (t 3.2, hit 64%, Oct +1.9);
+  beat-and-sold (since_print<=10 & last_surprise>0 & r_1w:lo) +2.2% (t 4.7, Oct +1.2); industry turn (ind_r_3m:lo & ind_last_surprise:hi)
+  +3.5% (t 3.2, Oct -0.3); r_1m:lo & p_dvc:hi +3.2% (t 2.4, Oct +0.1).
+- Hindsight shape of October's winners (r_1m:lo & pt_up:hi & dte<=28) lifts both tails about 2x: +3% a month Mar-Sep, -2.4% to -4.6% in
+  October. r_3m:lo & pt_up:hi & eps_rev_3m>=0 was the most one-sided (lift up 2.8 / dn 0.7, 28d +5.3%) until October (-4.8%): regime.
+- Down side is the robust result: p_bo:hi & p_cons_w:lo 28d -11.7% (hit 22%), p_bo:hi & p_fwd:lo -10.3%, r_1m:hi & p_fwd:lo negative every
+  month (Oct -21.5%). Hold-out: down patterns mined before each window caught losers 2.4-2.6x; up patterns mined before October lagged in it.
+
+## 2026-11-02 (night): beat bar - what a beat paid by positioning (5,360 lab prints, 30 Mar - 2 Nov)
+
+- Base: beat rate 73%; a beat +1.27 pp on the reaction vs the market (hit 55%), a miss -2.31 pp (hit 37%); 45% of beats were sold.
+  B/B +1.75, B/M -0.95 (an EPS beat with a revenue miss lost). 28-day hold from the pre-print close: beat +1.85, miss -2.40.
+- Low bar pays: runup:T3 & r_3m:T1 & eps_rev_3m:T1 (bounce into the print after a 3-month slide, estimates cut) beat +4.9 pp, hit 83%,
+  17% sold, lift t 4.2 (second half only: 2 early beats); runup:T1 & r_3m:T1 & eps_rev_3m:T1 beat +3.1 (t 2.35, both halves +), h28 +5.9.
+- High bar: estimates raised (eps_rev_3m:T3) with r_3m T2-T3 sold about half of beats (beat -0.6 to -0.9 pp, t -2.1 to -2.6) and
+  needed EPS +10% to +24%. Crowded misses (r_3m:T3) cost -5.5 to -8.2 pp, h28 to -13.
+- Pointer cells (halves rule): beats paid more after a prior miss (last_surprise Q1 +1.7, t 3.6), target cut, high pt_up; less after
+  EPS revisions up (eps_rev_3m Q4 -1.3, t -3.1), revenue revisions up, target raises.
+
+## 2026-11-02 (late): recovery clock - how long drawdown states took to come back (51,371 weekly starts, 29 Mar - 2 Nov)
+
+- New scan `tv_scan_cli.py recovery-clock` (Kaplan-Meier on the store's closes, censored starts count while seen; a touch, not a hold).
+- Crowded winners in a drawdown kept falling: dd 20-35 | 12M 100+ ended 91 days later -11.7% (median, 200 names), excess -5.4 pp,
+  path-low median -23%, a further -20% in 57% of starts; yet +13.5% was touched in 59% within 91 days (volatility both ways: sell them
+  into the 50-day, do not add). dd 35-50 / 50+ | 12M 100+: -15.0% / -7.3% median.
+- Not-crowded deep drawdowns drifted up: dd 35-50 / 50+ | 12M down +7.1% / +5.4% over 91 days (median), excess +7.8 / +6.2 pp;
+  no-letter count cells (from July) +11.7 / +13.3 pp mean excess. One letter at 35-50%: -7.9% median, path low q10 -37%.
+- Starts in a down market month (median name's trailing month down) paid +9% to +12% over 91 days at 10-50%+ drawdowns vs +1% to +2%
+  in up months: averaging down pays in a washout, not on a calm day.
+- Half-way back to the high inside 182 days: 55% at dd 20-35, 35% at dd 35-50, 21% at dd 50+ (dd-only cells).
+- Caveats: a young, mostly rising store; the letter cells start in July so their 126 / 182-day odds stay empty; starts overlap (read names).
+
+## 2026-11-03: peer value - is the discount to peers earned by growth and quality? (29 store days, 9 Jun - 3 Nov, US $2B+)
+
+- New scan `tv_scan_cli.py peer-value`: per TradingView industry (sector when thin), the log forward P/E / EV/EBITDA / EV/sales fitted
+  on z-scored growth and quality (ridge); `gap_pct` = fitted vs actual multiple. Median R2 0.49 (P/E, 74 fitted groups), 0.40
+  (EV/EBITDA), 0.65 (EV/sales).
+- The adjusted gap beat a plain peer discount: 28d IC 0.024 (t 0.86, hit 56%) vs 0.012 (t 0.30, 44%); 56d 0.043 (t 1.31, 74% of days
+  positive) vs 0.044 (t 0.88, 61%); 7d 0.014 (t 1.12) vs 0.011 (t 0.57). 28d quintile excess: gap Q5 +1.86 / Q3 +0.41 / Q1 +0.90;
+  plain discount Q5 +1.26 / Q1 +1.15 (flat). Direction only: no t above 2 yet.
+- What industries pay for (P/E lens, % multiple per 1 sd): Semiconductors revenue growth +46, ROE -24, EPS revisions -34 (rising
+  estimates lower the forward P/E before the price follows: the gap partly reads estimates outrunning price); Internet software revenue
+  growth +52, margin -37; Packaged software growth +28; P&C insurance growth +8, margin -28.
+- Book today: MU gap +90 (cyclical at peak margins, read `cycle` beside it), PGY +127, FSLR +123 (sits in Semiconductors: wrong peers),
+  STRL +35, QCOM +31, RDDT +28 (still under its profile after -57% in 12 months), RMBS -10, GEV -14 (premium 33% vs 14% earned).
+  Candidates: HIG +66, AMP +46, PDD +111 (sector peers), DINO -9 (its discount is earned).
+
+## 2026-11-03 (16:12 UTC update): peer gaps move between two fits of one day; low-bar cells for this week's prints
+
+- Peer value re-fitted on the afternoon store day (the 16:12 UTC focused run replaced the morning row): Semiconductors grew from 48 to
+  55 fitted names and the P/E fit's weights changed sign (ROE -24 -> +4, operating margin -6 -> -29). Single-name gaps moved by up to
+  40 points: NASDAQ:QCOM +31 -> +70, NASDAQ:RDDT +28 -> +63, NASDAQ:RMBS -10 -> -29, NASDAQ:WDC unfitted -> -27. Signs held for every
+  Book line that had both. Rule: use the sign that agrees across fits, not the size; a pooled fit over the last few store days is the
+  fix to test.
+- Beat bar, W0 / W1: the best low-bar cell is run-up T3, 3-month tape T1, EPS revisions T1 (n 102 past prints): beats paid +5.1 on the
+  day with 17% sold and held +6.4 over 28 days; misses held +7.3. Run-up T1 / tape T1 / revisions T1 (n 137): beats +3.2 on the day,
+  28% sold, held +6.1; misses -1.6. High bar (revisions and tape T3): about half of beats sold and misses held -11.8 over 28 days.
+- New `tv_scan_cli.py board` (PACK/board) joins all of it per name; the page's screens are the reading orders.
+
+## 2026-11-03 (16:12 UTC): market sentiment, first measurement
+
+- New `tv_scan_cli.py sentiment` (PACK/sentiment; also inside `run_market_timing_policy.py`): 35 market-level readings on the US $2B+
+  floor, 145 store files (29 Mar - 3 Nov). None clears the arrow rule (|t| >= 2 on n_indep = days / h, both halves, today's lean, the
+  quintile's lift) at 1 / 5 / 10 / 21 sessions: at 21 sessions the store holds about six independent windows. Closest: volume pace at 5
+  sessions (IC +0.35, t 1.9, halves +0.11 / +0.23). Read percentiles and patterns as context until the store grows.
+- Patterns (episodes are the sample): distribution clusters (5+ in 25 sessions, 6 episodes) were followed by -0.7 pp at 5 sessions and
+  -0.9 pp at 21 vs all days; beats-sold stretches (8 episodes) -0.8 / -1.7; momentum unwinds (3 episodes) -1.9 / -2.0; the AI cluster
+  trailing the market by 3 pp+ over five sessions (4 episodes) +2.0 at 5, -0.2 at 21. Live today: ai_lags and accumulation_cluster
+  (8 accumulation vs 3 distribution days, 97th percentile) with the cap index at its weakest 21-session return in the store (1st percentile).
+
+## 2026-11-04 (13:01 UTC premarket scan): the midterm sweep sorts groups; the Book leans the way October punished
+
+- Premarket after the Democratic sweep (OUTSIDE, Reuters / CNBC 4 Nov), measured on 70 names with `premarket-book` and a policy recipe:
+  data-center builders -3 to -11 (NYSE:FIX -10.6, NASDAQ:IESC -7.1, NASDAQ:STRL -7.0, NYSE:PWR -5.2), ERCOT / data-center power -4 to -6
+  (NYSE:VST -6.4, NYSE:GEV -6.3, NASDAQ:TLN -4.8), neoclouds -4 to -7, defense -2 to -4; utility-scale solar +6 to +9 (NASDAQ:ARRY +8.8,
+  NASDAQ:NXT +6.2, NASDAQ:FSLR +6.0), hospitals / Medicaid insurers +4 to +9, hyperscalers +1 to +4, homebuilders +4. NASDAQ:SEDG -14.5 on a
+  Q4 guide under Q3: inside the policy winners, results still set the sign.
+- Data on the policy names: the solar names with letters (ARRY revenue cut, ENPH ERS, RUN cash burn) sit in model deciles 1-4; only
+  NASDAQ:NXT is decile 10 with no letter. NYSE:VST carries ERS and its cell (dd 20-35 | 3+) is -0.9 over 28 days, t -3.0. NASDAQ:STRL is
+  price-only with the strongest cell in the store (dd 50+ | 0: +6.3, t 6.2). Hospitals: NYSE:UHS forward PE 7.9, peer gap +74, no letter.
+- Factor month (signal lab, October): forward earnings yield and FCF yield led (28d IC +0.25 / +0.28), beta / ATR / realized volatility
+  lagged (28d IC -0.27 / -0.28 / -0.29). November's first sessions reversed (1d IC of rsi, vs20, r_1m about -0.15). The Book sits at the
+  92nd percentile of beta and the 82nd of realized volatility; 1M gap to the market -20.5 pp (industry -12.7, stock picking -7.8).
+- Alpha model: 28d WEAK (OOS IC 0.055, t 1.43, beats its best baseline), 7d WEAK, 56d FAILING.
+- Data gaps found: the holdings producer's FX call timed out (OMXCOP:NOVO_B valued in DKK as USD until a rerun); NASDAQ:GOOG is held but
+  unmatched (the move-prediction scan carries only NASDAQ:GOOGL), so the pack's NAV leaves out about $6.3k.
+
+## 2026-11-04 (23:03 UTC post-close scan): big-move odds on prints; size is measurable, side is not
+
+- New print-night measures (recipe `tail_measures`, `generic_utils/print_night.py`): u10 / d10 = reaction vs the market at +10 / -10 pp
+  or beyond (0/1 per print), b10 = +1 / -1 / 0 (up odds minus down odds), with Size pointers (own_abs = the name's mean |past reaction|,
+  mcap, rev_yoy) measured on these only, so the rx / h7 / h28 counts are unchanged. On 5,699 lab prints (base u10 10%, d10 9%):
+  realized volatility Q5 17% / 16% vs Q1 1% / 3%; own past move Q5 15% / 17%; small cap, fast revenue growth and high street upside
+  raise both tails. Side tilts are small: previous print <= -10 vs the market u10 17% / d10 15% (mean reaction +1.3, 28-day hold +3.0,
+  both halves); previous print >= +10 u10 12% / d10 16%; next-FY EPS revised up 3 months (top quintile) d10 12% vs u10 9%.
+- Out of sample on the 179 after-hours reporters of 4 Nov, scored from the 17:03 pack: u10_hi >= 0.16 moved 6.2% on average (47% 5%+,
+  16% 10%+ either way), 0.13-0.16 moved 2.7%, under 0.13 moved 1.2% (none 10%). The b10 up-tilt group (momentum: r_1m / rsi / vs50
+  top quintile) had 21% of its names at -10 or worse: the side read failed while momentum reverses.
+- NASDAQ:APP (+25.5% AH) and NASDAQ:SEZL (+28.2%) both fit "good print, punished print (-19 / -29), rebound": so did NYSE:HUBS (-9.3),
+  NASDAQ:FSLY (-14.8), NYSE:BROS (-17.4). After a +10 reaction that follows a punished print the store's next 7 days averaged -1.75 and
+  28 days -0.5 (38 prints); after any +10 reaction the 28-day drift is +1.4 mean / -0.2 median with the halves disagreeing. Prints that
+  fell 10+ drifted +1.8 over 28 days (both halves positive).
+- Lesson for the Book: a best-cell line into a print is a size decision. Cutting NASDAQ:APP to half instead of out would have kept about
+  $950 of the +25% night with half the -10% tail.
+
+## 2026-11-09 (16:24 UTC intraday scan): day 2 of the rally; band discipline vs a gap day
+
+- Session: cap-weighted +2.35%, 79.8% of US $2B+ names up, up-volume 76.9%, 59.5% over the 50-day; 8 accumulation vs 3 distribution
+  days in 25. The sentiment suite's live patterns both lagged afterwards in the store: follow-through (n 4) 5s -1.14 / 21s -2.40 pp vs
+  all days; accumulation cluster (n 3) -0.55 / -1.22 pp. Only measured arrow: median gap down at 1 session. OUTSIDE: VIX 20.9, 10-year
+  4.87%, December hike odds about 78% before the 10 Nov CPI.
+- Play review of the 6 Nov judgment (6 Nov -> 9 Nov, market +1.59%): WAIT courses +2.86 vs the market (mean, n 38), WATCH (AI bounce)
+  +6.74 (n 4), NEW (queue) -1.56 (n 13). The bands held price discipline but cost the strongest movers: NASDAQ:SANM +11.4% from its
+  124-127 pre-print ticket, NASDAQ:AEIS +11.6%, NASDAQ:AMAT +10.1%, NASDAQ:GFS +6.5% all left their bands unfilled on a 2-day rally.
+  NASDAQ:MNDY's after-print band (82.81-88.28) sat above the reaction (82.2): set post-print bands from the reaction, not before it.
+- Bounce tier table shrank from 60 to 28 names in one session: the band-in-reach family (b) is the one a rally removes first.
+- Week plays: the best pre-print cell (sold into, previous print sold off, revisions under the priced quintile) still +2.92 hold-through
+  (t 4.2). NASDAQ:MNDY post-print cells: B/B +1.01 (t 4.4), reaction Q1 +1.43 (t 3.1), beat sold 5%+ +1.29 (t 2.4).
+- Alpha model unchanged: 28d WEAK (OOS IC 0.054, t 1.42, beats its baseline), 7d WEAK, 1d and 56d FAILING.
+- Renderer fix: preferred / unit ids with a slash suffix (AMEX:TXCP/PB) were flagged as bare tickers; `symbol_identity._QUALIFIED_TOKEN`
+  now reads the suffix as part of the id.
+
+## 2026-11-11 (17:21 UTC intraday scan): lane book - which kinds of trade paid, and when a discount pays
+
+- New suite `tv_scan_cli.py lane-book` (recipe `config/generic_utils/lane_book.json`): 20 lanes plus a base row, each one SQL condition on
+  the panel store, measured at 7 / 14 / 28 days (US $2B+, 29 Mar-11 Nov; 28-day labels to 14 Oct; 89 days for lanes that need 3-month
+  revisions). Base: 28-day excess +0.6 (the zero line: excess over a median is skewed positive), odds of +10% 18.7%, of -10% 15.7%.
+- Non-AI lanes with block t 2+: cheap to peers (forward earnings yield 2+ points over the industry), estimates up, under the 50-day, week up
+  +4.8 (t 3.1, +10% 33%, -10% 7.9%); quality washed out (strong, RSI 35 or under) +2.7 (t 3.7, 8.1%); street deep value +4.6 (t 3.7,
+  13.6%); quality repairing from depth +4.7 (t 2.2, 11.3%). The first two were positive in every entry month Jun-Oct, including October
+  (base -2.4); the depth lanes lost in October (-1.9 / -3.1). Pre-print: low bar +4.0 (positive every month), build-up +2.9 (-10% 8.5%).
+- Not edges: estimates up 5%+ with the month down (+0.7, t -0.3), beat-both gap-ups (+1.3, t -0.5), moving without a print (+1.3, second
+  half -3.0). Avoid lanes held: any +7% day -0.8 (32% odds of -10%; October entries -18.8 / 64%), cash burner after a big move -2.1
+  (40%), big mover the continuation score likes -2.1 (31%), momentum at the high -4.0 (AI -19.1 / 64%). Estimate cuts in a downtrend were
+  not a reliable short (+0.8).
+- AI cluster: the same quality-from-depth rule had 25.6% odds of -10% in AI vs 11.3% outside; the AI quality dip lane lost 20.9 in
+  October entries with 69% odds of -10%. Only cheap-and-turning held inside the cluster (+2.9, t 2.6, -10% odds 20%).
+- Premium vs discount has a clock: for strong businesses the cheapest fifth to peers beat the dearest by +5.6 pp over 28 days 8-21 days
+  before a print (+10% odds 34% vs 18%), +4.4 at 0-7 days, +2.1 at 22-45 days, -0.8 in the two weeks after the print. With no print near
+  the cheap fifth jumped 10% less often (-4.1 points). For weak businesses a discount mainly cut the left tail.
+- Industry rotation did not persist: quadrant -> next 28 days Leading 0.0, Improving -0.05, Weakening +0.4, Lagging +0.8 (hit 48-53%).
+- Correction: `since_print` is the close vs the last reaction close (%), not days since the print (`dsp`). The 11 Nov mover study's print
+  split and its "beat-both gap-up drifted +0.9 to +1.4" rule, the anatomy B letter (`since_print<=10`) and the quiet_accumulation focus
+  scan used it as days. Corrected: a +7% day on a print (dsp 0-2) +1.0 over 28 days (-10% odds 20%) vs no print -1.15 (34%); B letter on
+  dsp<=10: 5,697 rows (was 27,689), +1.5 at 28 days, t 1.9. The outlook and the board now carry `dsp`.
+- NVIDIA's fiscal Q3 print is official for 17 Nov after the close (NVIDIA IR, 28 Oct); the 18 Nov calendar estimate is marked disputed.
+
+## 2026-11-12 (19:05 UTC intraday scan, 71% of the session): a rates day plus the NVIDIA CEO exit; the lane map holds on one more day of labels
+
+- Tape: cap-weighted -0.12% but the median US $2B+ name -0.85%, 28.4% up, up-volume 21.9% (a narrow, rates-driven day). Store step since
+  the 11 Nov scan: cap -0.22%, median -0.44%, AI cluster -0.47%, Book -1.2% (-$1,008). The AI cluster sits 11.6% under its high and 5.5%
+  over its 5 Nov low (117.76). Sentiment: no measured arrow at 5-21 sessions; the accumulation-cluster pattern is live (after it -0.47 pp
+  over 5 sessions, -1.13 pp over 21; 4 episodes).
+- OUTSIDE: NVIDIA's CEO resigned (CFO interim; NASDAQ:NVDA opened 151.0, under the old 158.93 stage-C kill, then 164.65); 10-year 5.11%
+  (+11 bp); a December hike about fully priced after the hot October CPI; claims 200k; oil up on Iran headlines; Anthropic IPO dates
+  confirmed (prices 18 Nov, trades 19 Nov).
+- Lane book, labels to 15 Oct (non-AI, 28 days vs base +0.66): cheap and turning +4.65 (t 2.96, +10% 33%, -10% 7.9%; months +11.1 /
+  +8.1 / +2.5 / +1.7 / +3.1 Jun-Oct), street deep value +4.52 (t 3.47), washed-out quality +2.57 (t 2.67; every month positive), quality
+  from depth +4.55 (t 2.15; October +0.6). AI split: turning up from depth -2.68 with 41.5% odds of -10%; high-continuation chase -10.3
+  (55.5%). The edges shrank from June to October in every long lane.
+- Today's live cheap-and-turning names outside AI are mostly energy (NYSE:CRGY, NYSE:PARR, NYSE:DK, NYSE:SM, NYSE:INSW), decile 9-10
+  with rising estimates and negative store beta (-0.6 to -1.5): the lane and the Book's missing hedge (rates / oil) point the same way.
+- Deterioration on the Book: price-only lines kept positive cells (NASDAQ:MU 35-50% no letter +4.86, t 2.91; NYSE:RDDT 50%+ no letter
+  +5.05, t 6.18); NASDAQ:FSLR (one letter) -1.17 (t -1.08) is the only negative cell; NASDAQ:GOOG has two letters (one is the
+  investment-mark artefact) and sits 12% over its bounce kill.
+- Model and lab: alpha 28d WEAK but ahead of its baseline (recent IC +0.093), 7d DEGRADED, 1d / 56d FAILING; p_dvc leads at 7-56 days
+  (28d IC +0.122, t_nw 5.8); GMV value lens IC +0.060 (t 2.38), VALUE_TURN t 5.16, momentum and participation negative.
+- Play review (11 Nov calls vs the 12 Nov mark, market -0.44%): nothing in the day plan traded into its band on opens and closes;
+  day-plan names beat the tape by +1.0 to +2.0 except NASDAQ:DLO (-1.0); NEW (queue) n 13 +0.12 mean / +0.77 median vs PASS -0.52 and
+  WAIT -1.0.
+- AI trigger 1 (the 11 Nov follow-through day) did not count: the store's volume pace was 0.79 vs 0.96. 1 of 4 triggers on 12 Nov.
+
+## 2026-11-13 (16:43 UTC intraday scan, 34% of the session): beat-and-raise sold in AI hardware; the rest of the tape held
+
+- Tape: cap-weighted -0.72% at the scan but the median name +0.06% and 52% up (up-volume 36%): the selling sat in the AI cluster
+  (-2.0% on the step, 13.5% under its high, still over its 5 Nov low 117.8 at 121.4). NASDAQ:AMD -9.7% after +18.9% in five
+  sessions: the AI high-continuation chase lane (-10.33 over 28 days, 55% odds of -10%) unwound on schedule.
+- Last night's prints: NASDAQ:CSCO and NASDAQ:AMAT beat on both lines, raised / guided above and were sold 5%+ vs the market. Both
+  sit in three measured post-print cells that point up (beat on both lines +1.00 over 28 days, t 4.39; reaction in the bottom
+  fifth +1.45, t 3.19; beat sold 5%+ +1.32, t 2.47). NYSE:NU +11.2% and NASDAQ:LFTO +26.3% sit in the weaker beat-bought cell
+  (+0.78, t 1.73). NASDAQ:DLO opened inside its post-print band and closed the scan over it (revenue actual not posted, mix unused).
+- Lane book on one more day of labels (to 16 Oct): non-AI cheap and turning +4.62 (t 3.00, odds of -10% 7.7%), street deep value
+  +4.42 (t 3.23), quality from depth +4.45 (t 2.14), washed-out quality +2.49 (t 2.34); the AI split holds only cheap and turning
+  (+2.92, t 2.72). When-grid: strong names' cheapest fifth beat the dearest by +5.31 pp 8-21 days before a print.
+- Pre-print cells for W1: NASDAQ:PDD is the only decile-10 name in the best cell ('sold into & previous print down' +2.76, t 4.11)
+  with a low beat bar; its report date is not confirmed by the company (OUTSIDE), so the event ticket is Grade Low.
+- Play review (12 Nov calls vs the 13 Nov scan, market median +0.06%): nothing on the day plan filled on opens and closes;
+  NASDAQ:CSCO went through its old post-print band on the reaction day (-5.4%), NASDAQ:MU closed inside yesterday's band.
+- OUTSIDE: 10-year 5.16% (highest since October), VIX over 20, October PPI +0.3% m/m (0.4% expected). AI triggers still 1 of 4.

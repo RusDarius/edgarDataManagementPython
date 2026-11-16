@@ -79,6 +79,8 @@ class TestIdGuards(unittest.TestCase):
 
         self.assertEqual(bare_tickers_in("NYSE:RHI / NASDAQ:FCNCA"), [])
         self.assertEqual(bare_tickers_in("chips (TTMI, FLEX) and NYSE:BRK.B"), ["TTMI", "FLEX"])
+        self.assertEqual(bare_tickers_in("AMEX:TXCP/PB"), [])
+        self.assertEqual(bare_tickers_in("NYSE:C/PN and NYSE:RHI/NASDAQ:MU, FLEX"), ["FLEX"])
         by_ticker = ticker_map(["NASDAQ:MU", "NYSE:CRC", "NYSE:MMS", "ASX:MMS"])
         text, swapped = qualify_text("Buy CRC, hold MU and MMS before FOMC; NASDAQ:MU stays.", by_ticker)
         self.assertEqual(text, "Buy NYSE:CRC, hold NASDAQ:MU and MMS before FOMC; NASDAQ:MU stays.")

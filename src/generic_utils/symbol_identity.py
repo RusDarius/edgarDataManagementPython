@@ -207,7 +207,8 @@ def qualify_rows(
     return out
 
 
-_QUALIFIED_TOKEN = re.compile(r"(?<![A-Za-z0-9_])[A-Z][A-Z0-9_]*:[A-Z0-9][A-Z0-9._]*")
+# A TradingView preferred / unit series is one id with a slash suffix (AMEX:TXCP/PB, NYSE:C/PN), not two names.
+_QUALIFIED_TOKEN = re.compile(r"(?<![A-Za-z0-9_])[A-Z][A-Z0-9_]*:[A-Z0-9][A-Z0-9._]*(?:/[A-Z0-9]{1,4}(?![A-Za-z0-9_:]))?")
 _BARE_TOKEN = re.compile(r"(?<![A-Za-z0-9_.:])[A-Z][A-Z0-9]{0,5}(?:[._][A-Z0-9]{1,3})?(?![A-Za-z0-9_])")
 
 

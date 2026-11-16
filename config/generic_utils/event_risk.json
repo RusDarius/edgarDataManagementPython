@@ -1,0 +1,165 @@
+{
+  "_note": "Event risk knobs (generic_utils.event_risk). Floor, crowd size, windows and the letter / level rules are stated here and nowhere else. The letters are measured on the panel store; the level is a fixed rule over the letters, never a score or a size. OUTSIDE (the calendar's events and exposure maps, prediction-market odds) only decides which dated event touches which line: it adds the E / P letters and changes timing or Grade, never a sort key or a size.",
+  "floor_mcap": 2000000000,
+  "exchanges": [
+    "NASDAQ",
+    "NYSE",
+    "AMEX"
+  ],
+  "types": [
+    "stock",
+    "dr"
+  ],
+  "clip_pct": [
+    -90,
+    300
+  ],
+  "crowd": {
+    "_note": "A name's crowd = up to k floor names whose store steps correlate most with its own over the last corr_steps (at least min_overlap steps in common), each at corr >= min_corr; near-duplicates (corr >= same_company_corr: share classes, ADR + home line) are skipped. Fewer than min_members members = no crowd (the industry stands in). The crowd series is their cap-weighted step. The window ends skip_recent steps before the last file (an event's shared shock must not pick the crowd) and each row is winsorized at +-clip_sd sd first.",
+    "k": 15,
+    "corr_steps": 90,
+    "min_overlap": 70,
+    "min_corr": 0.35,
+    "min_members": 5,
+    "same_company_corr": 0.97,
+    "skip_recent": 5,
+    "clip_sd": 3.0
+  },
+  "beta_steps": 40,
+  "min_beta_steps": 30,
+  "z_steps": 60,
+  "multi_steps": 5,
+  "tail_q": 0.05,
+  "calendar": "config/generic_utils/catalyst_calendar.json",
+  "outside": "config/generic_utils/sentiment_outside.json",
+  "themes": "config/generic_utils/themes.json",
+  "lookahead_days": 10,
+  "lookback_days": 5,
+  "binary_kinds": [
+    "policy"
+  ],
+  "crowd_theme_share": 0.4,
+  "letters": {
+    "_note": "Order of the letters string. E = a dated event whose symbols or exposure themes include the line (or crowd_theme_share of its crowd's cap) on the down / either side, within lookahead_days. P = a binary event (binary_kinds, or binary: true on the row) within lookahead_days with no map for the line: direction unknown, the size is the risk. R / U = a policy / binary / targeted event in the last lookback_days moved the line's crowd z <= -z_event (R) / >= +z_event (U), and at least min_event_move_pct, on one of its steps. S = the line's industry (cap-weighted, without the line) is in a shock: its last multi_steps return z <= -z_shock. B = the line's beta to its industry over beta_steps >= beta_hi. T = the line's own worst step over z_steps <= tail_pct. V = the price is set for the boom: forward-value fv_upside_pct < 0 and irr_exp_pct < hurdle_pct. D = deterioration letters beyond price (PACK/deterioration det). $ = the stress (the worse of: the crowd's worst multi-step move x the line's down-beta to it, the line's own worst multi-step move) costs >= stress_nav_pct of NAV.",
+    "order": "EPRUSBTVD$",
+    "z_event": 2.0,
+    "z_shock": 2.0,
+    "beta_hi": 1.2,
+    "tail_pct": -8.0,
+    "stress_nav_pct": 1.0,
+    "min_event_move_pct": 3.0
+  },
+  "levels": {
+    "_note": "First level whose any alternative has all its letters on. Alternatives are plain letter strings. WARN_STRONG: a mapped event on a line with big dollars at stress, an event already repricing the crowd with big dollars, a binary event on a high-beta, gap-prone line with big dollars, or an industry shock on a high-beta line with big dollars. A level is a review trigger for the judgment, not a course.",
+    "order": [
+      "WARN_STRONG",
+      "WARN",
+      "WATCH"
+    ],
+    "WARN_STRONG": [
+      "E$",
+      "R$",
+      "PBT$",
+      "SB$"
+    ],
+    "WARN": [
+      "E",
+      "R",
+      "PB$",
+      "SB",
+      "ST$"
+    ],
+    "WATCH": [
+      "P$",
+      "S",
+      "BT",
+      "V$",
+      "T$"
+    ]
+  },
+  "evidence": {
+    "_note": "Point-in-time check of the measured letters S, B and T on the store (the industry is the crowd here, without the name): every file x floor name, its state from steps up to that file, and the labels' raw forward return (fwd_7d / fwd_28d, calendar days) less that file's median; p_dn = share with a raw fwd_28d <= dn_pct. n_indep = distinct files / files per horizon.",
+    "dn_pct": -15.0,
+    "files_per_horizon": {
+      "fwd_7d": 5,
+      "fwd_28d": 20
+    },
+    "states": [
+      "S",
+      "B",
+      "T",
+      "SB",
+      "ST",
+      "BT",
+      "SBT",
+      "none",
+      "all"
+    ]
+  },
+  "follow": {
+    "_note": "What an industry did after a crash step: steps where its 1-step z <= -crash_z, the industry's next 1 / 5 / 20 steps less the median industry's. Continuation or bounce, measured.",
+    "crash_z": 2.5,
+    "min_names": 5,
+    "after_steps": [
+      1,
+      5,
+      20
+    ]
+  },
+  "reactions": {
+    "_note": "Every calendar event inside the store: each industry's step on the event (the steps ending on the event date and the next file), its z, and the industry's next 5 steps. Kept when |z| >= min_abs_z or the industry holds a Book line.",
+    "min_abs_z": 2.0,
+    "min_names": 5
+  },
+  "tape_fields": [
+    "close",
+    "day",
+    "d5",
+    "m1",
+    "m3",
+    "vs50",
+    "rng",
+    "street_left",
+    "fv_base_px",
+    "fv_upside_pct",
+    "irr_exp_pct",
+    "hurdle_pct"
+  ],
+  "reaction_kinds": [
+    "policy"
+  ],
+  "_note_events": "E / R / U count only events that target the line (symbols or exposure map) or are binary / reaction kinds (reaction_kinds, binary: true): a macro print, an index change or a central bank row in the window is listed in events and reactions but is not credited with a crowd's move. P = a binary event ahead with no symbols list (market-wide) that does not map the line.",
+  "sell_buy": {
+    "_note": "Candidate lists, not budgets. sell_book = Book lines at WARN_STRONG / WARN, then other names whose crowd an event already repriced (R) or that sit on the down side of a mapped event ahead (E). buy_book = names whose crowd an event lifted (U) or on the up side of a mapped event ahead, without R and not at WARN_STRONG. A non-held name whose own print reacted on the event step (store prints) stays off both lists: its move is the print (ev_recent_print). Order: Book first, then level, then the event's crowd z (sell: most negative first; buy: most positive first), then size. The lists keep only `fields` (the full row stays in names); highlights.log shows the first highlights_top names off the Book.",
+    "highlights_top": 8,
+    "fields": [
+      "symbol",
+      "ind",
+      "mcap_b",
+      "in_book",
+      "value_usd",
+      "warn_level",
+      "er_letters",
+      "warn_rule",
+      "stress_5s_pct",
+      "stress_5s_usd",
+      "crowd_day_pct",
+      "crowd_5s_pct",
+      "crowd_z",
+      "beta_crowd_dn",
+      "ev_next",
+      "ev_side",
+      "ev_recent",
+      "ev_recent_z",
+      "ev_recent_crowd_pct",
+      "ev_recent_own_pct",
+      "own_day_pct",
+      "det",
+      "crowd_top",
+      "close",
+      "vs50",
+      "street_left",
+      "fv_upside_pct"
+    ]
+  }
+}

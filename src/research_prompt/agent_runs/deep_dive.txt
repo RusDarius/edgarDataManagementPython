@@ -1,0 +1,49 @@
+DEEP DIVE (agent) — {IDS}
+Question: {QUESTION}
+Folder: {DIR}
+Skill: .claude/skills/deep-dive-agent/SKILL.md (read it first; it is the contract for this run).
+
+The data step already ran (generic_utils.name_dossier): {DIR}/dossier.md holds every measured fact the project has on these
+names, and {DIR}/dossier.judgment.skeleton.json is the judgment shape with the data levels pre-filled. Your job is the part
+the tools cannot do: the outside context, the catalysts and the trajectory call, proved against the data.
+
+1. Read {DIR}/dossier.md once. Do not read the CSVs or dossier.duckdb whole; query one table with
+   `python src/generic_utils/tv_scan_cli.py named --db {DIR}/dossier.duckdb ...` only when a number is missing from the md.
+2. Outside read (WebSearch, standard first; extended only for thin, niche or very recent items). Run the research plan at the
+   end of the md for each name, plus the QUESTION queries when a question is set. Collect: dated catalysts (earnings date and
+   what the quarter must show, guidance, investor days, product / contract dates, regulatory and legal dates, index changes,
+   lockups, dividends and buybacks), estimate and target changes, competitive and pricing news, management / capital
+   allocation, macro or policy items that hit the industry. Every item is OUTSIDE with its link. Check each one against the
+   dossier before you lean on it (a "beat" the prints table does not show, an upgrade the street fields do not show, a
+   demand story the revisions contradict: say so).
+3. Per name, write the judgment (start from the skeleton, save as {DIR}/dossier.judgment.json):
+   - thesis (3-5 sentences: what the price assumes, what the data says, what outside could change it), bull and bear
+     (each line cites a dossier number or an OUTSIDE source);
+   - classes: SHORT (1-2 weeks), MID (1-3 months), LONG (6-12+ months), each DATA_BACKED / MIXED / NARRATIVE.
+     DATA_BACKED = that horizon's measured arrows lean one way (up and down counts differ by 2+) AND the outside read agrees;
+     NARRATIVE = most of that horizon's items are n/a or the call rests on outside items alone; else MIXED;
+   - trajectory: one row per horizon with path (words), price_lo / price_mid / price_hi and evidence. Anchor the prices on
+     the dossier: SHORT on the analog 7d / 14d px_q10 / q50 / q90 and the alpha 7d band; MID on the analog 28d / 56d paths,
+     the alpha 28d band and the street target; LONG on forward value bear / base / bull and the cycle drop. Move off an anchor
+     only with a stated reason (an OUTSIDE item or a measured conflict). When the all-floor and same-industry analogs
+     disagree, say which you follow and why;
+   - levels: entry_low / entry_high (entry book or bounce band; prefer the larger margin of safety), kill (on a close;
+     kill_px or bounce_kill, else below the analog 28d q10 price, stated), target_short / target_mid / target_long;
+   - verdict (BUY_BAND / ACCUMULATE / WAIT / AVOID / TRIM / SHORT_WATCH), grade (High / Med / Low), horizon (the one you
+     act on), plan (what to do at which price and date, what invalidates it), size (starter about $5,000; an add about
+     $1,000; a staged tranche plan is fine);
+   - catalysts: dated rows with direction (up / down / either) and source; outside: the OUTSIDE lines with sources.
+4. Suite: `order.ids` puts the names in the order you would act on them and `order.by` says the one key that sets it
+   (for example: up to target_mid over down to the kill, both from the levels) — a stated order, never a blended score.
+   `summary` = the read in 3-6 sentences (title, text, tone). With a QUESTION, `question_read.text` answers it and
+   `question_read.rows` (headers Item / Read / Source) lays out how it plays: timeline, mechanics, valuation anchors,
+   which listed names carry the exposure and how (stakes, suppliers, competitors), flows (index, lockup), the trade at each
+   stage (before, day one, after the lockup), what would make it fail.
+5. Rules: stock ids are EXCHANGE:TICKER everywhere. No 0-100 score; arrows are counts. A deep dive never opens a second
+   budget: a BUY_BAND / ACCUMULATE is a candidate for the Daily's queue (0-2 NEW), with its band and kill. AI / data-center
+   names stay in their own lane (contagion, late 2026). Give the most critical read: the gain to take, the loss to let go.
+   If a dated OUTSIDE event touches a held line, add it to config/generic_utils/catalyst_calendar.json (date, kind, event,
+   symbols or exposure, source, read) so event-risk sees it.
+6. Render and fix: `python src/generic_utils/tv_scan_cli.py dossier-page --dir {DIR} --strict` (0 warnings). Chat: a short
+   snapshot per name (verdict, band, kill, the horizon you act on and its class, the one catalyst that matters) and the
+   path of the HTML.

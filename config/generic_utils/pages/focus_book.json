@@ -1,0 +1,1376 @@
+{
+ "name": "focus-book-{DAY}",
+ "page_key": "focus_book",
+ "requires": "{PACK}/board/board.duckdb",
+ "title": "Focus book {DAY}",
+ "subtitle": "The highest-margin trades for the next two weeks and the month: every name with a buy band, a kill on a close, a target and its up / risk, the Book's lines, the AI lane kept apart, shorts, and what outside context the data confirms. Lanes are filters on the opportunity board; each column is one read and nothing is a sum.",
+ "sources_extra": [
+  "lanes {PACK}/analysis_scans/*.csv (tv_scan_cli.py focus on {PACK}/board/board.duckdb; argv in the judgment scans, replayed on UPDATE)",
+  "board {PACK}/board (bounce band, model, peers, letters, beat bar); cycle {PACK}/cycle_scenarios; recovery clock {PACK}/recovery_clock",
+  "capital {PACK}/capital_plan, capital_plan_queue, capital_plan_catalyst (tv_scan_cli.py capital-plan)"
+ ],
+ "tone_map": {
+  "NEW": "good",
+  "NEW (queue)": "good",
+  "NEW (event)": "good",
+  "ADD": "good",
+  "ADD (queue)": "good",
+  "BUY_PRE": "good",
+  "HOLD": "info",
+  "HOLD_THROUGH": "info",
+  "HOLD_NO_ADD": "warning",
+  "WAIT": "info",
+  "WATCH": "neutral",
+  "PASS": "neutral",
+  "TRIM": "warning",
+  "TRIM (queue)": "warning",
+  "DERISK": "warning",
+  "EXIT": "bad",
+  "SHORT_WAIT": "bad",
+  "SHORT_PRE": "bad"
+ },
+ "tabs": [
+  {
+   "label": "Plan",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "update.banner"
+    },
+    {
+     "type": "stats",
+     "from": "pages.focus_book.blocks.stats"
+    },
+    {
+     "type": "callout",
+     "from": "pages.focus_book.blocks.read"
+    },
+    {
+     "type": "callout",
+     "from": "pages.focus_book.blocks.market"
+    },
+    {
+     "type": "table",
+     "title": "Focus book: the trades, in reading order (judgment; one budget)",
+     "headers": [
+      "#",
+      "Symbol",
+      "Lane",
+      "Course",
+      "When",
+      "Buy band",
+      "Kill (close)",
+      "Target",
+      "Up %",
+      "Risk %",
+      "Up / risk",
+      "Size",
+      "Catalyst",
+      "Why (data)"
+     ],
+     "from": "pages.focus_book.blocks.focus"
+    },
+    {
+     "type": "table",
+     "title": "The Book: each line's course and levels (judgment)",
+     "headers": [
+      "Symbol",
+      "Value",
+      "P&L",
+      "Course",
+      "Add band",
+      "Kill / cut",
+      "Trim / target",
+      "Why (data)"
+     ],
+     "from": "pages.focus_book.blocks.book"
+    },
+    {
+     "type": "list",
+     "from": "pages.focus_book.blocks.stages"
+    },
+    {
+     "type": "table",
+     "title": "Cash after today's tickets (capital-plan)",
+     "optional": true,
+     "source": {
+      "duckdb": "{PACK}/capital_plan/capital_plan.duckdb",
+      "sql": "SELECT cash_start_usd, cash_from_sells_usd, cash_to_buys_usd, cash_end_usd, cash_end_pct, starters_left_at_hint FROM summary"
+     }
+    },
+    {
+     "type": "table",
+     "title": "Cash after the two-week queue (capital-plan)",
+     "optional": true,
+     "source": {
+      "duckdb": "{PACK}/capital_plan_queue/capital_plan.duckdb",
+      "sql": "SELECT cash_start_usd, cash_from_sells_usd, cash_to_buys_usd, cash_end_usd, cash_end_pct, starters_left_at_hint FROM summary"
+     }
+    },
+    {
+     "type": "table",
+     "title": "Cash after the month (all stages, capital-plan)",
+     "optional": true,
+     "source": {
+      "duckdb": "{PACK}/capital_plan_catalyst/capital_plan.duckdb",
+      "sql": "SELECT cash_start_usd, cash_from_sells_usd, cash_to_buys_usd, cash_end_usd, cash_end_pct, starters_left_at_hint FROM summary"
+     }
+    },
+    {
+     "type": "table",
+     "title": "Focus names on the board (data)",
+     "ids_from": "pages.focus_book.ids",
+     "optional": true,
+     "judgment_only": true,
+     "source": {
+      "duckdb": "{PACK}/board/board.duckdb",
+      "drop_missing_columns": true,
+      "sql": "SELECT symbol, ind, mcap_b, close, day, m1, bounce_low, bounce_high, bounce_kill, to_band_high_pct, kill_dist_pct, street_px, b28d_q20, b28d_q80, dec_28d, pred_28d, dd, det, cnt_fx_28d_mean, cnt_p_dn_28d, peer_gap_pct, mos_peer_pct, pe_nfy, fv_upside_pct, eps_rev_3m, beta, rvol_20, warn_level, earn_date, earn_days FROM names"
+     },
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "extra_from": "courses",
+     "tone_field": "Course"
+    }
+   ]
+  },
+  {
+   "label": "Two weeks",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.focus_book.blocks.two_weeks_read"
+    },
+    {
+     "type": "table",
+     "title": "Dated catalysts in the next two weeks and what each one does to a ticket (judgment)",
+     "headers": [
+      "Date",
+      "Symbol",
+      "Event",
+      "Course",
+      "Band",
+      "Kill",
+      "Bar / odds",
+      "Why (data)"
+     ],
+     "from": "pages.focus_book.blocks.events"
+    },
+    {
+     "type": "table",
+     "title": "Reporters in the next 14 days: model and value agree, at most one letter (ranked by up / risk, 2 per industry)",
+     "optional": true,
+     "source": {
+      "csv": "{PACK}/analysis_scans/two_week_events.csv"
+     },
+     "columns": [
+      "symbol",
+      "ind",
+      "mcap_b",
+      "earn_date",
+      "earn_slot",
+      "earn_days",
+      "close",
+      "day",
+      "m1",
+      "entry_px",
+      "bounce_low",
+      "bounce_high",
+      "bounce_kill",
+      "month_up_pct",
+      "risk_pct",
+      "payoff",
+      "setup_cell",
+      "setup_mean",
+      "bar_tape",
+      "bar_rev",
+      "c_beat_sold",
+      "p_beat",
+      "ev_h28",
+      "beat_q90_usd",
+      "miss_q10_usd",
+      "dec_28d",
+      "pred_28d",
+      "det",
+      "peer_gap_pct",
+      "pe_nfy",
+      "eps_rev_3m",
+      "beta"
+     ],
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "extra_from": "courses",
+     "tone_field": "Course",
+     "screens": [
+      {
+       "label": "This week",
+       "filters": {
+        "earn_days": "0..3"
+       },
+       "sort": "earn_days",
+       "group": "When",
+       "explain": "Prints within three days."
+      },
+      {
+       "label": "Next week",
+       "filters": {
+        "earn_days": "4..14"
+       },
+       "sort": "earn_days",
+       "group": "When",
+       "explain": "Prints in 4 to 14 days."
+      },
+      {
+       "label": "Low bar",
+       "filters": {
+        "c_beat_sold": "<=0.3"
+       },
+       "sort": "-ev_h28",
+       "explain": "Beats sold in at most 30% of past prints in this positioning cell."
+      },
+      {
+       "label": "Best set-up cell",
+       "filters": {
+        "setup_mean": ">=2"
+       },
+       "sort": "-setup_mean",
+       "explain": "The pre-print set-up cell held through by 2+ pp over 28 days."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Month lanes",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.focus_book.blocks.lanes_read"
+    },
+    {
+     "type": "table",
+     "title": "Focus lane: no letter, model 7+, cheaper than peers with the same profile, positive FCF, the drawdown state paid, no AI cluster (ranked by up / risk, 2 per industry)",
+     "optional": true,
+     "source": {
+      "csv": "{PACK}/analysis_scans/focus_book.csv"
+     },
+     "columns": [
+      "symbol",
+      "ind",
+      "mcap_b",
+      "close",
+      "day",
+      "m1",
+      "entry_px",
+      "bounce_low",
+      "bounce_high",
+      "bounce_kill",
+      "month_up_pct",
+      "risk_pct",
+      "payoff",
+      "street_px",
+      "b28d_q80",
+      "dec_28d",
+      "pred_28d",
+      "dd",
+      "det",
+      "cnt_fx_28d_mean",
+      "cnt_fx_28d_hit",
+      "cnt_p_dn_28d",
+      "peer_gap_pct",
+      "mos_peer_pct",
+      "pe_nfy",
+      "fv_upside_pct",
+      "eps_rev_3m",
+      "fcf_margin",
+      "beta",
+      "rvol_20",
+      "next_kind",
+      "next_date",
+      "earn_date",
+      "earn_days"
+     ],
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "extra_from": "courses",
+     "tone_field": "Course",
+     "screens": [
+      {
+       "label": "Up / risk 2+",
+       "filters": {
+        "payoff": ">=2"
+       },
+       "sort": "-payoff",
+       "explain": "At least two points of month upside per point of risk to the kill."
+      },
+      {
+       "label": "Margin of safety 30%+",
+       "filters": {
+        "mos_peer_pct": ">=30"
+       },
+       "sort": "-mos_peer_pct",
+       "explain": "Price at least 30% under the peer multiple on forward earnings."
+      },
+      {
+       "label": "Low beta",
+       "filters": {
+        "beta": "<0.8"
+       },
+       "sort": "beta",
+       "explain": "Beta under 0.8: lowers the Book's beta per dollar."
+      },
+      {
+       "label": "Large caps",
+       "filters": {
+        "mcap_b": ">=30"
+       },
+       "sort": "-payoff",
+       "group": "Size",
+       "explain": "$30B and up."
+      },
+      {
+       "label": "Small / mid",
+       "filters": {
+        "mcap_b": "<30"
+       },
+       "sort": "-payoff",
+       "group": "Size",
+       "explain": "Under $30B."
+      },
+      {
+       "label": "Model 9+",
+       "filters": {
+        "dec_28d": ">=9"
+       },
+       "sort": "-pred_28d",
+       "explain": "28-day model decile 9 or 10."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Bounce tiers",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.focus_book.blocks.bounce_read"
+    },
+    {
+     "type": "table",
+     "title": "Bounce tiers: the judgment's pick from the tier table (one budget)",
+     "headers": [
+      "#",
+      "Symbol",
+      "Tier",
+      "Families",
+      "Buy band",
+      "Kill (close)",
+      "Target",
+      "Up %",
+      "Risk %",
+      "Up / risk",
+      "Hold",
+      "Media check",
+      "Why (data)"
+     ],
+     "from": "pages.focus_book.blocks.bounce_picks",
+     "optional": true
+    },
+    {
+     "type": "table",
+     "title": "Bounce tier table: washed out (w), business intact (f), margin of safety (m), drawdown state paid (s), band in reach (b); A = all five, B = w f b plus m or s (ranked by up / risk, 2 per industry, WARN_STRONG out)",
+     "optional": true,
+     "source": {
+      "csv": "{PACK}/analysis_scans/bounce_tiers.csv"
+     },
+     "columns": [
+      "symbol",
+      "tier",
+      "fam",
+      "ind",
+      "mcap_b",
+      "close",
+      "day",
+      "w",
+      "m1",
+      "entry_px",
+      "bounce_low",
+      "bounce_high",
+      "bounce_kill",
+      "month_up_pct",
+      "risk_pct",
+      "payoff",
+      "street_px",
+      "b28d_q80",
+      "dec_7d",
+      "dec_28d",
+      "pred_28d",
+      "to_hi52_pct",
+      "rsi",
+      "det",
+      "cnt_fx_28d_mean",
+      "cnt_fx_28d_hit",
+      "cnt_p_dn_28d",
+      "peer_gap_pct",
+      "mos_peer_pct",
+      "pe_nfy",
+      "fv_upside_pct",
+      "street_left",
+      "eps_rev_3m",
+      "fcf_margin",
+      "nd_ebitda",
+      "beta",
+      "rvol_20",
+      "ai_cluster",
+      "warn_level",
+      "next_kind",
+      "next_date",
+      "earn_date",
+      "earn_days"
+     ],
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "extra_from": "courses",
+     "tone_field": "Course",
+     "screens": [
+      {
+       "label": "Tier A",
+       "filters": {
+        "tier": "=A"
+       },
+       "sort": "-payoff",
+       "explain": "All five families: washed out, business intact, cheaper than peers, the state paid, band in reach.",
+       "group": "Tier"
+      },
+      {
+       "label": "Tier B",
+       "filters": {
+        "tier": "=B"
+       },
+       "sort": "-payoff",
+       "explain": "Washed out, intact, band in reach, plus either margin of safety or a paid state.",
+       "group": "Tier"
+      },
+      {
+       "label": "Outside AI",
+       "filters": {
+        "ai_cluster": "=0"
+       },
+       "sort": "-payoff",
+       "explain": "Not in the AI / data-center cluster.",
+       "group": "Cluster"
+      },
+      {
+       "label": "AI bounce",
+       "filters": {
+        "ai_cluster": "=1"
+       },
+       "sort": "-payoff",
+       "explain": "The AI / data-center cluster: fade-only, 1-5 day holds until 2 of 4 repair triggers.",
+       "group": "Cluster"
+      },
+      {
+       "label": "Up / risk 2+",
+       "filters": {
+        "payoff": ">=2"
+       },
+       "sort": "-payoff",
+       "explain": "At least two points of month upside per point of risk to the kill."
+      },
+      {
+       "label": "Model 9+",
+       "filters": {
+        "dec_28d": ">=9"
+       },
+       "sort": "-pred_28d",
+       "explain": "28-day model decile 9 or 10."
+      },
+      {
+       "label": "Low beta",
+       "filters": {
+        "beta": "<0.8"
+       },
+       "sort": "beta",
+       "explain": "Beta under 0.8."
+      },
+      {
+       "label": "Red on the day",
+       "filters": {
+        "day": "<=0"
+       },
+       "sort": "-payoff",
+       "explain": "Down on the day of the scan: closest to a fill."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Up-slope",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.focus_book.blocks.upslope_read"
+    },
+    {
+     "type": "table",
+     "title": "Up-slope strength: above the 50- and 200-day, 3 months up, rsi under 70, no letter, estimates up, FCF positive, not priced over its profile, model 7+, pullback band within 8%; families u trend, g growth, q quality, p revisions up 3%+, b band in reach; A = g q p, B = (g or q) and p",
+     "optional": true,
+     "source": {
+      "csv": "{PACK}/analysis_scans/upslope_strength.csv"
+     },
+     "columns": [
+      "symbol",
+      "tier",
+      "fam",
+      "ind",
+      "mcap_b",
+      "close",
+      "day",
+      "w",
+      "m1",
+      "entry_px",
+      "bounce_low",
+      "bounce_high",
+      "bounce_kill",
+      "month_up_pct",
+      "risk_pct",
+      "payoff",
+      "street_px",
+      "b28d_q80",
+      "dec_7d",
+      "dec_28d",
+      "pred_28d",
+      "vs50",
+      "vs200",
+      "m3",
+      "rsi",
+      "rev_yoy",
+      "fwd_eps_g",
+      "opm",
+      "fcf_margin",
+      "eps_rev_3m",
+      "peer_gap_pct",
+      "pe_nfy",
+      "fv_upside_pct",
+      "beta",
+      "rvol_20",
+      "ai_cluster",
+      "warn_level",
+      "next_kind",
+      "next_date",
+      "earn_date",
+      "earn_days"
+     ],
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "extra_from": "courses",
+     "tone_field": "Course",
+     "screens": [
+      {
+       "label": "Tier A",
+       "filters": {
+        "tier": "=A"
+       },
+       "sort": "-payoff",
+       "explain": "Growth, quality and revisions all up.",
+       "group": "Tier"
+      },
+      {
+       "label": "Tier B",
+       "filters": {
+        "tier": "=B"
+       },
+       "sort": "-payoff",
+       "explain": "Growth or quality, with revisions up.",
+       "group": "Tier"
+      },
+      {
+       "label": "Outside AI",
+       "filters": {
+        "ai_cluster": "=0"
+       },
+       "sort": "-payoff",
+       "explain": "Not in the AI / data-center cluster.",
+       "group": "Cluster"
+      },
+      {
+       "label": "Model 9+",
+       "filters": {
+        "dec_28d": ">=9"
+       },
+       "sort": "-pred_28d",
+       "explain": "28-day model decile 9 or 10."
+      },
+      {
+       "label": "Low beta",
+       "filters": {
+        "beta": "<0.8"
+       },
+       "sort": "beta",
+       "explain": "Beta under 0.8."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Media protocol",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.focus_book.blocks.media_read"
+    },
+    {
+     "type": "list",
+     "from": "pages.focus_book.blocks.media_protocol"
+    },
+    {
+     "type": "table",
+     "title": "Media check on the picks (OUTSIDE: timing and grade only, never a sort key or a size)",
+     "headers": [
+      "Symbol",
+      "Date",
+      "What the media says",
+      "Tone",
+      "Checked in data",
+      "Effect",
+      "Source"
+     ],
+     "from": "pages.focus_book.blocks.media"
+    }
+   ]
+  },
+  {
+   "label": "Unpriced",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.focus_book.blocks.unpriced_read"
+    },
+    {
+     "type": "table",
+     "title": "Estimates up over 3 months, price down over 1: revisions the tape has not paid (ranked by eps_rev_3m)",
+     "optional": true,
+     "source": {
+      "csv": "{PACK}/analysis_scans/unpriced_revisions.csv"
+     },
+     "columns": [
+      "symbol",
+      "ind",
+      "mcap_b",
+      "close",
+      "day",
+      "m1",
+      "m3",
+      "eps_rev_3m",
+      "rev_rev_3m",
+      "pt_drift_3m",
+      "entry_px",
+      "bounce_low",
+      "bounce_high",
+      "bounce_kill",
+      "month_up_pct",
+      "risk_pct",
+      "payoff",
+      "dec_28d",
+      "pred_28d",
+      "dd",
+      "cnt_fx_28d_mean",
+      "peer_gap_pct",
+      "pe_nfy",
+      "beta",
+      "next_kind",
+      "next_date"
+     ],
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "extra_from": "courses",
+     "tone_field": "Course"
+    },
+    {
+     "type": "table",
+     "title": "Moving without a print: up 4%+ on the week, no print in 10 days or the next 3, model 7+ and cheaper than peers (ranked by w)",
+     "optional": true,
+     "source": {
+      "csv": "{PACK}/analysis_scans/quiet_accumulation.csv"
+     },
+     "columns": [
+      "symbol",
+      "ind",
+      "mcap_b",
+      "close",
+      "day",
+      "w",
+      "m1",
+      "relvol",
+      "updown_vol",
+      "tape_state",
+      "since_print",
+      "earn_days",
+      "entry_px",
+      "bounce_high",
+      "bounce_kill",
+      "month_up_pct",
+      "risk_pct",
+      "payoff",
+      "dec_28d",
+      "pred_28d",
+      "det",
+      "peer_gap_pct",
+      "beta"
+     ],
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "extra_from": "courses",
+     "tone_field": "Course"
+    }
+   ]
+  },
+  {
+   "label": "Selloff and bottoms",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.focus_book.blocks.selloff_read"
+    },
+    {
+     "type": "table",
+     "title": "Bottom signals: the judgment's read of each measured reading (judgment)",
+     "headers": [
+      "Signal",
+      "Now",
+      "Measured",
+      "Read"
+     ],
+     "from": "pages.focus_book.blocks.bottoms"
+    },
+    {
+     "type": "table",
+     "title": "Market patterns on the store: live today, episodes, and what the cap index did after (lift vs every day, pp)",
+     "optional": true,
+     "source": {
+      "duckdb": "{PACK}/sentiment/market_sentiment.duckdb",
+      "sql": "SELECT pattern, family, read, live, last, episodes, days, n_5, fwd_5, hit_5, lift_5, n_10, lift_10, n_21, fwd_21, hit_21, lift_21 FROM patterns ORDER BY live DESC, family, pattern"
+     }
+    },
+    {
+     "type": "table",
+     "title": "The store's drawdowns: market, median name and AI cluster, peak to trough, and when each recovered",
+     "optional": true,
+     "source": {
+      "duckdb": "{PACK}/downside/downside_risk.duckdb",
+      "sql": "SELECT episode, series, peak, trough, days, depth_pct, recovered_on, cap_pct, med_pct, cluster_pct, book_pct FROM episodes ORDER BY depth_pct"
+     }
+    },
+    {
+     "type": "table",
+     "title": "Industry crash steps in the last 20 sessions and what followed (excess vs the market, pp)",
+     "optional": true,
+     "source": {
+      "duckdb": "{PACK}/event_risk/event_risk.duckdb",
+      "sql": "SELECT ind, step_end, move_pct, z, n_names, after_1_xs_pct, after_5_xs_pct, after_20_xs_pct FROM crashes WHERE step_end >= (SELECT max(step_end) FROM crashes) - INTERVAL 28 DAY ORDER BY step_end DESC, z"
+     }
+    },
+    {
+     "type": "table",
+     "title": "Crash follow-through on the whole store (every industry crash step)",
+     "optional": true,
+     "source": {
+      "duckdb": "{PACK}/event_risk/event_risk.duckdb",
+      "sql": "SELECT after_steps, n_crashes, n_dates, xs_mean_pct, xs_median_pct, hit_pct, q10_xs_pct, q90_xs_pct FROM follow ORDER BY after_steps"
+     }
+    },
+    {
+     "type": "table",
+     "title": "Price-only drawdowns at a discount: 25%+ under the high, no letter, cheaper than peers with the same profile, the state's 28-day drift positive (ranked by peer_gap_pct)",
+     "optional": true,
+     "source": {
+      "csv": "{PACK}/analysis_scans/price_only_bottoms.csv"
+     },
+     "columns": [
+      "symbol",
+      "ind",
+      "mcap_b",
+      "ai_cluster",
+      "close",
+      "day",
+      "w",
+      "m1",
+      "m3",
+      "to_hi52_pct",
+      "dd",
+      "rsi",
+      "vs50",
+      "peer_gap_pct",
+      "peer_prem_pct",
+      "pe_nfy",
+      "pe_nfy_vs_own",
+      "fv_upside_pct",
+      "irr_exp_pct",
+      "hurdle_pct",
+      "eps_rev_3m",
+      "cnt_fx_28d_mean",
+      "cnt_p_half_56d",
+      "dec_28d",
+      "pred_28d",
+      "entry_px",
+      "bounce_low",
+      "bounce_high",
+      "bounce_kill",
+      "month_up_pct",
+      "risk_pct",
+      "payoff",
+      "warn_level",
+      "next_kind",
+      "next_date"
+     ],
+     "screens": [
+      {
+       "label": "Turning up",
+       "filters": {
+        "w": ">0"
+       },
+       "sort": "-w",
+       "group": "Turn",
+       "explain": "Up on the week: the selloff has paused on this name."
+      },
+      {
+       "label": "Still falling",
+       "filters": {
+        "w": "<0"
+       },
+       "sort": "w",
+       "group": "Turn",
+       "explain": "Down on the week: no turn yet; wait for the band."
+      },
+      {
+       "label": "Outside AI",
+       "filters": {
+        "ai_cluster": "=0"
+       },
+       "sort": "-peer_gap_pct",
+       "group": "Lane",
+       "explain": "Not in the AI cluster."
+      },
+      {
+       "label": "AI cluster",
+       "filters": {
+        "ai_cluster": "=1"
+       },
+       "sort": "-peer_gap_pct",
+       "group": "Lane",
+       "explain": "AI cluster: contagion lane, stage-3 triggers first."
+      },
+      {
+       "label": "Model 7+",
+       "filters": {
+        "dec_28d": ">=7"
+       },
+       "sort": "-pred_28d",
+       "explain": "28-day model decile 7 or higher."
+      },
+      {
+       "label": "Large caps",
+       "filters": {
+        "mcap_b": ">=30"
+       },
+       "sort": "-peer_gap_pct",
+       "explain": "$30B and up."
+      }
+     ],
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "extra_from": "courses",
+     "tone_field": "Course"
+    },
+    {
+     "type": "table",
+     "title": "Structural drawdowns: 25%+ under the high with two or more letters beyond price ($5B+, deepest first)",
+     "optional": true,
+     "source": {
+      "csv": "{PACK}/analysis_scans/structural_selloff.csv"
+     },
+     "columns": [
+      "symbol",
+      "ind",
+      "mcap_b",
+      "ai_cluster",
+      "close",
+      "w",
+      "m1",
+      "m3",
+      "to_hi52_pct",
+      "dd",
+      "det",
+      "n_det",
+      "eps_rev_3m",
+      "rev_rev_3m",
+      "fcf_margin",
+      "peer_gap_pct",
+      "pe_nfy",
+      "cnt_fx_28d_mean",
+      "cnt_p_dn_28d",
+      "dec_28d",
+      "pred_28d",
+      "warn_level",
+      "book_usd",
+      "next_kind",
+      "next_date"
+     ],
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "extra_from": "courses",
+     "tone_field": "Course"
+    }
+   ]
+  },
+  {
+   "label": "Memory and NASDAQ:MU",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.focus_book.blocks.mu_read"
+    },
+    {
+     "type": "table",
+     "title": "NASDAQ:MU: the bottom question in data (judgment on the reads)",
+     "headers": [
+      "Question",
+      "Data",
+      "Read"
+     ],
+     "from": "pages.focus_book.blocks.mu"
+    },
+    {
+     "type": "table",
+     "title": "Memory on other markets and the outside context (OUTSIDE, checked against the data where it can be)",
+     "headers": [
+      "Market",
+      "Name",
+      "Move / fact",
+      "Checked in data",
+      "Source"
+     ],
+     "from": "pages.focus_book.blocks.memory_outside"
+    },
+    {
+     "type": "table",
+     "title": "What each memory / storage / chip price assumes about the boom ending (cycle scenarios)",
+     "optional": true,
+     "source": {
+      "duckdb": "{PACK}/cycle_scenarios/cycle_scenarios.duckdb",
+      "drop_missing_columns": true,
+      "sql": "SELECT symbol, book_usd, close, dd, det, r_12m, eps_rev_3m, pe_fwd_now, pe_ind_med, g_eps1_pct, pe_on_peak_k0, drop_in_k0, drop_state_k0, drop_in_k1, drop_state_k1, pe_need_k1_d50, up_k1_d50, pe_need_k1_d75, up_k1_d75, fv_upside_pct FROM names WHERE symbol IN ('NASDAQ:MU', 'NASDAQ:SNDK', 'NASDAQ:WDC', 'NASDAQ:STX', 'NASDAQ:NVDA', 'NASDAQ:AMD', 'NASDAQ:AVGO') ORDER BY book_usd DESC NULLS LAST, symbol"
+     }
+    },
+    {
+     "type": "table",
+     "title": "NASDAQ:MU's road back: odds and days to its cost, the 50-day and half-way, and the floor of its state (recovery clock)",
+     "optional": true,
+     "source": {
+      "duckdb": "{PACK}/recovery_clock/recovery_clock.duckdb",
+      "drop_missing_columns": true,
+      "sql": "SELECT symbol, value_usd, pnl_usd, close, dd, det, need_cost_pct, p_cost_56, p_cost_91, days_cost, need_sma50_pct, p_sma50_56, days_sma50, need_half_pct, p_half_56, p_half_91, floor_28_med_px, floor_28_q10_px, floor_28_q10_usd, fx_28_mean, n_28 FROM lines WHERE symbol = 'NASDAQ:MU'"
+     }
+    }
+   ]
+  },
+  {
+   "label": "AI lane",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.focus_book.blocks.ai_read"
+    },
+    {
+     "type": "list",
+     "from": "pages.focus_book.blocks.ai_triggers"
+    },
+    {
+     "type": "table",
+     "title": "AI cluster (contagion lane): model 7+, at most one letter, cheaper than peers, 10%+ month upside; read only when the triggers fire",
+     "optional": true,
+     "source": {
+      "csv": "{PACK}/analysis_scans/ai_lane.csv"
+     },
+     "columns": [
+      "symbol",
+      "ind",
+      "mcap_b",
+      "book_usd",
+      "close",
+      "day",
+      "m1",
+      "entry_px",
+      "bounce_low",
+      "bounce_high",
+      "bounce_kill",
+      "month_up_pct",
+      "risk_pct",
+      "payoff",
+      "dec_28d",
+      "pred_28d",
+      "dd",
+      "det",
+      "cnt_fx_28d_mean",
+      "peer_gap_pct",
+      "pe_nfy",
+      "fv_upside_pct",
+      "warn_level",
+      "er_letters",
+      "beta",
+      "next_kind",
+      "next_date"
+     ],
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "extra_from": "courses",
+     "tone_field": "Course"
+    }
+   ]
+  },
+  {
+   "label": "Shorts",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.focus_book.blocks.short_read"
+    },
+    {
+     "type": "table",
+     "title": "Short tickets (judgment; 0-1 per Daily)",
+     "headers": [
+      "Symbol",
+      "Course",
+      "Short band",
+      "Stop (close)",
+      "Cover",
+      "Size",
+      "Why (data)"
+     ],
+     "from": "pages.focus_book.blocks.shorts"
+    },
+    {
+     "type": "table",
+     "title": "Two or more letters beyond price, model decile 3 or lower, rich to its profile, under the 50-day, $5B+ (ranked by pred_28d, lowest first)",
+     "optional": true,
+     "source": {
+      "csv": "{PACK}/analysis_scans/shorts_focus.csv"
+     },
+     "columns": [
+      "symbol",
+      "ind",
+      "mcap_b",
+      "close",
+      "day",
+      "m1",
+      "m3",
+      "r_12m",
+      "vs50",
+      "rsi",
+      "det",
+      "n_det",
+      "dec_28d",
+      "pred_28d",
+      "b28d_q20",
+      "b28d_q80",
+      "peer_gap_pct",
+      "peer_prem_pct",
+      "pe_nfy",
+      "fcf_margin",
+      "nd_ebitda",
+      "beta",
+      "warn_level",
+      "er_letters",
+      "earn_date",
+      "earn_days"
+     ],
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "extra_from": "courses",
+     "tone_field": "Course"
+    }
+   ]
+  },
+  {
+   "label": "Outside",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.focus_book.blocks.sentiment_read"
+    },
+    {
+     "type": "table",
+     "title": "Outside context, checked against the data (OUTSIDE: timing and grade only, never a sort key or a size)",
+     "headers": [
+      "Date",
+      "Item",
+      "Names",
+      "Checked in data",
+      "Source"
+     ],
+     "from": "pages.focus_book.blocks.outside"
+    }
+   ]
+  },
+  {
+   "label": "Rules",
+   "blocks": [
+    {
+     "type": "list",
+     "from": "pages.focus_book.blocks.rules"
+    }
+   ]
+  },
+  {
+   "label": "Sources",
+   "blocks": [
+    {
+     "type": "list",
+     "from": "pages.focus_book.blocks.sources"
+    }
+   ]
+  }
+ ],
+ "ledger": {
+  "auto": true,
+  "entries": [
+   {
+    "group": "Letters (det: deterioration; pat_up / pat_dn: winners anatomy)",
+    "rows": [
+     [
+      "E",
+      "det: next-FY EPS estimate cut by more than 1% over about 3 months. pat_up: not used."
+     ],
+     [
+      "R",
+      "det: next-FY revenue estimate cut by more than 1% over about 3 months."
+     ],
+     [
+      "C",
+      "det: free cash flow margin under 0 (cash burn). pat_up: street upside in its top quintile, a print within 28 days, estimates not cut, under the 200-day."
+     ],
+     [
+      "S",
+      "det: last reported EPS under its estimate."
+     ],
+     [
+      "O",
+      "pat_up: RSI in its lowest quintile with p_fwd in its top quintile (oversold, forward set-up strong)."
+     ],
+     [
+      "B",
+      "pat_up: printed within 10 days with a beat, last week in its lowest quintile (a beat that was sold)."
+     ],
+     [
+      "I",
+      "pat_up: the industry's 3-month return in its lowest quintile while the industry's last surprises are in their top quintile."
+     ],
+     [
+      "D",
+      "pat_up: 1-month return in its lowest quintile with p_dvc in its top quintile (a durable compounder that fell)."
+     ],
+     [
+      "H",
+      "pat_up: far from its 91-day high (hi_prox lowest quintile) with p_dvc in its top quintile."
+     ],
+     [
+      "V",
+      "pat_up: 3-month return in its lowest quintile, street upside in its top quintile, estimates not cut."
+     ],
+     [
+      "L",
+      "pat_up: 1-month return in its lowest quintile, street upside in its top quintile, a print within 28 days."
+     ],
+     [
+      "X",
+      "pat_dn: breakout score in its top quintile with weekly consensus in its lowest (a breakout nobody confirms)."
+     ],
+     [
+      "Y",
+      "pat_dn: breakout score in its top quintile with p_fwd in its lowest quintile."
+     ],
+     [
+      "Z",
+      "pat_dn: 1-month return in its top quintile with p_fwd in its lowest quintile (a run without a forward read)."
+     ]
+    ]
+   },
+   {
+    "group": "Plan tab (judgment tables)",
+    "rows": [
+     [
+      "Lane",
+      "Why the row is in the focus book: unpriced value, low-beta large cap, post-print (beat sold / re-entry), pre-print, event build-up, Book add, AI lane, deep-discount lane, short."
+     ],
+     [
+      "Value",
+      "The line's market value in USD at the pack's close."
+     ],
+     [
+      "P&L",
+      "The line's unrealized gain or loss in USD against its cost."
+     ],
+     [
+      "Bar / odds",
+      "What the print's measured cells say: the set-up cell's mean, the big-move odds (u10_hi) and the hold-through counts (h28 up / down pointers)."
+     ],
+     [
+      "Question",
+      "The question the MU table answers from the pack."
+     ],
+     [
+      "Data",
+      "The pack's numbers for that question (cycle scenarios, deterioration cell, recovery clock, event risk), or an OUTSIDE fact tagged as such."
+     ],
+     [
+      "Move / fact",
+      "An outside market fact (OUTSIDE, dated and sourced), not measured into any column."
+     ],
+     [
+      "Checked in data",
+      "What the pack shows for the same thing, or why it cannot be checked (not in the scans)."
+     ],
+     [
+      "Item",
+      "The outside event or reading (OUTSIDE): timing and grade only, never a sort key or a size."
+     ],
+     [
+      "Signal",
+      "A measured market or name reading used to judge whether the selloff has bottomed (sentiment pattern, crash follow-through, drawdown episode, deterioration cell)."
+     ],
+     [
+      "Now",
+      "The reading's value on this pack (live today or not, the level, the count)."
+     ],
+     [
+      "Measured",
+      "What the store says followed that reading: lift vs every day / excess vs the market over the next sessions, hit rate and n. Direction, not proof."
+     ],
+     [
+      "Read",
+      "The judgment: what the reading changes in timing or size (never a sort key)."
+     ],
+     [
+      "z",
+      "The crash step's move in standard deviations of that industry's own 5-step moves (negative = crash)."
+     ],
+     [
+      "hit_pct",
+      "Share of crash steps after which the industry beat the market over that many steps, %."
+     ]
+    ]
+   },
+   {
+    "group": "Families (fam) and tiers",
+    "rows": [
+     [
+      "fam",
+      "The families the row passes, one lowercase letter each; a tier is an intersection of letters, never a sum."
+     ],
+     [
+      "w",
+      "Bounce: washed out, at least 13% under the 52-week high (to_hi52_pct 15+) with RSI 50 or under or the month down 5%+."
+     ],
+     [
+      "f",
+      "Bounce: business intact, no deterioration letter, next-FY EPS estimate not cut over 3 months, FCF margin above 0, net debt / EBITDA under 3."
+     ],
+     [
+      "m",
+      "Bounce: margin of safety, cheaper than peers with the same profile (peer_gap_pct above 0) and the forward-value base or the street at least 15% over the close."
+     ],
+     [
+      "s",
+      "Bounce: the drawdown state paid, the deterioration count cell beat the median over 28 days on the store (cnt_fx_28d_mean above 0)."
+     ],
+     [
+      "b",
+      "Band in reach: the bounce band top within 6% under the close (bounce tier) or 8% (up-slope)."
+     ],
+     [
+      "u",
+      "Up-slope: above the 50-day and the 200-day, 3 months up, rsi under 70."
+     ],
+     [
+      "g",
+      "Up-slope: growth, revenue up 10%+ year on year or next-FY EPS growth 15%+."
+     ],
+     [
+      "q",
+      "Up-slope: quality, FCF margin 10%+ and operating margin 15%+."
+     ],
+     [
+      "p",
+      "Up-slope: next-FY EPS estimate raised 3%+ over 3 months."
+     ],
+     [
+      "tier",
+      "Bounce: A = w f m s b, B = w f b plus m or s. Up-slope: A = g q p, B = g or q with p, C = the lane's floor only."
+     ],
+     [
+      "Families",
+      "The fam letters of the pick (see above)."
+     ],
+     [
+      "Hold",
+      "The planned holding period: days for an AI bounce, weeks to a month outside it."
+     ],
+     [
+      "Media check",
+      "The media protocol's read on the name (OUTSIDE): confirm, neutral or contra; contra delays the entry, never sizes it."
+     ],
+     [
+      "Tone",
+      "The media read: confirm, neutral or contra (OUTSIDE)."
+     ],
+     [
+      "What the media says",
+      "The dated outside headline or read, in brief (OUTSIDE)."
+     ],
+     [
+      "Effect",
+      "What the read changes: timing or grade only."
+     ],
+     [
+      "Short band",
+      "Short entry: the price zone, or the close that triggers the short (a failed bounce)."
+     ],
+     [
+      "Stop (close)",
+      "Short stop: a close above this price covers the short."
+     ],
+     [
+      "Cover",
+      "Short target: where the short is covered."
+     ]
+    ]
+   }
+  ]
+ },
+ "description": "Operator page template. Lanes come from {PACK}/analysis_scans (focus scans on the board, recorded in the judgment scans); judgment from logs/canvases/{DAY}/judgment.json pages.focus_book. Render: tv_scan_cli.py page --template focus_book --day YYYYMMDD --judgment J --out-dir RUN_DIR --strict."
+}

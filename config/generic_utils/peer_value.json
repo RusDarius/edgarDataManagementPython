@@ -1,0 +1,24 @@
+{
+  "_note": "Peer value knobs (generic_utils.peer_value). Peers = the TradingView industry on the panel store's newest day (the sector when the industry has fewer than min_peers names on the peer floor). Within each group the log multiple is fitted on z-scored growth and quality drivers (ridge); the fit is what peers pay for that growth and quality. Floors, winsor, ridge and drivers are knobs, not cutoffs; ADD / WAIT / PASS stays the judgment's.",
+  "peer_floor_mcap_usd": 1000000000,
+  "list_floor_mcap_usd": 2000000000,
+  "min_peers": 6,
+  "min_fit_n": 8,
+  "winsor_pct": 5.0,
+  "ridge": 1.0,
+  "lenses": [
+    {"name": "pe", "yield": "ey_fwd", "label": "forward P/E (100 / next-FY EPS yield)", "drivers": ["rev_nfy_g", "eps_nfy_g", "opm", "roe", "eps_rev_3m"]},
+    {"name": "evebitda", "yield": "ebitda_yield", "label": "EV / EBITDA (100 / EBITDA yield)", "drivers": ["rev_nfy_g", "opm", "fcf_margin"]},
+    {"name": "evs", "yield": "sales_yield", "label": "EV / sales (100 / sales yield)", "drivers": ["rev_nfy_g", "opm", "fcf_margin"]}
+  ],
+  "primary_order": ["pe", "evebitda", "evs"],
+  "percentiles": {"value": "ey_fwd", "growth": "rev_nfy_g", "eps_growth": "eps_nfy_g", "quality": "opm", "roe": "roe", "fcf": "fcf_margin", "revision": "eps_rev_3m"},
+  "spreads": ["rev_nfy_g", "eps_nfy_g", "opm", "roe", "fcf_margin", "eps_rev_3m"],
+  "peers_k": 5,
+  "tape_join": {
+    "csv": "{PACK}/movers/us2b_tape.csv",
+    "fields": {"pe_fwd": "pack_pe_fwd", "fp_pe_y1": "fp_pe_y1", "fp_pe_y5": "fp_pe_y5", "fv_base_px": "fv_base_px", "fv_upside_pct": "fv_upside_pct", "irr_exp_pct": "irr_exp_pct", "hurdle_pct": "hurdle_pct", "priced_in_cagr_pct": "priced_in_cagr_pct", "growth_gap_pp": "growth_gap_pp", "street_px": "street_px", "left": "left", "mix": "mix", "mtp": "mtp", "dte": "dte"},
+    "vs_group": ["priced_in_cagr_pct", "irr_exp_pct", "fv_upside_pct", "growth_gap_pp"]
+  },
+  "evidence": {"every_files": 5, "horizons": ["7d", "28d", "56d"], "quantiles": 5, "signals": ["gap_pct", "disc_pct", "pe_gap_pct"]}
+}

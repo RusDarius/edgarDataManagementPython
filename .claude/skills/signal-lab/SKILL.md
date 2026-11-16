@@ -20,6 +20,10 @@ python src/run_signal_lab.py --page                                             
 
 The daily refresh runs `panel_store` as a producer (before compile) and `signal_lab` as an optional suite; `page-all` renders the `signal_lab` template. Read `PACK/signal_lab/highlights.log` first (a few KB); grep `queries.txt` before any SQL.
 
+## Winners anatomy (the event view)
+
+`tv_scan_cli.py anatomy --pack PACK --line` (`generic_utils/winners_anatomy.py`, recipe `config/generic_utils/anatomy.json`) answers "what did the big movers look like before they moved": top / bottom 5% tails per day, single legs and pairs of extreme legs by lift and `asym_up` (lift_up / lift_dn), a hold-out on the last window, the winner mix (print in window, industry wave), named patterns by month (`--test 'a:lo & b:hi & dte<=28'`), and today's names with pattern letters joined to the outlook (`candidates`, `short_candidates`). Order up-patterns by asymmetry, not lift (raw lift is volatility), and trust a pattern only if its month table holds through a bad month. Use it when the ask is pattern discovery, "obvious in hindsight" winners, or short-move alpha.
+
 ## Data
 
 - Store `logs/tradingview_analysis/signal_lab/panel_store.duckdb` (`generic_utils.panel_store`, knobs `config/generic_utils/panel_store.json`): `panel` (one row per as_of and id, newest run per file, $300M ingest floor), `pred` (move-prediction scores of the newest run before the scan), `series` (split flags), `prints` (one row per detected print), `labels` (`fwd_<h>`), `features` (the recipe's SQL expressions, point-in-time).

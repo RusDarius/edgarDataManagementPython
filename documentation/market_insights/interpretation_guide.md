@@ -47,6 +47,16 @@
   regime read (which kinds of businesses the quality / value weights favour now), not a buy list, and only
   while the 28d state is WEAK or better.
 
+## 3c. Peer value: a premium earned or not (peer-value)
+
+- `prem_pct` is the plain premium to the industry median; `just_pct` is the premium the name's growth and quality earn in the
+  industry's own fit; `gap_pct` is the difference (positive = cheaper than peers with the same profile).
+- Four reads: discount + gap near 0 = the profile explains the discount (do not buy it for cheapness); discount + gap > 0 = cheap for
+  what it is; premium + gap > 0 = rich to the median but still under what it earns; gap < 0 = paying more than the profile delivers.
+- Check `groups.pay_*` before calling a growth premium deserved: an industry that pays nothing for growth will not reward it.
+- Cyclicals at peak margins and misclassified names fit badly; groups under `min_fit_n` give only the premium.
+- Support, not a sort key or a size (forward-value skill, Peer value; evidence in `peer_value.evidence`).
+
 ## 4. Known biases in this evidence
 
 - One market, seven months: AI build-out into an October chip sell-off, rate hikes, oil above $100.

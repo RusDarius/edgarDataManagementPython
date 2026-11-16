@@ -14,6 +14,8 @@ see canvas_runs) listing only what moved:
   after hours (held lines and capital courses always; other courses at twice the floor)
 - judged names whose deterioration letters (`det_seen`, PACK/deterioration) changed between the packs
   (held lines and capital courses always reviewed; others listed as minor)
+- judged names whose event-risk level (`warn_level`, PACK/event_risk) changed between the packs
+  (held lines, capital courses and any new WARN_STRONG reviewed; others minor)
 
 The agent reads that report, edits only the flagged names in the judgment file,
 sets `reviewed_pack`, and re-renders. Unflagged names keep their reasons.
@@ -190,6 +192,38 @@ def letter_changes(old_pack: str, new_pack: str, spec: Mapping[str, Any] | None)
             for sym, row in new.items() if sym in old and str(old[sym]["det_seen"]) != str(row["det_seen"])}
 
 
+def warn_changes(old_pack: str, new_pack: str) -> dict[str, dict[str, Any]]:
+    """symbol -> {old, new, letters, held} where the event-risk level (PACK/event_risk, generic_utils.event_risk) differs
+    between the packs. An old pack without the suite counts as no level, so a held line's first WARN is a change."""
+    from generic_utils.scan_sources import rows_from_duckdb
+
+    def levels(pack: str) -> dict[str, dict[str, Any]] | None:
+        path = REPO_ROOT / pack / "event_risk" / "event_risk.duckdb"
+        if not path.exists():
+            return None
+        rows = None
+        for col in ("er_letters", "letters"):  # er_letters since 4 Nov 2026; earlier packs wrote letters
+            try:
+                rows = rows_from_duckdb(path, f'SELECT symbol, warn_level, {col} AS er_letters, in_book FROM "names"')
+                break
+            except Exception:  # an older run without the column
+                continue
+        if rows is None:
+            return None
+        return {str(r["symbol"]): r for r in rows}
+
+    old, new = levels(old_pack), levels(new_pack)
+    if new is None:
+        return {}
+    out = {}
+    for sym, row in new.items():
+        before = (old or {}).get(sym, {}).get("warn_level")
+        if str(before or "") != str(row.get("warn_level") or ""):
+            out[sym] = {"old": before or "-", "new": row.get("warn_level") or "-", "letters": row.get("er_letters"),
+                        "held": str(row.get("in_book")).lower() in ("true", "1")}
+    return out
+
+
 def judged_symbols(judgment: Mapping[str, Any], priors: Mapping[str, Any] | None, index: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     """symbol -> {course, source}. Priors use bare tickers; map them onto index symbols."""
     out = {sym: {"course": (c or {}).get("Course"), "source": "courses"} for sym, c in (judgment.get("courses") or {}).items()}
@@ -220,6 +254,7 @@ def build_update(
     after = after_hours_moves(new_pack, cfg.get("after_hours"))
     ah_floor = float((cfg.get("after_hours") or {}).get("min_abs_pct", 3.0))
     letters = letter_changes(old_pack, new_pack, cfg.get("deterioration"))
+    warns = warn_changes(old_pack, new_pack)
     for sym, info in judged.items():
         rec = diff_symbol(sym, old_index.get(sym), new_index.get(sym), fields=cfg["diff_fields"], thresholds=cfg["diff_thresholds"])
         rec = {**rec, "course": info["course"], "judged_in": info["source"]}
@@ -256,10 +291,20 @@ def build_update(
                 rec.pop("minor", None)
             elif not rec["review"]:
                 rec["minor"] = True
+        wc = warns.get(sym)
+        if wc:
+            # An event-risk level change (a dated event, a crowd repriced, an industry shock) is reviewed on a held
+            # line, a capital course or any new WARN_STRONG; elsewhere it is minor.
+            rec["flags"] = rec["flags"] + [f"warn {wc['old']}->{wc['new']} ({wc['letters']})"]
+            if course in capital or wc["held"] or wc["new"] == "WARN_STRONG":
+                rec["review"] = True
+                rec.pop("minor", None)
+            elif not rec["review"]:
+                rec["minor"] = True
         rows.append(rec)
 
     def rank(flag: str) -> int:
-        return 0 if flag == "THROUGH_KILL" or flag.startswith(("after-hours", "letters ")) else 1
+        return 0 if flag == "THROUGH_KILL" or flag.startswith(("after-hours", "letters ", "warn ")) else 1
 
     rows.sort(key=lambda r: (not r["review"], min([rank(f) for f in r["flags"]] or [9]), r["symbol"]))
     old_lists = watch_members(old_pack, cfg["watch_lists"])

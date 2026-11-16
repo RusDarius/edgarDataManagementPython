@@ -1262,6 +1262,63 @@ MOVE_PREDICTION_EARNINGS_EXTRA_COLUMNS = [
     "earnings_release_time",
 ]
 
+US_SECONDARY_LISTING_EXCHANGES: tuple[str, ...] = ("NASDAQ", "NYSE", "AMEX")
+
+
+def with_us_secondary_listings(
+    payload: dict[str, Any],
+    exchanges: tuple[str, ...] = US_SECONDARY_LISTING_EXCHANGES,
+) -> dict[str, Any]:
+    """Copy of a global stock-scan payload whose ``is_primary`` filter also admits US-listed
+    common shares and depositary receipts.
+
+    TradingView marks one listing per company as primary, so ``is_primary = true`` alone drops
+    the second US share class (NASDAQ:GOOG / GOOGL, NYSE:BRK.B, NASDAQ:FOXA) and every US ADR or
+    cross-listing of a foreign primary (NYSE:TSM, NASDAQ:ASML, NYSE:NVO). The chosen class can
+    also flip between scans (Alphabet moved from GOOG to GOOGL on 2 Nov 2026), so a held line can
+    vanish without warning. Non-US secondary listings and US preferreds stay out. The added rows
+    keep ``is_primary`` false, so readers that filter to primary listings are unchanged.
+    """
+    out = deepcopy(payload)
+    out["filter"] = [
+        item for item in out.get("filter") or [] if item.get("left") != "is_primary"
+    ]
+    us_listing = {
+        "operation": {
+            "operator": "and",
+            "operands": [
+                {"expression": {"left": "exchange", "operation": "in_range", "right": list(exchanges)}},
+                {
+                    "operation": {
+                        "operator": "or",
+                        "operands": [
+                            {"expression": {"left": "typespecs", "operation": "has", "right": ["common"]}},
+                            {"expression": {"left": "type", "operation": "equal", "right": "dr"}},
+                        ],
+                    }
+                },
+            ],
+        }
+    }
+    primary_or_us = {
+        "operation": {
+            "operator": "or",
+            "operands": [
+                {"expression": {"left": "is_primary", "operation": "equal", "right": True}},
+                us_listing,
+            ],
+        }
+    }
+    filter2 = out.get("filter2")
+    if not filter2:
+        out["filter2"] = {"operator": "and", "operands": [primary_or_us]}
+    elif filter2.get("operator") == "and":
+        out["filter2"] = {**filter2, "operands": [*filter2.get("operands", []), primary_or_us]}
+    else:
+        out["filter2"] = {"operator": "and", "operands": [{"operation": filter2}, primary_or_us]}
+    return out
+
+
 GLOBAL_MARKET_MOVE_PREDICTION_WITH_EARNINGS_BASE_PAYLOAD = deepcopy(
     GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD
 )
@@ -1978,7 +2035,9 @@ class ApiTradingViewClient:
         earnings-enriched variants stay behaviorally identical apart from the
         column set defined in their base payload.
         """
-        request_payload = deepcopy(base_payload)
+        # US share classes / ADRs that are not TradingView's primary listing (NASDAQ:GOOG while the
+        # primary is GOOGL) stay in, so a held line cannot drop out when the primary class flips.
+        request_payload = with_us_secondary_listings(base_payload)
         self._apply_markets_override(request_payload, markets)
         self._ensure_request_columns(
             request_payload, MOVE_PREDICTION_REQUIRED_CONTEXT_COLUMNS

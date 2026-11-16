@@ -29,6 +29,13 @@ Also follow, as the steps need them (read the SKILL.md only when you reach that 
      which kill printed; check the holdings file against yesterday's plan and say what was not taken).
    Model and lab state: {PACK}/alpha_model/highlights.log (state per horizon) and {PACK}/signal_lab/highlights.log;
      the factor month (signal_lab factor_month, 7d) says which styles paid this month and whether the Book is on them.
+   Event risk: {PACK}/event_risk/highlights.log (event risk, event-risk skill): every Book line's warn_level (WARN_STRONG / WARN / WATCH),
+     letters (E mapped event ahead, P market-wide binary event ahead, R / U an event already moved its crowd, S industry shock,
+     B high beta to it, T gap-prone, V priced for the boom, D letters beyond price, $ stress >= 1% NAV) and its stress in dollars.
+     Every WARN_STRONG Book line gets an explicit course Reason that says what the line does about the event (hold through,
+     trim, hedge, exit) and why; a WARN line names the letter it accepts. Before a dated policy / election / tariff / regulation
+     event, add its exposure map to config/generic_utils/catalyst_calendar.json (exposure {down|up|either: [themes]}, source in
+     read; themes ai_power_build, solar_clean, memory_storage, policy_midterm_up / _down) and re-run tv_scan_cli.py event-risk --pack {PACK}.
    Book deterioration: python src/generic_utils/tv_scan_cli.py deterioration --pack {PACK} --ids <named + candidates> --line
      (deterioration skill): per line the drawdown bucket, the letters beyond price (E R C S), the measured cell and
      its dollars, the recovery and kill levels. Record the call in `scans`.
@@ -36,6 +43,10 @@ Also follow, as the steps need them (read the SKILL.md only when you reach that 
      (pathway skill): the Book's factor tilt vs what each factor paid, the 1M / 3M gap split into industry and
      stock parts, the regime series, and each trade's effect on the tilt. Re-read the judgment's stage triggers;
      a NEW that moves the tilt toward what pays is preferred over one that deepens the lean that costs.
+   Peers: python src/generic_utils/tv_scan_cli.py peer-value --pack {PACK} --ids <named + candidates> --line
+     (premium to the industry median, the premium the growth / quality earns among peers, the gap, nearest peers; the refresh
+     already wrote {PACK}/peer_value). Quote prem / just / gap on every action row; fill pages.peer_value.blocks (read, stats,
+     evidence_read) and pages.wisdom.blocks.peers.
    Per name that could take capital: python src/operator_briefing/example_entry.py stance SYM ... --line
 
 2. OUTSIDE RESEARCH (tag OUTSIDE, date and link every line; timing and Grade only)
@@ -111,7 +122,7 @@ Also follow, as the steps need them (read the SKILL.md only when you reach that 
      python src/run_daily_refresh.py --no-producers --no-compile --no-suites --update-day {DAY} --run-dir {RUN_DIR}
 
 6. RENDER every page in one call and fix every Ledger warning (it also lists unfilled block ids):
-     python src/generic_utils/tv_scan_cli.py page-all --day {DAY} --judgment {JUDGMENT} --out-dir {RUN_DIR} --strict
+     python src/generic_utils/tv_scan_cli.py page-all --day {DAY} --judgment {JUDGMENT} --out-dir {RUN_DIR} --set all --strict
    (daily_focus, movers, playbook, gmv, wisdom, earnings_week, alpha_model, signal_lab, week_plays, outlook, deterioration, pathway;
    earnings_week reads {PACK}/earnings_week and its
    event plays come out of the Daily's event budget, see the earnings-week skill). Wisdom needs the named levels first:

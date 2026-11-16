@@ -11,7 +11,6 @@ import subprocess
 import sys
 import tempfile
 import time
-from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Literal
@@ -35,6 +34,7 @@ from data_loaders.api_tradingview_client import (
     ApiTradingViewClient,
     GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD,
     TRADINGVIEW_GLOBAL_SCAN_URL,
+    with_us_secondary_listings,
 )
 from db.trading_view_all_fields_duckdb import TradingViewAllFieldsDuckDBStore
 from generic_utils.log_to_files_util import log_to_file
@@ -309,7 +309,8 @@ def _chunked(values: list[str], chunk_size: int) -> list[list[str]]:
 
 
 def _build_scan_payload(columns: list[str]) -> dict[str, Any]:
-    payload = deepcopy(GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD)
+    # Primary listings worldwide plus US share classes / ADRs (NASDAQ:GOOG, NYSE:BRK.B, NYSE:TSM).
+    payload = with_us_secondary_listings(GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD)
     payload["columns"] = list(columns)
     payload["markets"] = list(TRADING_VIEW_ALL_MARKETS_ARRAY)
     payload["ignore_unknown_fields"] = True

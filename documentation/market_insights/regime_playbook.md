@@ -71,6 +71,35 @@ Mar -6.9 (sell-off), Apr +4.6, May +1.6, Jun +1.8, Jul +3.0, Aug +1.8, Sep -3.4,
   The store has no 10% index fall in it: read its tails as a floor. Rule added: no add with beta above 2 before the event that can reprice it.
   Go more defensive (section 5) if the trailing month turns negative or beta's trailing IC falls under -0.15.
 
+### Update 2026-11-02: relief rally into the midterm week
+
+- Data: US $2B +1.2% at the mark, 73% up; the universe's trailing month +4.4 (up regime). The store's cap-weighted floor is 2.9% under its
+  high, the AI cluster 10.6% under its 6 Oct high. GMV value-led profiles (RERATE / VALUE_TURN) led later closes (t 5.5 / 5.4).
+- OUTSIDE (2 Nov): S&P 500 +0.6 to +1% after Friday's -1.8% (Nasdaq -5.3% in October); WTI -7% to ~$97 on US-Iran talks; 10-year 4.88%;
+  VIX 18.9; December hike 69-85% priced; midterms Tue with a Democratic sweep ~71% (Kalshi). Since 1974 the S&P 500 averaged +5.7% in the
+  three months after a midterm (11 of 13 up). AI darlings and defense are seen as most exposed to the vote.
+- Action: low-beta value starters before the events; the AI cluster's adds after NASDAQ:AMD / NASDAQ:QCOM, in bounce bands. Lean back on two
+  of: the guides hold with no new letter, the cluster back above its 50-days, beta's trailing IC above -0.05.
+
+### Update 2026-11-12: rates through 5%, a governance shock at the AI bellwether
+
+- Data: cap-weighted flat (-0.12%) on 28% breadth and 22% up-volume; 21 sessions -1.03%, 3.1% under the store high; 56% of names over
+  their 200-day. The AI cluster is 11.6% under its high after the 5 Nov crash low (S&P 500 -4.4% that day, OUTSIDE) and a five-session
+  rebound. The lane book's October-proof lanes (cheap and turning, washed-out quality) still lead; AI lanes carry 20-55% odds of -10%.
+- OUTSIDE (12 Nov): 10-year 5.11%; core CPI +0.3% m/m for the third month and a December hike about fully priced (FOMC 8-9 Dec); oil up
+  on Iran headlines; NVIDIA's CEO resigned three sessions before its 17 Nov print; the Anthropic IPO prices 18 Nov.
+- Action: limits in the measured non-AI lanes; one energy line with negative store beta as the hedge for the rates / oil leg; cash at or
+  above 20% of NAV into the FOMC. AI stage B on 2 of 4 triggers (follow-through day on volume, no new cluster low for 5 sessions,
+  NASDAQ:NVDA holds its band after the print, the cap month positive); stage C also needs the CEO seat settled.
+
+### Update 2026-11-13: AI sold on good news, the rest held
+
+- Data: cap-weighted -0.72% at the scan, median name +0.06%, 52% up; the AI cluster -2.0% (13.5% under its high, over its 5 Nov low).
+  Beat-and-raise prints in AI hardware (NASDAQ:CSCO, NASDAQ:AMAT) were sold 5%+; energy, telecom, defense, beverages led the week.
+- OUTSIDE (13 Nov): 10-year 5.16%, VIX over 20, October PPI +0.3% m/m; NVIDIA prints 17 Nov under an interim CEO; Anthropic prices 18 Nov.
+- Action: unchanged map. Non-AI lanes at limits now; AI stage B decided on the 18 Nov close (NASDAQ:CSCO replaces NYSE:TEL as the lead);
+  build-ups filled by 20 Nov; cash back at or above 20% of NAV before the 8-9 Dec FOMC.
+
 ## 3. What worked, by regime (7-day IC unless noted)
 
 | Signal | All days | Up months | Down months | October | Read |

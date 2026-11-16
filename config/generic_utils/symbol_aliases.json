@@ -1,0 +1,7 @@
+{
+  "_note": "Old EXCHANGE:TICKER -> current EXCHANGE:TICKER for renamed tickers and exchange moves (generic_utils.symbol_resolver.canonical; chains are followed). Add a row only after confirming it: `tv_scan_cli.py symbol-check` lists candidates for ids that look old, never applies them. A second share class is NOT an alias: NASDAQ:GOOG and NASDAQ:GOOGL are different listings with different prices and both stay in the scans (with_us_secondary_listings).",
+  "aliases": {
+    "NYSE:SQ": "NYSE:XYZ",
+    "NASDAQ:FB": "NASDAQ:META"
+  }
+}

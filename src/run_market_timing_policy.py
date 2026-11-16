@@ -844,6 +844,7 @@ def run_market_timing_policy(
     same_day_scan_limit: int = 3,
     config: TimingPolicyConfig = TimingPolicyConfig(),
     catalyst_config: CatalystEventPolicyConfig = CatalystEventPolicyConfig(),
+    sentiment: bool = True,
 ) -> dict[str, Any]:
     if checkpoint not in CHECKPOINTS:
         raise ValueError(f"checkpoint must be one of {CHECKPOINTS}")
@@ -1009,7 +1010,25 @@ def run_market_timing_policy(
         ],
     }
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    if sentiment:
+        # The market-level read beside the per-name timing book: written after this run's manifest so its ENTER share counts.
+        manifest["market_sentiment"] = run_market_sentiment(run_dir / "market_sentiment")
+        manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return {**manifest, "run_dir": str(run_dir), "manifest_path": str(manifest_path)}
+
+
+def run_market_sentiment(out_dir: str | Path, *, recipe: str | Path | None = None) -> dict[str, Any]:
+    """Market sentiment (generic_utils.market_sentiment) into out_dir; a store that is locked or short is reported, not fatal."""
+    try:
+        from generic_utils.market_sentiment import build_market_sentiment, load_recipe, write_market_sentiment
+
+        payload = build_market_sentiment(recipe=load_recipe(recipe))
+        exported = write_market_sentiment(payload, out_dir)
+        spec = payload["spec"]
+        return {"out_dir": exported["out_dir"], "last_file": spec["last_file"], "scan_frac": spec["scan_frac"],
+                "live_patterns": spec["live_patterns"], "families": spec["families"], "today": spec["today"]}
+    except Exception as exc:  # noqa: BLE001 - the timing book stands without the market read
+        return {"error": f"{type(exc).__name__}: {str(exc).splitlines()[0] if str(exc) else ''}"}
 
 
 def main() -> None:
@@ -1023,7 +1042,17 @@ def main() -> None:
     parser.add_argument("--backwards-database")
     parser.add_argument("--same-day-scan-limit", type=int, choices=(1, 2, 3), default=3)
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
+    parser.add_argument("--no-sentiment", action="store_true",
+                        help="Skip the market sentiment read (generic_utils.market_sentiment) written into the run folder.")
+    parser.add_argument("--sentiment-only", action="store_true",
+                        help="Only the market sentiment read (no timing book), into --sentiment-out.")
+    parser.add_argument("--sentiment-out", default=None,
+                        help="Output folder for --sentiment-only (default logs/tradingview_analysis/market_sentiment).")
     args = parser.parse_args()
+    if args.sentiment_only:
+        out = args.sentiment_out or str(PROJECT_ROOT / "logs/tradingview_analysis/market_sentiment")
+        print(json.dumps(run_market_sentiment(out), indent=2, default=str))
+        return
     result = run_market_timing_policy(
         checkpoint=args.checkpoint,
         edge_parent_dir=args.edge_parent_dir,
@@ -1032,8 +1061,9 @@ def main() -> None:
         backwards_database=args.backwards_database,
         output_root=args.output_root,
         same_day_scan_limit=args.same_day_scan_limit,
+        sentiment=not args.no_sentiment,
     )
-    print(json.dumps(result, indent=2))
+    print(json.dumps(result, indent=2, default=str))
 
 
 if __name__ == "__main__":

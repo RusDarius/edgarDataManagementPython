@@ -686,5 +686,23 @@ class TestScanSymbolColumnHandling(unittest.TestCase):
         conn.close()
 
 
+class TestScanPayloadUniverse(unittest.TestCase):
+    def test_payload_admits_us_share_classes_and_adrs_besides_primary(self):
+        from data_analysis_scripts.trading_view_export_all_tdfields import _build_scan_payload
+        from data_loaders.api_tradingview_client import GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD
+
+        payload = _build_scan_payload(["close"])
+        self.assertFalse(any(item.get("left") == "is_primary" for item in payload["filter"]))
+        self.assertEqual(payload["filter2"]["operator"], "and")
+        gate = payload["filter2"]["operands"][-1]["operation"]
+        self.assertEqual(gate["operator"], "or")
+        self.assertEqual(gate["operands"][0]["expression"], {"left": "is_primary", "operation": "equal", "right": True})
+        us = gate["operands"][1]["operation"]["operands"]
+        self.assertEqual(us[0]["expression"]["right"], ["NASDAQ", "NYSE", "AMEX"])
+        # The shared base payload keeps its primary-only filter (other scanners are unchanged).
+        self.assertTrue(any(item.get("left") == "is_primary" for item in GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD["filter"]))
+        self.assertEqual(len(payload["filter2"]["operands"]), len(GLOBAL_MARKET_MOVE_PREDICTION_BASE_PAYLOAD["filter2"]["operands"]) + 1)
+
+
 if __name__ == "__main__":
     unittest.main()

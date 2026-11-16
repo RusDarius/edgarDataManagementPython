@@ -43,7 +43,9 @@ source field or the header). It does not reorder columns; the table's SELECT / `
 
 ``screens`` on a table are one-click presets in its toolbar: ``[{"label": "Leans up", "filters": {"rx_up": ">=2",
 "rx_dn": "=0"}, "sort": "-rx_up", "explain": "what the screen shows and how to act on it"}]`` (filters use the column
-filter syntax, keyed by header). A page ``guide`` (``{"intro": "...", "sections": [{"title", "text" | "items" |
+filter syntax, keyed by header; an optional ``"group"`` marks alternatives). Screens overlap in the page: clicking a
+second one keeps the rows that pass both; two screens clash (the click replaces the older) when they share a ``group`` or,
+when either has none, filter the same column. Each button shows the rows a click would leave. A page ``guide`` (``{"intro": "...", "sections": [{"title", "text" | "items" |
 "headers" + "rows"}]}``) adds a Guide tab before the Ledger: the sections, every screen on the page with its
 filters, and the standard table how-to. A screen only filters and sorts; it never ranks or scores.
 A cell written ``▲+1.2`` / ``▼-0.8`` (a measured direction and its size) is shaded green / red and sorts as its number.
@@ -416,7 +418,8 @@ def build_page(spec: Mapping[str, Any], *, base_dir: Path, ledger_path: str | Pa
                                 if k.strip() and k.strip().lstrip("+-") not in table["headers"]]
                     if missing and table["rows"]:  # an empty table (nothing printed yet) drops its optional columns; no screen applies
                         warnings.append(f"screen {screen.get('label')!r} ({table.get('title') or 'table'}) names columns the table does not show: {', '.join(missing)}")
-                    screens.append([label, str(table.get("title") or ""), str(screen.get("label") or ""),
+                    screens.append([label, str(table.get("title") or ""),
+                                    (f"{screen['group']}: " if screen.get("group") else "") + str(screen.get("label") or ""),
                                     "  ".join(f"{h} {x}" for h, x in (screen.get("filters") or {}).items())
                                     + (f"  sort {screen['sort']}" if screen.get("sort") else ""),
                                     str(screen.get("explain") or "")])
@@ -600,7 +603,7 @@ def _cell_html(cell: str, start: bool, clamp: bool = True) -> str:
 def _render_table(block: Mapping[str, Any], idx: str, tips: Mapping[str, str] | None = None) -> str:
     """One grid. The toolbar (search, column filters, columns menu, heat, stats, CSV, reset), sorting and
     column drag are added by the page script; `data-group` lets it redraw the group row after a move."""
-    screens = [{k: s.get(k) for k in ("label", "filters", "sort", "explain")} for s in block.get("screens") or []]
+    screens = [{k: s.get(k) for k in ("label", "filters", "sort", "explain", "group") if s.get(k) is not None} for s in block.get("screens") or []]
     data = f' data-screens="{html.escape(json.dumps(screens, ensure_ascii=False))}"' if screens else ""
     out = [f'<section class="tbl{" wide" if block.get("wide") else ""}"{data}>']
     if block.get("title"):
@@ -824,6 +827,9 @@ th.drag{opacity:.4}body.dragging,body.dragging *{cursor:grabbing!important;user-
 code{font-size:12px;background:var(--zebra);padding:0 3px;border-radius:3px}.warn{color:var(--warning);font-size:12px}
 td.up{color:var(--good);background:var(--good-bg);font-weight:600}td.dn{color:var(--bad);background:var(--bad-bg);font-weight:600}
 .bar .scrl{color:var(--muted);font-size:11px;margin-left:6px}.bar button.scr{border-style:dashed}.bar button.scr.on{border-style:solid}
+.bar button.scr .n{color:var(--muted);font-size:10px;margin-left:5px;font-variant-numeric:tabular-nums}.bar button.scr.on .n{color:inherit}
+.bar button.scr.zero{opacity:.55}.bar .sgrp{color:var(--muted);font-size:10px;margin-left:4px;text-transform:uppercase;letter-spacing:.04em}
+.bar button.scr0{font-size:11px}.bar button.scr0[hidden]{display:none}
 .snote{color:var(--muted);font-size:12px;margin:0 0 5px;max-width:170ch}.snote:empty{display:none}
 .cardgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,560px),1fr));gap:10px;margin:6px 0}
 .card{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:6px;padding:8px 12px;min-width:0}
@@ -853,7 +859,10 @@ const HELP='Header: click to sort (numbers high to low first, text A-Z, dates ol
  'Shift+click adds a second sort key. Drag a header left or right to move the column (remembered for this page). '+
  'Alt+click a cell: filter its column to that value. Filter syntax: >5  <=-2  1..10  2026-11-01..2026-11-07  =exact  !not  a|b (either)  '+
  '= (empty)  ! (not empty); space-separated terms must all match; "quoted text" keeps spaces. '+
- 'Screens (dashed buttons): a preset of column filters and a sort; click again to clear. Green / red cells marked ▲ / ▼ are measured directions, not Heat.';
+ 'Screens (dashed buttons): presets of column filters and a sort. Click adds a screen to the active ones (rows must pass every active screen: the overlap); '+
+ 'a screen in the same group, or touching the same column, replaces the one it clashes with. Ctrl+click: overlap even with a clashing screen. '+
+ 'Shift+click: this screen only. Click an active screen to drop it; None clears them. The number on a button = the rows you would see after clicking it. '+
+ 'Green / red cells marked ▲ / ▼ are measured directions, not Heat.';
 const ISO=/^\d{4}-\d{2}-\d{2}/,UNIT=/^(%|x|pp|bp|[kKMBT]|d|w)?([\s–\-\/(].*)?$/;
 function val(s){s=(s||'').trim();if(!s)return null;if(ISO.test(s))return Date.parse(s.slice(0,10));
  const t=s.replace(/−/g,'-').replace(/[$,+▲▼]/g,''),m=t.match(/^-?\d*\.?\d+/);if(!m)return null;
@@ -886,7 +895,7 @@ function apply(t){const st=t._st,q=terms(st.q),fs=[];st.f.forEach((x,th)=>{const
  for(const r of tb.rows){const ok=(!q.length||pass(q,r.textContent,false))&&fs.every(([th,ts])=>pass(ts,txt(r.cells[th.cellIndex]),true));r.hidden=!ok;if(ok)n++;}
  const total=tb.rows.length;if(t._count)t._count.textContent=n===total?total+' rows':n+' of '+total+' rows';
  const fb=t._bar&&t._bar.querySelector('[data-a=flt]');if(fb)fb.textContent='Column filters'+(fs.length?' ('+fs.length+')':'');
- stripe(t);if(t._st.sum)summary(t);if(t._st.heat)heat(t);}
+ stripe(t);if(t._st.sum)summary(t);if(t._st.heat)heat(t);preview(t);}
 function regroup(t){const h=hdr(t),grp=t.tHead.querySelector('tr.grp'),vis=[...h.cells].filter(c=>!c.hidden),g=c=>c.dataset.group||'';
  const starts=new Set(),first=vis.length?vis[0].cellIndex:-1;if(grp)vis.forEach((c,k)=>{if(k&&g(c)!==g(vis[k-1]))starts.add(c.cellIndex);});
  for(const r of lines(t))[...r.cells].forEach((c,i)=>{c.classList.toggle('gs',starts.has(i));c.classList.toggle('stk',i===first);});
@@ -941,7 +950,7 @@ function menu(t,m){m.textContent='';const top=document.createElement('div');top.
 function reset(t){const st=t._st;t._orig.forEach(th=>setHidden(t,th,false));arrange(t,t._orig);st.sorts=[];st.q='';st.f.clear();st.heat=false;st.sum=false;
  if(t._bar){t._bar.querySelector('input.filter').value='';$$(t._bar,'button.on').forEach(x=>x.classList.remove('on'));}
  const fr=t.tHead.querySelector('tr.flt');if(fr){fr.hidden=true;$$(fr,'input').forEach(i=>i.value='');}
- if(t._note)t._note.textContent='';
+ if(t._note)t._note.textContent='';t._scr=[];if(t._sv)t._sv.clear();if(t._scr0)t._scr0.hidden=true;
  sortRows(t);heat(t);summary(t);apply(t);regroup(t);stick(t);store.set(lkey(t),null);}
 function bar(t){const sec=t.closest('section.tbl'),b=document.createElement('div');b.className='bar';
  b.innerHTML='<input type="search" class="filter" placeholder="Search rows: words, a|b, !not">'+
@@ -960,17 +969,42 @@ function bar(t){const sec=t.closest('section.tbl'),b=document.createElement('div
  b.querySelector('[data-a=csv]').onclick=()=>csv(t);b.querySelector('[data-a=reset]').onclick=()=>reset(t);
  const det=b.querySelector('details');det.addEventListener('toggle',()=>{if(det.open)menu(t,det.querySelector('.menu'));});
  let scr=[];try{scr=JSON.parse(sec.dataset.screens||'[]');}catch(e){}
+ t._scr=[];t._sv=new Map();
  if(scr.length){const l=document.createElement('span');l.className='scrl';l.textContent='Screens:';b.appendChild(l);
-  const note=document.createElement('p');note.className='snote';sec.insertBefore(note,sec.querySelector('.scroll'));t._note=note;
-  scr.forEach(s=>{const x=document.createElement('button');x.className='scr';x.textContent=s.label;
-   x.title=(s.explain||'')+'\nFilters: '+Object.entries(s.filters||{}).map(([h,v])=>h+' '+v).join('  ')+(s.sort?'\nSort: '+s.sort:'');
-   x.onclick=()=>screen(t,s,x);b.appendChild(x);});}}
-function screen(t,s,x){const on=!x.classList.contains('on'),st=t._st,fr=fltRow(t);$$(t._bar,'button.scr').forEach(y=>y.classList.remove('on'));
- st.f.clear();$$(fr,'input').forEach(i=>{i.value='';});
- if(on){const hs=[...hdr(t).cells];Object.entries(s.filters||{}).forEach(([h,v])=>{const th=hs.find(c=>c._key===h);if(th){th._in.value=v;st.f.set(th,v);}});
-  st.sorts=String(s.sort||'').split(',').map(k=>k.trim()).filter(Boolean).map(k=>({th:hs.find(c=>c._key===k.replace(/^[-+]/,'')),asc:!k.startsWith('-')})).filter(o=>o.th);
-  if(st.sorts.length)sortRows(t);x.classList.add('on');showFlt(t,true);}
- if(t._note)t._note.textContent=on?s.label+': '+(s.explain||''):'';apply(t);}
+  const note=document.createElement('p');note.className='snote';sec.insertBefore(note,sec.querySelector('.scroll'));t._note=note;let g0=null;
+  scr.forEach(s=>{if(s.group&&s.group!==g0){const g=document.createElement('span');g.className='sgrp';g.textContent=s.group;b.appendChild(g);}g0=s.group||null;
+   const x=document.createElement('button');x.className='scr';x._s=s;x.textContent=s.label;const n=document.createElement('span');n.className='n';x.appendChild(n);x._n=n;
+   x.title=(s.group?'Group '+s.group+' (one at a time)\n':'')+(s.explain||'')+'\nFilters: '+Object.entries(s.filters||{}).map(([h,v])=>h+' '+v).join('  ')+(s.sort?'\nSort: '+s.sort:'')+
+    '\nClick: add to the overlap · Ctrl+click: overlap even if it clashes · Shift+click: only this screen';
+   x.onclick=e=>toggleScreen(t,s,e.shiftKey?'only':(e.ctrlKey||e.metaKey)?'and':'smart');b.appendChild(x);});
+  const z=document.createElement('button');z.className='scr0';z.textContent='None';z.title='Clear every active screen (typed column filters stay)';z.hidden=true;
+  z.onclick=()=>setScreens(t,[]);b.appendChild(z);t._scr0=z;}}
+// Screens combine: every active screen's filters must pass (the overlap). Two screens clash when they share a group,
+// or (when either has no group) when they filter the same column; a click replaces the clashing one. Filters a person
+// typed are kept and combined with the screens; t._sv remembers which part of each box the screens wrote.
+const scols=s=>Object.keys(s.filters||{});
+const clash=(a,b)=>a.group&&b.group?a.group===b.group:scols(a).some(c=>scols(b).includes(c));
+function nextSet(t,s,mode){const cur=t._scr;if(cur.includes(s))return mode==='only'&&cur.length>1?[s]:cur.filter(x=>x!==s);if(mode==='only')return[s];
+ return cur.filter(x=>mode==='and'||!clash(x,s)).concat([s]);}
+function userF(t){const out=new Map();for(const th of hdr(t).cells){const cur=th._in?th._in.value.trim():'',rec=t._sv.get(th),u=rec&&cur===rec.v?rec.u:cur;if(u)out.set(th,u);}return out;}
+function combo(t,list){const hs=[...hdr(t).cells],u=userF(t),m=new Map(u);
+ list.forEach(s=>Object.entries(s.filters||{}).forEach(([h,v])=>{const th=hs.find(c=>c._key===h);if(th)m.set(th,m.has(th)?m.get(th)+' '+v:String(v));}));return[m,u];}
+function setScreens(t,list){const st=t._st;fltRow(t);const[m,u]=combo(t,list);t._scr=list;
+ for(const th of hdr(t).cells){if(!th._in)continue;const v=m.get(th)||'';th._in.value=v;if(v)st.f.set(th,v);else st.f.delete(th);
+  if(v&&v!==(u.get(th)||''))t._sv.set(th,{u:u.get(th)||'',v});else t._sv.delete(th);}
+ const ls=list.filter(s=>s.sort),hs=[...hdr(t).cells];
+ if(ls.length){st.sorts=String(ls[ls.length-1].sort).split(',').map(k=>k.trim()).filter(Boolean).map(k=>({th:hs.find(c=>c._key===k.replace(/^[-+]/,'')),asc:!k.startsWith('-')})).filter(o=>o.th);sortRows(t);}
+ $$(t._bar,'button.scr').forEach(x=>x.classList.toggle('on',list.includes(x._s)));if(t._scr0)t._scr0.hidden=!list.length;
+ if(list.length)showFlt(t,true);
+ if(t._note)t._note.textContent=!list.length?'':list.length===1?list[0].label+': '+(list[0].explain||''):
+  'Overlap of '+list.map(s=>s.label).join(' ∩ ')+' (rows that pass every screen). '+list.map(s=>s.label+': '+(s.explain||'')).join(' · ');
+ apply(t);}
+function toggleScreen(t,s,mode){setScreens(t,nextSet(t,s,mode));}
+function preview(t){if(!t._bar||!t._scr)return;const bs=$$(t._bar,'button.scr');if(!bs.length)return;const q=terms(t._st.q),rows=[...t.tBodies[0].rows];
+ bs.forEach(x=>{const list=x.classList.contains('on')?t._scr:nextSet(t,x._s,'smart'),[m]=combo(t,list),fs=[];
+  m.forEach((v,th)=>{const ts=terms(v);if(ts.length)fs.push([th.cellIndex,ts]);});let n=0;
+  for(const r of rows){if((!q.length||pass(q,r.textContent,false))&&fs.every(([i,ts])=>pass(ts,txt(r.cells[i]),true)))n++;}
+  x._n.textContent=String(n);x.classList.toggle('zero',!n&&!x.classList.contains('on'));});}
 let drag=null,dragged=false;const mark=document.createElement('div');mark.className='dropmark';mark.hidden=true;document.body.appendChild(mark);
 function dropAt(t,x){const vis=[...hdr(t).cells].filter(c=>!c.hidden);for(const c of vis){const b=c.getBoundingClientRect();if(x<b.left+b.width/2)return[c.cellIndex,b.left];}
  const l=vis[vis.length-1];return[l.cellIndex+1,l.getBoundingClientRect().right];}
@@ -983,7 +1017,7 @@ function grid(t){const h=t.tHead&&hdr(t);if(!h)return;const sec=t.closest('secti
  [...t.tBodies[0].rows].forEach((r,i)=>{r._i=i;});if(sec&&(t.tBodies[0].rows.length>5||h.cells.length>6))bar(t);
  t.tBodies[0].addEventListener('click',e=>{if(!e.altKey||!t._bar)return;const td=e.target.closest('td');if(!td)return;e.preventDefault();e.stopPropagation();
   const th=hdr(t).cells[td.cellIndex],v=txt(td),x=/\s/.test(v)?'="'+v+'"':'='+v;showFlt(t,true);th._in.value=th._in.value===x?'':x;t._st.f.set(th,th._in.value);apply(t);},true);
- restore(t);regroup(t);stripe(t);}
+ restore(t);regroup(t);stripe(t);if(t._scr&&t._bar)setTimeout(()=>preview(t),0);}
 document.addEventListener('pointermove',e=>{if(!drag)return;if(!drag.on){if(Math.abs(e.clientX-drag.x)<6)return;drag.on=true;drag.th.classList.add('drag');
  document.body.classList.add('dragging');mark.hidden=false;}
  const sc=drag.t.closest('.scroll'),b=sc.getBoundingClientRect();if(e.clientX<b.left+28)sc.scrollLeft-=18;else if(e.clientX>b.right-28)sc.scrollLeft+=18;
@@ -1012,7 +1046,7 @@ TABLE_HOWTO = [
     ["Move / hide columns", "Drag a header left or right (remembered for this page and table). Columns menu: tick columns on or off; Show all; Reset restores the original layout."],
     ["Search rows", "The box left of the buttons: every word must appear somewhere in the row; a|b = either; !x = not."],
     ["Column filters", "A box under every header: >5  <=-2  1..10  2026-11-01..2026-11-07  =exact  !not  a|b  = (empty)  ! (not empty). Alt+click a cell filters its column to that value."],
-    ["Screens", "Dashed buttons above a table: a named preset of column filters and a sort, explained in the line under the toolbar and in the Screens table on this tab. Click again to clear. A screen narrows the rows; it does not rank or score them."],
+    ["Screens", "Dashed buttons above a table: named presets of column filters and a sort, explained in the line under the toolbar and in the Screens table on this tab. Screens overlap: click a second one and the grid keeps the rows that pass both (Low bar + Tonight, Low bar + Model 8+). A screen in the same group (the small caps label before it, e.g. WHEN) or touching the same column replaces the one it clashes with; Ctrl+click overlaps anyway, Shift+click shows that screen alone, None clears them (typed column filters stay and combine). The number on each button is the rows you would see after clicking it. A screen narrows the rows; it does not rank or score them."],
     ["Heat", "Shades numeric columns over the visible rows: green / red around 0 when a column has both signs (stronger = larger), blue by rank otherwise. It shows size, not whether high is good: the Ledger gives each column's direction."],
     ["▲ / ▼ cells", "Green / red cells written ▲+1.2 / ▼-0.8 are measured directions (the cell's evidence cleared its rule); a bare number in the same column was measured without a clear direction. They sort and filter by the number (>0, <0)."],
     ["Stats", "A footer row over the visible rows: the median of each numeric column (hover for n, quartiles, min, max, mean), the top value of each text column."],

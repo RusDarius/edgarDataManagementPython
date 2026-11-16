@@ -7,6 +7,7 @@ rows**. Growth lanes are the default suite; price and overview are secondary.
 |-------|-----------------|---------------|---------------------|
 | **Growth** (default) | `--mode growth` | `fingrowth_*` | How do **revenue / EBIT / EBITDA / margins** evolve over 5y under 3 assumption lanes? |
 | **Price** | `--mode price` | `finproj_*` | What **terminal price / upside** does EV/Rev imply (with street + peer diagnostics)? |
+| **Value** | `--mode value` (and the default script run) | `finvalue_*` | What is the name **worth today** on ≤5y projected earnings, what **annual return** does today's price buy, and how much growth is **priced in**? See section V. |
 | **Overview** | `--mode overview --ticker …` | `tickoverview_*` | What ~100 all-fields metrics does this name show **today** (no projection path)? |
 | **Movement** (sibling) | `--mode movement` or `src/run_movement_opportunity.py` | `movement_opportunity_*` | Trading 1–10 upside/downside from day-to-day variation. Not a 5-year path. See [movement_opportunity_usage.md](movement_opportunity_usage.md). |
 
@@ -466,6 +467,48 @@ print(con.execute("""
 
 ---
 
+## V. Forward value (`finvalue_*`): fair value, IRR, priced-in growth
+
+**Why it exists.** The growth lanes compound year-1 street growth for five years at a 0.9 fade (MU own/base: year-5 EPS 1,479
+on an 879 price) and ignore the street's EPS forecast (HIG, MCY year-1 EPS 20-26% above the street). The price suite multiplies
+year-5 revenue by an EV/Rev and reports an **undiscounted** 5-year upside, with no margins, cash, dilution or required return, and it
+has not been run since 27 Aug, so `fp_terminal_*` in the pack was stale. A "+50% in five years" is 8.4% a year: below most names'
+cost of equity. The value suite answers the mispricing question directly.
+
+**Model** (`src/financial_projection/valuation.py`, knobs `config/financial_projection/value_v1.json`), per name x bear/base/bull:
+
+| Step | What | Knobs |
+|---|---|---|
+| Year 1 | Street: revenue growth from `revenue_forecast_next_fy`, EPS = `earnings_per_share_forecast_next_fy` (fallbacks: TTM YoY / 5y CAGR / industry median; TTM EPS at the TTM margin) | `g1_floor/cap`, `eps1_adjust`, `g1_scale` |
+| Years 2-5 | Growth from year 1 (capped after year 1) decays toward a long-run rate (half the industry's 5y CAGR, half 4%) | `growth_cap_after_y1`, `growth_decay`, `g_end_shift` |
+| Margins | Straight line from the year-1 margin part way to the industry median (down when above it, up when below; a lift capped at +5pp and +50% of today's margin) | `margin_pull_down/up`, `margin_lift_cap`, `margin_lift_rel_cap` |
+| Per share | EPS follows revenue x margin; buybacks shrink the share count; dividends at today's payout | `buyback_weight`, share drift caps |
+| Exit (year 5) | Earnings lens: EPS_5 x (½ own forward P/E + ½ industry median) x scale, P/E 6-35. Loss makers: EV/Sales (industry part scaled by margin / industry margin) less projected net debt | `own_multiple_weight`, `multiple_scale`, `pe_floor/cap` |
+| Discount | Cost of equity = 4.75% + beta (0.6-2.0) x 5% | `discount` |
+| Outputs | `fv_<s>_px` fair value today, `irr_<s>_pct` return the path pays, scenario-weighted `fv_exp_px` / `irr_exp_pct` (weights 25/50/25), `excess_irr_pp` vs the hurdle, `priced_in_cagr_pct` (reverse solve), `dcf_base_px` (FCF-to-equity cross-check, none for Finance) | `scenario_weights`, `terminal_growth` |
+
+Guards (flags column): `currency_mismatch` (price, per-share and market cap in different currencies: share count, P/E and
+mcap/NI checks; such names are not valued), `implausible_pe` (forward P/E under 2), `<s>_multiple_capped`,
+`y1_growth_above_cap`, `pe_under_half_industry` (often a cyclical at peak earnings: read the bear case), `net_debt_over_mcap`,
+`<s>_set_to_base` (year-5 prices kept ordered bear ≤ base ≤ bull).
+
+**How to read it.** Mispricing is `excess_irr_pp` (the scenario-weighted annual return over the name's own hurdle) and
+`growth_gap_pp` (base revenue CAGR minus the CAGR the price needs). `fv_bear_px` is the margin-of-safety floor. The level is
+conservative (2 Nov 2026: median `fv_upside_pct` -11%, median IRR 6.7% against hurdles of 7.75-14.75%), so compare names with each
+other and with the hurdle, not with zero. The pack joins the run: `pe_fwd` / `fp_pe_y1` / `fp_pe_y5` come from the street-anchored
+path (`pe_fwd_source = fp_street`) and every row carries the `fv_*` columns. It is one more lens: not a sort key on its own, not a gate.
+
+```powershell
+python src/run_financial_projection.py   # growth lanes, then the value run (__main__ block)
+# Python: run_value_projection_from_latest_all_fields(symbols=["NASDAQ:MU"])  # medians still use the whole universe
+python src/generic_utils/tv_scan_cli.py named --csv <run>/value_names.csv --ids MU,HIG --fields symbol,close,fv_bear_px,fv_base_px,fv_bull_px,irr_exp_pct,hurdle_pct,priced_in_cagr_pct,flags --line
+```
+
+Tables: `value_names` (one row per name), `value_summary` (name x scenario), `value_year_grid` (revenue, growth, net margin, EPS,
+dividend, share factor per year); `highlights.log` lists the largest excess IRRs, the lowest, and the largest growth gaps.
+
+---
+
 ## G. What the projection does **not** cover
 
 Be explicit — these gaps are why overview / price / all-fields still matter:
@@ -474,7 +517,7 @@ Be explicit — these gaps are why overview / price / all-fields still matter:
 |---------|-------------|
 | No price / multiple path in growth mode | No `terminal_upside_pct`; use `--mode price` |
 | No balance-sheet path (cash, debt, dilution) | Terminal equity/price not modeled here |
-| No FCF / EPS path | Only rev → margin → EBIT/EBITDA/net |
+| No FCF / EPS path | Only rev → margin → EBIT/EBITDA/net (the value suite, section V, has the EPS, dividend and FCF path) |
 | No daily/weekly price performance | Use overview `Perf.*` / `change|*` |
 | No earnings surprise / ST street outlook tables | Price suite `st_*` only |
 | No sector rotation / move-prediction scores | Separate prediction / edge runs |

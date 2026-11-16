@@ -144,7 +144,7 @@
      "title": "Decision matrix: every reporter of the session, pointers up / down per horizon, the overnight tail and the levels",
      "source": {
       "duckdb": "{PACK}/print_night/print_night.duckdb",
-      "sql": "SELECT symbol, phase, slot, mcap_b, close, day, runup, react_abs_mean, react_up, rx_up, rx_dn, h7_up, h7_dn, h28_up, h28_dn, h28_fam_up, h28_fam_dn, h28_up_list, h28_dn_list, h7_up_list, h7_dn_list, rx_up_list, rx_dn_list, setup_cell, setup_mean, setup_rx_mean, setup_rx_q10, setup_rx_q90, tail_starter_usd, up_starter_usd, own_move_starter_usd, peer_rx, peer_n, dec_7d, dec_7d_fx, state_7d, pt_up, pe_nfy_vs_ind, pe_nfy_vs_own, eps_rev_3m, last_surprise, bounce_low, bounce_high, bounce_kill, entry_low, entry_high, kill_px, book_usd, in_store FROM names ORDER BY book_usd DESC NULLS LAST, h28_up - h28_dn DESC, mcap_b DESC",
+      "sql": "SELECT symbol, phase, slot, mcap_b, close, day, runup, react_abs_mean, react_up, rx_up, rx_dn, h7_up, h7_dn, h28_up, h28_dn, h28_fam_up, h28_fam_dn, h28_up_list, h28_dn_list, h7_up_list, h7_dn_list, rx_up_list, rx_dn_list, u10_hi, u10_hi_ptr, d10_hi, d10_hi_ptr, u10_up, d10_up, b10_up, b10_dn, b10_hi, b10_hi_ptr, b10_up_list, b10_dn_list, setup_cell, setup_mean, setup_rx_mean, setup_rx_q10, setup_rx_q90, tail_starter_usd, up_starter_usd, own_move_starter_usd, peer_rx, peer_n, dec_7d, dec_7d_fx, state_7d, pt_up, pe_nfy_vs_ind, pe_nfy_vs_own, eps_rev_3m, last_surprise, bounce_low, bounce_high, bounce_kill, entry_low, entry_high, kill_px, book_usd, in_store FROM names ORDER BY book_usd DESC NULLS LAST, h28_up - h28_dn DESC, mcap_b DESC",
       "drop_missing_columns": true
      },
      "column_groups": [
@@ -189,6 +189,23 @@
         "h7_dn_list",
         "rx_up_list",
         "rx_dn_list"
+       ]
+      ],
+      [
+       "Big-move odds",
+       [
+        "u10_hi",
+        "u10_hi_ptr",
+        "d10_hi",
+        "d10_hi_ptr",
+        "u10_up",
+        "d10_up",
+        "b10_up",
+        "b10_dn",
+        "b10_hi",
+        "b10_hi_ptr",
+        "b10_up_list",
+        "b10_dn_list"
        ]
       ],
       [
@@ -292,6 +309,35 @@
        },
        "sort": "-rx_up",
        "explain": "Any pointer up on the reaction session itself and none down. Few cells call the reaction before a print; treat this as a tilt, not a call."
+      },
+      {
+       "label": "Big-move candidates",
+       "group": "Tail",
+       "filters": {
+        "u10_hi": ">=0.16"
+       },
+       "sort": "-u10_hi",
+       "explain": "HIGHLIGHT, not a course. The SIZE read: one of the name's cells put 16%+ of past prints at +10 pp or more (u10_hi; base 10%; about the top 28% of reporters), and d10_hi says the drop odds are about as high. Out of sample on 4 Nov 2026 (179 after-hours reporters scored from the 17:03 pack): this group moved 6.2% on average after hours, 47% moved 5%+ and 16% moved 10%+ either way, vs 2.7% / 19% / 7% for the middle and 1.2% / 5% / 0% for u10_hi under 0.13. These are the prints that can pay a +20% night (NASDAQ:APP, NASDAQ:SEZL) and the ones that can cost one (NYSE:BROS, NASDAQ:FSLY). Size by tail_starter_usd; the side comes from the 28-day hold counts and the set-up cell, not from this screen."
+      },
+      {
+       "label": "Tail tilts up (unproven live)",
+       "group": "Tail",
+       "filters": {
+        "u10_hi": ">=0.16",
+        "b10_up": ">=1",
+        "b10_dn": "=0"
+       },
+       "sort": "-b10_hi",
+       "explain": "Big-move candidates whose b10 cells (up odds minus down odds) lean up and none lean down. Measured on the lab's prints but the up cells are mostly momentum (r_1m, rsi, vs50 top quintile); on 4 Nov 2026, with momentum reversing, that group had the most -10 pp nights (21%). Read it with the factor month on the signal-lab page; never a buy signal by itself."
+      },
+      {
+       "label": "Quiet prints",
+       "group": "Tail",
+       "filters": {
+        "u10_hi": "<0.13"
+       },
+       "sort": "u10_hi",
+       "explain": "No cell lifts the +10 odds much above the 10% base (about the bottom 11% of reporters): a print these names usually absorb (out of sample on 4 Nov 2026: mean after-hours move 1.2%, 1 in 19 moved 5%+, none 10%). Holding a line through it is a small bet either way."
       },
       {
        "label": "Book lines printing",

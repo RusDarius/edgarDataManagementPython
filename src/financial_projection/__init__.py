@@ -23,6 +23,7 @@ from .sources import (
     resolve_symbols_argument,
 )
 from .ticker_overview import run_ticker_projection_overview
+from .value_suite import run_value_projection_suite
 
 __all__ = [
     "DEFAULT_MIN_MARKET_CAP_USD",
@@ -40,4 +41,5 @@ __all__ = [
     "run_growth_projection_suite",
     "run_growth_projection_suite_custom_peer_group",
     "run_ticker_projection_overview",
+    "run_value_projection_suite",
 ]

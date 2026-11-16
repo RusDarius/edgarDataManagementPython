@@ -30,6 +30,10 @@
     {"type": "callout", "from": "pages.wisdom.blocks.book_3"},
     {"type": "table", "title": "Book: levels on today's data (safety-band)", "ids_from": "pages.wisdom.book_ids",
      "source": {"duckdb": "{PACK}/analysis_scans/name_levels/safety_band/safety_band.duckdb", "sql": "SELECT symbol, ind, close, day, bounce_low, bounce_high, bounce_kill, bounce_kill_pct, add_trigger_low, add_trigger_high, trim_zone, trim_zone_state, street_px, street_left, dte FROM safety_band"},
+     "extra_columns": ["Course", "Grade", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+    {"type": "callout", "from": "pages.wisdom.blocks.peers"},
+    {"type": "table", "title": "Book against its peers: premium to the industry, the premium its growth / quality earns, the gap (peer-value)", "optional": true,
+     "source": {"duckdb": "{PACK}/peer_value/peer_value.duckdb", "sql": "SELECT symbol, \"group\", lens, mult, ind_med, prem_pct, just_pct, gap_pct, px_fit, pctl_growth, pctl_quality, pctl_revision, rev_nfy_g_vs_ind, opm_vs_ind, priced_in_cagr_pct_vs_ind FROM names WHERE in_book ORDER BY book_usd DESC NULLS LAST", "drop_missing_columns": true},
      "extra_columns": ["Course", "Grade", "Reason"], "tone_field": "Course", "extra_from": "courses"}
    ]
   },
@@ -53,6 +57,8 @@
      "extra_columns": ["Course", "Grade", "Reason"], "tone_field": "Course", "extra_from": "courses"},
     {"type": "table", "title": "Margin of safety on next-FY EPS and the 7-month path", "ids_from": "pages.wisdom.focus_ids", "sort": "-mos_peer_pct",
      "source": {"duckdb": "{PACK}/analysis_scans/name_levels/safety_band/safety_band.duckdb", "sql": "SELECT symbol, close, pe_nfy, pe_nfy_ind_med, pe_nfy_vs_ind, pe_nfy_seat, mos_peer_pct, mos_own_med_pct, eps_fc_pct, derate_pct, giveback_pct, window_high, window_low FROM safety_band"}},
+    {"type": "table", "title": "Focus names against their peers (peer-value: gap_pct > 0 = cheaper than peers with the same profile)", "optional": true, "ids_from": "pages.wisdom.focus_ids", "sort": "-gap_pct",
+     "source": {"duckdb": "{PACK}/peer_value/peer_value.duckdb", "sql": "SELECT symbol, \"group\", lens, mult, ind_med, prem_pct, just_pct, gap_pct, px_fit, pctl_growth, pctl_quality, pctl_revision, peg_vs_ind_pct, priced_in_cagr_pct_vs_ind, irr_exp_pct_vs_ind FROM names", "drop_missing_columns": true}},
     {"type": "table", "title": "Theme slice (GMV lens, industry cap)", "optional": true,
      "source": {"csv": "{PACK}/analysis_scans/theme_slice.csv"},
      "columns": ["symbol", "ind", "lenses", "tape_state", "rerate_floor", "r_1m", "eps_rev_3m", "fwd_eps_g", "pe_nfy", "pe_nfy_vs_ind", "peg_fwd", "street_left", "dte"],

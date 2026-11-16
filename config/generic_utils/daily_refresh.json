@@ -144,7 +144,9 @@
       "name": "earnings_week",
       "after": [
         "gmv",
-        "movers"
+        "movers",
+        "peer_value",
+        "event_risk"
       ],
       "optional": true,
       "argv": [
@@ -388,7 +390,8 @@
     {
       "name": "outlook",
       "after": [
-        "week_plays"
+        "week_plays",
+        "event_risk"
       ],
       "optional": true,
       "argv": [
@@ -440,7 +443,8 @@
     {
       "name": "deterioration",
       "after": [
-        "week_plays"
+        "week_plays",
+        "event_risk"
       ],
       "optional": true,
       "argv": [
@@ -502,6 +506,178 @@
         "{PACK}",
         "--out-dir",
         "{PACK}/pathway",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "premarket_book",
+      "after": [],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "premarket-book",
+        "--out-dir",
+        "{PACK}/premarket_book",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "beat_bar",
+      "after": [
+        "week_plays"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "beat-bar",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/beat_bar",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "anatomy",
+      "after": [
+        "outlook"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "anatomy",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/anatomy",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "recovery_clock",
+      "after": [
+        "deterioration"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "recovery-clock",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/recovery_clock",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "cycle",
+      "after": [
+        "deterioration"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "cycle",
+        "--pack",
+        "{PACK}",
+        "--theme",
+        "ai_core,ai_peers,hyperscalers",
+        "--out-dir",
+        "{PACK}/cycle_scenarios",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "peer_value",
+      "after": [
+        "movers"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "peer-value",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/peer_value",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "event_risk",
+      "after": [
+        "book_risk",
+        "movers"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "event-risk",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/event_risk",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "board",
+      "after": [
+        "outlook",
+        "anatomy",
+        "beat_bar",
+        "deterioration",
+        "peer_value",
+        "event_risk"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "board",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/board",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "lane_book",
+      "after": [
+        "board"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "lane-book",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/lane_book",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "sentiment",
+      "after": [],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "sentiment",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/sentiment",
         "--quiet"
       ]
     }
@@ -617,6 +793,14 @@
     }
   ],
   "templates": [
+    "brief",
+    "board",
+    "movers"
+  ],
+  "_templates_note": "templates = the default daily pages (the quick brief, the board: plan, grids, catalyst book, and movers: day / week / 5D / 1M Top 25 up and punished BOUNCE vs CONTINUE_DOWN with its Plan tab from pages.movers). templates_all = every page; render it with tv_scan_cli.py page-all --set all, or one deep page with --templates NAME, when a step needs it (print nights: outlook / print_brief / week_plays; drawdowns: deterioration / pathway; model weeks: alpha_model / signal_lab).",
+  "templates_all": [
+    "brief",
+    "board",
     "daily_focus",
     "movers",
     "playbook",
@@ -629,7 +813,10 @@
     "outlook",
     "print_brief",
     "deterioration",
-    "pathway"
+    "pathway",
+    "peer_value",
+    "focus_book",
+    "lane_book"
   ],
   "review_courses": [
     "NEW",

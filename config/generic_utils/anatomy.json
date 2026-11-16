@@ -1,0 +1,48 @@
+{
+  "name": "anatomy",
+  "description": "Winners anatomy on the panel store: what the biggest later movers (top / bottom tail of each day's forward return) looked like before the move - single feature quantiles and pairs of extreme quantiles (patterns) by how much more often they produced a tail mover than the base rate, with block t, both halves and distinct names; a hold-out check on the last window (patterns mined only on labels that closed before it); the catalyst mix of the tail movers (print in the window, industry wave); and today's names on the stable patterns. Evidence, not a gate: no list is filtered by it.",
+  "study": {
+    "min_market_cap_usd": 1000000000,
+    "min_names": 200,
+    "min_feature_n": 100,
+    "winsor_pct": 1.0,
+    "first_day": null,
+    "last_day": null
+  },
+  "horizons": ["7d", "14d", "28d"],
+  "tail_pct": 5.0,
+  "quantiles": 5,
+  "features": "all",
+  "exclude_features": ["size", "dollar_vol"],
+  "industry_features": {"by": "ind", "min_n": 5, "fields": ["r_1w", "r_1m", "r_3m", "eps_rev_3m", "rev_rev_3m", "last_surprise", "pt_up", "vs50"]},
+  "pairs": {"min_obs": 300, "min_days": 20, "min_names": 25, "keep": 400, "min_block_obs": 10},
+  "labels": {"t": 2.0, "strong_t": 3.0, "pair_t": 3.0, "excess_t": 2.0},
+  "mix_features": ["r_1m", "r_3m", "eps_rev_3m", "pt_up", "ey_fwd", "rvol_20", "vs50", "relvol", "ind_r_1m"],
+  "tests": [
+    "rsi:lo & p_fwd:hi",
+    "dsp<=10 & last_surprise>0 & r_1w:lo",
+    "ind_r_3m:lo & ind_last_surprise:hi",
+    "r_1m:lo & p_dvc:hi",
+    "hi_prox:lo & p_dvc:hi",
+    "r_3m:lo & pt_up:hi & eps_rev_3m>=0",
+    "pt_up:hi & dte<=28 & eps_rev_3m>=0 & vs200:lo",
+    "r_1m:lo & pt_up:hi",
+    "r_1m:lo & pt_up:hi & dte<=28",
+    "p_bo:hi & p_cons_w:lo",
+    "p_bo:hi & p_fwd:lo",
+    "r_1m:hi & p_fwd:lo"
+  ],
+  "letters": {
+    "up": {"O": "rsi:lo & p_fwd:hi", "B": "dsp<=10 & last_surprise>0 & r_1w:lo", "I": "ind_r_3m:lo & ind_last_surprise:hi",
+           "D": "r_1m:lo & p_dvc:hi", "H": "hi_prox:lo & p_dvc:hi", "V": "r_3m:lo & pt_up:hi & eps_rev_3m>=0",
+           "C": "pt_up:hi & dte<=28 & eps_rev_3m>=0 & vs200:lo", "L": "r_1m:lo & pt_up:hi & dte<=28"},
+    "down": {"X": "p_bo:hi & p_cons_w:lo", "Y": "p_bo:hi & p_fwd:lo", "Z": "r_1m:hi & p_fwd:lo"},
+    "durable": "OBIDH"
+  },
+  "candidates": {
+    "outlook_csv": "outlook/names.csv",
+    "fields": ["company", "mcap_b", "close", "day", "m1", "m3", "rsi", "vs50", "vs200", "next_kind", "next_date", "catalysts", "earn_date", "earn_slot", "earn_days", "setup_cell", "setup_mean", "entry_low", "entry_high", "kill_px", "mark_vs_band", "bounce_low", "bounce_high", "bounce_kill", "first_target", "pe_nfy", "pe_nfy_vs_ind", "pt_up", "left", "eps_rev_3m", "rev_rev_3m", "fwd_eps_g", "fcf_margin", "pred_28d", "dec_28d", "b28d_q20", "b28d_q80", "lenses", "pack_lists", "book_usd"]
+  },
+  "recent": {"top_pct": 5.0, "patterns_per_side": 40, "winners_rows": 60},
+  "live": {"patterns_per_side": 40, "detail_features": ["r_1w", "r_1m", "r_3m", "ind_r_1m", "vs50", "rng52", "eps_rev_3m", "rev_rev_3m", "pt_up", "ey_fwd", "fcf_yield", "rev_yoy", "last_surprise", "dte", "since_print", "rvol_20", "beta", "relvol"]}
+}

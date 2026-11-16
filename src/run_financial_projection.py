@@ -26,6 +26,10 @@ Price-projection callables (EV/Rev suite):
   - run_financial_projection_from_all_fields_day
   - run_financial_projection_for_custom_peer_group
 
+Forward value (fair value today, IRR vs a cost-of-equity hurdle, priced-in growth; <= 5 years, street year 1):
+  - run_value_projection_from_latest_all_fields   (--mode value; the default script run also writes it)
+  - config/financial_projection/value_v1.json, financial_projection/valuation.py
+
 Ticker overview:
   - run_ticker_projection_overview / example_ticker_overview
 
@@ -59,6 +63,7 @@ from financial_projection.load_all_fields import (
     resolve_all_fields_day_database,
 )
 from financial_projection.sources import resolve_symbols_argument
+from financial_projection.value_suite import run_value_projection_suite
 
 # ---------------------------------------------------------------------------
 # Growth suite presets — primary first-iteration output
@@ -109,6 +114,34 @@ def run_growth_projection_from_latest_all_fields(
     )
     result["source_mode"] = "latest_all_fields"
     result["min_market_cap_usd"] = float(min_market_cap_usd)
+    return result
+
+
+def run_value_projection_from_latest_all_fields(
+    *,
+    min_market_cap_usd: float = DEFAULT_MIN_MARKET_CAP_USD,
+    all_fields_db: str | Path | None = None,
+    symbols: Sequence[str] | None = None,
+    value_config_path: str | Path | None = None,
+    output_root: str | Path | None = None,
+    print_console: bool = True,
+) -> dict[str, Any]:
+    """
+    Forward value for the latest all-fields universe (``finvalue_*`` run).
+
+    Year 1 = street revenue / EPS forecasts; years 2-5 = decaying growth and margins toward the
+    industry; year-5 exit multiple; dividends; discounted at a beta-based cost of equity. Industry
+    medians use the whole universe; ``symbols`` only limits which names are valued.
+    """
+    result = run_value_projection_suite(
+        all_fields_db=all_fields_db,
+        config_path=value_config_path,
+        output_root=output_root,
+        min_market_cap_usd=min_market_cap_usd,
+        symbols=symbols,
+        print_console=print_console,
+    )
+    result["source_mode"] = "latest_all_fields"
     return result
 
 
@@ -532,7 +565,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--mode",
-        choices=("growth", "price", "overview", "movement"),
+        choices=("growth", "price", "value", "overview", "movement"),
         default="growth",
         help=(
             "growth=revenue/EBIT/EBITDA/margin lanes (default); "
@@ -700,6 +733,21 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
         print(f"Overview log: {result['overview_log']}")
         return result
 
+    if mode == "value":
+        result = run_value_projection_from_latest_all_fields(
+            min_market_cap_usd=args.min_market_cap_usd,
+            all_fields_db=args.all_fields_db,
+            symbols=resolve_symbols_argument(symbols_csv=args.symbols) or None,
+            output_root=args.output_root,
+            print_console=not args.quiet,
+        )
+        print(f"Project root: {PROJECT_ROOT.as_posix()}")
+        print(f"Mode: {mode}")
+        print(f"Run dir: {result['run_dir']}")
+        print(f"DuckDB: {result['database_path']}")
+        print(f"Highlights: {result['highlights_log']}")
+        return result
+
     growth = mode == "growth"
 
     common = dict(
@@ -811,6 +859,9 @@ if __name__ == "__main__":
     run_growth_projection_from_latest_prediction_analysis(
         min_market_cap_usd=500_000_000
     )
+    # Forward value (fair value today, IRR vs hurdle, priced-in growth) on the whole universe; the
+    # briefing pack joins it as fp_pe_y1 / fp_pe_y5 (street-anchored) and the fv_* columns.
+    run_value_projection_from_latest_all_fields(min_market_cap_usd=500_000_000)
     #   run_growth_projection_from_latest_all_fields(symbols=["NASDAQ:ADBE", "NYSE:PATH"])
     #   run_growth_projection_for_custom_peer_group([...], group_label="saas_mature")
     #   example_ticker_overview("NASDAQ:PENG")

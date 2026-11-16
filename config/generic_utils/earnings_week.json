@@ -42,6 +42,10 @@
      "id_field": "symbol",
      "fields": {"upside_prediction_score": "edge_up_score", "forward_valuation_upside_pct": "edge_fwd_up",
                 "historical_validation_win_rate": "edge_hist_win", "median_fwd_5d_in_setup": "edge_med_5d",
-                "big_mover_score": "edge_big_mover", "safety_bucket": "edge_safety"}}
+                "big_mover_score": "edge_big_mover", "safety_bucket": "edge_safety"}},
+    {"name": "peer_value", "duckdb": "{PACK}/peer_value/peer_value.duckdb", "table": "names", "id_field": "symbol",
+     "fields": {"group": "peer_group", "lens": "peer_lens", "mult": "peer_mult", "ind_med": "peer_ind_med", "prem_pct": "peer_prem_pct", "just_pct": "peer_just_pct", "gap_pct": "peer_gap_pct", "px_fit": "peer_px_fit", "pctl_growth": "peer_pctl_growth", "pctl_quality": "peer_pctl_quality", "peg_vs_ind_pct": "peer_peg_vs_ind_pct", "priced_in_cagr_pct_vs_ind": "peer_pic_vs_ind"}},
+    {"name": "event_risk", "duckdb": "{PACK}/event_risk/event_risk.duckdb", "table": "names", "id_field": "symbol",
+     "fields": {"warn_level": "warn_level", "er_letters": "er_letters", "stress_5s_usd": "stress_5s_usd", "ev_next": "ev_next", "ev_recent_z": "ev_recent_z"}}
   ]
 }

@@ -1,0 +1,364 @@
+{
+  "name": "opportunity_board_v1",
+  "description": "One row per name (base: the outlook names) with peer value, deterioration, the beat bar, forward value, pattern letters and store beta / volatility joined by EXCHANGE:TICKER. column_groups is the one owner of the column order for the board tables and the board page. No cutoffs, no ranking, no course.",
+  "base": {
+    "duckdb": "{PACK}/outlook/outlook.duckdb",
+    "table": "names"
+  },
+  "joins": [
+    {
+      "name": "peer_value",
+      "duckdb": "{PACK}/peer_value/peer_value.duckdb",
+      "table": "names",
+      "id_field": "symbol",
+      "fields": {
+        "group": "peer_group",
+        "lens": "peer_lens",
+        "mult": "peer_mult",
+        "ind_med": "peer_ind_med",
+        "prem_pct": "peer_prem_pct",
+        "just_pct": "peer_just_pct",
+        "gap_pct": "peer_gap_pct",
+        "px_fit": "peer_px_fit",
+        "pctl_growth": "peer_pctl_growth",
+        "pctl_quality": "peer_pctl_quality",
+        "pctl_revision": "peer_pctl_revision"
+      }
+    },
+    {
+      "name": "deterioration",
+      "duckdb": "{PACK}/deterioration/deterioration.duckdb",
+      "table": "names",
+      "id_field": "symbol",
+      "fields": {
+        "dd": "dd",
+        "det": "det",
+        "n_det": "n_det",
+        "to_sma50_pct": "to_sma50_pct",
+        "to_hi52_pct": "to_hi52_pct",
+        "cnt_cell": "cnt_cell",
+        "cnt_fx_28d_mean": "cnt_fx_28d_mean",
+        "cnt_fx_28d_hit": "cnt_fx_28d_hit",
+        "cnt_p_dn_28d": "cnt_p_dn_28d",
+        "cnt_p_half_56d": "cnt_p_half_56d",
+        "crun_cell": "crun_cell"
+      }
+    },
+    {
+      "name": "beat_bar",
+      "duckdb": "{PACK}/beat_bar/beat_bar.duckdb",
+      "table": "names",
+      "id_field": "symbol",
+      "fields": {
+        "cell": "bb_cell",
+        "c_bar_text": "c_bar_text",
+        "c_beat_rate": "c_beat_rate",
+        "c_rx_beat": "c_rx_beat",
+        "c_rx_miss": "c_rx_miss",
+        "c_beat_sold": "c_beat_sold",
+        "c_h28_beat": "c_h28_beat",
+        "c_h28_miss": "c_h28_miss",
+        "p_beat": "p_beat",
+        "ev_rx": "ev_rx",
+        "ev_h28": "ev_h28",
+        "own_beats": "own_beats",
+        "own_n": "own_n",
+        "beat_q90_usd": "beat_q90_usd",
+        "miss_q10_usd": "miss_q10_usd"
+      }
+    },
+    {
+      "name": "forward_value",
+      "csv": "{PACK}/movers/us2b_tape.csv",
+      "id_field": "symbol",
+      "fields": {
+        "fv_base_px": "fv_base_px",
+        "fv_upside_pct": "fv_upside_pct",
+        "irr_exp_pct": "irr_exp_pct",
+        "hurdle_pct": "hurdle_pct",
+        "priced_in_cagr_pct": "priced_in_cagr_pct",
+        "fv_flags": "fv_flags",
+        "mtp": "mtp",
+        "street_px": "street_px"
+      }
+    },
+    {
+      "name": "anatomy_up",
+      "duckdb": "{PACK}/anatomy/anatomy.duckdb",
+      "table": "candidates",
+      "id_field": "symbol",
+      "fields": {
+        "pat_up": "pat_up",
+        "n_durable": "n_durable"
+      }
+    },
+    {
+      "name": "anatomy_down",
+      "duckdb": "{PACK}/anatomy/anatomy.duckdb",
+      "table": "short_candidates",
+      "id_field": "symbol",
+      "fields": {
+        "pat_dn": "pat_dn"
+      }
+    },
+    {
+      "name": "store",
+      "duckdb": "logs/tradingview_analysis/signal_lab/panel_store.duckdb",
+      "table": "features",
+      "id_field": "symbol",
+      "where": "as_of = (SELECT max(as_of) FROM features)",
+      "fields": {
+        "beta": "beta",
+        "rvol_20": "rvol_20",
+        "r_12m": "r_12m"
+      }
+    },
+    {
+      "name": "event_risk",
+      "duckdb": "{PACK}/event_risk/event_risk.duckdb",
+      "table": "names",
+      "id_field": "symbol",
+      "fields": {
+        "warn_level": "warn_level",
+        "warn_rule": "warn_rule",
+        "er_letters": "er_letters",
+        "stress_5s_pct": "stress_5s_pct",
+        "stress_5s_usd": "stress_5s_usd",
+        "crowd_day_pct": "crowd_day_pct",
+        "crowd_5s_pct": "crowd_5s_pct",
+        "crowd_z": "crowd_z",
+        "beta_crowd_dn": "beta_crowd_dn",
+        "ev_recent_z": "ev_recent_z",
+        "ev_next": "ev_next",
+        "ev_binary": "ev_binary",
+        "crowd_top": "crowd_top"
+      }
+    }
+  ],
+  "band": {
+    "low": "bounce_low",
+    "high": "bounce_high",
+    "kill": "bounce_kill"
+  },
+  "cell_field": "bb_cell",
+  "cell_axes": {
+    "runup": "bar_runup",
+    "r_3m": "bar_tape",
+    "eps_rev_3m": "bar_rev"
+  },
+  "column_groups": [
+    [
+      "Name",
+      [
+        "symbol",
+        "company",
+        "ind",
+        "mcap_b",
+        "book_usd",
+        "in_book",
+        "named",
+        "pack_lists"
+      ]
+    ],
+    [
+      "Tape",
+      [
+        "close",
+        "day",
+        "w",
+        "m1",
+        "m3",
+        "r_12m",
+        "rsi",
+        "rng",
+        "vs50",
+        "vs200",
+        "atrp",
+        "relvol",
+        "tape_state",
+        "trend_q",
+        "updown_vol",
+        "hi52_days"
+      ]
+    ],
+    [
+      "Entry band",
+      [
+        "band_state",
+        "bounce_low",
+        "bounce_high",
+        "bounce_kill",
+        "to_band_high_pct",
+        "kill_dist_pct",
+        "first_target",
+        "sma_role",
+        "entry_low",
+        "entry_high",
+        "kill_px",
+        "mark_vs_band",
+        "b28d_q20",
+        "b28d_q80"
+      ]
+    ],
+    [
+      "Catalyst",
+      [
+        "next_kind",
+        "next_date",
+        "earn_date",
+        "earn_slot",
+        "earn_days",
+        "earn_week",
+        "catalysts",
+        "phase",
+        "runup",
+        "setup_cell",
+        "setup_mean"
+      ]
+    ],
+    [
+      "Earnings bar",
+      [
+        "bb_cell",
+        "bar_runup",
+        "bar_tape",
+        "bar_rev",
+        "c_bar_text",
+        "c_beat_rate",
+        "c_rx_beat",
+        "c_rx_miss",
+        "c_beat_sold",
+        "c_h28_beat",
+        "c_h28_miss",
+        "p_beat",
+        "ev_rx",
+        "ev_h28",
+        "own_beats",
+        "own_n",
+        "beat_q90_usd",
+        "miss_q10_usd"
+      ]
+    ],
+    [
+      "Model",
+      [
+        "dec_7d",
+        "pred_7d",
+        "dec_28d",
+        "pred_28d",
+        "dec_56d",
+        "pred_56d",
+        "why_28d",
+        "pat_up",
+        "n_durable",
+        "pat_dn",
+        "p_def",
+        "p_dvc",
+        "lenses",
+        "strong_lens",
+        "weak_lens"
+      ]
+    ],
+    [
+      "Value",
+      [
+        "pe_nfy",
+        "pe_nfy_vs_ind",
+        "pe_nfy_vs_own",
+        "mos_peer_pct",
+        "mos_own_med_pct",
+        "peg_fwd",
+        "evebitda",
+        "pt_up",
+        "street_px",
+        "street_left",
+        "left",
+        "fv_base_px",
+        "fv_upside_pct",
+        "irr_exp_pct",
+        "hurdle_pct",
+        "priced_in_cagr_pct",
+        "fv_flags"
+      ]
+    ],
+    [
+      "Peers",
+      [
+        "peer_group",
+        "peer_lens",
+        "peer_mult",
+        "peer_ind_med",
+        "peer_prem_pct",
+        "peer_just_pct",
+        "peer_gap_pct",
+        "peer_px_fit",
+        "peer_pctl_growth",
+        "peer_pctl_quality",
+        "peer_pctl_revision"
+      ]
+    ],
+    [
+      "Progression",
+      [
+        "eps_rev_3m",
+        "eps_rev_breadth",
+        "rev_rev_3m",
+        "pt_drift_3m",
+        "fwd_eps_g",
+        "rev_yoy",
+        "eps_yoy",
+        "last_surprise",
+        "rev_surprise",
+        "react_last",
+        "since_print",
+        "dsp",
+        "analysts",
+        "rating"
+      ]
+    ],
+    [
+      "Risk",
+      [
+        "beta",
+        "rvol_20",
+        "dd",
+        "to_hi52_pct",
+        "to_sma50_pct",
+        "det",
+        "n_det",
+        "cnt_cell",
+        "cnt_fx_28d_mean",
+        "cnt_fx_28d_hit",
+        "cnt_p_dn_28d",
+        "cnt_p_half_56d",
+        "crun_cell",
+        "opm",
+        "fcf_margin",
+        "nd_ebitda",
+        "div_yield",
+        "mix",
+        "mtp",
+        "rr",
+        "bo"
+      ]
+    ],
+    [
+      "Event risk",
+      [
+        "warn_level",
+        "er_letters",
+        "warn_rule",
+        "stress_5s_pct",
+        "stress_5s_usd",
+        "crowd_day_pct",
+        "crowd_5s_pct",
+        "crowd_z",
+        "beta_crowd_dn",
+        "ev_recent_z",
+        "ev_next",
+        "ev_binary",
+        "crowd_top"
+      ]
+    ]
+  ]
+}

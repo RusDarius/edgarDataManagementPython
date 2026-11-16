@@ -12,6 +12,10 @@ Forward EV/EBITDA is today's enterprise value / that year's EBITDA.
 Neither multiple is filled with EV/Rev or with trailing PE.
 
 ``fp_*_y5`` uses ``fp_horizon_year`` (the last projected year, capped at 5).
+
+When a forward value run (``finvalue_*``, financial_projection.value_suite) exists, ``fp_pe_y1`` / ``fp_pe_y5`` come from its
+street-anchored base path (year-1 EPS = the street's next-FY EPS) and the ``fv_*`` columns carry its values: fair value today
+per scenario and scenario-weighted, the IRR each pays against the cost-of-equity hurdle, and the revenue CAGR the price needs.
 """
 
 from __future__ import annotations
@@ -58,6 +62,20 @@ PACK_FORWARD_KEYS: tuple[str, ...] = (
     "fp_ebitda_y5",
     "fp_rev_y1",
     "fp_rev_y5",
+    "fp_eps_y1",
+    "fp_eps_y5",
+    "fv_bear_px",
+    "fv_base_px",
+    "fv_bull_px",
+    "fv_exp_px",
+    "fv_upside_pct",
+    "irr_exp_pct",
+    "hurdle_pct",
+    "excess_irr_pp",
+    "priced_in_cagr_pct",
+    "growth_gap_pp",
+    "fv_lens",
+    "fv_flags",
     "ni",
     "ebitda",
     "fcf",
@@ -67,7 +85,13 @@ PACK_FORWARD_KEYS: tuple[str, ...] = (
     "ev",
 )
 
-_CACHE: dict[tuple[str, str, str], "ProjectionContext"] = {}
+_CACHE: dict[tuple[str, ...], "ProjectionContext"] = {}
+
+# value_names columns read from a finvalue run (financial_projection.value_suite).
+VALUE_COLUMNS: tuple[str, ...] = (
+    "symbol", "close", "market_cap_basic", "lens", "eps1", "eps_y5_base", "fv_bear_px", "fv_base_px", "fv_bull_px", "fv_exp_px",
+    "fv_upside_pct", "irr_exp_pct", "hurdle_pct", "excess_irr_pp", "priced_in_cagr_pct", "growth_gap_pp", "flags",
+)
 
 
 @dataclass
@@ -79,6 +103,8 @@ class ProjectionContext:
     price_summary: dict[str, dict[str, Any]] = field(default_factory=dict)
     price_years: dict[str, dict[str, Any]] = field(default_factory=dict)
     trailing: dict[str, dict[str, Any]] = field(default_factory=dict)
+    value_names: dict[str, dict[str, Any]] = field(default_factory=dict)
+    value_db: str | None = None
     growth_db: str | None = None
     price_db: str | None = None
     all_fields_db: str | None = None
@@ -313,6 +339,7 @@ def context_from_parts(
     price_summary: Sequence[Mapping[str, Any]] = (),
     price_years: Sequence[Mapping[str, Any]] = (),
     trailing: Sequence[Mapping[str, Any]] = (),
+    value_names: Sequence[Mapping[str, Any]] = (),
 ) -> ProjectionContext:
     """Build a context from in-memory rows. Used by tests and by the loader."""
     return ProjectionContext(
@@ -330,6 +357,7 @@ def context_from_parts(
             scenario="base",
         ),
         trailing=index_summary_rows(trailing),
+        value_names=index_summary_rows(value_names),
     )
 
 
@@ -430,9 +458,10 @@ def load_projection_context(
     price_db: str | Path | None = None,
     all_fields_db: str | Path | None = None,
     *,
+    value_db: str | Path | None = None,
     discover: bool = True,
 ) -> ProjectionContext:
-    """Latest fingrowth, finproj, and all-fields trailing levels. Missing files are skipped."""
+    """Latest fingrowth, finproj, finvalue and all-fields trailing levels. Missing files are skipped."""
     if discover:
         from generic_utils.forward_value import discover_latest_projection_db
 
@@ -442,12 +471,15 @@ def load_projection_context(
         if not price_db:
             found = discover_latest_projection_db(prefix="finproj_")
             price_db = str(found) if found else None
+        if not value_db:
+            found = discover_latest_projection_db(prefix="finvalue_")
+            value_db = str(found) if found else None
         if not all_fields_db:
             from financial_projection.load_all_fields import discover_latest_all_fields_db
 
             found_af = discover_latest_all_fields_db()
             all_fields_db = str(found_af) if found_af else None
-    key = (str(growth_db or ""), str(price_db or ""), str(all_fields_db or ""))
+    key = (str(growth_db or ""), str(price_db or ""), str(all_fields_db or ""), str(value_db or ""))
     cached = _CACHE.get(key)
     if cached is not None:
         return cached
@@ -543,6 +575,13 @@ def load_projection_context(
                 )
         except Exception as exc:
             warnings.append(f"price: {exc}")
+    value_names: dict[str, dict[str, Any]] = {}
+    if value_db and Path(value_db).exists():
+        try:
+            if "value_names" in _table_names(value_db):
+                value_names = index_summary_rows(_load_summary(value_db, "value_names", VALUE_COLUMNS, "TRUE"))
+        except Exception as exc:
+            warnings.append(f"value: {exc}")
     if all_fields_db and Path(all_fields_db).exists():
         try:
             trailing = index_summary_rows(_load_trailing(all_fields_db))
@@ -554,6 +593,8 @@ def load_projection_context(
         price_summary=price_summary,
         price_years=price_years,
         trailing=trailing,
+        value_names=value_names,
+        value_db=str(value_db) if value_db else None,
         growth_db=str(growth_db) if growth_db else None,
         price_db=str(price_db) if price_db else None,
         all_fields_db=str(all_fields_db) if all_fields_db else None,
@@ -593,7 +634,7 @@ def _debt_forward(
 def _quote_forward_pe(rec: dict[str, Any], fp_pe_y1: float | None, pe_method: str | None) -> None:
     source_now = rec.get("pe_fwd_source")
     if "pe_fwd_tv" not in rec:
-        if source_now in {"fp_path", "fp_cagr", "tv_nongaap"}:
+        if source_now in {"fp_path", "fp_cagr", "fp_street", "tv_nongaap"}:
             rec["pe_fwd_tv"] = None
         else:
             rec["pe_fwd_tv"] = _num(rec.get("pe_fwd"))
@@ -601,7 +642,7 @@ def _quote_forward_pe(rec: dict[str, Any], fp_pe_y1: float | None, pe_method: st
     nongaap = _num(rec.get("pe_fwd_nongaap"))
     if fp_pe_y1 is not None and fp_pe_y1 > 0:
         rec["pe_fwd"] = _round(fp_pe_y1)
-        rec["pe_fwd_source"] = "fp_path" if pe_method == "path" else "fp_cagr"
+        rec["pe_fwd_source"] = {"path": "fp_path", "value_street": "fp_street"}.get(str(pe_method), "fp_cagr")
     elif tv is not None and tv > 0:
         rec["pe_fwd"] = _round(tv)
         rec["pe_fwd_source"] = "tv"
@@ -641,6 +682,7 @@ def attach_forward_fundamentals(
     price_maps = (_bound(ctx.price_summary),)
     growth_years_index = _bound(ctx.growth_years)
     price_years_index = _bound(ctx.price_years)
+    value_index = _bound(ctx.value_names)
     out: list[dict[str, Any]] = []
     for row in rows:
         rec = dict(row)
@@ -743,6 +785,14 @@ def attach_forward_fundamentals(
 
         pe_y1 = _multiple(mcap, ni_y1)
         pe_y5 = _multiple(mcap, ni_y5)
+        value = _lookup(value_index, symbol) or {}
+        close_now = _first(_row_num(rec, "close"), _num(value.get("close")))
+        eps_v1, eps_v5 = _num(value.get("eps1")), _num(value.get("eps_y5_base"))
+        if close_now and eps_v1 is not None:
+            # The value run's base path is anchored on the street's next-FY EPS: it replaces the growth-lane path.
+            pe_y1, ni_m1 = (close_now / eps_v1 if eps_v1 > 0 else None), "value_street"
+            if eps_v5 is not None:
+                pe_y5, ni_m5 = (close_now / eps_v5 if eps_v5 > 0 else None), "value_path"
         evebitda_y1 = _multiple(ev_now, ebitda_y1)
         evebitda_y5 = _multiple(ev_now, ebitda_y5)
 
@@ -795,6 +845,13 @@ def attach_forward_fundamentals(
         rec["fp_ebitda_y5"] = _round(ebitda_y5)
         rec["fp_rev_y1"] = _round(rev_y1)
         rec["fp_rev_y5"] = _round(rev_y5)
+        rec["fp_eps_y1"] = _round(eps_v1)
+        rec["fp_eps_y5"] = _round(eps_v5)
+        for key in ("fv_bear_px", "fv_base_px", "fv_bull_px", "fv_exp_px", "fv_upside_pct", "irr_exp_pct", "hurdle_pct",
+                    "excess_irr_pp", "priced_in_cagr_pct", "growth_gap_pp"):
+            rec[key] = _round(_num(value.get(key)))
+        rec["fv_lens"] = value.get("lens") or None
+        rec["fv_flags"] = value.get("flags") or None
         if rec.get("ni") is None and ni_trail is not None:
             rec["ni"] = _round(ni_trail)
         if rec.get("ebitda") is None and ebitda_trail is not None:

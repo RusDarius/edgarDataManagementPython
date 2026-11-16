@@ -1,0 +1,118 @@
+DAILY BASELINE: the session-aware start of day, canvas output. Day {DAY}.
+Goal: in one pass, what this session is likely to say (US premarket / Europe live / Asia closed, or wherever the
+clock is), where the Book stands (hold vs cut vs add, and what staying costs against the best alternative), and the
+best returns on offer by horizon: short term (1-10 sessions), mid term (3-12 weeks), long term (a 1-3 year thesis).
+
+The runner (src/run_operator_day.py --mode baseline) already refreshed the scans, compiled the pack and wrote every
+suite dump. Pack: {PACK}. Do not rerun producers or compile. Refresh record: {REFRESH_JSON}
+Run folder: {RUN_DIR}. Live judgment: {JUDGMENT}. A same-day earlier judgment is {RUN_DIR}/judgment.prev.json:
+carry its courses through the polar rule.
+
+@.claude/skills/daily-operator-scan/SKILL.md
+@.claude/skills/canvas-ledger/SKILL.md
+Read other skills only when a step needs them (deterioration, book-risk, catalyst-outlook, earnings-week,
+forward-value, pathway, alpha-model, entry-book, scan-evidence).
+
+Every step below is one deterministic command or one file read. Record every extra command in the judgment
+`scans` (argv with {{PACK}}) so UPDATE replays it. Never print data rows to "look": use --line / --quiet.
+
+0. SESSION CLOCK (what the data can and cannot know yet)
+   Note the scan time (pack sources: all-fields run stamp) against the sessions, in UTC:
+     Asia 00:00-07:00 (closed after), Europe 07:00/08:00-15:30/16:30 (live: its rows are intraday marks),
+     US premarket 08:00-13:30, cash 13:30/14:30-20:00/21:00 (DST), after-hours to 00:00.
+   US rows before the cash open carry yesterday's close: the gap is premarket only.
+     {PACK}/premarket_book (premarket, tape_climate): pre_repeat true = no premarket print, pre_px empty.
+     python src/operator_briefing/example_entry.py compare --session --exchanges NASDAQ,NYSE,AMEX --brief
+     {PACK}/intraday/highlights.log when the day file has two runs (session_path EXTENDING / FADING / REVERSING).
+   Say in one line per region what is known (Asia close, Europe so far, US futures / premarket) and what is not.
+
+1. REGIME (before any name)
+   {PACK}/briefing_pack.md once: regime.us_2b, breadth, industries_5d, Book, suggested_courses.
+   documentation/market_insights/regime_playbook.md sections 2 and 3 (what paid in this regime).
+   {PACK}/alpha_model/highlights.log (state per horizon: only OK / WEAK horizons are read as forecasts) and
+   {PACK}/signal_lab/highlights.log (factor month: which styles paid this month).
+   {PACK}/downside overview: the Book's beta (% of NAV) and the AI cluster under its high vs the market.
+   {PACK}/sentiment/highlights.log (market sentiment: breadth, volume, stretch, appetite, earnings reactions, revisions, model
+     medians; percentiles, measured arrows per family, live patterns). Add any dated OUTSIDE reading found in step 4 with
+     tv_scan_cli.py sentiment-add (kind, value, date, source, link); it is shown, never an arrow. Fill pages.brief.blocks.sentiment_read.
+   {PACK}/event_risk/highlights.log (event risk, event-risk skill): every Book line's warn_level (WARN_STRONG / WARN / WATCH),
+     letters (E mapped event ahead, P market-wide binary event ahead, R / U an event already moved its crowd, S industry shock,
+     B high beta to it, T gap-prone, V priced for the boom, D letters beyond price, $ stress >= 1% NAV) and its stress in dollars.
+     Every WARN_STRONG Book line gets an explicit course Reason that says what the line does about the event (hold through,
+     trim, hedge, exit) and why; a WARN line names the letter it accepts. Before a dated policy / election / tariff / regulation
+     event, add its exposure map to config/generic_utils/catalyst_calendar.json (exposure {down|up|either: [themes]}, source in
+     read; themes ai_power_build, solar_clean, memory_storage, policy_midterm_up / _down) and re-run tv_scan_cli.py event-risk --pack {PACK}.
+   Yesterday's calls: python src/generic_utils/tv_scan_cli.py play-review --pack {PACK} --line
+
+2. BOOK PREDICAMENT (one course per line, with what staying costs)
+   python src/generic_utils/tv_scan_cli.py deterioration --pack {PACK} --line     (letters E R C S, cells, dollars)
+   python src/generic_utils/tv_scan_cli.py recovery-clock --pack {PACK} --line    (odds and days to cost / 50-day,
+     path low first, fx_91 vs the median name = the cost of staying)
+   python src/generic_utils/tv_scan_cli.py recovery --pack {PACK} --line          (average-down math, be_vs_sma50_pct)
+   {PACK}/cycle_scenarios names (drop_in_k*, pe_need_k*_d*) for the AI-chain lines: priced for a bust or for continuation.
+   python src/generic_utils/tv_scan_cli.py peer-value --pack {PACK} --ids <book + candidates> --line   (premium to industry
+     peers, the premium the growth / quality earns there, the gap, nearest peers; its evidence lines say whether the gap paid).
+   {PACK}/week_plays book + {PACK}/print_night for lines printing this week (DERISK sticks while dte <= 7).
+   Course rules: price-only damage is held; a new letter is the review trigger; 2+ letters under the bounce kill is cut;
+   crowded winners (12M +100%, 10-35% off the high) are not added; adds only in the bounce band with the new break-even
+   under the 50-day; cap the cluster by NAV (capital-plan industry nav_pct_after), not the line.
+   Opportunity cost, stated per line: stay_fx_91 (the state's excess over the median name, in dollars) against the best
+   alternative's measured edge (alpha decile mean, payoff band, week-plays cell). A line is switched only when the
+   alternative is measured better AND the line's own state lags; never on price alone.
+
+3. OPPORTUNITY, BY HORIZON (data pool first; OUTSIDE second)
+   Short term (1-10 sessions):
+     {PACK}/week_plays plays (pre / post print cells, bands, rx_tail_usd) and {PACK}/print_night (tonight's pointers),
+     {PACK}/beat_bar names (is a beat what the set-up needs), {PACK}/movers (Top 25 up, BOUNCE vs CONTINUE_DOWN),
+     {PACK}/anatomy candidates / short_candidates (read its month table first), premarket gaps from step 0.
+   Mid term (3-12 weeks):
+     Build-50 (radar_curated_50) and payoff focus 10 ({PACK}/payoff_focus), alpha 28d / 56d deciles (if the state allows),
+     {PACK}/outlook build-ups (W2-W6) and overlooked names, GMV profiles that are working ({PACK}/gmv/highlights.log),
+     playbook Best 25 (mesh_band).
+   Long term (1-3 year thesis):
+     forward value (fv_base_px, irr_exp_pct vs hurdle_pct, priced_in_cagr_pct vs street growth, flags) on the
+     candidates: python src/generic_utils/tv_scan_cli.py named --csv <newest finvalue value_names.csv> --ids ... --line;
+     {PACK}/cycle_scenarios for cyclicals (a low pe_need at k0 = a bust already paid for);
+     {PACK}/pathway (the Book's factor tilt vs what pays; a NEW that moves the tilt toward what pays is preferred).
+     {PACK}/peer_value: a name can have its growth priced in and still trade under what peers with the same profile get
+     (gap_pct > 0) or above it (gap_pct < 0); groups.pay_* says whether the industry pays for growth at all.
+   Names outside the pack: named --csv {PACK}/movers/us2b_tape.csv, then entry-book --csv (band, kill, street).
+   Every pick needs a band, a kill and a leftover that is not edge_only; levels from name-levels / entry-book.
+   One grid for all of it: {PACK}/board/board.duckdb names (tv_scan_cli.py board; the page screens are the reading
+   orders). Lanes to cover every day, each with its measured reason:
+     - timing: bounce band top within reach (to_band_high_pct), pull-backs to the 50-day inside a strong model read;
+     - earnings: low bar (bar_rev T1 + bar_tape T1: beats paid most, misses often held) with strength (decile, peer gap)
+       as event tickets; high bar (both T3) only after a sold beat; Book reporters against their cell;
+     - safe park: low store beta and rvol_20, no letter, decile 7+, peer gap / IRR over hurdle (what lowers beta_nav);
+     - upside: big street / forward-value upside that agrees with the peer gap and the model, cluster cap first;
+     - catalyst book (board tab): policy / sentiment names (themes policy_midterm_up / _down), discounted names turning
+       up (Value screen "Discounted, strong, turning up"), AI upside with a dated catalyst; OUTSIDE sets timing only.
+   Peer gaps can move tens of points between two fits of the same day: use only the sign that agrees across runs.
+
+4. OUTSIDE (tag OUTSIDE, date and link every line; timing and Grade only, never a sort key or a size)
+   a. Overnight: Asia closes, Europe so far, US futures, the dollar, 10y, oil, gold; the day's macro calendar.
+   b. Events today and this week (Fed, data, elections, policy) and the prints tonight / tomorrow morning.
+   c. Headlines on every Book line and every name that could take capital.
+   d. The narrative: what is rotating in and out, and what would reverse it.
+   Write "not found" rather than guessing a number.
+
+5. JUDGMENT AND CAPITAL
+   Start from {RUN_DIR}/judgment.skeleton.json, save as {JUDGMENT}, fill courses for every ruled name and the page
+   blocks. Three pages are rendered (CLAUDE.md, Daily outputs): pages.brief (stats, read, highlights, sources: the quick
+   scan) and pages.board (Plan tab: ids, blocks.stats, read, plan / earnings / park / book tables as {"rows": [...],
+   "tones": [...]}, timing, change, sources; Catalyst book tab: catalyst_ids, blocks.catalyst_read, policy, catalyst, and
+   capital_plan.capital_plan_catalyst), and pages.movers (plan_0 stats, plan_1 read, plan_2 [[Horizon, Symbol, Class,
+   Course, Reason]] for the tape names that could take capital or a short; courses for them). Do not repeat the board's plan in the brief. Deep pages only on demand. Budget 0-2 NEW, 0-2 ADD, 0-2 TRIM/EXIT, 0-2 event, 0-1 short; starter about $5,000, an add about $1,000.
+   Queue the rest (NEW (queue) / ADD (queue)) with a trigger; one budget only.
+   python src/generic_utils/tv_scan_cli.py capital-plan --judgment {JUDGMENT} --key capital_plan --pack {PACK}/briefing_pack.json --quiet
+   Then: python src/run_daily_refresh.py --no-producers --no-compile --no-suites --update-day {DAY} --run-dir {RUN_DIR}
+   python src/generic_utils/tv_scan_cli.py page-all --day {DAY} --judgment {JUDGMENT} --out-dir {RUN_DIR} --strict
+   Fix every Ledger warning. Priors: python src/generic_utils/tv_scan_cli.py priors --day {DAY} --notes "<plan line>".
+
+6. FINAL MESSAGE (short)
+   Session line per region; bias; the Book in one table (line, state, course, level, cost of staying); the trade cards
+   by horizon (short / mid / long: entry band or trigger, kill, target street and value apart, catalyst date, size);
+   cash after; what would change the call (a level, a print, a date); page links; sources.
+
+Every stock id is EXCHANGE:TICKER. Polar rule, MTP is climate, no 0-100 composites, no logs/_tmp_*.py, never read a
+whole queries.txt.

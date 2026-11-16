@@ -1,0 +1,71 @@
+{
+  "name": "peer-value-{DAY}",
+  "page_key": "peer_value",
+  "requires": "{PACK}/peer_value/peer_value.duckdb",
+  "title": "Peer value {DAY}",
+  "subtitle": "Each name's multiple against its industry: the plain premium to the peer median, the premium its growth and quality earn inside the industry (fitted), and the gap between them. Growth or quality can be priced in on its own and still be cheap or rich against what peers get for the same profile. Each column is one read; nothing is a sum.",
+  "sources_extra": [
+    "peer_value {PACK}/peer_value (tv_scan_cli.py peer-value --pack {PACK} --quiet; config/generic_utils/peer_value.json)",
+    "panel store features (newest day) and labels (evidence); forward value fields from {PACK}/movers/us2b_tape.csv"
+  ],
+  "tone_map": {"NEW": "good", "NEW (queue)": "info", "ADD": "good", "ADD (queue)": "info", "HOLD": "info", "WATCH": "neutral", "WAIT": "neutral",
+               "HOLD_NO_ADD": "warning", "DERISK": "warning", "TRIM": "warning", "TRIM (queue)": "warning", "EXIT": "bad", "PASS": "bad"},
+  "tabs": [
+    {
+      "label": "Book and named",
+      "blocks": [
+        {"type": "callout", "from": "update.banner"},
+        {"type": "stats", "from": "pages.peer_value.blocks.stats"},
+        {"type": "callout", "from": "pages.peer_value.blocks.read"},
+        {"type": "table", "title": "Book and named names against their peers (gap_pct > 0 = cheaper than peers with the same growth / quality)",
+         "source": {"duckdb": "{PACK}/peer_value/peer_value.duckdb", "sql": "SELECT symbol, \"group\", book_usd, lens, mult, ind_med, prem_pct, just_pct, gap_pct, px_fit, close, pctl_value, pctl_growth, pctl_eps_growth, pctl_quality, pctl_roe, pctl_revision, rev_nfy_g_vs_ind, eps_nfy_g_vs_ind, opm_vs_ind, roe_vs_ind, eps_rev_3m_vs_ind, peg, peg_vs_ind_pct, priced_in_cagr_pct, priced_in_cagr_pct_vs_ind, irr_exp_pct_vs_ind, mtp FROM names WHERE in_book OR named ORDER BY book_usd DESC NULLS LAST, symbol", "drop_missing_columns": true},
+         "extra_columns": ["Course", "Reason"], "extra_from": "courses", "tone_field": "Course"},
+        {"type": "table", "title": "Each lens side by side (P/E, EV/EBITDA, EV/sales)",
+         "source": {"duckdb": "{PACK}/peer_value/peer_value.duckdb", "sql": "SELECT symbol, pe_mult, pe_ind_med, pe_prem_pct, pe_just_pct, pe_gap_pct, evebitda_mult, evebitda_ind_med, evebitda_prem_pct, evebitda_just_pct, evebitda_gap_pct, evs_mult, evs_ind_med, evs_prem_pct, evs_just_pct, evs_gap_pct FROM names WHERE in_book OR named ORDER BY symbol", "drop_missing_columns": true}}
+      ]
+    },
+    {
+      "label": "Nearest peers",
+      "blocks": [
+        {"type": "text", "text": "The five names closest in market cap inside the same peer group, with the same reads side by side: is the line cheap because it is worse (growth, margin, revisions), or cheap for the same profile?"},
+        {"type": "table", "title": "Nearest peers by market cap",
+         "source": {"duckdb": "{PACK}/peer_value/peer_value.duckdb", "sql": "SELECT symbol, rank, peer, \"group\", mcap_ratio, lens, mult, peer_mult, gap_pct, peer_gap_pct, rev_nfy_g, peer_rev_nfy_g, opm, peer_opm, roe, peer_roe, eps_rev_3m, peer_eps_rev_3m, r_1m, peer_r_1m FROM peers ORDER BY symbol, rank"}}
+      ]
+    },
+    {
+      "label": "Universe",
+      "blocks": [
+        {"type": "text", "text": "Every US $2B+ name with a fitted lens, the cheapest against its fitted multiple first. A screen is a reading order, not a buy list: a slot still needs a band, a kill and a course."},
+        {"type": "table", "title": "US $2B+: peer gap, premium, the profile behind it",
+         "source": {"duckdb": "{PACK}/peer_value/peer_value.duckdb", "sql": "SELECT symbol, \"group\", mcap_b, close, lens, mult, ind_med, prem_pct, just_pct, gap_pct, px_fit, pctl_growth, pctl_quality, pctl_revision, rev_nfy_g_vs_ind, opm_vs_ind, eps_rev_3m_vs_ind, priced_in_cagr_pct_vs_ind, irr_exp_pct_vs_ind, \"left\", mix, mtp, dte FROM names WHERE gap_pct IS NOT NULL ORDER BY gap_pct DESC", "drop_missing_columns": true},
+         "screens": [
+           {"label": "Cheap for the profile, estimates rising", "filters": {"gap_pct": ">20", "eps_rev_3m_vs_ind": ">0"}, "sort": "-gap_pct", "explain": "Trades under what peers with its growth and quality get, and its estimates rise faster than the group's."},
+           {"label": "Discount that is earned", "filters": {"prem_pct": "<-20", "gap_pct": "<5"}, "sort": "prem_pct", "explain": "Cheap to the median, but its profile explains the discount: a value-trap read against peers."},
+           {"label": "Premium not earned", "filters": {"gap_pct": "<-25"}, "sort": "gap_pct", "explain": "Pays more than its growth and quality earn in the group."},
+           {"label": "Premium that is earned", "filters": {"prem_pct": ">20", "gap_pct": ">0"}, "sort": "-prem_pct", "explain": "Rich to the median, still under what its profile earns."}
+         ]}
+      ]
+    },
+    {
+      "label": "Industries",
+      "blocks": [
+        {"type": "text", "text": "What each peer group pays for: pay_<driver> is the % change in the multiple per one standard deviation of the driver inside the group (ridge fit), r2 how much of the spread in multiples the profile explains. A group that pays nothing for growth is one where a growth premium will not be rewarded."},
+        {"type": "table", "title": "Per group and lens",
+         "source": {"duckdb": "{PACK}/peer_value/peer_value.duckdb", "sql": "SELECT \"group\", group_kind, lens, n, ind_med, fitted, r2, pay_rev_nfy_g, pay_eps_nfy_g, pay_opm, pay_roe, pay_eps_rev_3m, pay_fcf_margin FROM groups ORDER BY lens, n DESC", "drop_missing_columns": true},
+         "screens": [{"label": "P/E lens", "filters": {"lens": "=pe"}, "sort": "-n", "explain": "The forward P/E fit per industry."}]}
+      ]
+    },
+    {
+      "label": "Evidence",
+      "blocks": [
+        {"type": "callout", "from": "pages.peer_value.blocks.evidence_read"},
+        {"type": "table", "title": "Did the peer gap pay? Daily rank IC with the forward return minus the day's median name",
+         "source": {"duckdb": "{PACK}/peer_value/peer_value.duckdb", "sql": "SELECT horizon, signal, n_days, n_indep, ic_mean, ic_sd, t_indep, hit_days, first_day, last_day FROM evidence ORDER BY horizon, signal"}},
+        {"type": "table", "title": "Quantile means (5 = the highest signal: the cheapest against peers)",
+         "source": {"duckdb": "{PACK}/peer_value/peer_value.duckdb", "sql": "SELECT horizon, signal, quantile, n, fx_mean, fx_med, hit FROM quantiles ORDER BY horizon, signal, quantile"},
+         "screens": [{"label": "28 days", "filters": {"horizon": "=28d"}, "sort": "signal", "explain": "The month horizon."}]}
+      ]
+    }
+  ],
+  "ledger": {"auto": true}
+}

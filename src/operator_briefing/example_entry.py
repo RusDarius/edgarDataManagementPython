@@ -147,11 +147,29 @@ def _brief_dossiers(lookup: dict[str, object]) -> dict[str, object]:
             "bo_path": _bo_path(prog),
             "d_prior_run": prog.get("delta_vs_prior_run") if isinstance(prog, dict) else None,
         })
+    _attach_warn(rows, lookup.get("pack_path"))
     return {"pack_id": lookup.get("pack_id"), "missing": lookup.get("missing"), "rows": rows}
 
 
+def _attach_warn(rows: list[dict[str, object]], pack_path: object) -> None:
+    """The core event-risk warning (PACK/event_risk, generic_utils.event_risk.warn_token) on each brief row; only rows
+    at a level get the field, so an unflagged name costs no bytes."""
+    from generic_utils.event_risk import warn_lookup, warn_token
+
+    if not pack_path or not rows:
+        return
+    try:
+        found = warn_lookup(Path(str(pack_path)).parent, [str(r.get("symbol")) for r in rows])
+    except Exception:  # an older pack or a locked file: the brief stays as it was
+        return
+    for row in rows:
+        token = warn_token(found.get(str(row.get("symbol"))))
+        if token:
+            row["warn"] = token
+
+
 def _brief_lines(brief: dict[str, object]) -> str:
-    """One text line per --brief row (about 250 bytes vs 1 KB of JSON). Same fields, nothing added."""
+    """One text line per --brief row (about 250 bytes vs 1 KB of JSON). Same fields, plus warn= when the line is at an event-risk level."""
     lines = [f"pack {brief.get('pack_id')}"]
     for row in brief.get("rows") or []:
         raw = row.get("raw") or {}
@@ -159,6 +177,7 @@ def _brief_lines(brief: dict[str, object]) -> str:
         bo = row.get("bo_path") or {}
         tail = [f"d_bo={bo['d_bo']}"] if bo.get("d_bo") is not None else []
         tail += [f"conflicts={'; '.join(row['conflicts'])}"] if row.get("conflicts") else []
+        tail += [f"warn={row['warn']}"] if row.get("warn") else []
         lines.append(f"{row.get('symbol')} {'BOOK ' if row.get('in_book') else ''}{row.get('stance')} "
                      f"support={row.get('support')} " + " ".join(cells + tail))
     if brief.get("missing"):

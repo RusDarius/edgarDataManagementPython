@@ -1,0 +1,94 @@
+{
+  "schema_version": "financial_projection_value_v1",
+  "config_id": "value_v1",
+  "description": "Forward value (financial_projection.valuation): year 1 anchored on street revenue and EPS forecasts, years 2-5 on decaying growth and margins converging to the industry, an exit multiple at year 5, dividends, discounted at a beta-based cost of equity. Scenario knobs, not cutoffs.",
+  "horizon_years": 5,
+  "min_market_cap_usd": 500000000,
+  "min_revenue_usd": 25000000,
+  "min_industry_n": 8,
+  "discount": {
+    "risk_free": 0.0475,
+    "equity_risk_premium": 0.05,
+    "use_beta": true,
+    "beta_floor": 0.6,
+    "beta_cap": 2.0
+  },
+  "growth": {
+    "g1_floor": -0.5,
+    "g1_cap": 1.5,
+    "long_run_growth": 0.04,
+    "industry_long_run_weight": 0.5,
+    "g_end_floor": 0.0,
+    "g_end_cap": 0.1,
+    "eps_ratio_min_margin": 0.02,
+    "margin_lift_cap": 0.05,
+    "margin_lift_rel_cap": 0.5
+  },
+  "multiples": {
+    "pe_floor": 6.0,
+    "pe_cap": 35.0,
+    "evs_floor": 0.2,
+    "evs_cap": 25.0,
+    "earnings_only_sectors": [
+      "Finance"
+    ],
+    "min_plausible_pe": 2.0
+  },
+  "cash": {
+    "fcf_conversion_floor": 0.2,
+    "fcf_conversion_cap": 1.5,
+    "fcf_conversion_end": 1.0,
+    "share_drift_floor": -0.05,
+    "share_drift_cap": 0.03
+  },
+  "reverse": {
+    "cagr_low": -0.6,
+    "cagr_high": 1.5
+  },
+  "scenario_weights": {
+    "bear": 0.25,
+    "base": 0.5,
+    "bull": 0.25
+  },
+  "scenarios": {
+    "bear": {
+      "g1_scale": 0.6,
+      "eps1_adjust": -0.1,
+      "growth_cap_after_y1": 0.2,
+      "growth_decay": 0.4,
+      "g_end_shift": -0.02,
+      "own_multiple_weight": 0.5,
+      "multiple_scale": 0.85,
+      "buyback_weight": 0.5,
+      "terminal_growth": 0.02,
+      "margin_pull_down": 0.5,
+      "margin_pull_up": 0.0
+    },
+    "base": {
+      "g1_scale": 1.0,
+      "eps1_adjust": 0.0,
+      "growth_cap_after_y1": 0.3,
+      "growth_decay": 0.5,
+      "g_end_shift": 0.0,
+      "own_multiple_weight": 0.5,
+      "multiple_scale": 1.0,
+      "buyback_weight": 1.0,
+      "terminal_growth": 0.03,
+      "margin_pull_down": 0.25,
+      "margin_pull_up": 0.25
+    },
+    "bull": {
+      "g1_scale": 1.15,
+      "eps1_adjust": 0.05,
+      "growth_cap_after_y1": 0.4,
+      "growth_decay": 0.65,
+      "g_end_shift": 0.02,
+      "own_multiple_weight": 0.5,
+      "multiple_scale": 1.1,
+      "buyback_weight": 1.0,
+      "terminal_growth": 0.035,
+      "margin_pull_down": 0.0,
+      "margin_pull_up": 0.5
+    }
+  }
+}

@@ -768,6 +768,21 @@ def _write_pack_duckdb(
     )
 
 
+def _book_missing(holdings_config: Any, book_symbols: set[str]) -> list[str]:
+    """Holdings-config lines (any instrument type) whose ticker is not on the Book."""
+    from generic_utils.symbol_identity import parse_symbol
+    from generic_utils.symbol_resolver import holdings_ids
+
+    if not holdings_config:
+        return []
+    try:
+        ids = holdings_ids(holdings_config, types=("stock", "etf", "fund"))
+    except Exception:  # noqa: BLE001
+        return []
+    on_book = {parse_symbol(s).ticker for s in book_symbols}
+    return [i for i in ids if parse_symbol(i).ticker not in on_book]
+
+
 def compile_briefing_pack(
     *,
     output_root: Path | None = None,
@@ -878,11 +893,19 @@ def compile_briefing_pack(
         ),
     }
     mtp_climate = _mtp_climate(mtp)
+    sources_out = sources.as_dict()
+    missing = _book_missing(sources.holdings_config, book_symbols)
+    if missing:
+        # A held line that is in the config but not on the Book drops out of NAV: say so on every pack.
+        sources_out["notes"] = list(sources_out.get("notes") or []) + [
+            "held lines missing from the Book (NAV leaves them out; run tv_scan_cli.py symbol-check): " + ", ".join(missing)
+        ]
     pack = {
         "schema_version": "operator_briefing_pack_v1",
         "run_id": run_id,
         "created_at_utc": created.isoformat(),
-        "sources": sources.as_dict(),
+        "sources": sources_out,
+        "book_missing": missing,
         "gotchas": GOTCHAS,
         "regime": regime,
         "mtp": mtp_climate,

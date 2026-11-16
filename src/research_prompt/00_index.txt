@@ -62,9 +62,14 @@ run_catalog.txt
   newest folder lands, and which agent_copy_paste block to paste.
   DuckDB is the default. queries.txt sits in that folder.
 
-agent_runs/daily_full.txt, agent_runs/daily_update.txt
+agent_runs/daily_full.txt, agent_runs/daily_update.txt, agent_runs/daily_baseline.txt
   Prompts that src/run_operator_day.py --agent sends to a headless Claude run
-  (full DAILY + MOVERS + PLAYBOOK, or UPDATE). Also printable with --print-prompt.
+  (full DAILY + MOVERS + PLAYBOOK, UPDATE, or --mode baseline: the session-aware start of day).
+  Also printable with --print-prompt.
+
+agent_runs/deep_dive.txt
+  Prompt that src/run_deep_dive.py --agent sends (deep research on named ids, a theme or a question;
+  the name dossier + outside read + verdict / band / trajectory per horizon). --print-prompt to paste.
 
 agent_copy_paste.txt
   Short chat blocks. Paste one. DAILY (full) is the operator's spoken scan:

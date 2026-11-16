@@ -1838,7 +1838,11 @@ def _empty_mark_to_market_fields() -> dict[str, Any]:
     }
 
 
-def _build_unmatched_rows(unmatched_tickers: Sequence[str], holdings: Sequence[HoldingConfig]) -> list[dict[str, Any]]:
+def _build_unmatched_rows(
+    unmatched_tickers: Sequence[str],
+    holdings: Sequence[HoldingConfig],
+    reasons: Mapping[str, str] | None = None,
+) -> list[dict[str, Any]]:
     holding_by_label = {holding_config_label(holding): holding for holding in holdings}
     rows: list[dict[str, Any]] = []
     for label in unmatched_tickers:
@@ -1871,10 +1875,68 @@ def _build_unmatched_rows(unmatched_tickers: Sequence[str], holdings: Sequence[H
                 "config_ticker": holding.ticker if holding else label,
                 **position_fields,
                 **_empty_mark_to_market_fields(),
-                "reason": "no_symbol_match_in_source_run",
+                "reason": (reasons or {}).get(label) or "no_symbol_match_in_source_run",
             }
         )
     return rows
+
+
+def _resolver_fallback_rows(
+    source: MovePredictionSource,
+    unmatched_tickers: Sequence[str],
+    holdings: Sequence[HoldingConfig],
+    perf_fields: Sequence[str] | None = None,
+    mtm_context: MarkToMarketContext | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """Summary rows for held lines the source run does not list, marked by ``generic_utils.symbol_resolver``
+    (alias map -> newest all-fields run -> panel store). The line keeps its position and mark-to-market so the Book
+    and NAV still count it; scores stay empty (it was not in the run). Returns (rows, {label: reason})."""
+    from generic_utils.symbol_resolver import resolve_marks
+
+    holding_by_label = {holding_config_label(h): h for h in holdings}
+    wanted = {label: holding_by_label[label] for label in unmatched_tickers if label in holding_by_label}
+    if not wanted:
+        return [], {}
+    ids = {label: str(h.symbol or h.ticker) for label, h in wanted.items()}
+    try:
+        marks = resolve_marks(ids.values())
+    except Exception as exc:  # a store being written: the lines stay unmatched, said so
+        return [], {label: f"no_symbol_match_in_source_run; resolver failed: {exc}" for label in wanted}
+    rows: list[dict[str, Any]] = []
+    reasons: dict[str, str] = {}
+    for label, holding in wanted.items():
+        mark = marks.get(str(ids[label]).upper()) or {}
+        if mark.get("close") is None:
+            reasons[label] = f"no_symbol_match_in_source_run; resolver: {mark.get('reason') or mark.get('qualified') or 'not_found'}"
+            continue
+        sym = str(mark["symbol"])
+        row = {
+            "config_ticker": holding.ticker,
+            "config_symbol": holding.symbol or "",
+            "matched_symbol": sym,
+            "db_symbol": sym,
+            "matched_company": mark.get("description") or "",
+            **_holding_position_fields(holding),
+            "source_run_id": source.run_id,
+            "suite_name": source.suite_name or "",
+            "company": mark.get("description") or mark.get("name"),
+            "market_cap_basic": mark.get("mcap"),
+        }
+        row.update(
+            _build_mark_to_market_fields(
+                holding,
+                mark["close"],
+                close_quote_currency=_resolve_close_quote_currency(exchange=mark.get("exchange"), country=mark.get("country")),
+                close_source=f"symbol_resolver.{mark.get('mark_source')}",
+                mtm_context=mtm_context,
+            )
+        )
+        row["match_note"] = "not_in_source_run" + (f"; alias from {mark['alias_from']}" if mark.get("alias_from") else "")
+        row["mark_source"] = mark.get("mark_source")
+        row["mark_age_days"] = mark.get("age_days")
+        rows.append(_order_summary_row(row, list(perf_fields or RAW_PERF_FIELDS)))
+        reasons[label] = f"not_in_source_run; marked from {mark.get('mark_source')} as {sym}"
+    return rows, reasons
 
 
 def _scan_row_matches_holding(row: dict[str, Any], holding: HoldingConfig) -> bool:
@@ -1972,7 +2034,13 @@ def export_move_prediction_v1_scan(
         close_by_symbol,
         mtm_context=mtm_context,
     )
-    unmatched_rows = _build_unmatched_rows(unmatched_tickers, holdings)
+    # Held lines the run does not list (a share class that lost TradingView's primary flag, a renamed ticker):
+    # marked by the global resolver so the Book and NAV keep them (generic_utils.symbol_resolver).
+    fallback_rows, fallback_reasons = _resolver_fallback_rows(
+        source, unmatched_tickers, holdings, perf_fields=perf_fields, mtm_context=mtm_context
+    )
+    summary_rows.extend(fallback_rows)
+    unmatched_rows = _build_unmatched_rows(unmatched_tickers, holdings, fallback_reasons)
 
     api_rows: list[dict[str, Any]] = []
     if scan_data:

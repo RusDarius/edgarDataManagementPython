@@ -13,7 +13,10 @@
     "pre": [
       ["react_fx", "rx", "Reaction session vs the market (pp)"],
       ["hold_fx_7d", "h7", "Hold from the pre-print close, 7 days, excess (pp)"],
-      ["hold_fx_28d", "h28", "Hold from the pre-print close, 28 days, excess (pp)"]
+      ["hold_fx_28d", "h28", "Hold from the pre-print close, 28 days, excess (pp)"],
+      ["rx_up10", "u10", "Odds of a reaction session >= +10 pp vs the market (share of prints)"],
+      ["rx_dn10", "d10", "Odds of a reaction session <= -10 pp vs the market (share of prints)"],
+      ["rx_bal10", "b10", "Tail balance: +1 at >= +10 pp, -1 at <= -10 pp, 0 between (mean = up odds minus down odds)"]
     ],
     "post": [
       ["react_fx", "rx", "Reaction session vs the market (pp)"],
@@ -44,8 +47,17 @@
     {"key": "fcf_margin", "family": "Value", "store": "fcf_margin", "calendar": "fcf_margin", "label": "FCF margin (%)"},
     {"key": "p_dvc", "family": "Value", "store": "p_dvc", "label": "Move-prediction p_dvc (value / cash-flow profile)"},
     {"key": "p_cons_w", "family": "Model", "store": "p_cons_w", "label": "Move-prediction weekly consensus"},
-    {"key": "peer_rx", "family": "Peers", "derived": "peer_rx", "label": "Mean reaction vs the market of the industry's prints in the prior peer_window_days"}
+    {"key": "peer_rx", "family": "Peers", "derived": "peer_rx", "label": "Mean reaction vs the market of the industry's prints in the prior peer_window_days"},
+    {"key": "own_abs", "family": "Size", "derived": "own_abs", "measures": ["rx_up10", "rx_dn10", "rx_bal10"], "label": "Mean |reaction vs the market| of the name's earlier lab prints (pp)"},
+    {"key": "mcap", "family": "Size", "store": "mcap", "calendar": "mcap", "measures": ["rx_up10", "rx_dn10", "rx_bal10"], "label": "Market cap before the print (USD)"},
+    {"key": "rev_yoy", "family": "Size", "store": "rev_yoy", "print_moves": true, "measures": ["rx_up10", "rx_dn10", "rx_bal10"], "label": "Revenue growth, year on year (%)"}
   ],
+  "tail_measures": [
+    {"key": "rx_up10", "from": "react_fx", "op": ">=", "value": 10, "code": "u10"},
+    {"key": "rx_dn10", "from": "react_fx", "op": "<=", "value": -10, "code": "d10"},
+    {"key": "rx_bal10", "from": "react_fx", "op": "balance", "value": 10, "code": "b10"}
+  ],
+  "tail_note": "u10 / d10 are 0/1 per past print (reaction vs the market at or beyond +10 / -10 pp), so a cell's mean is the share of prints that moved that far: the SIZE read (most fields that raise one raise the other). b10 is +1 / -1 / 0 on the same thresholds, so a cell's mean is the up odds minus the down odds: the SIDE read; b10_up / b10_dn count pointers whose cell tilts the big moves up / down. The Size pointers (own_abs, mcap, rev_yoy) are measured on these three only, so they never change the rx / h7 / h28 counts. A highlight beside the counts, never a gate, a size or a course.",
   "post_pointers": [
     {"key": "eps_surprise", "family": "Print", "event": "eps_surprise", "live": "eps_surprise", "label": "EPS surprise (%)"},
     {"key": "rev_surprise", "family": "Print", "event": "rev_surprise", "live": "rev_surprise", "label": "Revenue surprise (%)"},

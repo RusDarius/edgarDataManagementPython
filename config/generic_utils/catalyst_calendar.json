@@ -1,5 +1,5 @@
 {
-  "_note": "Dated non-earnings catalysts (OUTSIDE). Earnings, ex-dividend and IPO lockup dates come from the day files; this file holds what they cannot see: macro releases, central banks, index reviews, regulatory decisions, conferences. One row per event: date (YYYY-MM-DD, the session it lands in), kind (macro / central_bank / policy / index / regulatory / conference / commodity / market), event, status (confirmed / estimated / disputed), source (where the date was read, with the read date), optional symbols (EXCHANGE:TICKER the event is about) and read (what it moves). Append, do not rewrite; mark a moved date 'disputed' with both sources. Timing and Grade only: never a sort key or a size.",
+  "_note": "Dated non-earnings catalysts (OUTSIDE). Earnings, ex-dividend and IPO lockup dates come from the day files; this file holds what they cannot see: macro releases, central banks, index reviews, regulatory decisions, conferences. One row per event: date (YYYY-MM-DD, the session it lands in), kind (macro / central_bank / policy / index / regulatory / conference / commodity / market), event, status (confirmed / estimated / disputed), source (where the date was read, with the read date), optional symbols (EXCHANGE:TICKER the event is about) and read (what it moves). Append, do not rewrite; mark a moved date 'disputed' with both sources. Timing and Grade only: never a sort key or a size. Optional per row for tv_scan_cli.py event-risk: exposure {down|up|either: [themes.json names]} (which crowds the event moves, OUTSIDE judgment with its source in read), binary: true (a two-sided event even outside kind policy), odds_kind (the sentiment_outside.json kind that holds its odds). A policy row with no symbols counts as a market-wide binary event (the P letter on every line it does not map).",
   "events": [
     {
       "date": "2026-10-28",
@@ -38,6 +38,7 @@
       "kind": "policy",
       "event": "US midterm elections",
       "status": "confirmed",
+      "odds_kind": "polymarket_dem_sweep",
       "source": "Ameriprise / CMC Markets, read 2026-10-28",
       "read": "Healthcare, energy, defense; uncertainty fades into the vote historically."
     },
@@ -48,6 +49,19 @@
       "status": "estimated",
       "source": "first-Wednesday-of-November pattern; not checked",
       "read": "Term premium; 10-year near 5%."
+    },
+    {
+      "date": "2026-11-04",
+      "kind": "index",
+      "event": "Okta joins the S&P 500 (replaces Kenvue); Glaukos to MidCap 400, McGrath to SmallCap 600",
+      "status": "confirmed",
+      "source": "S&P Dow Jones Indices press release 30 Oct, read 2026-11-04",
+      "symbols": [
+        "NASDAQ:OKTA",
+        "NYSE:GKOS",
+        "NASDAQ:MGRC"
+      ],
+      "read": "Index buying done at the 3 Nov close; the add is in the price."
     },
     {
       "date": "2026-11-06",
@@ -74,6 +88,17 @@
       "read": "Adds / deletes trade into the 30 Nov close."
     },
     {
+      "date": "2026-11-12",
+      "kind": "governance",
+      "event": "NASDAQ:NVDA: CEO Jensen Huang resigned as president, CEO and director, effective immediately; CFO Colette Kress interim CEO",
+      "status": "confirmed",
+      "source": "Yahoo Finance live blog, Thu 12 Nov 2026 (stock-market-today-thursday-november-12), read 2026-11-12 19:00 UTC",
+      "symbols": [
+        "NASDAQ:NVDA"
+      ],
+      "read": "Key-person and governance shock 3 sessions before the 17 Nov print, which now comes from an interim CEO. NVDA -14% at the open, about -5.5% at 19:00 UTC; AMD +4.8%, CoreWeave -7.7%, Nebius -18%, Super Micro -10%."
+    },
+    {
       "date": "2026-11-14",
       "kind": "regulatory",
       "event": "PDUFA: ivonescimab + chemo, EGFR-mutated NSCLC (Saturday target date)",
@@ -85,15 +110,78 @@
       "read": "Binary for the name; read-through to PD-1 x VEGF bispecifics."
     },
     {
+      "date": "2026-11-14",
+      "kind": "regulatory",
+      "event": "PDUFA: aficamten (MYQORZO) label decision (aggregator, date not checked with the company)",
+      "status": "estimated",
+      "source": "catalyst-ventures.eu / biopharmawatch PDUFA calendars, read 2026-11-04",
+      "symbols": [
+        "NASDAQ:CYTK"
+      ],
+      "read": "Binary for the label; aggregator odds high."
+    },
+    {
+      "date": "2026-11-17",
+      "kind": "earnings_outside",
+      "event": "NASDAQ:NVDA Q3 FY2027 results after the close (quarter ended 25 Oct); call 2 p.m. PT / 5 p.m. ET; the reaction shows on 18 Nov",
+      "status": "confirmed",
+      "source": "NVIDIA investor relations press release 28 Oct 2026 (NVIDIA Sets Conference Call for Third Quarter Financial Results), read 2026-11-11",
+      "symbols": [
+        "NASDAQ:NVDA"
+      ],
+      "read": "AI capex chain: NASDAQ:MU, NASDAQ:WDC, NYSE:VRT, NYSE:GEV, NASDAQ:STRL. Reaction session 18 Nov is also the reported Anthropic IPO pricing day and the APEC opening."
+    },
+    {
       "date": "2026-11-18",
       "kind": "earnings_outside",
       "event": "NASDAQ:NVDA Q3 FY2027 results expected (not yet confirmed by the company)",
-      "status": "estimated",
-      "source": "days.to / financecalendar, read 2026-10-28",
+      "status": "disputed",
+      "source": "days.to / financecalendar, read 2026-10-28; moved: NVIDIA IR confirmed 17 Nov after the close (press release 28 Oct, read 2026-11-11)",
       "symbols": [
         "NASDAQ:NVDA"
       ],
       "read": "AI capex chain: NASDAQ:MU, NASDAQ:WDC, NYSE:VRT, NYSE:GEV, NASDAQ:STRL."
+    },
+    {
+      "date": "2026-11-18",
+      "kind": "policy",
+      "event": "APEC leaders' meeting, Shenzhen (18-19 Nov); a Trump-Xi meeting expected, not scheduled; trade truce runs to 10 Jan",
+      "status": "estimated",
+      "source": "roic.ai / CNBC (Sep 2026), read 2026-11-04",
+      "symbols": [
+        "NASDAQ:PDD",
+        "NASDAQ:JD",
+        "NYSE:BABA",
+        "NYSE:YUMC",
+        "NYSE:VIPS"
+      ],
+      "read": "China consumer and tariff-exposed names: a truce extension or tariff cuts move them; no meeting is the risk."
+    },
+    {
+      "date": "2026-11-19",
+      "kind": "market",
+      "event": "Anthropic IPO on Nasdaq ('ANT'): pricing 18 Nov, first trade 19 Nov (company-confirmed 12 Nov); filed range $70-78 x 825M shares (about $58-64B); a Reuters-reported $70-80 x 867M sheet was retracted",
+      "status": "confirmed",
+      "source": "CNBC / CNN / Yahoo Finance 10 Nov 2026; dates confirmed in the Yahoo Finance live blog, Thu 12 Nov 2026 (stock-market-today-thursday-november-12), read 2026-11-12 19:00 UTC; Reuters via investinglive on the retracted sheet",
+      "symbols": [
+        "NASDAQ:GOOG",
+        "NASDAQ:GOOGL",
+        "NASDAQ:AMZN",
+        "NASDAQ:AVGO",
+        "NASDAQ:NVDA"
+      ],
+      "read": "AI financing read: the largest IPO on record lands the day after the NASDAQ:NVDA print. NVIDIA pledged $10B of the $26B private placement (Yahoo, 12 Nov); a weak book or a cut range is a down read for the AI cluster, a strong debut a supply drain (about $60B of new AI paper). Hyperscaler partners NASDAQ:GOOG / NASDAQ:AMZN hold stakes."
+    },
+    {
+      "date": "2026-11-19",
+      "kind": "product",
+      "event": "GTA VI launch (PS5 / Xbox); date reaffirmed on the 7 Aug call",
+      "status": "confirmed",
+      "source": "Take-Two calls Feb / May / Aug 2026 via PCWorld / iGrandTheftAuto, read 2026-11-04",
+      "symbols": [
+        "NASDAQ:TTWO"
+      ],
+      "read": "Take-Two's largest release; reports 9 Nov after the close (implied move about 10%)."
     },
     {
       "date": "2026-11-20",
@@ -115,12 +203,34 @@
       "read": "Binary for the name."
     },
     {
+      "date": "2026-11-22",
+      "kind": "regulatory",
+      "event": "PDUFA: deramiocel (CAP-1002), moved from 22 Aug",
+      "status": "estimated",
+      "source": "PDUFA aggregator calendars, read 2026-11-04",
+      "symbols": [
+        "NASDAQ:CAPR"
+      ],
+      "read": "Binary."
+    },
+    {
       "date": "2026-11-26",
       "kind": "market",
       "event": "US Thanksgiving: markets closed (27 Nov half day)",
       "status": "confirmed",
       "source": "NYSE holiday calendar",
       "read": "Thin trading; holiday-sales read on 27-30 Nov."
+    },
+    {
+      "date": "2026-11-27",
+      "kind": "regulatory",
+      "event": "PDUFA: BBP-418 (LGMD2I)",
+      "status": "estimated",
+      "source": "PDUFA aggregator calendars, read 2026-11-04",
+      "symbols": [
+        "NASDAQ:BBIO"
+      ],
+      "read": "Binary; second product for the company."
     },
     {
       "date": "2026-11-30",
@@ -140,6 +250,17 @@
       "status": "confirmed",
       "source": "MSCI review dates via Asianet, read 2026-10-28",
       "read": "Index flows."
+    },
+    {
+      "date": "2026-11-30",
+      "kind": "regulatory",
+      "event": "PDUFA: povetacicept (IgA nephropathy)",
+      "status": "estimated",
+      "source": "PDUFA aggregator calendars, read 2026-11-04",
+      "symbols": [
+        "NASDAQ:VRTX"
+      ],
+      "read": "Pipeline expansion; small for a large cap."
     },
     {
       "date": "2026-12-04",
@@ -164,6 +285,22 @@
       "status": "confirmed",
       "source": "eco3min citing BLS, read 2026-10-28",
       "read": "Inflation path into 2027."
+    },
+    {
+      "date": "2026-12-11",
+      "kind": "policy",
+      "event": "Federal funding deadline (stopgap P.L. 119-103); ACA credits can only ride on the funding bill in the lame duck",
+      "status": "confirmed",
+      "source": "STAT 4 Nov / CRFB 3 Nov, read 2026-11-04",
+      "symbols": [
+        "NYSE:UHS",
+        "NYSE:HCA",
+        "NYSE:THC",
+        "NYSE:CNC",
+        "NYSE:OSCR",
+        "NYSE:MOH"
+      ],
+      "read": "A credit extension in the deal helps hospitals and exchange insurers; a lapse is the risk."
     }
   ]
 }

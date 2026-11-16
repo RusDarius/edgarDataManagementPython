@@ -23,6 +23,15 @@ the band after which a return to that level breaks the line even) and `ladder` (
 `new_avg`, `avg_cut_pct`, `be_from_add_pct`, `be_vs_sma50_pct`, the add's and the line's loss at the kill). Prices in the quote currency;
 the street price is left empty on non-USD lines. Scenarios only: the add is still judged by the rules below.
 
+**Recovery clock** (`generic_utils/recovery_clock.py`, knobs `config/generic_utils/recovery_clock.json`, on demand):
+`tv_scan_cli.py recovery-clock --pack PACK --ids A,B --line` -> `PACK/recovery_clock/recovery_clock.duckdb`. Every $2B+ name is a start
+once a week in its deterioration state; `cells` (study x cell: `fwd_<W>` where it ended, `fx_<W>` vs the median start, `floor_<W>` the
+path low first, `p_floor<k>_<W>`, `trough_<W>_med`, `p_half_<d>` / `p_high_<d>`), `curves` (cell x rise / half / high x checkpoint:
+Kaplan-Meier `p_reach`, `n_obs`, `med_days`; empty under the observation floor), `lines` (each Book line: `need_<level>_pct` to cost,
+cost +10%, the 50-day, half-way, street, high; `p_<need>_<d>` and `days_<need>` from the primary cell, the floor in price and USD) and
+`reach` (the same per cell kind: dd, cnt, run, mkt). Answers "how long back, how far first, is staying worth it": read the 12-month-run
+cell beside the count cell (crowding shows only there), `names_<W>` not `n_<W>`, and a touch is not a hold.
+
 The daily refresh runs it as the optional suite `deterioration` after week_plays (Book only); record a call with named ids in the judgment `scans` so UPDATE replays it. Code `generic_utils/deterioration.py`, knobs `config/generic_utils/deterioration.json` (bucket edges, letter rules, splits, studies, the cell row floor), page `config/generic_utils/pages/deterioration.json`.
 
 `PACK/deterioration/deterioration.duckdb`:

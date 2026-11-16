@@ -1,0 +1,314 @@
+{
+  "name": "board-{DAY}",
+  "page_key": "board",
+  "requires": "{PACK}/board/board.duckdb",
+  "column_groups_from": "config/generic_utils/opportunity_board.json",
+  "title": "Opportunity board {DAY}",
+  "subtitle": "The plan in one tab, then every US $2B+ name in one grid with each suite's read beside it: timing and the bounce band, the earnings bar of this week's and next week's reporters, the model, value to peers and to the forward-value run, risk. Screens are reading orders; each column is its own read and nothing is a sum.",
+  "sources_extra": ["board {PACK}/board (tv_scan_cli.py board --pack {PACK} --quiet; config/generic_utils/opportunity_board.json)", "joined suites: outlook, peer_value, deterioration, beat_bar, anatomy, movers us2b_tape (forward value), panel store features (beta, rvol_20)"],
+  "tone_map": {
+    "NEW": "good",
+    "NEW (queue)": "info",
+    "ADD": "good",
+    "ADD (queue)": "info",
+    "PARK": "info",
+    "HOLD": "info",
+    "WATCH": "neutral",
+    "WAIT": "neutral",
+    "HOLD_NO_ADD": "warning",
+    "DERISK": "warning",
+    "DERISK_INTO_PRINT": "warning",
+    "TRIM": "warning",
+    "TRIM (queue)": "warning",
+    "EXIT": "bad",
+    "PASS": "bad"
+  },
+  "tabs": [
+    {
+      "label": "Plan",
+      "blocks": [
+        {"type": "callout", "from": "update.banner"},
+        {"type": "stats", "from": "pages.board.blocks.stats"},
+        {"type": "callout", "from": "pages.board.blocks.read"},
+        {
+          "type": "table",
+          "title": "The plan: what to do, where, and what kills it (judgment)",
+          "headers": ["Lane", "Symbol", "Course", "Entry", "Kill", "Target", "Catalyst", "Size", "Why (data)"],
+          "from": "pages.board.blocks.plan"
+        },
+        {"type": "callout", "from": "pages.board.blocks.timing"},
+        {
+          "type": "table",
+          "title": "Earnings this week and next: low bar and high bar, the measured cell (judgment)",
+          "headers": ["Bar", "Symbol", "When", "Course", "Entry", "Kill", "The cell says", "Why (data)"],
+          "from": "pages.board.blocks.earnings"
+        },
+        {
+          "type": "table",
+          "title": "Safer places to park cash (judgment)",
+          "headers": ["Symbol", "Course", "Entry", "Kill", "Beta", "Why (data)"],
+          "from": "pages.board.blocks.park"
+        },
+        {
+          "type": "table",
+          "title": "The Book today (judgment)",
+          "headers": ["Symbol", "Course", "Level", "Cost of staying", "Why (data)"],
+          "from": "pages.board.blocks.book"
+        },
+        {
+          "type": "table",
+          "title": "Conviction log: every name that takes capital or sits next in line (judgment)",
+          "headers": ["#", "Symbol", "Course", "Grade", "Support", "Horizon", "For (data)", "Against (data)", "What changes it"],
+          "from": "pages.board.blocks.conviction"
+        },
+        {"type": "list", "from": "pages.board.blocks.change"},
+        {
+          "type": "table",
+          "title": "Plan names on the board (data)",
+          "ids_from": "pages.board.ids",
+          "optional": true,
+          "judgment_only": true,
+          "source": {"duckdb": "{PACK}/board/board.duckdb", "sql": "SELECT symbol, ind, mcap_b, close, day, m1, rsi, vs50, bounce_low, bounce_high, bounce_kill, to_band_high_pct, kill_dist_pct, earn_date, earn_slot, bar_tape, bar_rev, c_bar_text, dec_7d, dec_28d, pred_28d, b28d_q20, b28d_q80, peer_gap_pct, street_left, fv_upside_pct, irr_exp_pct, beta, rvol_20, det FROM names", "drop_missing_columns": true},
+          "extra_columns": ["Course", "Reason"],
+          "extra_from": "courses",
+          "tone_field": "Course"
+        }
+      ]
+    },
+    {
+      "label": "Catalyst book",
+      "blocks": [
+        {"type": "callout", "from": "pages.board.blocks.catalyst_read"},
+        {"type": "callout", "from": "pages.board.blocks.policy"},
+        {
+          "type": "table",
+          "title": "Catalyst book: policy and sentiment, discounted names turning up, AI upside with an outside catalyst (judgment; shares the Daily's one budget)",
+          "headers": ["Lane", "Symbol", "Course", "Entry", "Kill", "Upside", "Catalyst (OUTSIDE)", "Data", "Size"],
+          "from": "pages.board.blocks.catalyst"
+        },
+        {
+          "type": "table",
+          "title": "Cash if the catalyst queue fills (capital-plan)",
+          "optional": true,
+          "source": {"duckdb": "{PACK}/capital_plan_catalyst/capital_plan.duckdb", "sql": "SELECT cash_start_usd, cash_from_sells_usd, cash_to_buys_usd, cash_end_usd, cash_end_pct, starters_left_at_hint FROM summary"}
+        },
+        {
+          "type": "table",
+          "title": "Catalyst book names on the board (data)",
+          "ids_from": "pages.board.catalyst_ids",
+          "optional": true,
+          "judgment_only": true,
+          "source": {"duckdb": "{PACK}/board/board.duckdb", "sql": "SELECT symbol, ind, mcap_b, book_usd, close, day, w, m1, m3, rsi, vs50, bounce_low, bounce_high, bounce_kill, to_band_high_pct, dec_28d, pred_28d, peer_gap_pct, irr_exp_pct, hurdle_pct, street_left, eps_rev_3m, fcf_margin, det, beta, rvol_20, earn_date FROM names", "drop_missing_columns": true},
+          "extra_columns": ["Course", "Reason"],
+          "extra_from": "courses",
+          "tone_field": "Course"
+        }
+      ]
+    },
+    {
+      "label": "Timing",
+      "blocks": [
+        {
+          "type": "text",
+          "text": "Every name with a priced bounce band (the buy-in-red band under the close from the safety band, levels window or named). to_band_high_pct = how far the close must fall to fill at the band top; kill_dist_pct = the distance to the bounce kill. The alpha model's 28-day band (b28d_q20 / b28d_q80, %) and deciles sit beside it. A screen is a reading order, not a buy list."
+        },
+        {
+          "type": "table",
+          "title": "Timing: tape, the bounce band, the model's band",
+          "source": {"duckdb": "{PACK}/board/board.duckdb", "sql": "SELECT symbol, ind, mcap_b, book_usd, close, day, w, m1, m3, rsi, rng, vs50, vs200, atrp, relvol, tape_state, trend_q, updown_vol, band_state, bounce_low, bounce_high, bounce_kill, to_band_high_pct, kill_dist_pct, first_target, sma_role, b28d_q20, b28d_q80, dec_7d, dec_28d, pred_28d, dec_56d, peer_gap_pct, earn_date, earn_days, beta, det FROM names WHERE bounce_low IS NOT NULL ORDER BY to_band_high_pct DESC NULLS LAST", "drop_missing_columns": true},
+          "extra_columns": ["Course", "Reason"],
+          "extra_from": "courses",
+          "tone_field": "Course",
+          "screens": [
+            {"group": "Setup", "label": "Pulled back", "filters": {"m1": "<0", "vs50": "-4..2"}, "sort": "-dec_28d", "explain": "Down on the month and back near the 50-day: stack Model 8+ for the pull-back inside a strong model read."},
+            {"group": "Setup", "label": "Band within 3%", "filters": {"to_band_high_pct": ">=-3"}, "sort": "-to_band_high_pct", "explain": "The close is within 3% of the bounce band top (or inside it): the band is a live order today."},
+            {"group": "Setup", "label": "Extended", "filters": {"rsi": ">=70", "to_band_high_pct": "<-8"}, "sort": "-rsi", "explain": "RSI 70+ and 8%+ over the band top: trims and no-chase, not entries."},
+            {"group": "Setup", "label": "Breakout on volume", "filters": {"relvol": ">=1.5", "day": ">2", "vs50": ">0"}, "sort": "-relvol", "explain": "Up 2%+ on 1.5x volume over the 50-day: the move the band waits behind."},
+            {"label": "Model 8+", "filters": {"dec_28d": ">=8"}, "sort": "-pred_28d", "explain": "Alpha model 28-day decile 8 or better (read only in an OK / WEAK state)."},
+            {"label": "Cheap to peers", "filters": {"peer_gap_pct": ">20"}, "sort": "-peer_gap_pct", "explain": "Trades 20%+ under what industry peers with the same growth / quality get (use only the sign that agrees across fits)."},
+            {"label": "No letters", "filters": {"det": "="}, "explain": "No deterioration letter (E R C S): the drawdown, if any, is price only."},
+            {"group": "When", "label": "Prints within 7d", "filters": {"earn_days": "0..7"}, "sort": "earn_date", "explain": "A print inside a week: event risk on any entry."},
+            {"group": "When", "label": "No print 14d", "filters": {"earn_days": "=|>14"}, "explain": "No print inside two weeks: entries without event risk."},
+            {"label": "Book lines", "filters": {"book_usd": ">0"}, "sort": "-book_usd", "explain": "Lines the Book holds."}
+          ]
+        }
+      ]
+    },
+    {
+      "label": "Earnings bar",
+      "blocks": [
+        {
+          "type": "text",
+          "text": "This week's and next week's reporters in their positioning cell (terciles of the run-up into the print, the 3-month tape and the 3-month EPS estimate change on the lab's past prints). Low bar = estimates cut (bar_rev T1) and a weak tape (bar_tape T1): beats paid most there. High bar = estimates raised (T3) and a strong tape (T3): about half of beats sold. c_bar_text is the surprise the cell needed; p_beat / ev_* mix the cell with the name's own beat record (a read, never a gate). Strength beside it: the model decile, the peer gap, the up-pattern letters."
+        },
+        {
+          "type": "table",
+          "title": "Reporters W0 / W1: the cell, what a beat paid and a miss cost, the strength beside it",
+          "source": {"duckdb": "{PACK}/board/board.duckdb", "sql": "SELECT symbol, ind, mcap_b, book_usd, earn_date, earn_week, earn_slot, earn_days, close, day, m1, runup, bar_runup, bar_tape, bar_rev, c_bar_text, c_beat_rate, c_rx_beat, c_rx_miss, c_beat_sold, c_h28_beat, c_h28_miss, p_beat, ev_rx, ev_h28, own_beats, own_n, beat_q90_usd, miss_q10_usd, dec_7d, dec_28d, pred_28d, pat_up, pat_dn, peer_gap_pct, pe_nfy_vs_ind, street_left, eps_rev_3m, bounce_low, bounce_high, bounce_kill, to_band_high_pct FROM names WHERE bb_cell IS NOT NULL ORDER BY earn_date, mcap_b DESC", "drop_missing_columns": true},
+          "extra_columns": ["Course", "Reason"],
+          "extra_from": "courses",
+          "tone_field": "Course",
+          "screens": [
+            {"group": "When", "label": "Tonight / tomorrow", "filters": {"earn_days": "0..1"}, "sort": "-mcap_b", "explain": "Prints whose reaction lands on the next session."},
+            {"group": "When", "label": "This week", "filters": {"earn_week": "=w0"}, "sort": "earn_date", "explain": "Prints this calendar week (W0)."},
+            {"group": "When", "label": "Next week", "filters": {"earn_week": "=w1"}, "sort": "earn_date", "explain": "Prints next week (W1): the event budget of that week's Daily."},
+            {"group": "Bar", "label": "Low bar", "filters": {"bar_rev": "=t1", "bar_tape": "=t1|=t2"}, "sort": "-ev_h28", "explain": "Estimates cut into the print and a weak or middling tape: the cells where beats paid most and misses often held."},
+            {"group": "Bar", "label": "High bar", "filters": {"bar_rev": "=t3", "bar_tape": "=t3"}, "sort": "-mcap_b", "explain": "Estimates raised and a strong tape: about half of beats sold; buy a sold beat in the band, not the print."},
+            {"group": "Bar", "label": "Beats sold here", "filters": {"c_beat_sold": ">=45"}, "sort": "-c_beat_sold", "explain": "Cells where 45%+ of beats fell on the day: the dip after a beat is the entry, not the print."},
+            {"label": "Model 7+", "filters": {"dec_28d": ">=7"}, "sort": "-pred_28d", "explain": "Alpha model 28-day decile 7 or better (read only in an OK / WEAK state)."},
+            {"label": "Cheap to peers", "filters": {"peer_gap_pct": ">20"}, "sort": "-peer_gap_pct", "explain": "Trades 20%+ under what industry peers with the same growth / quality get (use only the sign that agrees across fits)."},
+            {"label": "Estimates up", "filters": {"eps_rev_3m": ">0"}, "sort": "-eps_rev_3m", "explain": "Next-FY EPS estimate raised over three months."},
+            {"label": "Book lines", "filters": {"book_usd": ">0"}, "sort": "-book_usd", "explain": "Lines the Book holds."}
+          ]
+        }
+      ]
+    },
+    {
+      "label": "Safe park",
+      "blocks": [
+        {
+          "type": "text",
+          "text": "Lower-risk places for cash that should still earn: store beta (vs the cap-weighted US floor), 20-day realized volatility, no deterioration letter, the model's 28-day decile, value to peers. Low beta lowers the Book's market dollars per point (downside beta_nav_pct). Screens are reading orders."
+        },
+        {
+          "type": "table",
+          "title": "Low beta and low volatility, with the model and value beside them",
+          "source": {"duckdb": "{PACK}/board/board.duckdb", "sql": "SELECT symbol, ind, mcap_b, book_usd, close, day, m1, m3, r_12m, beta, rvol_20, atrp, dd, n_det, det, cnt_fx_28d_mean, cnt_p_dn_28d, dec_28d, pred_28d, dec_56d, pred_56d, b28d_q20, b28d_q80, peer_gap_pct, peer_prem_pct, pe_nfy, pe_nfy_vs_ind, div_yield, fcf_margin, nd_ebitda, irr_exp_pct, hurdle_pct, street_left, earn_date, bounce_low, bounce_high, bounce_kill FROM names WHERE beta IS NOT NULL AND symbol NOT LIKE '%/%' ORDER BY beta", "drop_missing_columns": true},
+          "extra_columns": ["Course", "Reason"],
+          "extra_from": "courses",
+          "tone_field": "Course",
+          "screens": [
+            {"label": "Park: low beta, model up", "filters": {"beta": "<0.8", "rvol_20": "<2", "n_det": "=0", "dec_28d": ">=7"}, "sort": "-pred_28d", "explain": "One click for the park lane (the four facets below stacked)."},
+            {"label": "Low beta", "filters": {"beta": "<0.8"}, "sort": "beta", "explain": "Beta under 0.8: lowers the Book's beta per dollar."},
+            {"label": "Low volatility", "filters": {"rvol_20": "<2"}, "sort": "rvol_20", "explain": "20-day realised daily volatility under 2%."},
+            {"label": "No letters", "filters": {"n_det": "=0"}, "explain": "No deterioration letter (E R C S): the drawdown, if any, is price only."},
+            {"label": "Model 7+", "filters": {"dec_28d": ">=7"}, "sort": "-pred_28d", "explain": "Alpha model 28-day decile 7 or better (read only in an OK / WEAK state)."},
+            {"label": "Cheap to peers", "filters": {"peer_gap_pct": ">15"}, "sort": "-peer_gap_pct", "explain": "15%+ under what peers with the same profile get."},
+            {"label": "IRR over hurdle", "filters": {"irr_exp_pct": ">10"}, "sort": "-irr_exp_pct", "explain": "Forward-value expected IRR over 10% a year."},
+            {"label": "Dividend 2%+", "filters": {"div_yield": ">=2"}, "sort": "-div_yield", "explain": "Pays 2%+ while parked."},
+            {"label": "Negative beta / hedges", "filters": {"beta": "<0.2"}, "sort": "beta", "explain": "Beta under 0.2: moves apart from the market."}
+          ]
+        }
+      ]
+    },
+    {
+      "label": "Value",
+      "blocks": [
+        {
+          "type": "text",
+          "text": "Value three ways, kept apart: to industry peers (peer value: gap_pct > 0 = cheaper than peers with the same growth / quality), to the street (street_left) and to the forward-value run (fv_upside_pct, irr_exp_pct vs hurdle_pct, priced_in_cagr_pct = the growth the price assumes)."
+        },
+        {
+          "type": "table",
+          "title": "Peers, street and forward value side by side",
+          "source": {"duckdb": "{PACK}/board/board.duckdb", "sql": "SELECT symbol, ind, mcap_b, book_usd, close, m1, vs50, peer_group, peer_lens, peer_mult, peer_ind_med, peer_prem_pct, peer_just_pct, peer_gap_pct, peer_px_fit, peer_pctl_growth, peer_pctl_quality, peer_pctl_revision, pe_nfy, pe_nfy_vs_own, peg_fwd, street_px, street_left, fv_base_px, fv_upside_pct, irr_exp_pct, hurdle_pct, priced_in_cagr_pct, fwd_eps_g, eps_rev_3m, dec_28d, pred_28d, dec_56d, n_det, earn_date, earn_days FROM names WHERE peer_gap_pct IS NOT NULL ORDER BY peer_gap_pct DESC", "drop_missing_columns": true},
+          "extra_columns": ["Course", "Reason"],
+          "extra_from": "courses",
+          "tone_field": "Course",
+          "screens": [
+            {"label": "Discounted, strong, turning up", "filters": {"peer_gap_pct": ">20", "eps_rev_3m": ">0", "n_det": "=0", "dec_28d": ">=8", "m1": ">0", "vs50": ">-3"}, "sort": "-peer_gap_pct", "explain": "The catalyst book's discount-turn lane in one click (cheap to peers, estimates up, no letter, model 8+, month up, near or over the 50-day)."},
+            {"label": "Cheap to peers", "filters": {"peer_gap_pct": ">20"}, "sort": "-peer_gap_pct", "explain": "Trades 20%+ under what industry peers with the same growth / quality get (use only the sign that agrees across fits)."},
+            {"label": "Estimates up", "filters": {"eps_rev_3m": ">0"}, "sort": "-eps_rev_3m", "explain": "Next-FY EPS estimate raised over three months."},
+            {"label": "No letters", "filters": {"n_det": "=0"}, "explain": "No deterioration letter (E R C S): the drawdown, if any, is price only."},
+            {"label": "Model 8+", "filters": {"dec_28d": ">=8"}, "sort": "-pred_28d", "explain": "Alpha model 28-day decile 8 or better (read only in an OK / WEAK state)."},
+            {"label": "Turning up", "filters": {"m1": ">0", "vs50": ">-3"}, "sort": "-m1", "explain": "Up on the month and near or over the 50-day."},
+            {"label": "IRR over hurdle", "filters": {"irr_exp_pct": ">12"}, "sort": "-irr_exp_pct", "explain": "Forward-value expected IRR over 12% a year."},
+            {"label": "Premium not earned", "filters": {"peer_gap_pct": "<-25"}, "sort": "peer_gap_pct", "explain": "25%+ over what peers with the same profile get."},
+            {"label": "Priced for little growth", "filters": {"priced_in_cagr_pct": "<5", "fwd_eps_g": ">10"}, "sort": "priced_in_cagr_pct", "explain": "The price assumes under 5% growth while the street forecasts 10%+."},
+            {"group": "When", "label": "Prints within 7d", "filters": {"earn_days": "0..7"}, "sort": "earn_days", "explain": "A print inside a week."},
+            {"label": "Book lines", "filters": {"book_usd": ">0"}, "sort": "-book_usd", "explain": "Lines the Book holds."}
+          ]
+        }
+      ]
+    },
+    {
+      "label": "All names",
+      "blocks": [
+        {
+          "type": "text",
+          "text": "Every column of the board in its group order (config/generic_utils/opportunity_board.json). Use the columns menu to hide groups, per-column filters (>5, 1..10, =x, !x, a|b), Heat for shading and Stats for medians. PACK/board/board.duckdb names holds the same rows."
+        },
+        {
+          "type": "table",
+          "title": "US $2B+, the Book and named ids: every suite's read",
+          "source": {"duckdb": "{PACK}/board/board.duckdb", "sql": "SELECT * EXCLUDE (in_book, named, catalysts, company) FROM names WHERE symbol NOT LIKE '%/%' ORDER BY mcap_b DESC NULLS LAST", "drop_missing_columns": true},
+          "extra_columns": ["Course", "Reason"],
+          "extra_from": "courses",
+          "tone_field": "Course",
+          "screens": [
+            {"label": "Event WARN", "filters": {"warn_level": "=WARN_STRONG|=WARN"}, "sort": "stress_5s_pct", "explain": "Event-risk WARN_STRONG / WARN (event-risk letters and rule on the Ledger): the review list for held lines, the avoid list for others."},
+            {"label": "Event lifted (U)", "filters": {"er_letters": "U"}, "sort": "-ev_recent_z", "explain": "A policy / binary / mapped event in the last 5 days lifted the crowd (z >= 2): the buy-side candidates; confirm with value and the band."},
+            {"label": "Model 10 / 10", "filters": {"dec_28d": "=10", "dec_56d": ">=9"}, "sort": "-pred_28d", "explain": "Top decile at 28 days and 9+ at 56 days."},
+            {"label": "Up pattern letters", "filters": {"pat_up": "!", "n_durable": ">=1"}, "sort": "-n_durable", "explain": "Anatomy up-pattern letters with at least one durable pattern."},
+            {"label": "Down pattern letters", "filters": {"pat_dn": "!"}, "sort": "pat_dn", "explain": "Anatomy down-pattern letters."},
+            {"label": "Letters beyond price", "filters": {"n_det": ">=2"}, "sort": "-n_det", "explain": "Two or more deterioration letters."},
+            {"label": "On a pack list", "filters": {"pack_lists": "!"}, "sort": "-dec_28d", "explain": "Names on any pack list."},
+            {"label": "Cheap to peers", "filters": {"peer_gap_pct": ">20"}, "sort": "-peer_gap_pct", "explain": "Trades 20%+ under what industry peers with the same growth / quality get (use only the sign that agrees across fits)."},
+            {"label": "Estimates up", "filters": {"eps_rev_3m": ">0"}, "sort": "-eps_rev_3m", "explain": "Next-FY EPS estimate raised over three months."},
+            {"label": "Band within 3%", "filters": {"to_band_high_pct": ">=-3"}, "sort": "-to_band_high_pct", "explain": "Within 3% of the bounce band top."},
+            {"group": "When", "label": "Tonight / tomorrow", "filters": {"earn_days": "0..1"}, "sort": "-mcap_b", "explain": "Prints whose reaction lands on the next session."},
+            {"group": "When", "label": "This week", "filters": {"earn_week": "=w0"}, "sort": "earn_date", "explain": "Prints this calendar week (W0)."},
+            {"group": "When", "label": "Next week", "filters": {"earn_week": "=w1"}, "sort": "earn_date", "explain": "Prints next week (W1): the event budget of that week's Daily."},
+            {"group": "Bar", "label": "Low bar", "filters": {"bar_rev": "=t1", "bar_tape": "=t1|=t2"}, "sort": "-ev_h28", "explain": "Estimates cut into the print and a weak or middling tape: the cells where beats paid most and misses often held."},
+            {"group": "Bar", "label": "High bar", "filters": {"bar_rev": "=t3", "bar_tape": "=t3"}, "explain": "Estimates raised and a strong tape: about half of beats sold; buy a sold beat in the band, not the print."},
+            {"label": "Book lines", "filters": {"book_usd": ">0"}, "sort": "-book_usd", "explain": "Lines the Book holds."}
+          ]
+        }
+      ]
+    },
+    {
+      "label": "Book",
+      "blocks": [
+        {
+          "type": "table",
+          "title": "Book lines on the board",
+          "source": {"duckdb": "{PACK}/board/board.duckdb", "sql": "SELECT symbol, book_usd, close, day, m1, rsi, vs50, bounce_low, bounce_high, bounce_kill, to_band_high_pct, kill_dist_pct, earn_date, earn_slot, bar_tape, bar_rev, c_bar_text, c_beat_sold, dec_7d, dec_28d, pred_28d, b28d_q20, b28d_q80, peer_gap_pct, peer_prem_pct, street_left, fv_upside_pct, beta, rvol_20, dd, det, cnt_fx_28d_mean, cnt_p_dn_28d FROM names WHERE in_book ORDER BY book_usd DESC", "drop_missing_columns": true},
+          "extra_columns": ["Course", "Reason"],
+          "extra_from": "courses",
+          "tone_field": "Course"
+        }
+      ]
+    },
+    {"label": "Sources", "blocks": [{"type": "list", "from": "pages.board.blocks.sources"}]}
+  ],
+  "ledger": {
+    "auto": true,
+    "entries": [
+      {
+        "group": "Letters (det: deterioration; pat_up / pat_dn: winners anatomy)",
+        "rows": [
+          ["E", "det: next-FY EPS estimate cut by more than 1% over about 3 months. pat_up: not used."],
+          ["R", "det: next-FY revenue estimate cut by more than 1% over about 3 months."],
+          ["C", "det: free cash flow margin under 0 (cash burn). pat_up: street upside in its top quintile, a print within 28 days, estimates not cut, under the 200-day."],
+          ["S", "det: last reported EPS under its estimate."],
+          ["O", "pat_up: RSI in its lowest quintile with p_fwd in its top quintile (oversold, forward set-up strong)."],
+          ["B", "pat_up: printed within 10 days with a beat, last week in its lowest quintile (a beat that was sold)."],
+          ["I", "pat_up: the industry's 3-month return in its lowest quintile while the industry's last surprises are in their top quintile."],
+          ["D", "pat_up: 1-month return in its lowest quintile with p_dvc in its top quintile (a durable compounder that fell)."],
+          ["H", "pat_up: far from its 91-day high (hi_prox lowest quintile) with p_dvc in its top quintile."],
+          ["V", "pat_up: 3-month return in its lowest quintile, street upside in its top quintile, estimates not cut."],
+          ["L", "pat_up: 1-month return in its lowest quintile, street upside in its top quintile, a print within 28 days."],
+          ["X", "pat_dn: breakout score in its top quintile with weekly consensus in its lowest (a breakout nobody confirms)."],
+          ["Y", "pat_dn: breakout score in its top quintile with p_fwd in its lowest quintile."],
+          ["Z", "pat_dn: 1-month return in its top quintile with p_fwd in its lowest quintile (a run without a forward read)."]
+        ]
+      },
+      {
+        "group": "Plan tab (judgment tables)",
+        "rows": [
+          ["Lane", "Why the row is on the plan: exit, park (low beta), hedge, event (an earnings ticket from the event budget), add after the events, trim."],
+          ["Bar", "Low bar = estimates cut and a weak 3-month tape into the print (bar_rev / bar_tape T1); high bar = both in their top third (T3); middle otherwise."],
+          ["The cell says", "What beats and misses did on past prints in the reporter's beat-bar cell: the day's reaction vs the market and the 28-day hold (h28), pp; n = prints in the cell."],
+          ["Level", "The prices that act on a Book line: bounce band, kill, resting trim."],
+          ["For (data)", "Conviction log: the measured reads that back the course (cell mean and t, model decile, peer gap, street, letters absent), each its own number, never summed."],
+          ["Against (data)", "Conviction log: the measured reads that argue against it (letters, street under the price, crowd stress, above the band, a weak cell)."],
+          ["What changes it", "Conviction log: the price or event that raises, lowers or ends the course (a close through the kill, a print, a trigger)."],
+          ["Cost of staying", "The line's deterioration cell (dd | letters) and its measured mean excess over 28 days vs the median name: what holding this state has paid."],
+          ["Beta", "Store beta against the cap-weighted US floor (panel store); negative = tends to rise when the market falls."],
+          ["Catalyst (OUTSIDE)", "The outside event or policy that could move the name (dated, sourced on the page's Sources tab); it changes timing or Grade only, never the order or the size."],
+          ["Data", "The pack's reads that keep the name on the list: model decile, IRR vs hurdle, peer gap, letters, beta."]
+        ]
+      }
+    ]
+  }
+}

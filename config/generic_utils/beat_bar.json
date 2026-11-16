@@ -1,0 +1,33 @@
+{
+  "name": "beat_bar_v1",
+  "description": "What a beat (and a miss) has paid on past prints set up like each coming reporter. Positioning cell = terciles of the recipe's grid axes on the lab's prints (run-up into the print, the three-month tape, the three-month EPS estimate change); inside the cell the prints are split by outcome (EPS beat / miss, B/B and B/M mix) and measured on the reaction vs the market and the hold-through from the pre-print close. The bar is the lowest EPS-surprise quintile whose reaction mean is positive in the cell. Pointer cells repeat the beat / miss split on one pre-print field's quintile at a time. Zero cutoffs beyond the floors; no ranking, no course.",
+  "grid": {
+    "axes": ["runup", "r_3m", "eps_rev_3m"],
+    "levels": 3,
+    "fallbacks": [["runup", "eps_rev_3m"], ["runup", "r_3m"], ["runup"]],
+    "min_beats": 30,
+    "min_misses": 12
+  },
+  "beat_field": "eps_surprise",
+  "beat_above": 0.0,
+  "surprise_bins": 5,
+  "bar_min_n": 12,
+  "measures": [
+    ["react_fx", "rx", "Reaction session vs the market (pp)"],
+    ["hold_fx_7d", "h7", "Hold from the pre-print close, 7 days, excess (pp)"],
+    ["hold_fx_28d", "h28", "Hold from the pre-print close, 28 days, excess (pp)"]
+  ],
+  "own_prior_prints": 4,
+  "starter_usd": 5000,
+  "weeks": ["W0", "W1"],
+  "pointer_keys": ["runup", "r_1m", "r_3m", "rsi", "vs50", "hi_prox", "rvol_20", "prev_react", "last_surprise", "eps_rev_3m", "eps_rev_1m",
+                   "rev_rev_3m", "eps_q_step", "pt_up", "pt_rev_1m", "ey_fwd", "p_dvc", "p_cons_w", "peer_rx"],
+  "plays_fields": ["company", "ind", "week", "earn_date", "earn_dow", "slot", "react_on", "dte", "close", "day", "m1", "runup", "rsi", "vs50",
+                   "atrp", "pt_up", "eps_rev_3m", "eps_q_step", "rev_q_step", "last_surprise", "pe_nfy", "pe_nfy_vs_ind", "pe_nfy_vs_own",
+                   "n_prints", "react_last", "react_abs_mean", "react_up", "setup_cell", "setup_mean", "setup_rx_q10", "setup_rx_q90",
+                   "dec_7d", "pred_7d", "dec_28d", "pred_28d", "b28d_q20", "b28d_q80", "entry_low", "entry_high", "kill_px", "mark_vs_band",
+                   "bounce_low", "bounce_high", "bounce_kill", "first_target", "mos_own_med_pct", "mos_peer_pct", "lenses", "book_usd",
+                   "book_vs_cost"],
+  "outlook_fields": ["pack_lists", "analysts", "rating"],
+  "anatomy_fields": ["pat_up", "pat_dn", "n_durable"]
+}

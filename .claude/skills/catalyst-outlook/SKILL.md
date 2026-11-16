@@ -52,6 +52,12 @@ Reading (the page's Guide tab has the steps and every screen):
 4. Book lines printing: hold vs DERISK from the down list and the tail; the polar rule and sticky DERISK still bind.
 5. The digest (after the post-close scan or `--react-on today`): the print's own pointers on the reaction, the after-hours-to-close move
    and the 28-day drift, beside the week-plays post cells. Decide at the cash close.
+6. Big-move odds (recipe `tail_measures`, a HIGHLIGHT): `u10_hi` / `d10_hi` = the highest odds of a +10 / -10 pp reaction among the
+   name's cells (the SIZE read; Size pointers `own_abs`, `mcap`, `rev_yoy` feed only these), `b10_*` = up odds minus down odds (the
+   SIDE read). On 4 Nov 2026, out of sample, size held (u10_hi >= 0.16: mean after-hours move 6.2%, 16% moved 10%+; under 0.13:
+   1.2%) and side failed (the up-tilt cells are momentum, which was reversing). Use it to size a line through a print (keep a
+   best-cell line at a size whose 1-in-10 drop you can carry instead of all in / all out), never to pick the side. A +10 jump after a
+   punished print gave back 1.75 over the next 7 days on the store: no chase.
 
 **Print brief page** (one card per reporter, the written read):
 
@@ -73,6 +79,19 @@ notes for the Book's prints and the few names that could take capital, not every
 
 Judgment: `pages.outlook.blocks.tonight_read` (callout), `blocks.tonight` `[[Symbol, Slot, Course, Entry, Kill, Size, Pointers, Why]]`,
 `blocks.digest_read` (callout, after the print). Event tickets come out of the Daily's event budget; otherwise WATCH with the post-print band.
+
+## Beat bar (is a beat what the market wants?)
+
+```powershell
+python src/generic_utils/tv_scan_cli.py beat-bar --pack PACK --ids APP,HL --line    # W0 + W1 reporters -> PACK/beat_bar
+```
+
+`generic_utils/beat_bar.py` puts each reporter in a positioning cell (terciles of run-up, 3-month return, 3-month EPS revision on the
+lab's prints) and reads what beats and misses did there: `c_rx_beat` / `c_rx_miss`, `c_beat_sold`, `c_h28_beat`, the bar (`c_bar_text`,
+lowest EPS-surprise quintile with a positive reaction), pointer quintiles where beats paid more / less (`beat_rx_up_list`), own surprises,
+`p_beat` and the mixed reads `p_up_rx` / `ev_rx` / `ev_h28` (frequencies, never a gate or size). Use it beside print-night before an
+event ticket: a low bar (beats sold <= 30%) earns a pre-print starter in the bounce band; a high bar (>= 45%) waits for a beat that is
+sold. Re-run on the week of the print for W1 names (their run-up axis is not formed yet).
 
 ## Reading
 

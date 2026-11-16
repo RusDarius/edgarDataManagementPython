@@ -7,6 +7,7 @@ Active-manager research and refinement plans for the TradingView move-prediction
 | Document | Purpose |
 |----------|---------|
 | [active_manager_profile_and_pattern_discovery_plan.md](active_manager_profile_and_pattern_discovery_plan.md) | Profile improvements, new opportunity lenses, and skeptical pattern-discovery strategy |
+| [holder_base_and_flow_plan.md](holder_base_and_flow_plan.md) | Who holds / trades a stock (13F, N-PORT, Form 4, 13D/G, FINRA short interest and short volume) and the volume-flow profile, tested against print reactions (Nov 2026, not built) |
 | [implementation_todos.md](implementation_todos.md) | Prioritized code/process implementation backlog derived from the plan |
 | [active_manager_implementation_usage.md](../active_manager_implementation_usage.md) | June 2026 implementation guide — signals, profiles, weekly workflow |
 | [tradingview_move_prediction_pattern_discovery_reference.md](../tradingview_move_prediction_pattern_discovery_reference.md) | Pattern discovery methods, SQL blocks, calibration gates |

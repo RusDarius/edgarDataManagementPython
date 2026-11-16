@@ -16,8 +16,40 @@
     "label": "Hyperscalers and AI capex buyers",
     "ids": ["MSFT", "GOOGL", "AMZN", "META", "ORCL"]
   },
+  "ai_adopters": {
+    "label": "AI adopters: capex payers, software, platforms and services that gain when chips / data-center capacity get cheaper (not the build-out)",
+    "ids": ["NASDAQ:MSFT", "NASDAQ:GOOGL", "NASDAQ:AMZN", "NASDAQ:META", "NYSE:NOW", "NYSE:CRM", "NASDAQ:ADBE", "NASDAQ:INTU", "NASDAQ:PLTR", "NYSE:SNOW", "NASDAQ:DDOG", "NASDAQ:APP", "NYSE:RDDT", "NYSE:UBER", "NASDAQ:SHOP", "NYSE:SPOT", "NASDAQ:NFLX", "NASDAQ:TTD", "NYSE:HUBS", "NASDAQ:WDAY", "NYSE:EPAM", "NYSE:G", "NYSE:IT", "NYSE:ACN", "NYSE:IBM", "NASDAQ:CRWD", "NASDAQ:PANW", "NYSE:NET", "NASDAQ:ZS", "NASDAQ:DUOL", "NYSE:XYZ", "NASDAQ:PYPL", "NASDAQ:MELI", "NYSE:SE", "NYSE:CPNG", "NASDAQ:DASH", "NASDAQ:ABNB", "NASDAQ:BKNG", "NASDAQ:EXPE", "NYSE:V", "NYSE:MA", "NASDAQ:ADP", "NYSE:FICO", "NYSE:SPGI", "NYSE:MCO", "NYSE:TRU"]
+  },
   "ai_buildout": {
     "label": "AI buildout industries (theme-slice)",
     "industries": ["Semiconductors", "Electronic Components", "Computer Peripherals", "Electronic Production Equipment", "Electrical Products", "Engineering & Construction", "Data Processing Services", "Telecommunications Equipment", "Computer Processing Hardware", "Electronic Equipment/Instruments", "Computer Communications", "Alternative Power Generation", "Electric Utilities"]
+  },
+  "policy_midterm_up": {
+    "label": "Policy / midterm: sentiment helped by a Democratic Congress (clean energy kept from further cuts, grid, hospitals and ACA insurers, staples)",
+    "ids": ["NASDAQ:FSLR", "NASDAQ:NXT", "NYSE:GEV", "NASDAQ:ENPH", "NASDAQ:RUN", "NYSE:THC", "NYSE:HCA", "NYSE:OSCR", "NYSE:CNC", "NYSE:ELV", "NYSE:NEE", "NASDAQ:REYN", "NYSE:INGR"]
+  },
+  "policy_midterm_down": {
+    "label": "Policy / midterm: sentiment hurt by a Democratic sweep (capital markets, aerospace and defense, crypto)",
+    "ids": ["NYSE:GS", "NASDAQ:HOOD", "NASDAQ:COIN", "NYSE:LMT", "NYSE:NOC", "NYSE:GD", "NYSE:LHX"]
+  },
+  "ai_power_build": {
+    "label": "AI power and data-center build: contractors, electrical gear, grid and the generators that sell to data centers (the crowd the 4 Nov 2026 Democratic sweep repriced on data-center construction limits). For calendar exposure maps.",
+    "ids": ["NASDAQ:STRL", "NYSE:FIX", "NYSE:PWR", "NYSE:EME", "NYSE:MTZ", "NYSE:ECG", "NASDAQ:IESC", "NYSE:AGX", "NYSE:PRIM", "NYSE:DY", "NYSE:VRT", "NYSE:GEV", "NYSE:ETN", "NYSE:NVT", "NYSE:HUBB", "NYSE:MOD", "NASDAQ:AAON", "NASDAQ:POWL", "NYSE:VST", "NASDAQ:CEG", "NASDAQ:TLN", "NYSE:BE"]
+  },
+  "solar_clean": {
+    "label": "Solar and clean-energy names that trade on federal credits and policy (the side the 4 Nov 2026 sweep lifted). For calendar exposure maps.",
+    "ids": ["NASDAQ:FSLR", "NASDAQ:ENPH", "NASDAQ:RUN", "NASDAQ:NXT", "NASDAQ:SEDG", "NASDAQ:ARRY", "NASDAQ:SHLS", "NASDAQ:CSIQ", "NYSE:NEE"]
+  },
+  "memory_storage": {
+    "label": "Memory and storage: the DRAM / NAND / disk cycle names. For calendar exposure maps.",
+    "ids": ["NASDAQ:MU", "NASDAQ:WDC", "NASDAQ:SNDK", "NASDAQ:STX"]
+  },
+  "discount_turn": {
+    "label": "Discounted to peers with fundamental strength and the tape turning up (catalyst book lane 2)",
+    "ids": ["NASDAQ:PDD", "NYSE:ST", "NYSE:YUMC", "NYSE:CMC", "NASDAQ:PYPL", "NYSE:TPR", "NYSE:HIG", "NYSE:SYF"]
+  },
+  "ai_upside_catalyst": {
+    "label": "AI names with large upside and a dated outside catalyst (catalyst book lane 3)",
+    "ids": ["NASDAQ:SNDK", "NASDAQ:NVDA", "NASDAQ:LRCX", "NASDAQ:CRDO", "NASDAQ:PENG", "NASDAQ:AMD", "NASDAQ:ARM", "NASDAQ:APP"]
   }
 }

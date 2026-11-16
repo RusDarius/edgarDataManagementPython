@@ -660,6 +660,22 @@ def run_symbol_intelligence_report_example(
     return result
 
 
+def deep_dive_analysis_agent(
+    ids, question=None, theme=None, agent=True, print_prompt=False
+) -> dict[str, object]:
+    """Deep dive on one name or a list (or a question over them): the name dossier, then the agent's outside read,
+    catalysts, trajectory per horizon and band / kill / targets (src/run_deep_dive.py, skill deep-dive-agent).
+    """
+    from run_deep_dive import deep_dive_analysis_agent as _run
+
+    result = _run(
+        ids, question=question, theme=theme, agent=agent, print_prompt=print_prompt
+    )
+    print(f"Deep dive folder: {result['dir']}")
+    print(f"Deep dive page  : {result['page']}")
+    return result
+
+
 # Main entry point for running workflows and data loaders.
 def main():
     # analyze_global_price_performance(
@@ -698,6 +714,11 @@ def main():
     # run_symbol_intelligence_report_example("NYSE:MOH")
     # run_symbol_intelligence_report_example("NYSE:BE")
     # run_symbol_intelligence_report_example("NASDAQ:WDC")
+    # ── Deep-dive agent (dossier + outside read + trajectory / band per horizon) ──
+    # deep_dive_analysis_agent("NYSE:DOW")                                   # one name, headless agent
+    # deep_dive_analysis_agent(["NYSE:DOW", "NYSE:LYB"], agent=False)        # data-only dossier + page
+    # deep_dive_analysis_agent(["NASDAQ:AMZN", "NASDAQ:GOOG", "NASDAQ:MSFT", "NASDAQ:NVDA"],
+    #                          question="Position how trading the Anthropic IPO could work for the market and the company")
 
     # ── ETF analysis (world primary listings) ─────────────────────────────
     # Fetch + v1 composite + active-management book + persist. Output:
