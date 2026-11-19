@@ -13,7 +13,7 @@ import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Literal
+from typing import Any, Iterable, Iterator, Literal, Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 import uuid
 
@@ -61,10 +61,33 @@ OUTPUT_DIR = Path(
 )
 DUCKDB_OUTPUT_DIR = OUTPUT_DIR / "trading_view_all_fields_data"
 CHUNK_SIZE = 600
-# Focused catalog is ~243 columns; a single request is the point of the intraday
+# Focused catalog is ~253 columns; a single request is the point of the intraday
 # export (vs ~6 chunks at the full-catalog CHUNK_SIZE). Larger than the catalog
 # so it stays one request unless the focused set grows past this.
 FOCUSED_CHUNK_SIZE = 300
+# Fields the daily suites read that the full catalog has and the curated focused CSV did not (the CSV lives in the
+# gitignored savedData/ folder, so this list is the versioned record). Merged into every focused request. Since the
+# focused export became the daily producer (7 Sep 2026) and the full export stopped running daily (last 6 Nov 2026),
+# a field missing here is NULL on every run the suites read:
+# - premarket_close / postmarket_close: the premarket and after-hours price (session_tape, pack Book / tape rows);
+# - price_book_ratio: P/B for the book family, the pack and the panel store (`pb`);
+# - recommendation_mark / recommendation_total: analyst rating and count (panel `rec_analyst`, catalyst outlook,
+#   name dossier); recommendation_total is also the outlook's probe for a day file that carries the catalyst fields;
+# - ex_dividend_date_upcoming / dividend_amount_upcoming / ipo_offer_date / price_52_week_high_date: the catalyst
+#   outlook's ex-dividend and IPO-lockup events and the 52-week-high date;
+# - total_shares_outstanding: the forward value run's share-count check.
+FOCUSED_REQUIRED_FIELDS: tuple[str, ...] = (
+    "premarket_close",
+    "postmarket_close",
+    "price_book_ratio",
+    "recommendation_mark",
+    "recommendation_total",
+    "ex_dividend_date_upcoming",
+    "dividend_amount_upcoming",
+    "ipo_offer_date",
+    "price_52_week_high_date",
+    "total_shares_outstanding",
+)
 MIN_EXPECTED_ALL_FIELDS_ROWS = 5_000
 # Retry a successful HTTP scan that still came back near-empty (transient stub).
 MIN_EXPECTED_CHUNK_ROWS = 100
@@ -2027,10 +2050,12 @@ def export_all_tradingview_fields_duckdb(
     export_parquet: bool = True,
     create_indexes: bool = False,
     min_expected_rows: int = MIN_EXPECTED_ALL_FIELDS_ROWS,
+    extra_fields: Sequence[str] = (),
 ) -> dict[str, Any]:
     field_names = _load_field_names(field_catalog_csv)
     if not field_names:
         raise ValueError(f"No TradingView field names found in {field_catalog_csv}")
+    field_names += [name for name in dict.fromkeys(extra_fields) if name and name not in field_names]
 
     data_field_names = _scan_request_columns(field_names)
     if not data_field_names:
@@ -2239,7 +2264,7 @@ def export_focused_tradingview_fields_duckdb(
     """Fast, focused-field variant of ``export_all_tradingview_fields_duckdb``.
 
     Fetches only ``FOCUSED_FIELD_CATALOG_CSV`` (~243 curated finance/scoring-relevant
-    fields) instead of the full ~3.5k TradingView field catalog, typically in a single
+    fields) plus ``FOCUSED_REQUIRED_FIELDS`` (what the daily suites read beyond that CSV) instead of the full ~3.5k TradingView field catalog, typically in a single
     scan request (see ``FOCUSED_CHUNK_SIZE``). The catalog's ``symbol`` row-key is never
     sent as a scanner column: TradingView treats it as unknown (null), and mapping that
     null over the ticker used to collapse every row into one merged symbol. It writes
@@ -2270,6 +2295,7 @@ def export_focused_tradingview_fields_duckdb(
         export_parquet=export_parquet,
         create_indexes=create_indexes,
         min_expected_rows=min_expected_rows,
+        extra_fields=FOCUSED_REQUIRED_FIELDS,
     )
 
 

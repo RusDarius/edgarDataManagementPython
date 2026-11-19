@@ -11,6 +11,7 @@ from typing import Any, Mapping
 
 from generic_utils.derive import implied_price
 from generic_utils.print_pointers import POINTER_COLUMNS, attach_print_pointers
+from generic_utils.session_marks import MARK_COLUMNS
 from generic_utils.symbol_identity import display_id
 
 from .continuity import (
@@ -96,6 +97,7 @@ TAPE_FIELDS = (
     "atrp",
     "pt",
     *POINTER_COLUMNS,
+    *MARK_COLUMNS,
 )
 
 GOTCHAS = [
@@ -217,6 +219,7 @@ def _compact_name(row: dict[str, Any]) -> dict[str, Any]:
         "tech_rng",
         "tech_rsi",
         *POINTER_COLUMNS,
+        *MARK_COLUMNS,
     )
     from generic_utils.forward_fundamentals import PACK_FORWARD_KEYS
     from generic_utils.setup import FORWARD_PEER_FIELDS, TV_AS_IS_PEER_FIELDS
@@ -435,6 +438,8 @@ def _book_rows(
                 "atr": name.get("atr"),
                 "atrp": name.get("atrp"),
                 "beta": name.get("beta"),
+                # premarket / after-hours price and volume on the line (generic_utils.session_marks)
+                **{k: name.get(k) for k in MARK_COLUMNS},
                 **{key: name.get(key) for key in POINTER_COLUMNS},
                 "continuity": cont,
                 "event_alert": name.get("dte") is not None and name["dte"] <= 2,

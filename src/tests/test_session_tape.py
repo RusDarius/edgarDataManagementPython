@@ -87,7 +87,9 @@ class TestSessionTape(unittest.TestCase):
             {"symbol": "NASDAQ:PGY", "close": 17.4, "premarket_change": -0.90, "industry": "Packaged Software"},
         ]
         prior.append({"symbol": "NASDAQ:PGY", "close": 17.4, "premarket_change": -0.88})
-        rows = {row["symbol"]: row for row in join_named_premarket(prior, current, ["NASDAQ:MU", "NASDAQ:PGY", "NASDAQ:MISSING"])}
+        premarket = datetime(2026, 11, 18, 13, 0, tzinfo=timezone.utc)  # 08:00 New York: close is still the prior cash close
+        rows = {row["symbol"]: row for row in join_named_premarket(prior, current, ["NASDAQ:MU", "NASDAQ:PGY", "NASDAQ:MISSING"],
+                                                                   scan_at=premarket)}
         self.assertFalse(rows["NASDAQ:MU"]["pre_repeat"])
         self.assertEqual(rows["NASDAQ:MU"]["pre_px"], 97.0)
         self.assertEqual((rows["NASDAQ:MU"]["post_chg"], rows["NASDAQ:MU"]["post_px"]), (-2.5, 97.5))
@@ -96,3 +98,15 @@ class TestSessionTape(unittest.TestCase):
         self.assertIsNone(rows["NASDAQ:PGY"]["pre_px"])
         self.assertIsNone(rows["NASDAQ:MISSING"]["pre_px"])
         self.assertTrue(rows["NASDAQ:MISSING"]["pre_repeat"] is False)
+
+    def test_named_premarket_after_the_open_uses_the_prior_close(self):
+        from generic_utils.session_tape import join_named_premarket
+
+        prior = [{"symbol": "NASDAQ:MU", "close": 104.0, "premarket_change": 0.5}]
+        current = [{"symbol": "NASDAQ:MU", "close": 100.0, "change": -4.0, "premarket_change": -3.0}]
+        after_open = datetime(2026, 11, 18, 16, 0, tzinfo=timezone.utc)  # 11:00 New York: close is the live price
+        row = join_named_premarket(prior, current, ["NASDAQ:MU"], scan_at=after_open)[0]
+        self.assertEqual(row["us_phase"], "cash")
+        self.assertAlmostEqual(row["pre_px"], 104.1667 * 0.97, places=1)  # not 100 x 0.97 = 97.0
+        self.assertIsNone(join_named_premarket(prior, current, ["NASDAQ:MU"])[0]["pre_px"])  # no scan time, no guess
+

@@ -18,7 +18,7 @@
     "income": {
       "weight": 0.35,
       "derived": {
-        "dividend_yield_recent": 1.2,
+        "dividends_yield_current": 1.2,
         "shareholder_yield": 1.1
       }
     },

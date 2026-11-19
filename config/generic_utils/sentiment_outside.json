@@ -162,6 +162,105 @@
    "source": "Yahoo Finance live, 13 Nov (VIX climbed above 20 in morning trade)",
    "link": "https://finance.yahoo.com/markets/live/stock-market-today-friday-november-13-dow-sp-500-nasdaq-nvidia-ppi-141451558.html",
    "read": ""
+  },
+  {
+   "date": "2026-11-16",
+   "kind": "us10y_yield",
+   "value": 5.12,
+   "unit": "",
+   "source": "Yahoo Finance live, 16 Nov (ticker header)",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-monday-november-16-dow-sp-500-nasdaq-nvidia-oil-091631084.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-16",
+   "kind": "vix_intraday",
+   "value": 23.77,
+   "unit": "",
+   "source": "Yahoo Finance live 16 Nov (~13:50 ET)",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-monday-november-16-dow-sp-500-nasdaq-nvidia-oil-091631084.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-17",
+   "kind": "fed_dec_hike_odds",
+   "value": 95.4,
+   "unit": "pct",
+   "source": "HDFC Sky 17 Nov citing CME FedWatch: 95.4% for a 25 bp hike on 9 Dec",
+   "link": "https://hdfcsky.com/news/nasdaq-flat-at-24526-as-nvidia-earnings-loom-dow-slips-330-points-on-home-depot-drag",
+   "read": ""
+  },
+  {
+   "date": "2026-11-17",
+   "kind": "options_event_move",
+   "value": 7.8,
+   "unit": "pct",
+   "source": "Admiral Markets 17 Nov: options implied about 7.8% on NASDAQ:NVDA's print",
+   "link": "https://admiralmarkets.com/analytics/traders-blog/why-is-the-stock-market-down-today-17-november-2026",
+   "read": ""
+  },
+  {
+   "date": "2026-11-17",
+   "kind": "retail_sales_mom",
+   "value": 0.2,
+   "unit": "",
+   "source": "Yahoo Finance live 17 Nov: October retail sales +0.2% m/m vs 0.1% expected; control +0.5%",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-tuesday-november-17-dow-sp-500-nasdaq-nvidia-earnings-retail-sales-143848454.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-17",
+   "kind": "us10y_yield",
+   "value": 5.118,
+   "unit": "",
+   "source": "HDFC Sky 17 Nov US session (10-year 5.118%, 2-year 4.806%, 30-year 5.472%)",
+   "link": "https://hdfcsky.com/news/nasdaq-flat-at-24526-as-nvidia-earnings-loom-dow-slips-330-points-on-home-depot-drag",
+   "read": ""
+  },
+  {
+   "date": "2026-11-17",
+   "kind": "vix_intraday",
+   "value": 25.58,
+   "unit": "",
+   "source": "Yahoo Finance live 17 Nov (ticker header, ~13:55 ET)",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-tuesday-november-17-dow-sp-500-nasdaq-nvidia-earnings-retail-sales-143848454.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-18",
+   "kind": "fed_dec_hike_odds",
+   "value": 96.8,
+   "unit": "",
+   "source": "TradingKey 18 Nov premarket: 96.8% for a 25 bp December hike, 3.2% for 50 bp",
+   "link": "https://www.tradingkey.com/analysis/stocks/us-stocks/262311015-us-pre-market-nvda-anthropic-tradingkey",
+   "read": ""
+  },
+  {
+   "date": "2026-11-18",
+   "kind": "index_futures_premarket",
+   "value": 0.35,
+   "unit": "",
+   "source": "Yahoo Finance live 18 Nov: S&P 500 futures +0.35%, Nasdaq +0.82%, Dow -0.03%, Russell -0.28%",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-wednesday-november-18-dow-sp-500-nasdaq-nvidia-anthropic-ipo-090613569.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-18",
+   "kind": "us10y_yield",
+   "value": 5.12,
+   "unit": "",
+   "source": "Yahoo Finance live 18 Nov premarket (10-year 5.12%, +0.01)",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-wednesday-november-18-dow-sp-500-nasdaq-nvidia-anthropic-ipo-090613569.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-18",
+   "kind": "vix_premarket",
+   "value": 24.34,
+   "unit": "",
+   "source": "Yahoo Finance live 18 Nov (ticker header, ~08:48 ET, -4.4%)",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-wednesday-november-18-dow-sp-500-nasdaq-nvidia-anthropic-ipo-090613569.html",
+   "read": ""
   }
  ]
 }

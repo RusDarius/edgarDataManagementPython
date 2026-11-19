@@ -55,7 +55,7 @@
     "pe_fwd_tv": "non_gaap_price_to_earnings_per_share_forecast_next_fy",
     "evebitda": "enterprise_value_ebitda_ttm",
     "evrev": "enterprise_value_to_revenue_ttm",
-    "pb": "price_book_ratio",
+    "pb": ["price_book_ratio", "price_book_fq"],
     "fcf_ttm": "free_cash_flow_ttm",
     "rev_yoy": "total_revenue_yoy_growth_ttm",
     "eps_yoy": "earnings_per_share_diluted_yoy_growth_ttm",

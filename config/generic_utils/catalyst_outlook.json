@@ -127,6 +127,10 @@
       [
         "close",
         "day",
+        "pre_chg",
+        "pre_vol_x",
+        "post_chg",
+        "post_vol_x",
         "w",
         "m1",
         "m3",

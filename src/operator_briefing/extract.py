@@ -70,6 +70,10 @@ AF_CANDIDATES = {
     "pre_close": ("premarket_close",),
     "post_chg": ("postmarket_change",),
     "post_close": ("postmarket_close",),
+    "pre_vol": ("premarket_volume",),
+    "post_vol": ("postmarket_volume",),
+    "avgvol10": ("average_volume_10d_calc",),
+    "vwap": ("VWAP",),
     "pe": ("price_earnings_ttm",),
     "pe_fwd": ("price_earnings_forward_fy",),
     "pe_fwd_nongaap": (
@@ -90,7 +94,8 @@ AF_CANDIDATES = {
     "ev": ("enterprise_value_current",),
     "peg": ("price_earnings_growth_ttm",),
     "evebitda": ("enterprise_value_ebitda_ttm", "enterprise_value_ebitda_current"),
-    "pb": ("price_book_ratio", "price_book_current", "price_annual_book"),
+    # price_book_fq last: the focused intraday export carries only the quarterly print (94% of US $2B+ on 18 Nov 2026)
+    "pb": ("price_book_ratio", "price_book_current", "price_annual_book", "price_book_fq"),
     "evfcf": ("enterprise_value_to_free_cash_flow_ttm",),
     "opm": ("operating_margin",),
     "adx": ("ADX",),
@@ -143,6 +148,16 @@ def _parse_date(value: Any) -> date | None:
         except ValueError:
             continue
     return None
+
+
+def _scan_time(value: Any) -> datetime | None:
+    """The run's created_at_utc as a datetime (None when it is missing or does not parse)."""
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")) if value else None
+    except ValueError:
+        return None
 
 
 def _scan_day(day_label: str) -> date | None:
@@ -205,6 +220,9 @@ def extract_all_fields(
     """
     rows = query_move_prediction_duckdb(sources.all_fields_db, sql, params)
     scan = _scan_day(sources.all_fields_day_label)
+    from generic_utils.session_marks import session_marks
+
+    scan_at = _scan_time(sources.all_fields_created_at_utc)
     out: list[dict[str, Any]] = []
     for row in rows:
         close = _f(row.get("close"))
@@ -256,6 +274,8 @@ def extract_all_fields(
             "beta": _f(row.get("beta")),
             "vol_d": _f(row.get("vol_d")),
         }
+        # premarket / after-hours price on the close each percent is measured against, session volume, close vs VWAP
+        rec.update(session_marks({**row, "change": row.get("day")}, scan_at))
         rec["vs50"] = pct_vs(close, rec["sma50"])
         rec["vs200"] = pct_vs(close, rec["sma200"])
         rec["rng"] = range_position_pct(close, row.get("lo52"), row.get("hi52"))

@@ -69,7 +69,7 @@
         "pivot_distance": 0.95
       },
       "quality": {
-        "dividend_yield_recent": 0.9,
+        "dividends_yield_current": 0.9,
         "dps_common_stock_prim_issue_yoy_growth_fy": 1.45,
         "free_cash_flow_margin_ttm": 1.2,
         "return_on_invested_capital": 1.15,

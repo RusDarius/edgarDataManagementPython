@@ -131,6 +131,202 @@
    ]
   },
   {
+   "label": "Shortlist",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.print_brief.blocks.sentiment_read"
+    },
+    {
+     "type": "table",
+     "title": "Shortlist: pre-print and post-print tickets (judgment, reading order)",
+     "headers": [
+      "Symbol",
+      "When",
+      "Course",
+      "What the print needs",
+      "Value now / forward",
+      "Strength / tech",
+      "Entry",
+      "Kill",
+      "Size",
+      "Why"
+     ],
+     "from": "pages.print_brief.blocks.shortlist"
+    },
+    {
+     "type": "callout",
+     "from": "pages.print_brief.blocks.season_read"
+    },
+    {
+     "type": "list",
+     "from": "pages.print_brief.blocks.rules"
+    }
+   ]
+  },
+  {
+   "label": "The bar",
+   "requires": "{PACK}/board/names.csv",
+   "blocks": [
+    {
+     "type": "text",
+     "text": "What each print needs: the beat-bar cell (terciles of run-up, 3-month tape and 3-month EPS revision on the lab's prints), what a beat paid and a miss cost in that cell, the share of beats sold, the surprise the set-up needed (c_bar_text), the name's own beat record, and the print-night pointer counts. US $2B+ names carry the board row; smaller reporters show the print-night columns only."
+    },
+    {
+     "type": "table",
+     "title": "What the print needs (beat bar + pointers)",
+     "source": {
+      "duckdb": "{PACK}/print_brief/print_brief.duckdb",
+      "sql": "SELECT c.symbol, c.react_on, c.slot, c.mcap_b, c.ind, b.c_bar_text, b.bar_runup, b.bar_tape, b.bar_rev, b.c_beat_rate, b.c_rx_beat, b.c_rx_miss, b.c_beat_sold, b.c_h28_beat, b.c_h28_miss, b.p_beat, b.own_beats, b.own_n, b.beat_q90_usd, b.miss_q10_usd, c.runup, c.react_abs_mean, c.setup_cell, c.h28_up, c.h28_dn, c.h7_up, c.h7_dn, c.rx_up, c.rx_dn, c.peer_rx, c.tail_starter_usd FROM cards c LEFT JOIN read_csv_auto('{PACK}/board/names.csv') b USING (symbol) ORDER BY c.react_on, c.book_usd DESC NULLS LAST, c.mcap_b DESC",
+      "drop_missing_columns": true
+     },
+     "extra_columns": [
+      "Course"
+     ],
+     "extra_from": "courses",
+     "screens": [
+      {
+       "label": "Low bar",
+       "group": "Bar",
+       "filters": {
+        "bar_rev": "=T1"
+       },
+       "sort": "-c_rx_beat",
+       "explain": "Estimates cut into the print (revision tercile T1): beats have paid more here."
+      },
+      {
+       "label": "High bar",
+       "group": "Bar",
+       "filters": {
+        "bar_rev": "=T3"
+       },
+       "sort": "-c_beat_sold",
+       "explain": "Estimates raised into the print: a large share of beats sold."
+      },
+      {
+       "label": "Hold leans up",
+       "filters": {
+        "h28_up": ">=3",
+        "h28_dn": "<=1"
+       },
+       "sort": "-h28_up",
+       "explain": "3+ pointers up on the 28-day hold, at most 1 down."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Value",
+   "requires": "{PACK}/board/names.csv",
+   "blocks": [
+    {
+     "type": "text",
+     "text": "Value now (forward PE against the industry and the name's own history, the peer premium vs the premium its growth and quality earn, gap = cheaper than its profile when positive) and forward (street upside, the forward-value base price and IRR vs its hurdle, the growth the price assumes, revisions). Separate columns, no blend."
+    },
+    {
+     "type": "table",
+     "title": "Value now and forward",
+     "source": {
+      "duckdb": "{PACK}/print_brief/print_brief.duckdb",
+      "sql": "SELECT c.symbol, c.react_on, c.slot, c.mcap_b, c.ind, b.close, b.pe_nfy, b.pe_nfy_vs_ind, b.pe_nfy_vs_own, b.peer_mult, b.peer_prem_pct, b.peer_just_pct, b.peer_gap_pct, b.peer_px_fit, b.evebitda, b.peg_fwd, b.fcf_margin, b.nd_ebitda, b.pt_up, b.street_px, b.fv_base_px, b.fv_upside_pct, b.irr_exp_pct, b.hurdle_pct, b.priced_in_cagr_pct, b.fwd_eps_g, b.rev_yoy, b.eps_rev_3m, b.rev_rev_3m, b.pt_drift_3m, b.analysts FROM cards c LEFT JOIN read_csv_auto('{PACK}/board/names.csv') b USING (symbol) ORDER BY c.react_on, c.book_usd DESC NULLS LAST, c.mcap_b DESC",
+      "drop_missing_columns": true
+     },
+     "extra_columns": [
+      "Course"
+     ],
+     "extra_from": "courses",
+     "screens": [
+      {
+       "label": "Cheaper than its profile",
+       "group": "Peer",
+       "filters": {
+        "peer_gap_pct": ">15"
+       },
+       "sort": "-peer_gap_pct",
+       "explain": "Gap over +15%: cheaper than peers with the same growth and quality."
+      },
+      {
+       "label": "Rich to its profile",
+       "group": "Peer",
+       "filters": {
+        "peer_gap_pct": "<-25"
+       },
+       "sort": "peer_gap_pct",
+       "explain": "Gap under -25%: the print has to carry a premium its profile does not earn."
+      },
+      {
+       "label": "IRR over hurdle",
+       "filters": {
+        "fv_upside_pct": ">0"
+       },
+       "sort": "-irr_exp_pct",
+       "explain": "Forward-value base price over the close."
+      },
+      {
+       "label": "Estimates rising",
+       "filters": {
+        "eps_rev_3m": ">0"
+       },
+       "sort": "-eps_rev_3m",
+       "explain": "3-month EPS revision up: read the bar (raised estimates = high bar)."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Strength & tech",
+   "requires": "{PACK}/board/names.csv",
+   "blocks": [
+    {
+     "type": "text",
+     "text": "Strength (trailing returns, the alpha model's 28-day decile and forecast, up/down volume, trend quality, lenses) and technical position (rsi, range, 50-day and 200-day, ATR, the bounce band and kill, event warning)."
+    },
+    {
+     "type": "table",
+     "title": "Strength and technical",
+     "source": {
+      "duckdb": "{PACK}/print_brief/print_brief.duckdb",
+      "sql": "SELECT c.symbol, c.react_on, c.slot, c.mcap_b, c.ind, b.close, b.day, b.w, b.m1, b.m3, b.r_12m, b.dec_28d, b.pred_28d, b.updown_vol, b.trend_q, b.tape_state, b.strong_lens, b.weak_lens, b.rsi, b.rng, b.vs50, b.vs200, b.atrp, b.relvol, b.beta, b.band_state, b.bounce_low, b.bounce_high, b.bounce_kill, b.to_band_high_pct, b.kill_dist_pct, b.det, b.warn_level, b.er_letters FROM cards c LEFT JOIN read_csv_auto('{PACK}/board/names.csv') b USING (symbol) ORDER BY c.react_on, c.book_usd DESC NULLS LAST, c.mcap_b DESC",
+      "drop_missing_columns": true
+     },
+     "extra_columns": [
+      "Course"
+     ],
+     "extra_from": "courses",
+     "screens": [
+      {
+       "label": "Decile 8+",
+       "filters": {
+        "dec_28d": ">=8"
+       },
+       "sort": "-pred_28d",
+       "explain": "The alpha model's 28-day decile 8-10 (the only horizon with a usable record)."
+      },
+      {
+       "label": "In or under band",
+       "group": "Band",
+       "filters": {
+        "to_band_high_pct": "<=0"
+       },
+       "sort": "to_band_high_pct",
+       "explain": "Close at or under the bounce band top."
+      },
+      {
+       "label": "Stretched",
+       "group": "Band",
+       "filters": {
+        "rsi": ">=70"
+       },
+       "sort": "-rsi",
+       "explain": "rsi 70+: a beat has to beat a paid tape."
+      }
+     ]
+    }
+   ]
+  },
+  {
    "label": "Leans up",
    "blocks": [
     {
@@ -606,7 +802,7 @@
      ],
      [
       "Headline",
-      "The set-up into the print, forward P/E against the industry and its own median, the pointer counts and the name's average print move."
+      "The set-up into the print, forward PE against the industry and its own median, the pointer counts and the name's average print move."
      ],
      [
       "Metrics",
@@ -667,6 +863,50 @@
   ]
  },
  "ledger": {
-  "auto": true
+  "auto": true,
+  "entries": [
+   {
+    "group": "Deterioration letters",
+    "rows": [
+     [
+      "E",
+      "On: next-FY EPS estimate cut by more than 1% over about 3 months (panel eps_rev_3m < -1). Off: held or raised. Unknown (?): no positive estimate 3 months ago or now."
+     ],
+     [
+      "R",
+      "On: next-FY revenue estimate cut by more than 1% over about 3 months (rev_rev_3m < -1). Off: held or raised. Unknown (?): no estimate."
+     ],
+     [
+      "C",
+      "On: free cash flow margin (ttm) under 0, the business burns cash. Off: FCF positive. Unknown (?): no FCF margin (banks, some ADRs)."
+     ],
+     [
+      "S",
+      "On: last reported EPS under its estimate (last_surprise < 0). Off: met or beat. Unknown (?): no surprise on file."
+     ],
+     [
+      "?",
+      "In det_seen only: that letter's field is empty, so the letter count and the count cells are empty for the name."
+     ]
+    ]
+   },
+   {
+    "group": "Print-night shortlist",
+    "rows": [
+     [
+      "What the print needs",
+      "Judgment column: the beat-bar cell's surprise threshold (c_bar_text), what a beat paid on the night (c_rx_beat) and the share of beats sold (c_beat_sold) for that cell."
+     ],
+     [
+      "Value now / forward",
+      "Judgment column: forward PE and its percent to the industry median, the peer gap (positive = cheaper than its profile earns), the forward-value base price vs the close and the expected IRR."
+     ],
+     [
+      "Strength / tech",
+      "Judgment column: the alpha model's 28-day decile, the run into the print, the 50-day position, rsi, and the industry's season reaction."
+     ]
+    ]
+   }
+  ]
  }
 }

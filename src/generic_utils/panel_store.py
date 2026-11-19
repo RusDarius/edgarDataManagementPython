@@ -98,6 +98,17 @@ def _newest_run(con: Any, alias: str) -> tuple[str | None, datetime | None]:
     return (str(row[0]), _naive_utc(row[1])) if row else (None, None)
 
 
+def numeric_pick(columns: str | Sequence[str], present: set[str]) -> str:
+    """SQL for one panel field: a column name, or a list read in order (the first non-null of the columns the day file
+    has). A list lets a field survive a scan that fetched a sibling column only (the focused intraday export carries
+    price_book_fq, not price_book_ratio)."""
+    names = [columns] if isinstance(columns, str) else list(columns)
+    parts = [f"TRY_CAST({qident(c)} AS DOUBLE)" for c in names if c in present]
+    if not parts:
+        return "CAST(NULL AS DOUBLE)"
+    return parts[0] if len(parts) == 1 else f"COALESCE({', '.join(parts)})"
+
+
 def ingest_day_file(con: Any, source: Mapping[str, Any], recipe: Mapping[str, Any], *, force: bool = False) -> dict[str, Any]:
     """Load one day file's newest run inside the ingest floor. Skips a day already stored from the same run."""
     path = Path(source["path"])
@@ -116,7 +127,7 @@ def ingest_day_file(con: Any, source: Mapping[str, Any], recipe: Mapping[str, An
         for short, col in (recipe.get("text_fields") or {}).items():
             select.append(f"CAST({qident(col)} AS VARCHAR) AS {qident(short)}" if col in present else f"CAST(NULL AS VARCHAR) AS {qident(short)}")
         for short, col in (recipe.get("fields") or {}).items():
-            select.append(f"TRY_CAST({qident(col)} AS DOUBLE) AS {qident(short)}" if col in present else f"CAST(NULL AS DOUBLE) AS {qident(short)}")
+            select.append(f"{numeric_pick(col, present)} AS {qident(short)}")
         floor = dict(recipe.get("floor") or {})
         where = ["run_id = ?", "TRY_CAST(market_cap_basic AS DOUBLE) >= ?"]
         params: list[Any] = [as_of, run_id, run_id, float(floor.get("min_market_cap_usd") or 0)]

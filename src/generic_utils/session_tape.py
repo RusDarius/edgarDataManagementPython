@@ -12,6 +12,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from generic_utils.session_marks import marks_from_raw, run_scan_time
 from operator_briefing.extract import _parse_date
 
 SESSION_COLUMNS: tuple[str, ...] = (
@@ -26,6 +27,10 @@ SESSION_COLUMNS: tuple[str, ...] = (
     "premarket_close",
     "postmarket_change",
     "postmarket_close",
+    "premarket_volume",
+    "postmarket_volume",
+    "average_volume_10d_calc",
+    "VWAP",
     "earnings_release_date",
     "earnings_release_time",
     "price_target_average",
@@ -85,11 +90,14 @@ def join_post_earn(
     earn_on: date,
     *,
     exchanges: Sequence[str] | None = None,
+    scan_at: datetime | None = None,
 ) -> list[dict[str, Any]]:
     """One row per symbol that reported on earn_on in either scan.
 
     Sorted by absolute session-day return, then absolute after-hours return.
-    Missing returns sort last. This order is not a score.
+    Missing returns sort last. This order is not a score. ``scan_at`` is the later
+    scan's time: it sets the close the premarket / after-hours percent is measured
+    against when the scan has no premarket_close / postmarket_close (session_marks).
     """
     allowed = {item.strip().upper() for item in exchanges} if exchanges else None
     prior = _index(prior_rows)
@@ -117,6 +125,7 @@ def join_post_earn(
             and abs(pre_now - pre_then) < 0.05
         )
         source = now or then
+        marks = marks_from_raw(now, scan_at) if now else {}
         out.append(
             {
                 "symbol": symbol,
@@ -136,10 +145,13 @@ def join_post_earn(
                 "vs_afternoon": _round(vs_afternoon, 2),
                 "pre_chg": _round(pre_now, 2),
                 "pre_gap": _round(_num(now.get("premarket_gap")), 2),
-                "pre_close": _round(_num(now.get("premarket_close")), 2),
+                "pre_close": None if pre_repeat else _round(marks.get("pre_px"), 2),
+                "pre_vol_x": marks.get("pre_vol_x"),
                 "pre_repeat": pre_repeat,
                 "post_chg": _round(_num(now.get("postmarket_change")), 2),
-                "post_close": _round(_num(now.get("postmarket_close")), 2),
+                "post_close": _round(marks.get("post_px"), 2),
+                "post_vol_x": marks.get("post_vol_x"),
+                "us_phase": marks.get("us_phase"),
                 "pt": _round(_num(source.get("price_target_average")), 2),
                 "rsi": _round(_num(source.get("RSI")), 1),
             }
@@ -209,7 +221,11 @@ def premarket_repeated(prior_change: Any, current_change: Any, tol: float = PREM
 
 
 def implied_premarket_price(close: Any, premarket_change: Any, *, repeated: bool) -> float | None:
-    """Cash close times the premarket percent. Empty when the percent was not refreshed."""
+    """Base close times the percent. Empty when the percent was not refreshed.
+
+    Right only when ``close`` is the close the percent is measured against: the row's close
+    during the premarket, the prior close once the cash session has opened. Row-level
+    callers use ``session_marks.session_marks``, which picks the base from the scan time."""
     if repeated:
         return None
     price = _num(close)
@@ -223,13 +239,15 @@ def join_named_premarket(
     prior_rows: Sequence[Mapping[str, Any]],
     current_rows: Sequence[Mapping[str, Any]],
     symbols: Sequence[str],
+    scan_at: datetime | None = None,
 ) -> list[dict[str, Any]]:
     """One row per requested symbol. No earnings date and no market-cap cutoff.
 
-    ``pre_px`` is the cash close adjusted by ``premarket_change`` only when
-    that percent changed versus the prior scan. ``pre_repeat`` true means
-    leave the cash close as the mark. ``post_px`` is the cash close adjusted
-    by ``postmarket_change`` (a post-close scan's after-hours read).
+    ``pre_px`` is the premarket price (``premarket_close``, else derived from
+    ``premarket_change`` on the close it is measured against: session_marks)
+    only when that percent changed versus the prior scan. ``pre_repeat`` true
+    means leave the cash close as the mark. ``post_px`` is the after-hours price
+    the same way. ``scan_at`` is the later scan's time.
     """
     prior = _index(prior_rows)
     current = _index(current_rows)
@@ -246,6 +264,7 @@ def join_named_premarket(
         repeated = premarket_repeated(pre_then, pre_now)
         close = _num(now.get("close"))
         post_now = _num(now.get("postmarket_change"))
+        marks = marks_from_raw(now, scan_at) if now else {}
         out.append(
             {
                 "symbol": symbol,
@@ -261,9 +280,13 @@ def join_named_premarket(
                 "prior_pre_chg": _round(pre_then, 2),
                 "pre_gap": _round(_num(now.get("premarket_gap")), 2),
                 "pre_repeat": repeated,
-                "pre_px": _round(implied_premarket_price(close, pre_now, repeated=repeated), 2),
+                "pre_px": None if repeated else _round(marks.get("pre_px"), 2),
+                "pre_vol_x": marks.get("pre_vol_x"),
                 "post_chg": _round(post_now, 2),
-                "post_px": _round(implied_premarket_price(close, post_now, repeated=False), 2),
+                "post_px": _round(marks.get("post_px"), 2),
+                "post_vol_x": marks.get("post_vol_x"),
+                "vs_vwap": marks.get("vs_vwap"),
+                "us_phase": marks.get("us_phase"),
                 "rsi": _round(_num(now.get("RSI")), 1),
                 "sma50": _round(_num(now.get("SMA50")), 2),
                 "sma200": _round(_num(now.get("SMA200")), 2),
@@ -304,7 +327,8 @@ def build_named_premarket(
         id_field="symbol",
         ids=list(symbols),
     )
-    rows = join_named_premarket(prior_fetched["rows"], current_fetched["rows"], symbols)
+    scan_at = run_scan_time(current_db, current_id)
+    rows = join_named_premarket(prior_fetched["rows"], current_fetched["rows"], symbols, scan_at=scan_at)
     return {
         "rows": rows,
         "spec": {
@@ -312,11 +336,14 @@ def build_named_premarket(
             "prior_run": prior_id,
             "current_db": str(current_db),
             "current_run": current_id,
+            "current_scan_at": scan_at.isoformat(timespec="minutes") if scan_at else None,
             "symbols": [str(item).strip() for item in symbols if str(item).strip()],
             "n": len(rows),
             "notes": [
                 "close is the cash close on the later file",
-                "pre_px applies pre_chg to that close only when pre_repeat is false",
+                "pre_px = premarket_close, else pre_chg on the close it is measured against (the row close in the premarket, "
+                "the prior close after the open: us_phase); empty when pre_repeat is true",
+                "pre_vol_x / post_vol_x = premarket / after-hours shares over the 10-day average daily volume",
                 "pre_repeat means premarket_change was not refreshed",
                 "no earnings date, leftover, or market-cap cutoff",
             ],
@@ -337,7 +364,7 @@ def build_post_earn(
     day = parse_earn_on(earn_on)
     prior_id, prior_rows = load_session_rows(prior_db, prior_run)
     current_id, current_rows = load_session_rows(current_db, current_run)
-    rows = join_post_earn(prior_rows, current_rows, day, exchanges=exchanges)
+    rows = join_post_earn(prior_rows, current_rows, day, exchanges=exchanges, scan_at=run_scan_time(current_db, current_id))
     return {
         "rows": rows,
         "spec": {

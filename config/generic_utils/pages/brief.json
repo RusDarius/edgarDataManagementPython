@@ -149,7 +149,7 @@
         {
           "type": "table",
           "title": "Book update: event risk (warn_level, letters, stress), today's move, the bands, the letters, the print, the model (board)",
-          "source": {"duckdb": "{PACK}/board/board.duckdb", "sql": "SELECT symbol, book_usd, warn_level, er_letters, stress_5s_usd, ev_recent_z, ev_next, ev_binary, close, day, w, m1, rsi, vs50, bounce_low, bounce_high, bounce_kill, to_band_high_pct, kill_dist_pct, det, cnt_cell, cnt_fx_28d_mean, cnt_p_dn_28d, earn_date, earn_slot, c_bar_text, dec_28d, pred_28d, peer_gap_pct, street_left, fv_upside_pct, beta FROM names WHERE in_book ORDER BY book_usd DESC", "drop_missing_columns": true},
+          "source": {"duckdb": "{PACK}/board/board.duckdb", "sql": "SELECT symbol, book_usd, warn_level, er_letters, stress_5s_usd, ev_recent_z, ev_next, ev_binary, close, day, pre_chg, pre_vol_x, post_chg, post_vol_x, w, m1, rsi, vs50, bounce_low, bounce_high, bounce_kill, to_band_high_pct, kill_dist_pct, det, cnt_cell, cnt_fx_28d_mean, cnt_p_dn_28d, earn_date, earn_slot, c_bar_text, dec_28d, pred_28d, peer_gap_pct, street_left, fv_upside_pct, beta FROM names WHERE in_book ORDER BY book_usd DESC", "drop_missing_columns": true},
           "extra_columns": ["Course", "Reason"],
           "extra_from": "courses",
           "tone_field": "Course"

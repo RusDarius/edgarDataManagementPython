@@ -52,7 +52,7 @@
     },
     "component_signal_weights": {
       "quality": {
-        "dividend_yield_recent": 1.05,
+        "dividends_yield_current": 1.05,
         "free_cash_flow_margin_ttm": 1.2,
         "return_on_invested_capital": 1.1,
         "piotroski_f_score_ttm": 1.15

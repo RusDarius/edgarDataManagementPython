@@ -5147,7 +5147,7 @@
         "post_chg"
       ],
       "group": "Signal lab",
-      "meaning": "After-hours change against the regular-session close, percent (TradingView postmarket_change). Only a scan taken after the close carries tonight's move; during the session it is the evening before."
+      "meaning": "After-hours change against the regular-session close, percent (TradingView postmarket_change). Filled on a scan taken after the close and overnight; empty from the next premarket through the cash session (checked on runs 6-18 Nov 2026)."
     },
     {
       "key": "post_px",
@@ -5155,7 +5155,55 @@
         "post_px"
       ],
       "group": "Signal lab",
-      "meaning": "The cash close moved by post_chg: the after-hours price implied by a post-close scan (session --ids). Not a fill; decide held lines at the next cash close."
+      "meaning": "After-hours price: postmarket_close when the scan carries it, else the cash close the session followed moved by post_chg (generic_utils.session_marks). Not a fill; decide held lines at the next cash close."
+    },
+    {
+      "key": "pre_chg",
+      "aliases": [
+        "pre_chg"
+      ],
+      "group": "Signal lab",
+      "meaning": "Premarket change, percent (TradingView premarket_change), always against the last cash close before that premarket. Fresh from about 04:00 New York; a scan before that, or on a weekend, still carries the last session's premarket (us_phase)."
+    },
+    {
+      "key": "pre_px",
+      "aliases": [
+        "pre_px"
+      ],
+      "group": "Signal lab",
+      "meaning": "Premarket price: premarket_close when the scan carries it, else pre_chg applied to the close it is measured against (the row close during the premarket, the prior close once the cash session opened; generic_utils.session_marks). Empty when pre_repeat is true."
+    },
+    {
+      "key": "pre_vol_x",
+      "aliases": [
+        "pre_vol_x"
+      ],
+      "group": "Signal lab",
+      "meaning": "Premarket shares over the 10-day average daily volume (0.05 = 5% of a normal day). A large pre_chg on a small ratio is a thin print. Not a score."
+    },
+    {
+      "key": "post_vol_x",
+      "aliases": [
+        "post_vol_x"
+      ],
+      "group": "Signal lab",
+      "meaning": "After-hours shares over the 10-day average daily volume (0.05 = 5% of a normal day). A large post_chg on a small ratio is a thin print. Not a score."
+    },
+    {
+      "key": "vs_vwap",
+      "aliases": [
+        "vs_vwap"
+      ],
+      "group": "Signal lab",
+      "meaning": "Close against the session VWAP, percent (TradingView VWAP). During the premarket both are the prior session's."
+    },
+    {
+      "key": "us_phase",
+      "aliases": [
+        "us_phase"
+      ],
+      "group": "Signal lab",
+      "meaning": "US session at the scan time, New York clock: pre (04:00-09:30, weekdays), cash (09:30-16:00), post (16:00-20:00), closed (overnight, weekends). Holidays are not in the clock. Sets the close pre_px / post_px are measured against."
     },
     {
       "key": "post_usd",

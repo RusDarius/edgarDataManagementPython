@@ -39,7 +39,8 @@ ALL_FIELDS_ROOT = REPO_ROOT / "logs" / "tradingview_analysis" / "trading_view_al
 RAW_FIELDS: dict[str, str] = {
     "company": "description", "ind": "industry", "sector": "sector", "market": "market", "type": "type",
     "close": "close", "mcap": "market_cap_basic", "day": "change", "gap": "gap", "pre_chg": "premarket_change",
-    "post_chg": "postmarket_change", "w": "Perf.W", "m1": "Perf.1M", "m3": "Perf.3M", "ytd": "Perf.YTD", "rsi": "RSI",
+    "post_chg": "postmarket_change", "pre_vol": "premarket_volume", "post_vol": "postmarket_volume",
+    "avgvol10": "average_volume_10d_calc", "w": "Perf.W", "m1": "Perf.1M", "m3": "Perf.3M", "ytd": "Perf.YTD", "rsi": "RSI",
     "sma50": "SMA50", "sma200": "SMA200", "hi52": "price_52_week_high", "lo52": "price_52_week_low",
     "relvol": "relative_volume_10d_calc", "atrp": "ATRP", "vol_d": "Volatility.D", "pt_1y": "price_target_1y",
     "pt_avg": "price_target_average",
@@ -68,7 +69,7 @@ HISTORY_TEXT = {"symbol", "earnings_release_date", "earnings_release_time"}
 
 CALENDAR_COLUMNS: tuple[str, ...] = (
     "symbol", "company", "ind", "sector", "market", "mcap", "week", "earn_date", "earn_dow", "earn_utc", "slot",
-    "react_on", "printed", "dte", "close", "day", "gap", "pre_chg", "post_chg", "w", "m1", "m3", "ytd", "runup",
+    "react_on", "printed", "dte", "close", "day", "gap", "pre_chg", "pre_vol_x", "post_chg", "post_vol_x", "w", "m1", "m3", "ytd", "runup",
     "since_print", "rsi", "vs50", "vs200", "rng", "relvol", "atrp", "vol_d", "pt", "pt_up", "pt_high_up", "pt_low_up",
     "rec", "eps_next_q", "eps_last_q", "eps_q_step", "rev_next_q", "rev_last_q", "rev_q_step", "last_surprise",
     "rev_surprise", "surprise_mix", "rev_posted", "eps_nfy", "eps_nfy_g", "rev_nfy_g", "rev_yoy", "eps_yoy", "rev_qoq", "opm", "fcf_margin", "nd_ebitda", "pe",
@@ -211,6 +212,11 @@ def derive_row(row: Mapping[str, Any]) -> dict[str, Any]:
     rec["vs200"] = _pct(close, rec.get("sma200"))
     lo, hi = _f(rec.get("lo52")), _f(rec.get("hi52"))
     rec["rng"] = round((close - lo) / (hi - lo) * 100.0, 1) if close is not None and lo is not None and hi and hi > lo else None
+    # premarket / after-hours shares over the 10-day average daily volume: a large after-hours move on 1% of a day is thin
+    avg = _f(rec.get("avgvol10"))
+    for side in ("pre", "post"):
+        vol = _f(rec.get(f"{side}_vol"))
+        rec[f"{side}_vol_x"] = round(vol / avg, 4) if vol is not None and avg else None
     # Outside the US price_target_average (and low / high) is in USD while price_target_1y is in the quote currency
     pt_1y, pt_avg = _f(rec.get("pt_1y")), _f(rec.get("pt_avg"))
     fx = pt_1y / pt_avg if pt_1y and pt_avg and pt_avg > 0 else 1.0

@@ -503,3 +503,64 @@ revived the AI trade; Philadelphia semis +2.8% on 26 Oct.
 - Play review (12 Nov calls vs the 13 Nov scan, market median +0.06%): nothing on the day plan filled on opens and closes;
   NASDAQ:CSCO went through its old post-print band on the reaction day (-5.4%), NASDAQ:MU closed inside yesterday's band.
 - OUTSIDE: 10-year 5.16% (highest since October), VIX over 20, October PPI +0.3% m/m (0.4% expected). AI triggers still 1 of 4.
+
+## 2026-11-16 (15:47 UTC open-session scan, 20% of the session): risk-off into NVIDIA and the Anthropic pricing
+
+- Tape: cap-weighted -1.02%, 37% of names up, up-volume 22%; two live patterns (distribution cluster; risk-off rotation, 5s -1.02 /
+  21s -2.14 pp after it on 5 episodes). The AI cluster index 118.9 sits 1.0% over its 5 Nov low (117.8); semiconductors -9.2% and
+  computer hardware -13.1% over five sessions. Resting limits worked: NYSE:CRGY (11.76) and NYSE:GAP (20.76) traded inside their
+  13 Nov bands; NASDAQ:ADBE (+1.8%) and the NOVO add ran away above theirs.
+- NVIDIA into its 17 Nov print: pointers 0 up / 0 down on the reaction, 7 up / 1 down on the 7-day hold and 5 up / 0 down on the
+  28-day hold (4 families); set-up 'sold into & previous print up' night range q10 -10.1% / q90 +9.7%. Post-reaction cells for that
+  set-up: sold 5%+ +2.99 over 28 days (t 2.64), inside the band +1.15 (t 1.88), bought 5%+ +1.38 (t 1.05); after-hours reads of
+  +2.3% or more gave back 1.34 by the next close (t -1.85).
+- Hot-listing analogs in the store (two names, not a cell): NASDAQ:SPCX (first scan 15 Jun) +6.5% the next session, then -17.6%
+  after 5 sessions, -27.6% after 20, -20.9% after 60; NASDAQ:CBRS (15 May) -13.6% the next session, -23.8% after 5, -26.1% after 60.
+- OUTSIDE: VIX 21.4, 10-year 5.12%, WTI -2% (IEA surplus); Trump backed Huang's return; Anthropic books reported 6-7x covered.
+
+## 2026-11-17 (16:46 UTC open-session scan, 35% of the session): AI cluster at a new low on NVIDIA day; software crash
+
+- Tape: cap-weighted -1.14%, 20% of names up, up-volume 21%; the cap index (-6.85%) and the AI cluster (-17.1% under its high, under
+  the 5 Nov low of -16.2%) both at their drawdown lows. Live patterns: distribution cluster (5s -0.66 / 21s -1.36 pp after it, 7
+  episodes) and risk-off rotation (5s -0.99 / 21s -2.66 pp, 5 episodes). Packaged software -4.12% (z -2.49) and IT services -3.8%
+  (z -2.21); after an industry crash step the industry beat the median by +1.07 pp over 5 sessions (hit 59%, n 128) and -0.18 over 20.
+- Pre-print cells (signal lab re-run): 'sold into & previous print down' +2.65 hold-through over 28 days (t 4.09) is this week's best
+  cell; NASDAQ:INTU (decile 10, peer gap +50) and NASDAQ:ZM (decile 10) sit in it after the software sell-off; NYSE:TJX sits in it
+  but at peer gap -45 / decile 6. NVIDIA's set-up x reaction cells unchanged: sold 5%+ +2.94 (t 2.61), inside +1.11 (t 1.84),
+  bought 5%+ +1.38 (t 1.05); after-hours reads of +2.3% or more -3.93 over 28 days (t -1.98).
+- Lane book (labels to 20 Oct): non-AI cheap and turning +4.61 (t 3.11), street deep value +4.17 (t 2.71), quality from depth +4.23
+  (t 2.05); AI split: cheap and turning +2.90 (t 2.75), quality dips -1.08 (odds of -10% 31%), quality repairing and turning -2.54
+  (odds of -10% 41%).
+- Book: the operator added $5,000 to NASDAQ:MU (average 919) and started NASDAQ:NVDA ($4,000 at 155) with the AI gate at 0 of 4: the
+  AI cluster is 28.3% of NAV (cap 25%), Book beta 117% of NAV (a -5% market about -$8,070). Monday's resting orders traded on two red
+  days (NYSE:CRGY, NYSE:GAP Monday; NASDAQ:ADBE and the NOVO add today); NASDAQ:DLO went through its kill before a close in its band.
+- OUTSIDE: VIX 26.2, 10-year 5.10%; Musalem wants 100-150 bp more of hikes by spring; October retail sales +0.2% (control +0.5%),
+  industrial production -0.4%, NAHB 25; Commerce licenses for advanced AI chips to Southeast Asian data centers (filed 16 Nov).
+
+## 2026-11-17 (18:55 UTC late-session scan, 68% of the session): selling built through the day; rotation to energy, shipping, insurers
+
+- Tape: cap-weighted -1.00% (from -1.14% at 16:46), median -0.81%, 24% of names up, volume pace 0.72; cap index -6.72% under its
+  store high, median name -5.74%, AI cluster -16.91%, the Book -21.24% (all at their store lows except the median name's -8.39%).
+  Same two live patterns (distribution cluster, risk-off rotation). Defensive-over-beta 10-session spread at the 100th percentile;
+  10-session advance share 44% (2nd percentile), up-volume 43% (3rd); no washed-out or thrust day.
+- Industry map (lane book, 85 groups, $93T): Lagging $29.1T (semiconductors, packaged software, major banks), Weakening $26.8T,
+  Leading $21.9T (insurance, utilities, specialty stores), Improving $15.2T. Quadrant record over the next 28 days: Lagging +0.60,
+  Weakening +0.34, Leading +0.03, Improving -0.05 (leaders did not carry). Week leaders energy and shipping (+3 to +5%), laggards
+  precious metals -9.3%, metals -8.5%, airlines, homebuilders.
+- Alpha model month_ind (28d WEAK, beats baselines): favoured precious metals +2.53, marine shipping +2.30, refiners +2.28,
+  integrated oil +2.20, P&C insurance +2.13; disfavoured entertainment, biotech, gas distributors, electric utilities (bond proxies).
+- Signal lab factor tape, 7-day IC this month: size, 12-1 momentum, ROE, revenue revisions paid; 1-week return, days since print and
+  distance over the 20-day lost (-0.12 to -0.15): short-term reversal, so red-day bands over green-day chases.
+- Book: holdings as listed by the operator (no Monday order filled; NASDAQ:BIDU still held); AI cluster 28.4% of NAV, beta 117%
+  (down-beta 122%); a -5% market about -$8,114.
+- OUTSIDE: S&P 500 -1.2% (about 6% under its 6 Oct record), Nasdaq -1.2% (about 12% under); VIX 25.6; 10-year 5.12%, 2-year
+  4.81%; December hike 95% priced; import prices +1.1% vs 0.7%; dollar index 103.7 (19-month high); gold lowest since Sep 2025;
+  tech at 17.2x forward earnings vs staples 24.2x; NVIDIA options about +/-7.8%.
+
+## 2026-11-18 (13:48 UTC premarket scan; the file carries the 17 Nov close): breadth at the store's low, NVIDIA beat, reversal factor live
+
+- Tape (US $2B+): 17 Nov closed cap-weighted -1.02%, median -1.28%, 19% of names up (2nd percentile); 10-session advance share 38.7% and up-volume 38.5% are the lowest in the store; cap index -6.75% under its store high (its low); 5 sessions -4.01%, 21 sessions -4.81% (1st percentile). Distribution cluster and risk-off rotation live; no washed-out or thrust day. No family arrow.
+- Factor month (7-day IC): return on equity and size +0.075, one-month target revisions +0.057, 12-1 momentum +0.053; last week's return -0.141, days since print -0.133, beta -0.117, volatility -0.093. Quality and low beta pay; the short-term reversal is the strongest read.
+- Lanes (non-AI, 28 days): quality repair and turning +6.55 (t 1.79), cheap and turning +4.57 (t 3.11), quality from depth +4.14 (t 2.01), street deep value +4.08 (t 2.60); AI quality dips -1.31 (32% odds of -10%).
+- Print cells: beat / beat drift +0.97 over 28 days (t 4.35, n 3759); after-hours read Q5 (+2.3% or more, AMC) gave back 1.34 by the next close and drifted -3.93 (t -1.98): the cell that frames NASDAQ:NVDA's +3% premarket after its beat.
+- Alpha model: 28d WEAK (IC 0.049, beats baselines), 7d WEAK, 1d DEGRADED, 56d FAILING. Month-ahead industries: refiners +2.90, integrated oil +2.72, property and casualty insurance +2.65, marine shipping +2.57; against gas distributors -2.44, biotech -2.40, electric utilities -2.39.

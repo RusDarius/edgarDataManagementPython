@@ -262,7 +262,7 @@
         {
           "type": "table",
           "title": "Book lines on the board",
-          "source": {"duckdb": "{PACK}/board/board.duckdb", "sql": "SELECT symbol, book_usd, close, day, m1, rsi, vs50, bounce_low, bounce_high, bounce_kill, to_band_high_pct, kill_dist_pct, earn_date, earn_slot, bar_tape, bar_rev, c_bar_text, c_beat_sold, dec_7d, dec_28d, pred_28d, b28d_q20, b28d_q80, peer_gap_pct, peer_prem_pct, street_left, fv_upside_pct, beta, rvol_20, dd, det, cnt_fx_28d_mean, cnt_p_dn_28d FROM names WHERE in_book ORDER BY book_usd DESC", "drop_missing_columns": true},
+          "source": {"duckdb": "{PACK}/board/board.duckdb", "sql": "SELECT symbol, book_usd, close, day, pre_chg, pre_vol_x, post_chg, post_vol_x, m1, rsi, vs50, bounce_low, bounce_high, bounce_kill, to_band_high_pct, kill_dist_pct, earn_date, earn_slot, bar_tape, bar_rev, c_bar_text, c_beat_sold, dec_7d, dec_28d, pred_28d, b28d_q20, b28d_q80, peer_gap_pct, peer_prem_pct, street_left, fv_upside_pct, beta, rvol_20, dd, det, cnt_fx_28d_mean, cnt_p_dn_28d FROM names WHERE in_book ORDER BY book_usd DESC", "drop_missing_columns": true},
           "extra_columns": ["Course", "Reason"],
           "extra_from": "courses",
           "tone_field": "Course"
