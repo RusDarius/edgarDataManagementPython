@@ -41,6 +41,46 @@ class TestPeerValue(unittest.TestCase):
         self.assertIsNone(rows[3].get("pe_mult"))
         self.assertIsNotNone(rows[0].get("pe_prem_pct"))
 
+    def test_industry_with_too_few_earners_takes_sector_slopes_at_its_own_level(self):
+        from generic_utils.peer_value import score_day
+
+        recipe = {**RECIPE, "min_peers": 4, "min_fit_n": 5}
+        # sector: multiple = 10 * exp(0.05 * growth) across 8 other names
+        rows = _rows([0, 5, 10, 15, 20, 25, 30, 35], [10 * math.exp(0.05 * g) for g in range(0, 40, 5)])
+        for r in rows:
+            r["ind"] = "Big"
+        # thin-on-earnings industry: 4 earners (2x the sector level) + 2 loss-makers
+        thin = _rows([0, 10, 20, 20], [20.0, 20 * math.exp(0.5), 20 * math.exp(1.0), 20.0])
+        for i, r in enumerate(thin):
+            r["symbol"], r["ind"] = f"T:{i}", "Thin"
+        losers = [{"symbol": f"L:{i}", "ind": "Thin", "sector": "Tech", "mcap": 2e9, "close": 10, "ey_fwd": -5.0, "rev_nfy_g": 50}
+                  for i in range(2)]
+        rows += thin + losers
+        groups = score_day(rows, recipe)
+        g = next(x for x in groups if x["group"] == "ind: Thin")
+        self.assertEqual(g["fit_on"], "sector: Tech")
+        cheap = next(r for r in rows if r["symbol"] == "T:3")  # 20% growth at the 0% multiple of its industry
+        self.assertEqual(cheap["fit_on"], "sector")
+        self.assertGreater(cheap["gap_pct"], 50)
+        self.assertEqual(cheap["fit_n"], 12)  # the sector's 12 earners
+        self.assertLess(abs(next(r for r in rows if r["symbol"] == "T:1")["gap_pct"]), abs(cheap["gap_pct"]))
+
+    def test_wrong_signed_driver_is_dropped_and_a_fit_worse_than_the_median_is_not_used(self):
+        from generic_utils.peer_value import score_day, signed_ridge_fit
+
+        fit = signed_ridge_fit([1.0, 2.0, 3.0, 4.0, 5.0], [[1.0, -1.0], [2.0, -2.0], [3.0, -3.1], [4.0, -3.9], [5.0, -5.0]],
+                               0.01, [True, True])
+        self.assertEqual(fit["dropped"], [1])
+        self.assertGreater(fit["b"][0], 0)
+        self.assertEqual(fit["b"][1], 0.0)
+        # noise: the driver does not explain the multiple, the leave-one-out R2 is below zero, fitted = the median
+        recipe = {**RECIPE, "min_loo_r2": 0.0}
+        rows = _rows([0, 10, 20, 30, 40, 50], [12, 8, 15, 9, 14, 10])
+        score_day(rows, recipe)
+        self.assertEqual({r["fit_used"] for r in rows}, {0})
+        self.assertLess(rows[0]["fit_loo_r2"], 0)
+        self.assertEqual({r["just_pct"] for r in rows}, {0.0})
+
     def test_percentiles_and_spearman(self):
         from generic_utils.peer_value import percentile_ranks, spearman
 

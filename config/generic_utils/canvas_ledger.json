@@ -62,7 +62,8 @@
     "Lean back into the AI cluster when",
     "Go more defensive when",
     "Read",
-    "pointers"
+    "pointers",
+    "text"
   ],
   "free_text_headers": [
     "Stage",
@@ -182,7 +183,11 @@
     "ev_recent",
     "ev_how",
     "events",
-    "warn_rule"
+    "warn_rule",
+    "text",
+    "lists",
+    "patterns",
+    "alpha_states"
   ],
   "letter_coded_headers": {
     "mesh": "FCPDT",
@@ -7109,6 +7114,14 @@
       "meaning": "Which of the line's cells fills the p_<need>_<d> / days_<need> / floor columns: cnt (drawdown x letter count) when the line has a count cell, else dd (drawdown only)."
     },
     {
+      "key": "col",
+      "aliases": [
+        "col"
+      ],
+      "group": "Recovery clock",
+      "meaning": "Which split a reach row reads: dd (drawdown only), cnt (drawdown x letter count), run (drawdown x 12-month run), mkt (drawdown x the market's month), crun (drawdown x letter count x 12-month run: strong vs weak prior runs), cdir (drawdown x letter count x 1-month direction: turning vs still falling)."
+    },
+    {
       "key": "cell_kind",
       "aliases": [
         "cell_kind"
@@ -7165,7 +7178,19 @@
         "p_91d",
         "p_126d",
         "p_182d",
-        "p_reach"
+        "p_reach",
+        "p_gain10_56",
+        "p_gain10_91",
+        "p_gain10_126",
+        "p_gain10_182",
+        "p_street_56",
+        "p_street_91",
+        "p_street_126",
+        "p_street_182",
+        "p_high_56",
+        "p_high_91",
+        "p_high_126",
+        "p_high_182"
       ],
       "group": "Recovery clock",
       "meaning": "Kaplan-Meier odds (0-1) that a start in the same cell closed at or above that rise at least once by day d (calendar days), on the panel store. Starts the store stopped seeing count while seen. Empty when fewer than 40 starts (10 names) were observed through day d. A touch, not a hold: the close can fall back after."
@@ -7570,6 +7595,43 @@
       ],
       "group": "Peer value",
       "meaning": "The price at the peer-fitted multiple (close x fitted / actual multiple). A peer-relative level, kept apart from street, pack and model prices."
+    },
+    {
+      "key": "fit_on",
+      "aliases": [
+        "fit_on",
+        "peer_fit_on",
+        "pe_fit_on",
+        "evebitda_fit_on",
+        "evs_fit_on"
+      ],
+      "group": "Peer value",
+      "meaning": "Where the peer fit's slopes come from: group = the name's own industry (or sector group); sector = the industry had fewer than min_fit_n names with a positive yield on that multiple, so the whole sector's slopes were used, shifted to the industry's own level. Empty = no fit."
+    },
+    {
+      "key": "fit_loo_r2",
+      "aliases": [
+        "fit_loo_r2",
+        "peer_fit_loo_r2",
+        "pe_fit_loo_r2",
+        "evebitda_fit_loo_r2",
+        "evs_fit_loo_r2",
+        "loo_r2"
+      ],
+      "group": "Peer value",
+      "meaning": "Leave-one-out R2 of the peer fit: how well it predicts a peer's multiple it did not see, against the median of the others. 0 or below = no better than the median (the fit is then not used); near 0 = the gap is mostly the plain premium. Read it before trusting just_pct / gap_pct."
+    },
+    {
+      "key": "fit_used",
+      "aliases": [
+        "fit_used",
+        "peer_fit_used",
+        "pe_fit_used",
+        "evebitda_fit_used",
+        "evs_fit_used"
+      ],
+      "group": "Peer value",
+      "meaning": "1 = the fitted multiple drives just_pct / gap_pct; 0 = the fit did not beat the median out of sample (fit_loo_r2 not above min_loo_r2), so the fitted multiple is the median: just_pct 0 and gap_pct is the plain discount."
     },
     {
       "key": "pctl_<read>",
@@ -8635,6 +8697,658 @@
       ],
       "group": "Cycle scenarios",
       "meaning": "The street's year-1 EPS growth used to start the cycle path, % (next fiscal year EPS over trailing EPS)."
+    },
+    {
+      "key": "cls",
+      "aliases": [
+        "cls"
+      ],
+      "group": "Journal",
+      "meaning": "Call class from the course text (config/generic_utils/journal.json course_classes, first match): buy, hold, watch, short_watch, pass, trim, exit, short, other. 'no call' = a covered name with no call in force; 'all calls' = every class together."
+    },
+    {
+      "key": "px_entry",
+      "aliases": [
+        "px_entry"
+      ],
+      "group": "Journal",
+      "meaning": "The price recorded with the call: the scan price of that session (intraday when the scan ran in session), else that day's store close."
+    },
+    {
+      "key": "plan_px / plan_usd",
+      "aliases": [
+        "plan_px",
+        "plan_usd"
+      ],
+      "group": "Journal",
+      "meaning": "The judgment's capital-plan row for the name at that session: limit price and dollars (a TRIM / EXIT carries a fraction instead)."
+    },
+    {
+      "key": "ret_now / fx_now / days_now",
+      "aliases": [
+        "ret_now",
+        "fx_now",
+        "days_now",
+        "fx_now_mean"
+      ],
+      "group": "Journal",
+      "meaning": "From the call (or the snapshot day) to the newest close: raw return %, excess over the median panel-store name over the same days (pp), and calendar days elapsed. _mean = the average over the rows of the cell."
+    },
+    {
+      "key": "sfx_now",
+      "aliases": [
+        "sfx_now",
+        "sfx_now_mean"
+      ],
+      "group": "Journal",
+      "meaning": "Signed excess to the newest close: sign x fx_now, sign +1 for a held / bought call, -1 for a sold / passed / trimmed call, 0 for watch (excluded). Positive = the call was right so far."
+    },
+    {
+      "key": "fx_<h>",
+      "aliases": [
+        "fx_1d",
+        "fx_7d",
+        "fx_28d",
+        "fx_56d",
+        "fx_91d",
+        "fx_182d"
+      ],
+      "group": "Journal",
+      "meaning": "Excess of this call or snapshot over the median panel-store name from its day to the first close at least h calendar days later (pp); empty until the window is complete."
+    },
+    {
+      "key": "fx_<h>_med",
+      "aliases": [
+        "fx_1d_med",
+        "fx_7d_med",
+        "fx_28d_med",
+        "fx_56d_med",
+        "fx_91d_med",
+        "fx_182d_med"
+      ],
+      "group": "Journal",
+      "meaning": "Median of fx_<h> over the rows of the cell (pp)."
+    },
+    {
+      "key": "fx_<h>_mean (long)",
+      "aliases": [
+        "fx_1d_mean",
+        "fx_91d_mean",
+        "fx_182d_mean"
+      ],
+      "group": "Journal",
+      "meaning": "Mean excess over the median panel-store name at 1 day / 3 months / 6 months (pp); 91d and 182d fill as the journal ages (labels in the store since this change)."
+    },
+    {
+      "key": "ret_<h>_mean",
+      "aliases": [
+        "ret_1d_mean",
+        "ret_7d_mean",
+        "ret_28d_mean",
+        "ret_56d_mean",
+        "ret_91d_mean",
+        "ret_182d_mean"
+      ],
+      "group": "Journal",
+      "meaning": "Mean raw return from the entry price to the close at least h calendar days later (%)."
+    },
+    {
+      "key": "n_<h> (journal)",
+      "aliases": [
+        "n_1d",
+        "n_91d",
+        "n_182d"
+      ],
+      "group": "Journal",
+      "meaning": "Rows with a complete h window (the mean / hit beside it rest on them)."
+    },
+    {
+      "key": "sfx_<h>_mean",
+      "aliases": [
+        "sfx_1d_mean",
+        "sfx_7d_mean",
+        "sfx_28d_mean",
+        "sfx_56d_mean",
+        "sfx_91d_mean",
+        "sfx_182d_mean"
+      ],
+      "group": "Journal",
+      "meaning": "Mean signed excess at horizon h over calls with a direction (sign +1 held / bought, -1 sold / passed / trimmed): positive = the class of call was right on average."
+    },
+    {
+      "key": "kill_<h>_share",
+      "aliases": [
+        "kill_1d_share",
+        "kill_7d_share",
+        "kill_28d_share",
+        "kill_56d_share",
+        "kill_91d_share",
+        "kill_182d_share",
+        "kill_1d",
+        "kill_7d",
+        "kill_28d",
+        "kill_56d",
+        "kill_91d",
+        "kill_182d"
+      ],
+      "group": "Journal",
+      "meaning": "Share of complete windows in which a close went under the kill recorded with the call (the session's bounce kill) at least once; per call: 1 touched, 0 not."
+    },
+    {
+      "key": "cell_<study>",
+      "aliases": [
+        "cell_list",
+        "cell_list_trend21",
+        "cell_dec_b_trend21",
+        "cell_band_state"
+      ],
+      "group": "Journal",
+      "meaning": "Today's cell of the name in that study (journal recipe similar_studies): its list, the market's month (trend21), model decile bucket (dec_b) or band state; a name on several lists shows its best-measured list."
+    },
+    {
+      "key": "fx_<h>_<study> / hit_28d_<study> / n_28d_<study>",
+      "aliases": [
+        "fx_7d_list",
+        "fx_7d_list_trend21",
+        "fx_7d_dec_b_trend21",
+        "fx_7d_band_state",
+        "fx_28d_list",
+        "fx_28d_list_trend21",
+        "fx_28d_dec_b_trend21",
+        "fx_28d_band_state",
+        "hit_28d_list",
+        "hit_28d_list_trend21",
+        "hit_28d_dec_b_trend21",
+        "hit_28d_band_state",
+        "n_28d_list",
+        "n_28d_list_trend21",
+        "n_28d_dec_b_trend21",
+        "n_28d_band_state"
+      ],
+      "group": "Journal",
+      "meaning": "What earlier covered names in the same cell did: mean excess at 7 / 28 days, the share above the median at 28 days, and the observations behind it (empty under the recipe's min_cell_obs). A record of the cell, not a forecast for the name."
+    },
+    {
+      "key": "lists",
+      "aliases": [
+        "lists"
+      ],
+      "group": "Journal",
+      "meaning": "Pack lists the name was on that day (radar50, earn_up / earn_down, short15, payoff10, book, movers '<h> leaders / laggards', 'pack <stance>' from suggested_courses, earn W0 / W1)."
+    },
+    {
+      "key": "session_id / ts",
+      "aliases": [
+        "session_id",
+        "ts"
+      ],
+      "group": "Journal",
+      "meaning": "The briefing pack a session was recorded on (priors_<day> when only a priors file exists) and its scan time (UTC)."
+    },
+    {
+      "key": "patterns / alpha_states",
+      "aliases": [
+        "patterns",
+        "alpha_states"
+      ],
+      "group": "Journal",
+      "meaning": "Live market-sentiment patterns at the session (PACK/sentiment) and the alpha model's out-of-sample state per horizon."
+    },
+    {
+      "key": "n_snaps / n_calls / n_notes",
+      "aliases": [
+        "n_snaps",
+        "n_calls",
+        "n_notes"
+      ],
+      "group": "Journal",
+      "meaning": "Rows the session wrote: covered-name snapshots, changed calls, new notes."
+    },
+    {
+      "key": "tone",
+      "aliases": [
+        "tone"
+      ],
+      "group": "Journal",
+      "meaning": "Note tone given by its author: +1 supportive, 0 neutral, -1 negative (optional)."
+    },
+    {
+      "key": "table / rows",
+      "aliases": [
+        "table",
+        "rows"
+      ],
+      "group": "Journal",
+      "meaning": "Journal table and its row count."
+    },
+    {
+      "key": "OUT",
+      "aliases": [
+        "OUT"
+      ],
+      "group": "Journal",
+      "meaning": "Course: position closed (counted as an exit)."
+    },
+    {
+      "key": "QUEUE",
+      "aliases": [
+        "QUEUE"
+      ],
+      "group": "Journal",
+      "meaning": "Course: a candidate queued for a later budget, not funded (counted as watch)."
+    },
+    {
+      "key": "SOLD",
+      "aliases": [
+        "SOLD"
+      ],
+      "group": "Journal",
+      "meaning": "Course: sold by the operator (counted as an exit)."
+    },
+    {
+      "key": "SHORT",
+      "aliases": [
+        "SHORT"
+      ],
+      "group": "Journal",
+      "meaning": "Course: an open short (sign -1: right when the name lags)."
+    },
+    {
+      "key": "pair",
+      "aliases": [
+        "pair"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "Basket pair A / B (recipe rotation_pairs.json pairs): the relative line is A's level over B's; falling = B winning."
+    },
+    {
+      "key": "basket",
+      "aliases": [
+        "basket"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "Recipe basket: TradingView industries, theme members and tickers as one cap-weighted line on the store floor."
+    },
+    {
+      "key": "corr_raw",
+      "aliases": [
+        "corr_raw"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "Correlation of the two step series (store close to close): includes the market both share."
+    },
+    {
+      "key": "corr_resid",
+      "aliases": [
+        "corr_resid"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "Correlation once the floor's cap-weighted step is taken out of each side: negative = they move against each other."
+    },
+    {
+      "key": "corr_resid_recent",
+      "aliases": [
+        "corr_resid_recent"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "The same residual correlation over the last recent_steps store steps (recipe; 63)."
+    },
+    {
+      "key": "rel_w",
+      "aliases": [
+        "rel_5",
+        "rel_21",
+        "rel_63"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "A's return over B's over the last w store steps (5 / 21 / 63), %: the relative line's move."
+    },
+    {
+      "key": "rel_from_high",
+      "aliases": [
+        "rel_from_high"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "The relative line's distance from its store high, %."
+    },
+    {
+      "key": "rel_from_low",
+      "aliases": [
+        "rel_from_low"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "The relative line's distance over its store low, %."
+    },
+    {
+      "key": "rel_z",
+      "aliases": [
+        "rel_z"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "Today's 21-step relative move in standard deviations of every past 21-step move (in-sample)."
+    },
+    {
+      "key": "rel_pct",
+      "aliases": [
+        "rel_pct"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "Percentile of today's 21-step relative move among every past one (0 = the most B-favouring)."
+    },
+    {
+      "key": "hi_fwd_h",
+      "aliases": [
+        "hi_fwd_5",
+        "hi_fwd_21"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "After a past top tail (21-step relative move in its top extreme_q): the line's mean move over the next h steps, %."
+    },
+    {
+      "key": "lo_fwd_h",
+      "aliases": [
+        "lo_fwd_5",
+        "lo_fwd_21"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "After a past bottom tail: the line's mean move over the next h steps, %."
+    },
+    {
+      "key": "hi_rev_h",
+      "aliases": [
+        "hi_rev_5",
+        "hi_rev_21",
+        "lo_rev_5",
+        "lo_rev_21"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "Share of those starts where the line moved back the other way over the next h steps, %."
+    },
+    {
+      "key": "hi_nind_h",
+      "aliases": [
+        "hi_nind_5",
+        "hi_nind_21",
+        "lo_nind_5",
+        "lo_nind_21"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "Independent starts behind the tail read: starts at least h steps apart (the real sample size)."
+    },
+    {
+      "key": "n_steps",
+      "aliases": [
+        "n_steps"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "Store steps (pairs of consecutive day files) behind the pair's reads."
+    },
+    {
+      "key": "r_w",
+      "aliases": [
+        "r_5",
+        "r_21",
+        "r_63"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "The basket's cap-weighted return over the last w store steps, %."
+    },
+    {
+      "key": "xs_w_floor",
+      "aliases": [
+        "xs_5",
+        "xs_21",
+        "xs_63"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "The basket's return minus the floor's cap-weighted return over the last w store steps, pp."
+    },
+    {
+      "key": "dd_high",
+      "aliases": [
+        "dd_high"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "The basket's distance under its own store high, %."
+    },
+    {
+      "key": "beta_mkt",
+      "aliases": [
+        "beta_mkt"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "The basket's beta to the floor's cap-weighted step (store OLS)."
+    },
+    {
+      "key": "corr_mkt",
+      "aliases": [
+        "corr_mkt"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "The basket's correlation with the floor's step."
+    },
+    {
+      "key": "against",
+      "aliases": [
+        "against",
+        "against_corr"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "The basket whose residual step correlates least with this one, and that correlation."
+    },
+    {
+      "key": "with",
+      "aliases": [
+        "with",
+        "with_corr"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "The basket whose residual step correlates most with this one, and that correlation."
+    },
+    {
+      "key": "ind_pair",
+      "aliases": [
+        "ind_a",
+        "ind_b"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "The two TradingView industries of an industry pair."
+    },
+    {
+      "key": "cap_pair",
+      "aliases": [
+        "cap_a_b",
+        "cap_b_b"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "Each industry's market cap on the newest store day, $B."
+    },
+    {
+      "key": "xs_21_pair",
+      "aliases": [
+        "xs_21_a",
+        "xs_21_b"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "Each industry's return minus the floor's over the last 21 store steps, pp."
+    },
+    {
+      "key": "basket_series",
+      "aliases": [
+        "chips",
+        "staples",
+        "software",
+        "insurance",
+        "health",
+        "utilities",
+        "consumer_disc"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "Chart series: the basket's level over the floor's level x 100 (100 = moved with the market)."
+    },
+    {
+      "key": "pair_series",
+      "aliases": [
+        "chips_staples",
+        "software_chips",
+        "ai_insurance",
+        "disc_staples",
+        "hyper_chips"
+      ],
+      "group": "Rotation pairs",
+      "meaning": "Chart series: a pair's relative line A / B (100 at the store's first file)."
+    },
+    {
+      "key": "n_facets",
+      "aliases": [
+        "n_facets"
+      ],
+      "group": "Top tier",
+      "meaning": "Top-tier scan: how many of the five facets (value, growth, overlooked growth, competitive strength, sentiment turning) the name passes today. A count, never a score or an order; the table sorts by payoff."
+    },
+    {
+      "key": "f_value",
+      "aliases": [
+        "f_value"
+      ],
+      "group": "Top tier",
+      "meaning": "Value facet (1 / 0): peer_gap_pct 10+ (cheaper than industry peers with the same growth and quality profile) and forward-value upside 0+ or street upside 25%+."
+    },
+    {
+      "key": "f_growth",
+      "aliases": [
+        "f_growth"
+      ],
+      "group": "Top tier",
+      "meaning": "Growth facet (1 / 0): forward EPS growth or revenue growth year on year 15%+."
+    },
+    {
+      "key": "f_overlooked",
+      "aliases": [
+        "f_overlooked"
+      ],
+      "group": "Top tier",
+      "meaning": "Overlooked-growth facet (1 / 0): growth in the top 30% of its industry (peer_pctl_growth 70+) priced at most 10% over the peer median, or 15%+ growth with 10 or fewer analysts and on no pack list."
+    },
+    {
+      "key": "f_strength",
+      "aliases": [
+        "f_strength"
+      ],
+      "group": "Top tier",
+      "meaning": "Competitive-strength facet (1 / 0): quality in the top 35% of its industry (peer_pctl_quality 65+) with positive free cash flow."
+    },
+    {
+      "key": "f_turning",
+      "aliases": [
+        "f_turning"
+      ],
+      "group": "Top tier",
+      "meaning": "Sentiment-turning facet (1 / 0): 3-month EPS revision up with more raises than cuts (eps_rev_breadth > 0), street targets not falling, and the week up or up-volume ahead of down-volume."
+    },
+    {
+      "key": "month_tgt_px",
+      "aliases": [
+        "month_tgt_px"
+      ],
+      "group": "Top tier",
+      "meaning": "Month target price: the lower of the alpha model's 28-day q80 band and the street target (the focus-book target). Not the pack's target_px."
+    },
+    {
+      "key": "stake_per_1k",
+      "aliases": [
+        "stake_per_1k"
+      ],
+      "group": "Top tier",
+      "meaning": "Dollars to put in at entry_px so that reaching month_tgt_px earns $1,000 (1000 / month_up_pct). Compare with a losing line's add for break-even."
+    },
+    {
+      "key": "risk_per_1k",
+      "aliases": [
+        "risk_per_1k"
+      ],
+      "group": "Top tier",
+      "meaning": "What stake_per_1k loses if the kill prints (stake x risk_pct): the price of trying to make $1,000 back in this name."
+    },
+    {
+      "key": "Facets",
+      "aliases": [
+        "Facets"
+      ],
+      "group": "Top tier",
+      "meaning": "Top-tier picks: the facets (value, growth, overlooked growth, competitive strength, sentiment turning) the name passes on the top-tier scan; 'all five' = every facet. Filters, not a score."
+    },
+    {
+      "key": "Value / P&L",
+      "aliases": [
+        "Value / P&L"
+      ],
+      "group": "Break-even",
+      "meaning": "The line's market value in USD and its open profit or loss against cost (USD and %), from the recovery ladder."
+    },
+    {
+      "key": "Back to cost",
+      "aliases": [
+        "Back to cost"
+      ],
+      "group": "Break-even",
+      "meaning": "The rise from today's price back to the line's average cost (be_from_close_pct), with the cost price."
+    },
+    {
+      "key": "Add for break-even at the 50-day",
+      "aliases": [
+        "Add for break-even at the 50-day"
+      ],
+      "group": "Break-even",
+      "meaning": "The add at the bounce-band top after which a return to the 50-day breaks the line even (add_be_at_sma50_usd); $0 when the 50-day is already above cost."
+    },
+    {
+      "key": "Odds in 91 days",
+      "aliases": [
+        "Odds in 91 days"
+      ],
+      "group": "Break-even",
+      "meaning": "Recovery clock: the share of past starts in the line's state whose close touched the level within 91 days (p_<level>_91; Kaplan-Meier, censored)."
+    },
+    {
+      "key": "The add's loss at its kill",
+      "aliases": [
+        "The add's loss at its kill"
+      ],
+      "group": "Break-even",
+      "meaning": "Average-down ladder: what the named add loses if the bounce kill prints (add_kill_usd), and what the whole line then loses (line_kill_usd)."
+    },
+    {
+      "key": "Same loss made back elsewhere",
+      "aliases": [
+        "Same loss made back elsewhere"
+      ],
+      "group": "Break-even",
+      "meaning": "The stake that earns the line's loss back at a top-tier name's month target (loss / 1,000 x stake_per_1k): a measure of how hard the loss is to recoup, not an order."
+    },
+    {
+      "key": "ccy",
+      "aliases": [
+        "ccy"
+      ],
+      "group": "Break-even",
+      "meaning": "Quote currency of the line's prices (USD, DKK, EUR)."
+    },
+    {
+      "key": "DKK",
+      "aliases": [
+        "DKK"
+      ],
+      "group": "Break-even",
+      "meaning": "Danish krone: prices of OMXCOP lines are in DKK."
+    },
+    {
+      "key": "EUR",
+      "aliases": [
+        "EUR"
+      ],
+      "group": "Break-even",
+      "meaning": "Euro: prices of XETR lines are in EUR."
     }
   ]
 }

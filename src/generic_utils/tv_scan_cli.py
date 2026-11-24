@@ -1829,6 +1829,27 @@ def _cmd_lane_book(args: argparse.Namespace) -> dict[str, Any]:
     return {"spec": spec, "export": exported}
 
 
+def _cmd_rotation_pairs(args: argparse.Namespace) -> dict[str, Any]:
+    from generic_utils.rotation_pairs import build_rotation_pairs, load_recipe, write_rotation_pairs
+
+    pack = _resolve_pack_dir(args.pack)
+    payload = build_rotation_pairs(recipe=load_recipe(args.recipe), store=args.store)
+    exported = write_rotation_pairs(payload, args.out_dir or f"{pack}/rotation_pairs")
+    spec = payload["spec"]
+    if args.line:
+        hs = spec["after_steps"]
+        print(_row_lines(payload["baskets"], ["n", "r_5", "r_21", "r_63", "xs_21", "xs_63", "dd_high", "beta_mkt", "against", "against_corr",
+                                               "with", "with_corr"], id_field="basket"))
+        print(_row_lines(payload["pairs"], ["corr_raw", "corr_resid", "corr_resid_recent", "rel_5", "rel_21", "rel_63", "rel_from_high",
+                                             "rel_from_low", "rel_z", "rel_pct", "side"]
+                         + [f"{s}_{k}_{h}" for h in hs for s in ("hi", "lo") for k in ("fwd", "rev", "nind")], id_field="pair"))
+    print(f"day={spec['day']} store={spec['first_day']}.. steps={spec['n_steps']} baskets={spec['n_baskets']} pairs={spec['n_pairs']} "
+          f"industries={spec['n_industries']} floor_21s={spec['floor_r_21']} out={exported['out_dir']} highlights={exported['highlights']}")
+    if not args.quiet and not args.line:
+        print(_dumps({"spec": spec, "export": exported}))
+    return {"spec": spec, "export": exported}
+
+
 def _cmd_downside(args: argparse.Namespace) -> dict[str, Any]:
     from generic_utils.downside_risk import build_downside_risk, load_recipe, write_downside_risk
 
@@ -2487,8 +2508,137 @@ def _cmd_priors(args: argparse.Namespace) -> dict[str, Any]:
         merge=not args.replace,
         skip=[s for s in (args.skip.split(",") if args.skip is not None else DEFAULT_SKIP) if s],
     )
+    if not getattr(args, "no_journal", False):
+        try:
+            payload["journal"] = _journal_record(_resolve_pack_dir(args.pack), jpath, kind="priors")
+        except Exception as exc:  # the priors file is written; a journal failure is reported, not fatal
+            payload["journal"] = {"error": str(exc)}
     print(_dumps(payload))
     return payload
+
+
+def _journal_record(pack: str | Path, jpath: Path | None, *, kind: str = "") -> dict[str, Any]:
+    """Record the pack (regime + snaps); the judgment's calls go under the pack it was reviewed on."""
+    from generic_utils import journal as jr
+
+    REPO_ROOT = jr.REPO_ROOT
+    recipe = jr.load_recipe()
+    con = jr.connect(recipe=recipe)
+    try:
+        out: dict[str, Any] = {}
+        if jpath and Path(jpath).exists():
+            judgment = json.loads(Path(jpath).read_text(encoding="utf-8"))
+            reviewed = judgment.get("reviewed_pack") or judgment.get("pack") or str(pack)
+            rp = Path(reviewed)
+            rp = rp if rp.is_absolute() else REPO_ROOT / rp
+            target = rp if (rp / "briefing_pack.json").exists() else Path(pack)
+            rel = Path(jpath).resolve()
+            out["judgment"] = jr.record_session(con, target, judgment=judgment, kind=kind or "judgment", recipe=recipe,
+                                                judgment_path=rel.relative_to(REPO_ROOT).as_posix() if rel.is_relative_to(REPO_ROOT) else str(rel))
+            if Path(target).resolve() == Path(pack if Path(pack).is_absolute() else REPO_ROOT / pack).resolve():
+                out["data"] = out["judgment"]
+        if "data" not in out:
+            out["data"] = jr.record_session(con, pack, kind=kind or "data", recipe=recipe)
+        return out
+    finally:
+        con.close()
+
+
+def _cmd_journal(args: argparse.Namespace) -> dict[str, Any]:
+    from datetime import datetime, timezone
+
+    from generic_utils import journal as jr
+    from generic_utils.canvas_runs import judgment_path
+
+    recipe = jr.load_recipe(args.recipe)
+    act = args.action
+    if act == "record":
+        pack = _resolve_pack_dir(args.pack)
+        day = jr.pack_session(pack)["day"].strftime("%Y%m%d")
+        jpath = None if args.no_judgment else (Path(args.judgment) if args.judgment else judgment_path(day))
+        out = _journal_record(pack, jpath, kind=args.kind or "")
+        if args.review:
+            con = jr.connect(recipe=recipe)
+            try:
+                payload = jr.review(con, recipe)
+                out["review"] = jr.write_review(payload, args.out_dir or f"{pack}/journal")["out_dir"]
+            except FileNotFoundError as exc:
+                out["review"] = f"skipped: {exc}"
+            finally:
+                con.close()
+        print(_dumps(out) if not args.quiet else
+              f"journal record {out['data']['session_id']} snaps={out['data']['snaps']} ({out['data']['snap_source']}) "
+              f"calls={(out.get('judgment') or {}).get('calls', 0)} notes={(out.get('judgment') or {}).get('notes', 0)} "
+              f"review={out.get('review', '-')}")
+        return out
+    con = jr.connect(recipe=recipe, read_only=act == "stats" and jr.journal_path(recipe).exists())
+    try:
+        if act == "note":
+            ids = [s.strip() for s in (args.ids or "*").split(",") if s.strip()]
+            day = datetime.strptime(args.day, "%Y%m%d").date() if args.day else datetime.now(timezone.utc).date()
+            at = datetime.now(timezone.utc).replace(tzinfo=None)
+            n = jr.add_notes(con, [{"symbol": _qualify_one(s), "kind": args.kind or "note", "text": args.text, "source": args.source,
+                                    "tone": args.tone} for s in ids], day=day, at=at, session_id=None, recipe=recipe)
+            out = {"notes_added": n, "ids": ids}
+        elif act == "backfill":
+            since = datetime.strptime(args.since, "%Y%m%d").date() if args.since else None
+            out = jr.backfill(con, recipe, since=since, packs=not args.no_packs)
+            out["storage"] = jr.stats(con, recipe)
+        elif act == "review":
+            pack = _resolve_pack_dir(args.pack)
+            ids = _theme_or_ids(args) if (args.ids or args.theme) else []
+            payload = jr.review(con, recipe, ids=ids)
+            exported = jr.write_review(payload, args.out_dir or f"{pack}/journal")
+            if args.line:
+                print(_row_lines(payload["scorecard"], ["cls", "n", "n_names", "fx_now_mean", "sfx_now_mean", "n_7d", "fx_7d_mean",
+                                                        "fx_7d_hit", "n_28d", "fx_28d_mean", "fx_28d_hit", "sfx_28d_mean", "kill_28d_share"]))
+            sp = payload["spec"]
+            print(f"journal review calls={sp['scored'].get('scored')} priced={sp['scored'].get('priced')} newest={sp['newest_day']} "
+                  f"studies={len(payload['studies'])} similar={len(payload['similar_now'])} file_bytes={sp['storage']['file_bytes']} "
+                  f"out={exported['out_dir']}")
+            out = {"spec": sp, "export": exported}
+        elif act == "history":
+            ids = [_qualify_one(s) for s in (args.ids or "").split(",") if s.strip()]
+            if not ids:
+                raise SystemExit("journal history needs --ids")
+            if not args.no_score:
+                jr.score(con, recipe)
+            print("\n".join(jr.history_lines(con, ids)))
+            out = {"ids": ids}
+        elif act == "stats":
+            out = jr.stats(con, recipe)
+            print(_dumps(out))
+            return out
+        elif act == "compact":
+            con.close()
+            out = jr.compact(recipe=recipe)
+            print(_dumps(out))
+            return out
+        else:
+            raise SystemExit(f"unknown journal action {act}")
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
+    if act not in {"history", "review"}:
+        print(_dumps(out))
+    return out
+
+
+def _qualify_one(sym: str) -> str:
+    """A bare ticker becomes EXCHANGE:TICKER on the newest pack when unambiguous; '*' (the market) stays."""
+    s = sym.strip()
+    if s == "*" or ":" in s:
+        return s.upper() if ":" in s else s
+    try:
+        from generic_utils.priors import pack_catalogs
+        from generic_utils.symbol_identity import qualify
+
+        book, every = pack_catalogs(_resolve_pack_dir("latest"))
+        return qualify(s, book, every)
+    except Exception:
+        return s
 
 
 def _cmd_timing_levels(args: argparse.Namespace) -> dict[str, Any]:
@@ -3097,6 +3247,15 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     lb_p.add_argument("--quiet", action="store_true", help="Print the summary line only.")
     lb_p.set_defaults(func=_cmd_lane_book)
 
+    rp_p = sub.add_parser("rotation-pairs", help="Rotation pairs: what moves against what on the panel store - baskets of industries / themes / tickers as cap-weighted step series, each recipe pair's correlation (raw and with the floor's step out), A over B per window, where today's relative move sits among past ones (z, percentile) and what followed past extremes; plus the industry pairs that move most against each other.")
+    rp_p.add_argument("--pack", default="latest", help="Pack whose folder gets rotation_pairs/ (the read itself is the store's).")
+    rp_p.add_argument("--recipe", default=None, help="Default config/generic_utils/rotation_pairs.json.")
+    rp_p.add_argument("--store", default=None, help="Panel store DuckDB (panel_store.json path by default).")
+    rp_p.add_argument("--out-dir", default=None, help="Default PACK/rotation_pairs.")
+    rp_p.add_argument("--line", action="store_true", help="One line per basket and per pair, plus the summary.")
+    rp_p.add_argument("--quiet", action="store_true", help="Print the summary line only.")
+    rp_p.set_defaults(func=_cmd_rotation_pairs)
+
     dn_p = sub.add_parser("downside", help="Downside risk: the store's cap-weighted market, median name, cluster and today's Book (today's weights) step by step, their windows, worst drawdowns and the Book lines replayed through them, betas per line and the Book's loss for each market move.")
     dn_p.add_argument("--pack", default="latest")
     dn_p.add_argument("--store", default=None, help="Panel store DuckDB (panel_store.json path by default).")
@@ -3545,7 +3704,35 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     priors_p.add_argument("--notes", default=None, help="Plan summary line (cash after, queue, shorts).")
     priors_p.add_argument("--skip", default=None, help="Comma courses to leave out unless held. Default PASS,WATCH,STAND_ASIDE; '' keeps all.")
     priors_p.add_argument("--replace", action="store_true", help="Overwrite instead of merging into the day's file.")
+    priors_p.add_argument("--no-journal", action="store_true", help="Do not record the judgment in the decision journal.")
     priors_p.set_defaults(func=_cmd_priors)
+
+    jr_p = sub.add_parser(
+        "journal",
+        help="Decision journal (one small DuckDB): record a session (regime, a snapshot of every covered name, the judgment's changed "
+             "calls, notes), add a dated note (OUTSIDE news / sentiment / lesson), backfill from priors / judgments / packs, review "
+             "what calls and covered names did next (1 day to 6 months, excess vs the median store name), a name's history, storage.",
+    )
+    jr_p.add_argument("action", choices=["record", "note", "backfill", "review", "history", "stats", "compact"])
+    jr_p.add_argument("--pack", default="latest", help="record / review: the pack (default newest).")
+    jr_p.add_argument("--judgment", default=None, help="record: judgment file (default logs/canvases/<pack day>/judgment.json).")
+    jr_p.add_argument("--no-judgment", action="store_true", help="record: data only (regime + snaps).")
+    jr_p.add_argument("--kind", default=None, help="record: session kind label; note: note kind (outside, sentiment, guidance, lesson).")
+    jr_p.add_argument("--ids", default=None, help="note / history / review: EXCHANGE:TICKER ids ('*' = the market for a note).")
+    jr_p.add_argument("--theme", default=None, help="review: add a themes.json theme to the timeline ids.")
+    jr_p.add_argument("--text", default=None, help="note: the note (capped by the recipe).")
+    jr_p.add_argument("--source", default=None, help="note: source link or name.")
+    jr_p.add_argument("--tone", type=int, default=None, help="note: +1 / 0 / -1 (optional).")
+    jr_p.add_argument("--day", default=None, help="note: YYYYMMDD (default today UTC).")
+    jr_p.add_argument("--since", default=None, help="backfill: first day YYYYMMDD.")
+    jr_p.add_argument("--no-packs", action="store_true", help="backfill: skip data-only packs (judgments and priors only).")
+    jr_p.add_argument("--no-score", action="store_true", help="history: do not rescore on the panel store first.")
+    jr_p.add_argument("--out-dir", default=None, help="review: default PACK/journal.")
+    jr_p.add_argument("--recipe", default=None, help="Default config/generic_utils/journal.json.")
+    jr_p.add_argument("--line", action="store_true", help="review: one line per scorecard row.")
+    jr_p.add_argument("--review", action="store_true", help="record: also write the review into PACK/journal (the refresh suite).")
+    jr_p.add_argument("--quiet", action="store_true")
+    jr_p.set_defaults(func=_cmd_journal)
 
     args = parser.parse_args(argv)
     return args.func(args)

@@ -75,6 +75,26 @@
       ]
     },
     {
+      "label": "Recovery clock",
+      "requires": "{PACK}/recovery_clock/recovery_clock.duckdb",
+      "blocks": [
+        {"type": "callout", "from": "pages.deterioration.blocks.clock_read"},
+        {"type": "table", "title": "Road back in 2-6 months: odds (Kaplan-Meier, censored) that a start in the line's state touched its cost, +10% over cost, the 50-day and half-way to the high, and the median days (primary cell)",
+         "source": {"duckdb": "{PACK}/recovery_clock/recovery_clock.duckdb",
+                    "sql": "SELECT symbol, value_usd, pnl_pct, close, dd, det, run_12m, \"primary\", need_cost_pct, p_cost_56, p_cost_91, p_cost_126, p_cost_182, days_cost, need_gain10_pct, p_gain10_126, need_sma50_pct, p_sma50_56, p_sma50_91, days_sma50, need_half_pct, p_half_91, p_half_126, days_half FROM lines ORDER BY in_book DESC, value_usd DESC NULLS LAST, symbol",
+                    "drop_missing_columns": true},
+         "extra_columns": ["Course", "Grade", "Reason"], "tone_field": "Course", "extra_from": "courses"},
+        {"type": "table", "title": "How far it fell first, and what the state returned: the path low (median and q10) in price and dollars, the raw median and the excess vs the median start at 91 / 126 days",
+         "source": {"duckdb": "{PACK}/recovery_clock/recovery_clock.duckdb",
+                    "sql": "SELECT symbol, close, \"primary\", floor_56_med_px, floor_91_med_px, floor_91_q10_px, floor_91_q10_usd, floor_126_q10_px, floor_126_q10_usd, fwd_91_med, fx_91_mean, n_91, fwd_126_med, fx_126_mean, n_126 FROM lines ORDER BY in_book DESC, value_usd DESC NULLS LAST, symbol",
+                    "drop_missing_columns": true}},
+        {"type": "table", "title": "The same odds to cost in finer states: drawdown x letters x 12-month run (crun: strong vs weak runs) and x 1-month direction (cdir: turning vs still falling), beside the plain cells",
+         "source": {"duckdb": "{PACK}/recovery_clock/recovery_clock.duckdb",
+                    "sql": "SELECT symbol, col, cell, need, need_pct, max(p_reach) FILTER (WHERE days = 91) AS p_91d, max(p_reach) FILTER (WHERE days = 126) AS p_126d, max(p_reach) FILTER (WHERE days = 182) AS p_182d, max(n_obs) FILTER (WHERE days = 126) AS n_obs, max(med_days) AS med_days FROM reach WHERE need IN ('cost', 'sma50', 'half') GROUP BY symbol, col, cell, need, need_pct ORDER BY symbol, need, col",
+                    "drop_missing_columns": true}}
+      ]
+    },
+    {
       "label": "Evidence",
       "blocks": [
         {"type": "callout", "from": "pages.deterioration.blocks.evidence_read"},

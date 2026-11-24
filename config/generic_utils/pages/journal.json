@@ -1,0 +1,216 @@
+{
+ "name": "journal-{DAY}",
+ "page_key": "journal",
+ "requires": "{PACK}/journal/journal_review.duckdb",
+ "title": "Journal {DAY}",
+ "subtitle": "What was decided and covered, and what followed: every recorded call (only when a course, grade or plan changed) and every covered name per day, measured on the panel store at 1 day to 6 months against the median store name. Each column is one read; nothing is summed, nothing is filtered: small samples show their n, names and days.",
+ "sources_extra": [
+  "journal logs/tradingview_analysis/journal/journal.duckdb (tv_scan_cli.py journal record / note / backfill; config/generic_utils/journal.json)",
+  "review {PACK}/journal (tv_scan_cli.py journal review --pack {PACK}); prices and labels from the panel store"
+ ],
+ "tone_map": {
+  "buy": "good",
+  "hold": "info",
+  "watch": "neutral",
+  "short_watch": "neutral",
+  "pass": "warning",
+  "trim": "warning",
+  "exit": "bad",
+  "short": "bad",
+  "NEW": "good",
+  "ADD": "good",
+  "HOLD": "info",
+  "WATCH": "neutral",
+  "WAIT": "neutral",
+  "HOLD_NO_ADD": "warning",
+  "TRIM": "warning",
+  "EXIT": "bad",
+  "PASS": "bad"
+ },
+ "tabs": [
+  {
+   "label": "Scorecard",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "update.banner"
+    },
+    {
+     "type": "stats",
+     "from": "pages.journal.blocks.stats"
+    },
+    {
+     "type": "callout",
+     "from": "pages.journal.blocks.read"
+    },
+    {
+     "type": "list",
+     "from": "pages.journal.blocks.lessons"
+    },
+    {
+     "type": "table",
+     "title": "Calls by class: raw, excess over the median store name (fx), signed excess (sfx: + when the call was right) and the kill touched, from the call to each horizon and to the newest close (_now)",
+     "source": {
+      "duckdb": "{PACK}/journal/journal_review.duckdb",
+      "sql": "SELECT cls, n, n_names, first_day, last_day, fx_now_mean, sfx_now_mean, n_7d, fx_7d_mean, fx_7d_hit, sfx_7d_mean, n_28d, fx_28d_mean, fx_28d_hit, sfx_28d_mean, kill_28d_share, n_56d, fx_56d_mean, n_91d, fx_91d_mean, sfx_91d_mean, n_182d, fx_182d_mean FROM scorecard",
+      "drop_missing_columns": true
+     },
+     "tone_field": "cls"
+    },
+    {
+     "type": "table",
+     "title": "The same by grade",
+     "source": {
+      "duckdb": "{PACK}/journal/journal_review.duckdb",
+      "sql": "SELECT cls, grade, n, n_7d, fx_7d_mean, fx_7d_hit, sfx_7d_mean, n_28d, fx_28d_mean, fx_28d_hit, sfx_28d_mean, n_91d, fx_91d_mean FROM by_grade",
+      "drop_missing_columns": true
+     },
+     "tone_field": "cls"
+    }
+   ]
+  },
+  {
+   "label": "Lists and regimes",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.journal.blocks.lists_read"
+    },
+    {
+     "type": "table",
+     "title": "Covered names by pack list and by the call in force, split by breadth and the market's month (one observation per name per day: windows overlap, read n_names and n_days)",
+     "source": {
+      "duckdb": "{PACK}/journal/journal_review.duckdb",
+      "sql": "SELECT study, cell, n, n_names, n_days, n_7d, fx_7d_mean, fx_7d_hit, n_28d, fx_28d_mean, fx_28d_med, fx_28d_hit, n_56d, fx_56d_mean, n_91d, fx_91d_mean, n_182d, fx_182d_mean FROM studies WHERE study IN ('list', 'list x regime', 'cls', 'cls x regime', 'cls x trend21') ORDER BY study, n DESC",
+      "drop_missing_columns": true
+     }
+    },
+    {
+     "type": "table",
+     "title": "Pack reads at the time: band state, model decile, letters, event warning, peer gap",
+     "source": {
+      "duckdb": "{PACK}/journal/journal_review.duckdb",
+      "sql": "SELECT study, cell, n, n_names, n_days, n_7d, fx_7d_mean, fx_7d_hit, n_28d, fx_28d_mean, fx_28d_hit, n_91d, fx_91d_mean FROM studies WHERE study NOT IN ('list', 'list x regime', 'cls', 'cls x regime', 'cls x trend21') ORDER BY study, n DESC",
+      "drop_missing_columns": true
+     }
+    }
+   ]
+  },
+  {
+   "label": "Similar now",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.journal.blocks.similar_read"
+    },
+    {
+     "type": "table",
+     "title": "Today's covered names and what their cell did on earlier days (empty under the recipe's minimum observations)",
+     "source": {
+      "duckdb": "{PACK}/journal/journal_review.duckdb",
+      "sql": "SELECT * FROM similar_now",
+      "drop_missing_columns": true
+     },
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "extra_from": "courses",
+     "tone_field": "cls"
+    }
+   ]
+  },
+  {
+   "label": "Calls",
+   "blocks": [
+    {
+     "type": "table",
+     "title": "The call in force per name and what it did since (newest call per name)",
+     "source": {
+      "duckdb": "{PACK}/journal/journal_review.duckdb",
+      "sql": "SELECT * FROM latest",
+      "drop_missing_columns": true
+     },
+     "tone_field": "cls"
+    },
+    {
+     "type": "table",
+     "title": "Timeline: every recorded call of the Book and named ids, and every call of the recent window, with the reason then",
+     "source": {
+      "duckdb": "{PACK}/journal/journal_review.duckdb",
+      "sql": "SELECT * FROM timeline",
+      "drop_missing_columns": true
+     },
+     "tone_field": "cls"
+    }
+   ]
+  },
+  {
+   "label": "Notes",
+   "blocks": [
+    {
+     "type": "text",
+     "text": "Dated notes: OUTSIDE news, guidance, sentiment and lessons (tv_scan_cli.py journal note --ids ... --kind ... --text ... --source ...), plus the print brief's OUTSIDE lines and each update banner harvested from the judgment."
+    },
+    {
+     "type": "table",
+     "title": "Notes of the recent window",
+     "source": {
+      "duckdb": "{PACK}/journal/journal_review.duckdb",
+      "sql": "SELECT * FROM notes",
+      "drop_missing_columns": true
+     }
+    }
+   ]
+  },
+  {
+   "label": "Sessions and storage",
+   "blocks": [
+    {
+     "type": "table",
+     "title": "Sessions recorded: the regime then, live patterns and model states",
+     "source": {
+      "duckdb": "{PACK}/journal/journal_review.duckdb",
+      "sql": "SELECT * FROM sessions",
+      "drop_missing_columns": true
+     }
+    },
+    {
+     "type": "table",
+     "title": "Rows per table (the file is compacted with tv_scan_cli.py journal compact)",
+     "source": {
+      "duckdb": "{PACK}/journal/journal_review.duckdb",
+      "sql": "SELECT * FROM storage",
+      "drop_missing_columns": true
+     }
+    }
+   ]
+  }
+ ],
+ "ledger": {
+  "auto": true,
+  "entries": [
+   {
+    "group": "Deterioration letters (det)",
+    "rows": [
+     [
+      "E",
+      "On: next-FY EPS estimate cut by more than 1% over about 3 months. Off: held or raised."
+     ],
+     [
+      "R",
+      "On: next-FY revenue estimate cut by more than 1% over about 3 months. Off: held or raised."
+     ],
+     [
+      "C",
+      "On: free cash flow margin (ttm) under 0. Off: FCF positive."
+     ],
+     [
+      "S",
+      "On: last reported EPS under its estimate. Off: met or beat."
+     ]
+    ]
+   }
+  ]
+ }
+}

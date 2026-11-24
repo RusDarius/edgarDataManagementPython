@@ -20,6 +20,9 @@
         "just_pct": "peer_just_pct",
         "gap_pct": "peer_gap_pct",
         "px_fit": "peer_px_fit",
+        "fit_on": "peer_fit_on",
+        "fit_loo_r2": "peer_fit_loo_r2",
+        "fit_used": "peer_fit_used",
         "pctl_growth": "peer_pctl_growth",
         "pctl_quality": "peer_pctl_quality",
         "pctl_revision": "peer_pctl_revision"
@@ -296,6 +299,9 @@
         "peer_just_pct",
         "peer_gap_pct",
         "peer_px_fit",
+        "peer_fit_on",
+        "peer_fit_loo_r2",
+        "peer_fit_used",
         "peer_pctl_growth",
         "peer_pctl_quality",
         "peer_pctl_revision"

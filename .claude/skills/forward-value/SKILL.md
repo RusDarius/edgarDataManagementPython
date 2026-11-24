@@ -62,8 +62,14 @@ ROE, FCF margin, 3-month EPS revisions):
   under what the profile earns; `gap_pct` < 0 is paying for more than the profile delivers.
 - `groups.pay_<driver>` says what an industry pays for (multiple % per 1 sd). A growth premium is only rewarded where `pay_rev_nfy_g` is positive.
 - `priced_in_cagr_pct_vs_ind` / `irr_exp_pct_vs_ind`: the forward value run's priced-in growth and IRR against the group's median.
+- Fit quality (patch 0003): an industry with fewer than `min_fit_n` names with a positive yield borrows the sector's slopes at its own level
+  (`fit_on` = sector, `fit_n` = the sector's count); shrinkage grows with the group (`ridge_per_name`); growth / quality drivers
+  (`expect_positive`) never lower a multiple; `fit_loo_r2` is the leave-one-out R2 against the median of the other peers, and a fit at or under
+  `min_loo_r2` is not used (`fit_used` = 0: `just_pct` 0, `gap_pct` = the plain discount). On 23 Nov the median fit's LOO R2 was 0.04: read
+  `gap_pct` beside `fit_loo_r2`, and a sector fit (`fit_on` = sector) as weaker than a group fit. Board / brief: `peer_fit_on`,
+  `peer_fit_loo_r2`, `peer_fit_used`.
 - Caveats: cyclicals at peak margins (memory) fit as very cheap (read `cycle` beside it); misclassified names (a solar maker in Semiconductors)
-  fit against the wrong peers; groups under `min_fit_n` names give the premium only.
+  fit against the wrong peers.
 - Evidence (29 store days, 9 Jun - 3 Nov 2026, US $2B+): the adjusted gap beat a plain peer discount at every horizon (28d IC 0.024 vs 0.012,
   56d 0.043 with 74% positive days vs 61%; top-fifth 28d excess +1.9 vs +0.4 for the middle fifth, a plain discount was flat). Direction,
   not proof (t under 2); re-read `evidence` before leaning on it.

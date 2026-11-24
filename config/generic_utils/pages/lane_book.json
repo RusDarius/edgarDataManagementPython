@@ -7,7 +7,8 @@
  "sources_extra": [
   "lanes, names, when_value, rotation, timeline: {PACK}/lane_book (tv_scan_cli.py lane-book; recipe config/generic_utils/lane_book.json)",
   "board joins {PACK}/board; events {PACK}/outlook + config/generic_utils/catalyst_calendar.json; store logs/tradingview_analysis/signal_lab/panel_store.duckdb",
-  "capital {PACK}/capital_plan, capital_plan_queue, capital_plan_catalyst (tv_scan_cli.py capital-plan)"
+  "capital {PACK}/capital_plan, capital_plan_queue, capital_plan_catalyst (tv_scan_cli.py capital-plan)",
+  "pairs {PACK}/rotation_pairs (tv_scan_cli.py rotation-pairs; recipe config/generic_utils/rotation_pairs.json)"
  ],
  "tone_map": {
   "NEW": "good",
@@ -610,6 +611,455 @@
    ]
   },
   {
+   "label": "Top tier",
+   "requires": "{PACK}/analysis_scans/top_tier.csv",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.lane_book.blocks.top_read"
+    },
+    {
+     "type": "table",
+     "title": "Top-tier picks: the judgment's reading order (band, kill on a close, month target, up / risk, the facets it passes)",
+     "headers": [
+      "#",
+      "Symbol",
+      "Facets",
+      "Lane record",
+      "Course",
+      "Buy band",
+      "Kill (close)",
+      "Target",
+      "Up %",
+      "Risk %",
+      "Why (data)"
+     ],
+     "from": "pages.lane_book.blocks.top_picks"
+    },
+    {
+     "type": "table",
+     "title": "Top tier: US $2B+ names passing 3+ of five facets (value, growth, overlooked growth, competitive strength, sentiment turning), plus the Book. Facets are 0 / 1 reads; n_facets is a count, never a score or an order",
+     "source": {
+      "csv": "{PACK}/analysis_scans/top_tier.csv"
+     },
+     "sort": "-payoff",
+     "extra_columns": [
+      "Course",
+      "Reason"
+     ],
+     "extra_from": "courses",
+     "tone_field": "Course",
+     "column_groups": [
+      [
+       "Facets",
+       [
+        "n_facets",
+        "f_value",
+        "f_growth",
+        "f_overlooked",
+        "f_strength",
+        "f_turning"
+       ]
+      ],
+      [
+       "Lane record",
+       [
+        "lanes",
+        "avoid",
+        "best_lane",
+        "best_xs_28",
+        "best_t_28",
+        "best_p_up_28",
+        "best_p_dn_28"
+       ]
+      ],
+      [
+       "Tape",
+       [
+        "close",
+        "day",
+        "w",
+        "m1",
+        "m3",
+        "vs50",
+        "rsi"
+       ]
+      ],
+      [
+       "Value",
+       [
+        "peer_gap_pct",
+        "peer_prem_pct",
+        "pe_nfy",
+        "peg_fwd",
+        "fv_upside_pct",
+        "irr_exp_pct",
+        "hurdle_pct",
+        "pt_up"
+       ]
+      ],
+      [
+       "Growth",
+       [
+        "fwd_eps_g",
+        "rev_yoy",
+        "eps_yoy",
+        "peer_pctl_growth",
+        "analysts"
+       ]
+      ],
+      [
+       "Strength",
+       [
+        "peer_pctl_quality",
+        "opm",
+        "fcf_margin",
+        "nd_ebitda"
+       ]
+      ],
+      [
+       "Turning",
+       [
+        "eps_rev_3m",
+        "eps_rev_breadth",
+        "rev_rev_3m",
+        "pt_drift_3m",
+        "updown_vol",
+        "strong_lens"
+       ]
+      ],
+      [
+       "Entry",
+       [
+        "to_band_high_pct",
+        "bounce_low",
+        "bounce_high",
+        "bounce_kill",
+        "entry_px",
+        "month_tgt_px",
+        "month_up_pct",
+        "risk_pct",
+        "payoff",
+        "stake_per_1k",
+        "risk_per_1k"
+       ]
+      ],
+      [
+       "Model and risk",
+       [
+        "dec_28d",
+        "pred_28d",
+        "det",
+        "warn_level",
+        "beta"
+       ]
+      ],
+      [
+       "Catalyst",
+       [
+        "earn_date",
+        "earn_days",
+        "next_kind",
+        "next_date",
+        "pack_lists"
+       ]
+      ]
+     ],
+     "screens": [
+      {
+       "label": "Value",
+       "filters": {
+        "f_value": "=1"
+       },
+       "sort": "-peer_gap_pct",
+       "explain": "Cheaper than industry peers with the same growth and quality profile by 10%+ (peer_gap_pct), with forward-value or street upside behind it."
+      },
+      {
+       "label": "Growth",
+       "filters": {
+        "f_growth": "=1"
+       },
+       "sort": "-fwd_eps_g",
+       "explain": "Forward EPS growth or revenue growth 15%+."
+      },
+      {
+       "label": "Overlooked growth",
+       "filters": {
+        "f_overlooked": "=1"
+       },
+       "sort": "-peer_pctl_growth",
+       "explain": "Growth in the top 30% of its industry but priced at most 10% over the peer median, or 15%+ growth with 10 or fewer analysts and on no pack list."
+      },
+      {
+       "label": "Competitive strength",
+       "filters": {
+        "f_strength": "=1"
+       },
+       "sort": "-peer_pctl_quality",
+       "explain": "Quality in the top 35% of its industry (margins, returns) with positive free cash flow."
+      },
+      {
+       "label": "Sentiment turning",
+       "filters": {
+        "f_turning": "=1"
+       },
+       "sort": "-eps_rev_3m",
+       "explain": "Estimates up over 3 months with more raises than cuts, street targets not falling, and the tape turning (week up or up-volume ahead)."
+      },
+      {
+       "label": "All five",
+       "filters": {
+        "n_facets": "=5"
+       },
+       "group": "Count",
+       "explain": "Passes every facet."
+      },
+      {
+       "label": "Four or more",
+       "filters": {
+        "n_facets": ">=4"
+       },
+       "group": "Count",
+       "explain": "Passes four or five facets."
+      },
+      {
+       "label": "Outside AI",
+       "filters": {
+        "ai": "=0"
+       },
+       "group": "Cluster",
+       "explain": "Not in the AI cluster: the offset side."
+      },
+      {
+       "label": "AI cluster",
+       "filters": {
+        "ai": "=1"
+       },
+       "group": "Cluster",
+       "explain": "The AI / data-center cluster: waits for the cluster triggers."
+      },
+      {
+       "label": "In a long lane",
+       "filters": {
+        "n_lanes": ">=1"
+       },
+       "explain": "Sits in at least one measured long lane."
+      },
+      {
+       "label": "No avoid lane",
+       "filters": {
+        "n_avoid": "<1"
+       },
+       "explain": "In no avoid lane today."
+      },
+      {
+       "label": "No letter",
+       "filters": {
+        "det": "=-"
+       },
+       "explain": "No deterioration letter beyond price (E / R / C / S)."
+      },
+      {
+       "label": "Model 8+",
+       "filters": {
+        "dec_28d": ">=8"
+       },
+       "sort": "-pred_28d",
+       "explain": "28-day model decile 8 or higher."
+      },
+      {
+       "label": "Near the band",
+       "filters": {
+        "to_band_high_pct": ">=-5"
+       },
+       "sort": "-to_band_high_pct",
+       "explain": "The close at most 5% over the bounce-band top (or inside / under it)."
+      },
+      {
+       "label": "Up / risk 2+",
+       "filters": {
+        "payoff": ">=2"
+       },
+       "sort": "-payoff",
+       "explain": "Two points of month upside per point of risk to the kill."
+      },
+      {
+       "label": "Print in 21 days",
+       "filters": {
+        "earn_days": "0..21"
+       },
+       "sort": "earn_days",
+       "explain": "A dated print inside three weeks."
+      },
+      {
+       "label": "The Book",
+       "filters": {
+        "in_book": "=1"
+       },
+       "explain": "Held lines (always in the table)."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "label": "Breakeven",
+   "requires": "{PACK}/recovery_ladder/recovery_ladder.duckdb",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.lane_book.blocks.be_read"
+    },
+    {
+     "type": "table",
+     "title": "Losing lines: what break-even costs here vs making the loss back elsewhere (judgment)",
+     "headers": [
+      "Symbol",
+      "Value / P&L",
+      "Back to cost",
+      "Add for break-even at the 50-day",
+      "Odds in 91 days",
+      "The add's loss at its kill",
+      "Same loss made back elsewhere",
+      "Verdict",
+      "Why (data)"
+     ],
+     "from": "pages.lane_book.blocks.breakeven"
+    },
+    {
+     "type": "table",
+     "title": "Recovery ladder: each Book line's road back to cost, and the add at the bounce band after which a return to the 50-day / half-way / street breaks the line even (data)",
+     "source": {
+      "duckdb": "{PACK}/recovery_ladder/recovery_ladder.duckdb",
+      "drop_missing_columns": true,
+      "sql": "SELECT symbol, ccy, value_usd, cost_usd, pnl_usd, pnl_pct, close, avg_px, be_from_close_pct, sma50, half_px, street_px, bounce_low, bounce_high, bounce_kill, solve_at, solve_at_px, add_be_at_sma50_usd, add_be_at_half_px_usd, add_be_at_street_px_usd, let_fx_56d_mean, let_p_dn_56d, earn_date FROM lines ORDER BY pnl_usd"
+     },
+     "extra_columns": [
+      "Course"
+     ],
+     "extra_from": "courses",
+     "tone_field": "Course"
+    },
+    {
+     "type": "table",
+     "title": "Recovery clock: odds and median days for each Book line to touch its cost, 50-day, half-way and street, and the path low first (the line's state on the store since 29 Mar, censored)",
+     "optional": true,
+     "source": {
+      "duckdb": "{PACK}/recovery_clock/recovery_clock.duckdb",
+      "drop_missing_columns": true,
+      "sql": "SELECT symbol, value_usd, pnl_pct, dd, det, run_12m, need_cost_pct, p_cost_91, p_cost_182, days_cost, need_sma50_pct, p_sma50_91, days_sma50, need_half_pct, p_half_91, need_street_pct, p_street_91, p_street_182, floor_91_med_px, floor_91_q10_px, floor_91_q10_usd, fwd_91_med, fx_91_mean, n_91 FROM lines WHERE in_book ORDER BY pnl_usd"
+     }
+    },
+    {
+     "type": "table",
+     "title": "Average-down ladder: each Book line x buy level x add size - the new average, the rise from the add back to break-even, break-even against the 50-day, and what the add and the line lose at the kill (data)",
+     "source": {
+      "duckdb": "{PACK}/recovery_ladder/recovery_ladder.duckdb",
+      "drop_missing_columns": true,
+      "sql": "SELECT symbol, add_at, add_px, add_usd, new_avg, avg_cut_pct, be_from_add_pct, be_vs_sma50_pct, be_vs_half_px_pct, be_vs_street_px_pct, kill, add_kill_usd, line_kill_usd FROM ladder ORDER BY symbol, add_at, add_usd"
+     },
+     "screens": [
+      {
+       "label": "Break-even under the 50-day",
+       "filters": {
+        "be_vs_sma50_pct": "<0"
+       },
+       "sort": "be_from_add_pct",
+       "explain": "Adds after which the line breaks even below its 50-day: the only adds the deterioration rules allow."
+      },
+      {
+       "label": "At the bounce band",
+       "filters": {
+        "add_at": "bounce_high|bounce_low"
+       },
+       "group": "Level",
+       "explain": "Adds placed in the bounce band, not at the close."
+      },
+      {
+       "label": "At the close",
+       "filters": {
+        "add_at": "=close"
+       },
+       "group": "Level",
+       "explain": "Adds at today's close."
+      }
+     ]
+    },
+    {
+     "type": "table",
+     "title": "Making back $1,000 elsewhere: the stake in each top-tier name that earns $1,000 at its month target, and what that stake loses at the kill (data)",
+     "source": {
+      "csv": "{PACK}/analysis_scans/top_tier.csv"
+     },
+     "optional": true,
+     "where": "month_up_pct>0",
+     "sort": "stake_per_1k",
+     "limit": 40,
+     "columns": [
+      "symbol",
+      "ind",
+      "ai",
+      "n_facets",
+      "best_lane",
+      "best_xs_28",
+      "best_p_up_28",
+      "best_p_dn_28",
+      "close",
+      "entry_px",
+      "bounce_kill",
+      "month_tgt_px",
+      "month_up_pct",
+      "risk_pct",
+      "payoff",
+      "stake_per_1k",
+      "risk_per_1k",
+      "dec_28d",
+      "det",
+      "avoid",
+      "earn_date"
+     ],
+     "extra_columns": [
+      "Course"
+     ],
+     "extra_from": "courses",
+     "tone_field": "Course",
+     "screens": [
+      {
+       "label": "Outside AI",
+       "filters": {
+        "ai": "=0"
+       },
+       "group": "Cluster",
+       "explain": "The offset side."
+      },
+      {
+       "label": "AI cluster",
+       "filters": {
+        "ai": "=1"
+       },
+       "group": "Cluster",
+       "explain": "The rebound side."
+      },
+      {
+       "label": "Kill loss under $500",
+       "filters": {
+        "risk_per_1k": "<500"
+       },
+       "sort": "stake_per_1k",
+       "explain": "Making $1,000 at the target risks under $500 at the kill."
+      },
+      {
+       "label": "No letter",
+       "filters": {
+        "det": "=-"
+       },
+       "explain": "No deterioration letter beyond price."
+      }
+     ]
+    }
+   ]
+  },
+  {
    "label": "When it matters",
    "blocks": [
     {
@@ -919,6 +1369,137 @@
    ]
   },
   {
+   "label": "Pairs",
+   "requires": "{PACK}/rotation_pairs/rotation_pairs.duckdb",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.lane_book.blocks.pairs_read"
+    },
+    {
+     "type": "chart",
+     "title": "Baskets against the floor since the store began (level / floor level x 100; 100 = moved with the market)",
+     "source": {
+      "duckdb": "{PACK}/rotation_pairs/rotation_pairs.duckdb",
+      "sql": "SELECT as_of, max(CASE WHEN key = 'ai_cluster' THEN vs_floor END) AS ai_cluster, max(CASE WHEN key = 'chips' THEN vs_floor END) AS chips, max(CASE WHEN key = 'software' THEN vs_floor END) AS software, max(CASE WHEN key = 'staples' THEN vs_floor END) AS staples, max(CASE WHEN key = 'insurance' THEN vs_floor END) AS insurance, max(CASE WHEN key = 'health' THEN vs_floor END) AS health, max(CASE WHEN key = 'utilities' THEN vs_floor END) AS utilities, max(CASE WHEN key = 'consumer_disc' THEN vs_floor END) AS consumer_disc FROM series WHERE kind = 'basket' GROUP BY as_of ORDER BY as_of"
+     },
+     "x": "as_of",
+     "series": [
+      [
+       "ai_cluster",
+       "AI cluster"
+      ],
+      [
+       "chips",
+       "Chips"
+      ],
+      [
+       "software",
+       "Software"
+      ],
+      [
+       "staples",
+       "Staples"
+      ],
+      [
+       "insurance",
+       "Insurance"
+      ],
+      [
+       "health",
+       "Health"
+      ],
+      [
+       "utilities",
+       "Utilities"
+      ],
+      [
+       "consumer_disc",
+       "Consumer discretionary"
+      ]
+     ],
+     "y_label": "vs floor"
+    },
+    {
+     "type": "chart",
+     "title": "Relative lines: A over B (100 at the store's first file; falling = B winning)",
+     "source": {
+      "duckdb": "{PACK}/rotation_pairs/rotation_pairs.duckdb",
+      "sql": "SELECT as_of, max(CASE WHEN key = 'chips / staples' THEN level END) AS chips_staples, max(CASE WHEN key = 'software / chips' THEN level END) AS software_chips, max(CASE WHEN key = 'ai_cluster / insurance' THEN level END) AS ai_insurance, max(CASE WHEN key = 'consumer_disc / staples' THEN level END) AS disc_staples, max(CASE WHEN key = 'hyperscalers / chips' THEN level END) AS hyper_chips FROM series WHERE kind = 'pair' GROUP BY as_of ORDER BY as_of"
+     },
+     "x": "as_of",
+     "series": [
+      [
+       "chips_staples",
+       "Chips over staples"
+      ],
+      [
+       "software_chips",
+       "Software over chips"
+      ],
+      [
+       "ai_insurance",
+       "AI cluster over insurance"
+      ],
+      [
+       "disc_staples",
+       "Discretionary over staples"
+      ],
+      [
+       "hyper_chips",
+       "Hyperscalers over chips"
+      ]
+     ],
+     "y_label": "A / B"
+    },
+    {
+     "type": "table",
+     "title": "Pairs: correlation (raw, with the market's step out, recent), A over B per window, where today's 21-step move sits among past ones, and what the relative line did after its past top / bottom tails",
+     "source": {
+      "duckdb": "{PACK}/rotation_pairs/rotation_pairs.duckdb",
+      "sql": "SELECT pair, corr_raw, corr_resid, corr_resid_recent, rel_5, rel_21, rel_63, rel_from_high, rel_from_low, rel_z, rel_pct, side, hi_fwd_5, hi_rev_5, hi_nind_5, lo_fwd_5, lo_rev_5, lo_nind_5, hi_fwd_21, hi_rev_21, hi_nind_21, lo_fwd_21, lo_rev_21, lo_nind_21, n_steps FROM pairs",
+      "drop_missing_columns": true
+     },
+     "screens": [
+      {
+       "label": "At an extreme",
+       "filters": {
+        "side": "!middle"
+       },
+       "sort": "rel_pct",
+       "explain": "Today's 21-step relative move in its top or bottom tail."
+      },
+      {
+       "label": "Move against each other",
+       "filters": {
+        "corr_resid": "<0"
+       },
+       "sort": "corr_resid",
+       "explain": "Negative correlation once the market's step is taken out."
+      }
+     ]
+    },
+    {
+     "type": "table",
+     "title": "Baskets today: return and excess over the floor per window, drawdown, beta, and the basket each one moves most against / with",
+     "source": {
+      "duckdb": "{PACK}/rotation_pairs/rotation_pairs.duckdb",
+      "sql": "SELECT basket, label, n, cap_b, r_5, r_21, r_63, xs_5, xs_21, xs_63, dd_high, beta_mkt, corr_mkt, \"against\", against_corr, \"with\", with_corr FROM baskets ORDER BY xs_21 DESC",
+      "drop_missing_columns": true
+     }
+    },
+    {
+     "type": "table",
+     "title": "Industry pairs that move most against each other once the market is out (lowest residual correlation first)",
+     "source": {
+      "duckdb": "{PACK}/rotation_pairs/rotation_pairs.duckdb",
+      "sql": "SELECT ind_a, ind_b, corr_resid, corr_raw, cap_a_b, cap_b_b, rel_5, rel_21, rel_63, xs_21_a, xs_21_b FROM ind_pairs",
+      "drop_missing_columns": true
+     }
+    }
+   ]
+  },
+  {
    "label": "Book",
    "blocks": [
     {
@@ -1064,6 +1645,11 @@
       "Rotation",
       "Industries by quadrant today, and whether quadrants or month strength carried on the store.",
       "The precedent table first: it says whether to chase or fade rotation."
+     ],
+     [
+      "Pairs",
+      "What moves against what: baskets (AI cluster, chips, software, staples, insurance ...) as cap-weighted lines, each pair's correlation with the market out, where today's relative move sits and what followed past extremes.",
+      "The two charts, then the At an extreme screen."
      ],
      [
       "Book",

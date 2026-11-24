@@ -29,6 +29,16 @@ Code `generic_utils/lane_book.py`, recipe `config/generic_utils/lane_book.json` 
 - `timeline` / `weeks`: PACK/outlook events plus calendar rows the pack has not seen, with the lanes of the touched name; one row per week.
 - `capital`: NAV, cash, the floor (`cash_floor_pct`), cash above it and the starters / adds it buys at the hint sizes.
 
+## Pairs: what moves against what
+
+```powershell
+python src/generic_utils/tv_scan_cli.py rotation-pairs --pack PACK --line     # baskets + pairs, one line each (PACK/rotation_pairs; highlights.log)
+```
+
+`generic_utils/rotation_pairs.py`, recipe `config/generic_utils/rotation_pairs.json` (baskets of industries / themes / ids, the pairs, windows, the 21-step z window, the tail quantile, after-steps), test `src/tests/test_rotation_pairs.py`; optional refresh suite `rotation_pairs`; the lane book page shows it on its Pairs tab (tab `requires`). Tables: `baskets` (return / excess per window, drawdown, beta, the basket each moves most `against` / `with` once the market's step is out), `pairs` (`corr_raw`, `corr_resid`, `rel_<w>`, `rel_pct` / `rel_z` / `side`, and after past top / bottom tails `hi_*` / `lo_*` with `nind` independent starts), `ind_pairs` (the industry pairs with the lowest residual correlation), `series` (charts).
+
+Reading: a negative `corr_resid` is an offset (insurance and staples against the AI cluster on 19 Nov 2026: -0.83 / -0.82). A pair at a tail is a question, not a reversal call: read `nind` (often 1-3) before the mean, and buy the offset side at its 50-day rather than chasing the leaders (the journal's leader lists lagged by 6-11 points over 28 days).
+
 ## How to read it
 
 1. **Base first.** Mean excess over a median is positive for every name (skew): the `base` row's `xs_28` (about +0.6) is the zero line, and its `p_up_28` / `p_dn_28` (about 19% / 16%) are the odds to beat.

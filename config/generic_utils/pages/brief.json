@@ -178,7 +178,7 @@
         {
           "type": "table",
           "title": "This week's and next week's prints with the bar they face",
-          "source": {"duckdb": "{PACK}/board/board.duckdb", "sql": "SELECT symbol, ind, mcap_b, book_usd, earn_date, earn_week, earn_slot, earn_days, close, day, m1, bar_runup, bar_tape, bar_rev, c_bar_text, c_rx_beat, c_beat_sold, c_h28_beat, c_h28_miss, p_beat, ev_h28, dec_28d, pred_28d, peer_gap_pct, eps_rev_3m, street_left, bounce_low, bounce_high, bounce_kill FROM names WHERE bb_cell IS NOT NULL AND earn_week IN ('W0', 'W1') AND (mcap_b >= 3 OR in_book) ORDER BY earn_date, mcap_b DESC", "drop_missing_columns": true},
+          "source": {"duckdb": "{PACK}/board/board.duckdb", "sql": "SELECT symbol, ind, mcap_b, book_usd, earn_date, earn_week, earn_slot, earn_days, close, day, m1, bar_runup, bar_tape, bar_rev, c_bar_text, c_rx_beat, c_beat_sold, c_h28_beat, c_h28_miss, p_beat, ev_h28, dec_28d, pred_28d, peer_gap_pct, peer_fit_on, peer_fit_loo_r2, eps_rev_3m, street_left, bounce_low, bounce_high, bounce_kill FROM names WHERE bb_cell IS NOT NULL AND earn_week IN ('W0', 'W1') AND (mcap_b >= 3 OR in_book) ORDER BY earn_date, mcap_b DESC", "drop_missing_columns": true},
           "extra_columns": ["Course", "Reason"],
           "extra_from": "courses",
           "tone_field": "Course",

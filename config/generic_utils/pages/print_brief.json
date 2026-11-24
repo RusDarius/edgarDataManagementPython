@@ -165,6 +165,55 @@
    ]
   },
   {
+   "label": "Holders & flow",
+   "blocks": [
+    {
+     "type": "callout",
+     "from": "pages.print_brief.blocks.holders_read"
+    },
+    {
+     "type": "table",
+     "title": "Who holds and who trades: free float, float turnover and after-hours volume per reporter (scan fields; not measured as a pointer yet)",
+     "optional": true,
+     "source": {
+      "csv": "{PACK}/analysis_scans/reporter_flow.csv"
+     },
+     "columns": [
+      "symbol",
+      "slot",
+      "react_on",
+      "mcap_b",
+      "close",
+      "day",
+      "float_pct",
+      "held_out_pct",
+      "turn_30d_pct",
+      "turn_today_pct",
+      "days_float",
+      "rvol_10d",
+      "ah_chg",
+      "ah_vol_x"
+     ],
+     "extra_columns": [
+      "Course"
+     ]
+    },
+    {
+     "type": "table",
+     "title": "Institutions and short interest (OUTSIDE, judgment; names that could take capital)",
+     "headers": [
+      "Symbol",
+      "Institutional %",
+      "Short % of float",
+      "Days to cover",
+      "Who sets the open",
+      "Source"
+     ],
+     "from": "pages.print_brief.blocks.holders"
+    }
+   ]
+  },
+  {
    "label": "The bar",
    "requires": "{PACK}/board/names.csv",
    "blocks": [
@@ -904,6 +953,59 @@
      [
       "Strength / tech",
       "Judgment column: the alpha model's 28-day decile, the run into the print, the 50-day position, rsi, and the industry's season reaction."
+     ]
+    ]
+   },
+   {
+    "group": "Holders & flow",
+    "rows": [
+     [
+      "float_pct",
+      "Free float as % of shares outstanding (TradingView float_shares_percent_current). ADRs read 100 (the ADR line, not the home listing)."
+     ],
+     [
+      "held_out_pct",
+      "100 - float_pct: shares held by insiders, founders, parents or strategic holders that do not trade. A high value means a thin float."
+     ],
+     [
+      "turn_30d_pct",
+      "Average daily volume over 30 days as % of the free float. About 1% = slow holders (index and long-only); 2%+ = fast money (hedge funds, retail)."
+     ],
+     [
+      "turn_today_pct",
+      "Today's volume as % of the free float at scan time. Well above turn_30d_pct before a print = positioning into it."
+     ],
+     [
+      "days_float",
+      "Free float / 30-day average volume: sessions to trade the whole float once."
+     ],
+     [
+      "rvol_10d",
+      "Today's volume vs its 10-day average at scan time (TradingView relative_volume_10d_calc)."
+     ],
+     [
+      "ah_chg",
+      "After-hours (post-market) change in % from the cash close, at scan time. Empty before 16:00 ET or with no post-market trade."
+     ],
+     [
+      "ah_vol_x",
+      "After-hours volume / 30-day average daily volume: how much of a normal day has already traded on the print."
+     ],
+     [
+      "Institutional %",
+      "Judgment table (OUTSIDE): shares held by 13F institutions, % of shares, from the source named on the row; snapshot dates differ by source."
+     ],
+     [
+      "Short % of float",
+      "Judgment table (OUTSIDE): latest exchange short interest as % of the free float."
+     ],
+     [
+      "Days to cover",
+      "Judgment table (OUTSIDE): short interest / average daily volume."
+     ],
+     [
+      "Who sets the open",
+      "Judgment: which holders are likely to move the reaction (index / long-only, fast money, shorts covering) and on what number."
      ]
     ]
    }

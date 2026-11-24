@@ -106,7 +106,9 @@
     {"name": "7d", "days": 7, "files": 5},
     {"name": "14d", "days": 14, "files": 10},
     {"name": "28d", "days": 28, "files": 20},
-    {"name": "56d", "days": 56, "files": 40}
+    {"name": "56d", "days": 56, "files": 40},
+    {"name": "91d", "days": 91, "files": 63},
+    {"name": "182d", "days": 182, "files": 126}
   ],
   "label_tolerance_days": 4,
   "lag_tolerance_days": 10,

@@ -161,8 +161,14 @@ def calendar_events(path: str | Path | None, *, scan_day: date, end: date) -> li
 
 def pack_lists(pack: Path) -> dict[str, str]:
     """Per symbol, the pack lists it is on: radar50#k, earn_up, earn_down, short15, payoff10, <stance>, <h> <tail>, book."""
+    return {s: " ".join(tags) for s, tags in pack_list_tags(pack).items()}
+
+
+def pack_list_tags(pack: Path) -> dict[str, list[str]]:
+    """Per symbol, the pack list tags as a list (a tag may hold a space: '<h> <tail>'); see pack_lists."""
     import duckdb
 
+    pack = Path(pack)
     found: dict[str, list[str]] = {}
     db = pack / "briefing_pack.duckdb"
     if db.exists():
@@ -193,7 +199,7 @@ def pack_lists(pack: Path) -> dict[str, str]:
     for row in _csv(pack / "payoff_focus" / "payoff_focus.csv"):
         if row.get("symbol"):
             found.setdefault(str(row["symbol"]), []).append("payoff10")
-    return {s: " ".join(dict.fromkeys(tags)) for s, tags in found.items()}
+    return {s: list(dict.fromkeys(tags)) for s, tags in found.items()}
 
 
 # ---------------------------------------------------------------- build

@@ -126,6 +126,20 @@ class TestUpdateDiff(unittest.TestCase):
         self.assertEqual(moves, {"NASDAQ:GOOG": {"post_chg": -9.43, "held": True}, "NYSE:CMG": {"post_chg": 6.5, "held": False}})
         self.assertEqual(after_hours_moves(str(pack), None), {})
 
+    def test_replay_steps_drop_suite_dependencies(self):
+        from generic_utils.page_update import replay_steps
+        from generic_utils.task_dag import validate_steps
+
+        scans = [{"name": "focus_book", "after": ["board"], "argv": ["x"]},
+                 {"name": "reporter_flow", "after": ["print_night"], "argv": ["x"]},
+                 {"name": "lanes_named", "after": ["focus_book", "board"], "argv": ["x"]},
+                 {"name": "plain", "argv": ["x"]}]
+        steps = replay_steps(scans)
+        self.assertEqual([s["after"] for s in steps], [[], [], ["focus_book"], []])
+        validate_steps(steps)  # suites ran before the replay: no unknown-step error
+        with self.assertRaises(ValueError):
+            validate_steps([dict(s, after=s.get("after") or []) for s in scans])
+
     def test_letter_changes_between_packs(self):
         import tempfile
         from pathlib import Path

@@ -33,6 +33,9 @@ from data_analysis_scripts.trading_view_export_all_tdfields import (
     export_all_tradingview_fields_duckdb,
     export_focused_tradingview_fields_duckdb,
 )
+from data_analysis_scripts.trading_view_all_fields_prune_runs import (
+    prune_all_fields_day_runs,
+)
 from data_analysis_scripts.trading_view_market_flow_screening import (
     run_market_flow_screening_suite,
 )
@@ -752,6 +755,9 @@ def main():
     # export_all_tradingview_fields_duckdb()
     # export_all_tradingview_fields_duckdb(chunk_size=300, timeout=90)
     export_focused_tradingview_fields_duckdb()
+    # Day files with more than 3 scans: keep the newest, the newest full-catalog run and the last scan of each
+    # US session phase, drop the rest and compact the file. Dry run unless apply=True; skips today's day file.
+    # prune_all_fields_day_runs(keep=3, apply=True)
 
     # ── Focus pool screening (deterministic wide pool) ─────────────────────
     # Reads latest move-prediction run (scores + raw scan) enriched with the

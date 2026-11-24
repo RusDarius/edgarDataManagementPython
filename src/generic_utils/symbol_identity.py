@@ -231,13 +231,15 @@ def qualify_text(text: Any, by_ticker: Mapping[str, str]) -> tuple[str, list[str
     """Replace whole-word bare tickers the caller maps (``ticker_map``) with EXCHANGE:TICKER.
 
     Returns (new text, tickers replaced). Words the map does not hold stay as written,
-    so prose like FOMC or PMI is never touched.
+    so prose like FOMC or PMI is never touched. One-letter words are never read as tickers:
+    in prose they are the article "A" or the deterioration letters (E R C S), even when
+    NYSE:A or NYSE:C is a judged id.
     """
     replaced: list[str] = []
 
     def swap(match: "re.Match[str]") -> str:
         token = match.group(0)
-        full = by_ticker.get(token)
+        full = None if len(token) == 1 else by_ticker.get(token)
         if full is None:
             return token
         replaced.append(token)

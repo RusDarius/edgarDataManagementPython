@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | Date | 2026-11-18 |
-| Commit | pending; base `fd2525e` |
-| Change set | Staged: 24 files, +658 / -40 (3 added, 21 modified, none deleted) |
+| Commit | `bb7e9f3`; base `fd2525e` |
+| Change set | Scanned before the note: 24 files, +658 / -40 (3 added, 21 modified, none deleted). The commit: 30 files, +1090 / -67, including this note, its README row and the three generated files |
 | Scan | `logs/patch_notes/20261118_staged/inventory.md` |
 | Tests | 924 passed, 8 skipped; the two older test files unchanged (baseline B6) |
 
@@ -165,4 +165,4 @@ tables use `drop_missing_columns`, so older packs render without the new columns
 2. Carry `post_vol_x` into the panel store so signal lab can measure whether thin after-hours moves hold.
 3. A US holiday calendar for `us_phase` (R8).
 4. The baseline's B3 percent guesses in `financial_projection` are still open (patch 0001 follow-up 2).
-5. After the commit: put its hash in the Commit row and run `patch_scan.py regen`.
+5. Done: commit `bb7e9f3` recorded in the Commit row and the generated files regenerated.

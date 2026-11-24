@@ -365,6 +365,13 @@ def render_update_md(update: Mapping[str, Any], *, day: str) -> str:
     return "\n".join(lines)
 
 
+def replay_steps(scans: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Recorded scans as DAG steps. The refresh suites (board, print_night ...) ran before the replay, so an `after`
+    naming a suite is already met; only an `after` naming another recorded scan orders the replay."""
+    names = {s["name"] for s in scans}
+    return [dict(s, after=[a for a in (s.get("after") or []) if a in names]) for s in scans]
+
+
 def replay_inputs(judgment: Mapping[str, Any], *, new_pack: str, log_dir: Path) -> list[dict[str, Any]]:
     """Re-run the day's capital plans and recorded scans on the new pack."""
     from generic_utils.capital_plan import write_capital_plan
@@ -386,7 +393,7 @@ def replay_inputs(judgment: Mapping[str, Any], *, new_pack: str, log_dir: Path) 
             for arg in scan["argv"]:
                 if arg.startswith(new_pack) and arg.endswith(".csv"):
                     (REPO_ROOT / arg).parent.mkdir(parents=True, exist_ok=True)
-        done += run_dag([dict(s, after=s.get("after") or []) for s in scans], log_dir=log_dir, cwd=REPO_ROOT, echo=False)
+        done += run_dag(replay_steps(scans), log_dir=log_dir, cwd=REPO_ROOT, echo=False)
     return done
 
 

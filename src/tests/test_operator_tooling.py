@@ -85,6 +85,10 @@ class TestIdGuards(unittest.TestCase):
         text, swapped = qualify_text("Buy CRC, hold MU and MMS before FOMC; NASDAQ:MU stays.", by_ticker)
         self.assertEqual(text, "Buy NYSE:CRC, hold NASDAQ:MU and MMS before FOMC; NASDAQ:MU stays.")
         self.assertEqual(swapped, ["CRC", "MU"])
+        one_letter = ticker_map(["NYSE:A", "NYSE:S", "NASDAQ:ZM"])
+        text, swapped = qualify_text("A beat being bought; letters E S, tier A; hold ZM.", one_letter)
+        self.assertEqual(text, "A beat being bought; letters E S, tier A; hold NASDAQ:ZM.")
+        self.assertEqual(swapped, ["ZM"])
 
     def test_page_warns_on_bare_ids_in_tables_and_judged_text(self):
         from generic_utils.canvas_page import build_page, render_template

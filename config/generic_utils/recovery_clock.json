@@ -14,13 +14,17 @@
     {"study": "drawdown x count", "keys": ["dd", "n_det"]},
     {"study": "drawdown x 12m run", "keys": ["dd", "run_12m"]},
     {"study": "drawdown x market", "keys": ["dd", "mkt"]},
-    {"study": "drawdown x count x market", "keys": ["dd", "n_det", "mkt"]}
+    {"study": "drawdown x count x market", "keys": ["dd", "n_det", "mkt"]},
+    {"study": "drawdown x count x 12m run", "keys": ["dd", "n_det", "run_12m"]},
+    {"study": "drawdown x count x 1m direction", "keys": ["dd", "n_det", "dir_1m"]}
   ],
   "live_cells": [
     {"col": "dd", "study": "drawdown"},
     {"col": "cnt", "study": "drawdown x count"},
     {"col": "run", "study": "drawdown x 12m run"},
-    {"col": "mkt", "study": "drawdown x market"}
+    {"col": "mkt", "study": "drawdown x market"},
+    {"col": "crun", "study": "drawdown x count x 12m run"},
+    {"col": "cdir", "study": "drawdown x count x 1m direction"}
   ],
   "primary_order": ["cnt", "dd"],
   "needs": ["cost", "gain10", "sma50", "half", "street", "high"],

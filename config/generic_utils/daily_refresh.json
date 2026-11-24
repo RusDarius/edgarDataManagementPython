@@ -667,6 +667,21 @@
       ]
     },
     {
+      "name": "rotation_pairs",
+      "after": [],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "rotation-pairs",
+        "--pack",
+        "{PACK}",
+        "--out-dir",
+        "{PACK}/rotation_pairs",
+        "--quiet"
+      ]
+    },
+    {
       "name": "sentiment",
       "after": [],
       "optional": true,
@@ -678,6 +693,29 @@
         "{PACK}",
         "--out-dir",
         "{PACK}/sentiment",
+        "--quiet"
+      ]
+    },
+    {
+      "name": "journal",
+      "after": [
+        "board",
+        "sentiment",
+        "lane_book"
+      ],
+      "optional": true,
+      "argv": [
+        "python",
+        "src/generic_utils/tv_scan_cli.py",
+        "journal",
+        "record",
+        "--pack",
+        "{PACK}",
+        "--kind",
+        "refresh",
+        "--review",
+        "--out-dir",
+        "{PACK}/journal",
         "--quiet"
       ]
     }
@@ -816,7 +854,8 @@
     "pathway",
     "peer_value",
     "focus_book",
-    "lane_book"
+    "lane_book",
+    "journal"
   ],
   "review_courses": [
     "NEW",

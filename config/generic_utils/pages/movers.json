@@ -31,6 +31,33 @@
      "from": "pages.movers.blocks.plan_2"
     },
     {
+     "type": "table",
+     "title": "Opportunity cost: each use of the next dollar, measured per horizon against cash (judgment on measured cells)",
+     "headers": [
+      "Use of capital",
+      "Horizon",
+      "Measured",
+      "Odds",
+      "Vs cash",
+      "Decide when",
+      "Verdict"
+     ],
+     "from": "pages.movers.blocks.plan_4",
+     "optional": true
+    },
+    {
+     "type": "table",
+     "title": "Decision calendar: what gets decided when, and on what",
+     "headers": [
+      "When",
+      "Event",
+      "Trigger (data)",
+      "Action"
+     ],
+     "from": "pages.movers.blocks.plan_5",
+     "optional": true
+    },
+    {
      "type": "text",
      "from": "pages.movers.blocks.plan_3",
      "tone": "secondary"
@@ -276,7 +303,54 @@
   }
  ],
  "ledger": {
-  "auto": true
+  "auto": true,
+  "entries": [
+   {
+    "group": "Plan tab (judgment tables)",
+    "rows": [
+     [
+      "Use of capital",
+      "Where the next dollar can go: a named trade or lane, a Book line kept, or cash in Treasury bills."
+     ],
+     [
+      "Measured",
+      "What the store says that use returned over the horizon: mean raw return and excess vs the median store name (pp), with n and t where they exist. Direction, not proof."
+     ],
+     [
+      "Odds",
+      "Share of past cases up 10%+ and down 10%+ over the horizon, from the same cell."
+     ],
+     [
+      "Vs cash",
+      "The measured return less the Treasury-bill return over the same horizon (about 4.2% a year, OUTSIDE)."
+     ],
+     [
+      "Decide when",
+      "The date or the data trigger that settles the choice (a print, a filing, a follow-through day, a band fill)."
+     ],
+     [
+      "Verdict",
+      "The judgment: now, wait for the trigger, or not this month."
+     ],
+     [
+      "When",
+      "Date (ET) of the event or the trigger window."
+     ],
+     [
+      "Event",
+      "The dated catalyst or market event (OUTSIDE dates checked at two sources where possible)."
+     ],
+     [
+      "Trigger (data)",
+      "The measured condition that turns the event into an action."
+     ],
+     [
+      "Action",
+      "What the Book does when the trigger fires; kills are on a close."
+     ]
+    ]
+   }
+  ]
  },
  "tone_map": {
   "NEW": "good",

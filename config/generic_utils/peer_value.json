@@ -1,11 +1,14 @@
 {
-  "_note": "Peer value knobs (generic_utils.peer_value). Peers = the TradingView industry on the panel store's newest day (the sector when the industry has fewer than min_peers names on the peer floor). Within each group the log multiple is fitted on z-scored growth and quality drivers (ridge); the fit is what peers pay for that growth and quality. Floors, winsor, ridge and drivers are knobs, not cutoffs; ADD / WAIT / PASS stays the judgment's.",
+  "_note": "Peer value knobs (generic_utils.peer_value). Peers = the TradingView industry on the panel store's newest day (the sector when the industry has fewer than min_peers names on the peer floor). Within each group the log multiple is fitted on z-scored growth and quality drivers (ridge); the fit is what peers pay for that growth and quality. An industry with fewer than min_fit_n names with a positive yield on a lens takes the sector's slopes at its own level. Shrinkage = ridge + ridge_per_name x n; a driver in expect_positive that comes out paying negative is dropped and the fit redone; a fit whose leave-one-out R2 is not above min_loo_r2 is not used (fitted = the median, fit_used 0). Floors, winsor, ridge and drivers are knobs, not cutoffs; ADD / WAIT / PASS stays the judgment's.",
   "peer_floor_mcap_usd": 1000000000,
   "list_floor_mcap_usd": 2000000000,
   "min_peers": 6,
   "min_fit_n": 8,
   "winsor_pct": 5.0,
   "ridge": 1.0,
+  "ridge_per_name": 0.5,
+  "expect_positive": ["rev_nfy_g", "eps_nfy_g", "opm", "roe", "fcf_margin"],
+  "min_loo_r2": 0.0,
   "lenses": [
     {"name": "pe", "yield": "ey_fwd", "label": "forward P/E (100 / next-FY EPS yield)", "drivers": ["rev_nfy_g", "eps_nfy_g", "opm", "roe", "eps_rev_3m"]},
     {"name": "evebitda", "yield": "ebitda_yield", "label": "EV / EBITDA (100 / EBITDA yield)", "drivers": ["rev_nfy_g", "opm", "fcf_margin"]},

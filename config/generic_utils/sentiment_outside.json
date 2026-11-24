@@ -21,6 +21,15 @@
   },
   {
    "date": "2026-11-04",
+   "kind": "aaii_bear_pct",
+   "value": 48.4,
+   "unit": "pct",
+   "source": "AAII survey week ending 4 Nov (bull 34.1, neutral 17.5)",
+   "link": "https://www.aaii.com/sentimentsurvey",
+   "read": "AAII bearish share"
+  },
+  {
+   "date": "2026-11-04",
    "kind": "polymarket_dem_sweep",
    "value": 100.0,
    "unit": "pct",
@@ -98,6 +107,15 @@
    "unit": "",
    "source": "Yahoo Finance live (BLS October CPI): core +0.3% vs 0.2% expected, headline +0.4%",
    "link": "https://finance.yahoo.com/markets/live/stock-market-today-tuesday-november-10-dow-sp-500-nasdaq-inflation-data-cpi-090627830.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-11",
+   "kind": "aaii_bear_pct",
+   "value": 51.4,
+   "unit": "",
+   "source": "AAII survey week ending 11 Nov (bull 30.8, neutral 17.8; bear avg 31.5)",
+   "link": "https://www.aaii.com/sentiment-survey",
    "read": ""
   },
   {
@@ -260,6 +278,258 @@
    "unit": "",
    "source": "Yahoo Finance live 18 Nov (ticker header, ~08:48 ET, -4.4%)",
    "link": "https://finance.yahoo.com/markets/live/stock-market-today-wednesday-november-18-dow-sp-500-nasdaq-nvidia-anthropic-ipo-090613569.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-19",
+   "kind": "ccc_spread",
+   "value": 13.61,
+   "unit": "pct",
+   "source": "Navera Research 22 Nov (ICE CCC-or-lower OAS, +45 bp in 4 sessions; BB +24, BBB +6)",
+   "link": "https://naveraresearch.substack.com/p/week-that-was-nvidia-cash-flow-credit-spreads-november-22-2026",
+   "read": "ICE BofA CCC-and-lower high-yield option-adjusted spread"
+  },
+  {
+   "date": "2026-11-19",
+   "kind": "dsi_spx",
+   "value": 10.0,
+   "unit": "",
+   "source": "BTIG Krinsky via Seeking Alpha / TradingView (lowest since Apr 2025; VIX curve inverted >6 pts)",
+   "link": "https://www.tradingview.com/news/seekingalpha:6c8ae1805094b:0-s-p-500-is-near-a-bottom-but-breadth-still-shows-final-low-is-not-there-yet-btig-s-krinsky/",
+   "read": "S&P Daily Sentiment Index (% bulls)"
+  },
+  {
+   "date": "2026-11-20",
+   "kind": "asia_close_pct",
+   "value": -5.65,
+   "unit": "",
+   "source": "Options Oracle 20 Nov premarket",
+   "link": "https://optionsoracle.substack.com/p/anthropic-slips-below-90-asia-drops",
+   "read": "Taiwan -5.65% (worst week since 1997), Nikkei -5.06%, Kospi -5.21%, SoftBank -14.5%"
+  },
+  {
+   "date": "2026-11-20",
+   "kind": "cnn_fear_greed",
+   "value": 9.7,
+   "unit": "",
+   "source": "TheStreet Pro week ahead 22 Nov (extreme fear; after 6 prior readings <=10 the S&P was higher 1 and 3 months later every time)",
+   "link": "https://pro.thestreet.com/market-commentary/the-week-ahead-time-for-a-bounce",
+   "read": "CNN Fear & Greed index (0-100)"
+  },
+  {
+   "date": "2026-11-20",
+   "kind": "fed_dec_hike_odds",
+   "value": 91.8,
+   "unit": "pct",
+   "source": "Yahoo Finance live 20 Nov (CME FedWatch, 25 bp hike 9 Dec; 97.5% earlier after Cook)",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-friday-november-19-dow-sp-500-nasdaq-anthropic-nvidia-141644188.html",
+   "read": "Odds of a 25 bp December hike"
+  },
+  {
+   "date": "2026-11-20",
+   "kind": "gs_panic_index",
+   "value": 9.8,
+   "unit": "",
+   "source": "TheStreet Pro week ahead 22 Nov (Goldman volatility panic index record 9.8; >9.5 has signalled near-term relief)",
+   "link": "https://pro.thestreet.com/market-commentary/the-week-ahead-time-for-a-bounce",
+   "read": "Goldman Sachs volatility panic index (0-10)"
+  },
+  {
+   "date": "2026-11-20",
+   "kind": "hy_oas_bp",
+   "value": 367.0,
+   "unit": "",
+   "source": "Saxo Market Quick Take 23 Nov (HY spread +23 bp to 367, high since the early-2025 selloff; peak then >450)",
+   "link": "https://www.home.saxo/en-sg/content/articles/macro/market-quick-take---sentiment-bounces-after-friday-mayhem---23-november-2026-23112026",
+   "read": ""
+  },
+  {
+   "date": "2026-11-20",
+   "kind": "index_futures_premarket",
+   "value": -1.0,
+   "unit": "",
+   "source": "Options Oracle 20 Nov premarket",
+   "link": "https://optionsoracle.substack.com/p/anthropic-slips-below-90-asia-drops",
+   "read": "S&P 500 futures about -1%, Nasdaq 100 -1.5 to -1.9%; gold -2.3%, bitcoin under 62k: liquidation signature on monthly opex"
+  },
+  {
+   "date": "2026-11-20",
+   "kind": "spx_above_20d_pct",
+   "value": 20.8,
+   "unit": "pct",
+   "source": "TheStreet Pro week ahead 22 Nov (S&P 500 members over the 20-day, from 68.6; over the 200-day 48.8)",
+   "link": "https://pro.thestreet.com/market-commentary/the-week-ahead-time-for-a-bounce",
+   "read": "Share of S&P 500 members above their 20-day average"
+  },
+  {
+   "date": "2026-11-20",
+   "kind": "spx_close_pct",
+   "value": -3.7,
+   "unit": "pct",
+   "source": "CNBC 20 Nov (S&P ~6,910, 7th straight loss, correction; Nasdaq -5.28, NDX -5.6 hit -20% intraday, Dow -1.93)",
+   "link": "https://www.cnbc.com/2026/11/19/stock-market-today-live-updates.html",
+   "read": "S&P 500 day change"
+  },
+  {
+   "date": "2026-11-20",
+   "kind": "stoxx600_close_pct",
+   "value": -2.0,
+   "unit": "pct",
+   "source": "mlq.ai 20 Nov (625.65; week -5.8%; ASML -8.7, IFX -7.9, STM -9.1; DAX -2.5)",
+   "link": "https://mlq.ai/news/european-stocks-close-down-2-to-cap-their-worst-week-since-march-as-asml-and-infineon-slump/",
+   "read": "STOXX 600 day change"
+  },
+  {
+   "date": "2026-11-20",
+   "kind": "taiex_close_pct",
+   "value": -6.2,
+   "unit": "pct",
+   "source": "24/7 Wall St via Yahoo 20 Nov (week -17.5%, worst since 1991; Kospi -5.2, Nikkei -5.1)",
+   "link": "https://finance.yahoo.com/markets/world-indices/articles/taiwan-stock-market-falls-6-073304018.html",
+   "read": "Taiwan TAIEX day change"
+  },
+  {
+   "date": "2026-11-20",
+   "kind": "us10y_yield",
+   "value": 4.91,
+   "unit": "",
+   "source": "Yahoo Finance live 20 Nov close (-13 bp; 2y ~4.71)",
+   "link": "https://finance.yahoo.com/markets/live/stock-market-today-friday-november-19-dow-sp-500-nasdaq-anthropic-nvidia-141644188.html",
+   "read": "US 10-year yield"
+  },
+  {
+   "date": "2026-11-20",
+   "kind": "vix_close",
+   "value": 35.9,
+   "unit": "",
+   "source": "TheStreet Pro week ahead 22 Nov (VIX closed 35.9 on expiration day; intraday ~40; replaces the 38.4 ticker read)",
+   "link": "https://pro.thestreet.com/market-commentary/the-week-ahead-time-for-a-bounce",
+   "read": "CBOE VIX close"
+  },
+  {
+   "date": "2026-11-20",
+   "kind": "vix_premarket",
+   "value": 30.0,
+   "unit": "",
+   "source": "Options Oracle 20 Nov premarket",
+   "link": "https://optionsoracle.substack.com/p/anthropic-slips-below-90-asia-drops",
+   "read": "VIX above 30 premarket, highest since March"
+  },
+  {
+   "date": "2026-11-23",
+   "kind": "fed_dec_hike_odds",
+   "value": 96.0,
+   "unit": "",
+   "source": "CNBC 23 Nov midday (CME FedWatch ~96% for +25 bp on 9 Dec, from ~92% Fri; 50 bp 0%; Jan another hike ~60%)",
+   "link": "https://www.cnbc.com/2026/11/23/treasury-yields-bonds-fed.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-23",
+   "kind": "index_futures_premarket",
+   "value": 2.76,
+   "unit": "pct",
+   "source": "CNBC live 23 Nov 06:02 ET (ES +2.76, NQ +3.43, YM +1.97; NVDA +9.7, MU +7.7 premarket)",
+   "link": "https://www.cnbc.com/2026/11/22/stock-market-today-live-updates.html",
+   "read": "S&P 500 futures premarket change"
+  },
+  {
+   "date": "2026-11-23",
+   "kind": "kospi_close_pct",
+   "value": -3.31,
+   "unit": "pct",
+   "source": "CNBC live 23 Nov (4,708.54; intraday -5.8%; Samsung -3.1, SK Hynix -2.5; Korea ready to deploy stabilization funds)",
+   "link": "https://www.cnbc.com/2026/11/22/stock-market-today-live-updates.html",
+   "read": "Kospi close"
+  },
+  {
+   "date": "2026-11-23",
+   "kind": "skhy_adr_premium_pct",
+   "value": 53.27,
+   "unit": "",
+   "source": "skhypremium.com 23 Nov 16:46 (SKHY 123.82 +19.6%; 000660 KRW 1,085,000 pre-news; 20 Nov 25.2%)",
+   "link": "https://www.skhypremium.com/",
+   "read": ""
+  },
+  {
+   "date": "2026-11-23",
+   "kind": "smh_live_pct",
+   "value": 16.0,
+   "unit": "",
+   "source": "CNBC live 23 Nov ~10:50 ET (SMH +16%, best day since 9 Apr 2025; XLK +10%; DRAM ETF +19%)",
+   "link": "https://www.cnbc.com/2026/11/22/stock-market-today-live-updates.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-23",
+   "kind": "spx_live_pct",
+   "value": 4.62,
+   "unit": "",
+   "source": "Yahoo Finance ticker ~10:10 ET 23 Nov (S&P 7,229.85; Nasdaq +6.58, Dow +2.71, R2K +2.77; NVDA +28-33% on Huang reinstated)",
+   "link": "https://finance.yahoo.com/markets/stocks/articles/nvidia-jumps-28-chip-stocks-141339800.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-23",
+   "kind": "stoxx600_live_pct",
+   "value": 0.44,
+   "unit": "pct",
+   "source": "CNBC live 23 Nov early (DAX +0.47, tech +1.2; Germany composite PMI 56-month high, France 6-month low)",
+   "link": "https://www.cnbc.com/2026/11/22/stock-market-today-live-updates.html",
+   "read": "STOXX 600 intraday"
+  },
+  {
+   "date": "2026-11-23",
+   "kind": "taiex_close_pct",
+   "value": 2.2,
+   "unit": "pct",
+   "source": "Al Jazeera 23 Nov (opened lower, closed +2.2%; Taiwan tightened short-selling rules over the weekend)",
+   "link": "https://www.aljazeera.com/news/2026/11/23/south-koreas-stock-market-tumbles-as-ai-bubble-fears-mount",
+   "read": "TAIEX close"
+  },
+  {
+   "date": "2026-11-23",
+   "kind": "us10y_yield",
+   "value": 4.95,
+   "unit": "",
+   "source": "CNBC 23 Nov midday (4.94-4.96 intraday)",
+   "link": "https://www.cnbc.com/2026/11/23/treasury-yields-bonds-fed.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-23",
+   "kind": "us2y_yield",
+   "value": 4.72,
+   "unit": "",
+   "source": "CNBC 23 Nov midday (+10 bp; 30y 5.317 +15 bp; 10y ~4.95)",
+   "link": "https://www.cnbc.com/2026/11/23/treasury-yields-bonds-fed.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-23",
+   "kind": "us_flash_pmi_mfg",
+   "value": 53.7,
+   "unit": "",
+   "source": "CNBC live 23 Nov (S&P flash manufacturing 53.7; services 54.7)",
+   "link": "https://www.cnbc.com/2026/11/22/stock-market-today-live-updates.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-23",
+   "kind": "us_flash_pmi_services",
+   "value": 54.7,
+   "unit": "",
+   "source": "CNBC live 23 Nov (S&P flash: services 54.7, manufacturing 53.7; slowest growth in several months)",
+   "link": "https://www.cnbc.com/2026/11/22/stock-market-today-live-updates.html",
+   "read": ""
+  },
+  {
+   "date": "2026-11-23",
+   "kind": "vix_live",
+   "value": 28.59,
+   "unit": "",
+   "source": "Yahoo Finance ticker ~10:10 ET 23 Nov (-20.4% from 35.89)",
+   "link": "https://finance.yahoo.com/markets/stocks/articles/nvidia-jumps-28-chip-stocks-141339800.html",
    "read": ""
   }
  ]

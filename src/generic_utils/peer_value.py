@@ -6,7 +6,12 @@ industry is thin):
 
 1. Each lens (recipe ``lenses``: forward P/E from the next-FY EPS yield, EV/EBITDA, EV/sales) takes the names with a
    positive yield, works in the log multiple, and fits it inside the group on z-scored, winsorized growth and quality
-   drivers (ridge). The fitted multiple is what peers pay for that profile.
+   drivers (ridge, shrinkage ``ridge + ridge_per_name * n``). The fitted multiple is what peers pay for that profile.
+   When the industry has fewer than ``min_fit_n`` names with a positive yield on a lens, the drivers are fitted on the
+   whole sector and the fit is shifted to the industry's own level (``<lens>_fit_on`` = sector). A driver in
+   ``expect_positive`` whose pay comes out negative is dropped and the fit redone (``sign_dropped``); a fit whose
+   leave-one-out R2 is not above ``min_loo_r2`` (it predicts an unseen name no better than the median) is not used: the
+   fitted multiple is the median (``<lens>_fit_used`` = 0, ``<lens>_fit_loo_r2``).
 2. Per name and lens: ``<lens>_mult`` (the multiple), ``<lens>_ind_med`` (the group median), ``<lens>_prem_pct``
    (premium to the median), ``<lens>_just_pct`` (the premium its growth / quality earns in the group fit),
    ``<lens>_gap_pct`` (fitted vs actual multiple: positive = cheaper than peers with the same profile), ``<lens>_px_fit``
@@ -68,6 +73,43 @@ def winsor_z(values: Sequence[float | None], pct: float) -> list[float | None]:
     mean = sum(kc) / len(kc)
     sd = math.sqrt(sum((v - mean) ** 2 for v in kc) / (len(kc) - 1))
     return [((v - mean) / sd if sd > 0 else 0.0) if v is not None else None for v in clipped]
+
+
+def signed_ridge_fit(y: Sequence[float], x: Sequence[Sequence[float]], lam: float,
+                     positive: Sequence[bool] = ()) -> dict[str, Any]:
+    """Ridge with sign checks: a driver flagged in ``positive`` whose coefficient comes out negative is dropped and the
+    rest refit (peers do not pay less for more growth or margin). Adds the leave-one-out R2 on the final driver set
+    (residual e / (1 - h), baseline = the mean of the other names), the honest read of whether the fit beats the median."""
+    import numpy as np
+
+    ya = np.asarray(y, dtype=float)
+    xa = np.asarray(x, dtype=float).reshape(len(ya), -1)
+    n, p = xa.shape
+    pos = list(positive) + [False] * (p - len(positive))
+    active = list(range(p))
+    while True:
+        xc = xa[:, active] - xa[:, active].mean(axis=0) if active else np.zeros((n, 0))
+        a = float(ya.mean())
+        inv = np.linalg.inv(xc.T @ xc + lam * np.eye(len(active))) if active else np.zeros((0, 0))
+        b = inv @ (xc.T @ (ya - a)) if active else np.zeros(0)
+        bad = [active[j] for j, v in enumerate(b) if v < 0 and pos[active[j]]]
+        if not bad:
+            break
+        active = [k for k in active if k not in bad]
+    coef = [0.0] * p
+    for j, k in enumerate(active):
+        coef[k] = float(b[j])
+    fitted = a + (xc @ b if active else np.zeros(n))
+    ss_tot = float(((ya - a) ** 2).sum())
+    r2 = 1.0 - float(((ya - fitted) ** 2).sum()) / ss_tot if ss_tot > 0 else 0.0
+    loo = None
+    if n > 2 and ss_tot > 0:
+        h = 1.0 / n + (np.einsum("ij,jk,ik->i", xc, inv, xc) if active else 0.0)
+        e_loo = (ya - fitted) / np.clip(1.0 - h, 1e-9, None)
+        base = (ya - a) * n / (n - 1)  # y_i minus the mean of the others
+        loo = 1.0 - float((e_loo ** 2).sum()) / float((base ** 2).sum())
+    return {"a": a, "b": coef, "fitted": [float(v) for v in fitted], "r2": r2, "loo_r2": loo,
+            "dropped": [k for k in range(p) if k not in active]}
 
 
 def ridge_fit(y: Sequence[float], x: Sequence[Sequence[float]], lam: float) -> dict[str, Any]:
@@ -146,22 +188,52 @@ def score_day(rows: list[dict[str, Any]], recipe: Mapping[str, Any], *, detail: 
         if r.get("group"):
             by_group[r["group"]].append(r)
     pct, lam, min_fit = float(recipe.get("winsor_pct", 5.0)), float(recipe.get("ridge", 1.0)), int(recipe.get("min_fit_n", 8))
+    lam_per_name = float(recipe.get("ridge_per_name", 0.0))
+    expect_pos = set(recipe.get("expect_positive") or [])
+    min_loo = recipe.get("min_loo_r2")
+    by_sector: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for r in rows:
+        if r.get("sector"):
+            by_sector[r["sector"]].append(r)
+    pool_fits: dict[tuple[str, str], tuple[list[dict[str, Any]], list[float], dict[str, Any] | None]] = {}
+
+    def fit_pool(pool: list[dict[str, Any]], yfield: str, drivers: list[str]) -> tuple[list[float], dict[str, Any] | None]:
+        m = [math.log(100.0 / _f(r[yfield])) for r in pool]
+        if len(pool) < min_fit or not drivers:
+            return m, None
+        zcols = [winsor_z([_f(r.get(d)) for r in pool], pct) for d in drivers]
+        x = [[(z[i] if z[i] is not None else 0.0) for z in zcols] for i in range(len(pool))]
+        return m, signed_ridge_fit(m, x, lam + lam_per_name * len(pool), [d in expect_pos for d in drivers])
+
     groups: list[dict[str, Any]] = []
     for gname, members in by_group.items():
+        kind = members[0].get("group_kind")
+        sector = members[0].get("sector")
         for lens in recipe.get("lenses") or []:
             name, yfield, drivers = str(lens["name"]), str(lens["yield"]), list(lens.get("drivers") or [])
             cand = [r for r in members if (_f(r.get(yfield)) or 0) > 0]
             if not cand:
                 continue
+            sector_cand = [r for r in by_sector.get(sector or "", []) if (_f(r.get(yfield)) or 0) > 0]
+            # level: the industry's own names; a sector group is every name in the sector, not only the leftovers
+            level = cand if kind == "ind" else (sector_cand or cand)
+            med = median(math.log(100.0 / _f(r[yfield])) for r in level)
+            # fit pool: the level set when it has min_fit names, else the whole sector (its slopes, the industry's level)
+            fit_on, pool = (gname, level) if len(level) >= min_fit else (f"sector: {sector}", sector_cand)
+            key = (fit_on, name)
+            if key not in pool_fits:
+                pm, pfit = fit_pool(pool, yfield, drivers)
+                pool_fits[key] = (pool, pm, pfit)
+            pool, pm, fit = pool_fits[key]
             m = [math.log(100.0 / _f(r[yfield])) for r in cand]
-            med = median(m)
-            zcols = [winsor_z([_f(r.get(d)) for r in cand], pct) for d in drivers]
+            used = fit is not None and (min_loo is None or (fit["loo_r2"] is not None and fit["loo_r2"] > float(min_loo)))
             fitted = [med] * len(cand)
-            fit = None
-            if len(cand) >= min_fit and drivers:
-                x = [[(z[i] if z[i] is not None else 0.0) for z in zcols] for i in range(len(cand))]
-                fit = ridge_fit(m, x, lam)
-                fitted = fit["fitted"]
+            if fit is not None and used:
+                idx = {id(r): i for i, r in enumerate(pool)}
+                fitted = [fit["fitted"][idx[id(r)]] if id(r) in idx else med for r in cand]
+                if fit_on != gname:  # sector slopes on an industry: shift to the industry's own level
+                    offset = sum(mi - fi for mi, fi in zip(m, fitted)) / len(cand)
+                    fitted = [fi + offset for fi in fitted]
             for r, mi, fi in zip(cand, m, fitted):
                 r[f"{name}_mult"] = _r(math.exp(mi))
                 r[f"{name}_ind_med"] = _r(math.exp(med))
@@ -171,9 +243,17 @@ def score_day(rows: list[dict[str, Any]], recipe: Mapping[str, Any], *, detail: 
                     r[f"{name}_gap_pct"] = _r((math.exp(fi - mi) - 1.0) * 100.0)
                     close = _f(r.get("close"))
                     r[f"{name}_px_fit"] = _r(close * math.exp(fi - mi)) if close else None
+                    r[f"{name}_fit_on"] = "group" if fit_on == gname else "sector"
+                    r[f"{name}_fit_n"] = len(pool)
+                    r[f"{name}_fit_loo_r2"] = _r(fit["loo_r2"], 3) if fit["loo_r2"] is not None else None
+                    r[f"{name}_fit_used"] = int(used)
                 r[f"{name}_n"] = len(cand)
-            g = {"group": gname, "group_kind": members[0].get("group_kind"), "lens": name, "n": len(cand),
-                 "ind_med": _r(math.exp(med)), "fitted": fit is not None, "r2": _r(fit["r2"], 3) if fit else None}
+            g = {"group": gname, "group_kind": kind, "lens": name, "n": len(cand),
+                 "ind_med": _r(math.exp(med)), "fitted": fit is not None, "r2": _r(fit["r2"], 3) if fit else None,
+                 "fit_on": fit_on if fit is not None else None, "fit_n": len(pool) if fit is not None else None,
+                 "loo_r2": _r(fit["loo_r2"], 3) if fit and fit["loo_r2"] is not None else None,
+                 "fit_used": int(used) if fit is not None else None,
+                 "sign_dropped": ",".join(drivers[k] for k in fit["dropped"]) if fit and fit["dropped"] else None}
             if fit:
                 for d, b in zip(drivers, fit["b"]):
                     g[f"pay_{d}"] = _r((math.exp(b) - 1.0) * 100.0)  # multiple change per 1 sd of the driver, %
@@ -204,7 +284,8 @@ def score_day(rows: list[dict[str, Any]], recipe: Mapping[str, Any], *, detail: 
         for name in recipe.get("primary_order") or []:
             if r.get(f"{name}_gap_pct") is not None or r.get(f"{name}_prem_pct") is not None:
                 r["lens"] = name
-                for k in ("gap_pct", "prem_pct", "just_pct", "px_fit", "mult", "ind_med"):
+                for k in ("gap_pct", "prem_pct", "just_pct", "px_fit", "mult", "ind_med", "fit_on", "fit_n", "fit_loo_r2",
+                          "fit_used"):
                     r[k] = r.get(f"{name}_{k}")
                 r["disc_pct"] = _r(-r["prem_pct"]) if r.get("prem_pct") is not None else None
                 break
@@ -413,7 +494,9 @@ def write_peer_value(payload: Mapping[str, Any], out_dir: str | Path) -> dict[st
         f"Peers: the TradingView industry on the store day {spec['day']} (names over ${rec.get('peer_floor_mcap_usd'):,.0f}); the sector when the "
         f"industry has fewer than {rec.get('min_peers')}. names lists ${rec.get('list_floor_mcap_usd'):,.0f}+ plus the Book and named ids.",
         f"Lenses: {lenses}. Per group the log multiple is fitted on winsorized ({rec.get('winsor_pct')}%) z-scores with ridge {rec.get('ridge')} "
-        f"when the group has {rec.get('min_fit_n')}+ names with a positive yield.",
+        f"+ {rec.get('ridge_per_name', 0)} x n when the group has {rec.get('min_fit_n')}+ names with a positive yield; otherwise on the whole sector, "
+        f"shifted to the industry's level (<lens>_fit_on = sector). Drivers {rec.get('expect_positive') or []} cannot pay negative (dropped and refit, "
+        f"groups.sign_dropped); a fit whose leave-one-out R2 is not above {rec.get('min_loo_r2')} is not used (fitted = the median, <lens>_fit_used 0).",
         "<lens>_prem_pct = premium to the group median multiple; <lens>_just_pct = the premium the name's drivers earn in the group fit; "
         "<lens>_gap_pct = fitted vs actual multiple, % (positive = cheaper than peers with the same growth / quality); <lens>_px_fit = the price at "
         "the fitted multiple. lens / gap_pct / prem_pct / just_pct / px_fit = the first lens present in primary_order; disc_pct = -prem_pct.",

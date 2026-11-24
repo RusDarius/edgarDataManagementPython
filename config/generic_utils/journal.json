@@ -1,0 +1,64 @@
+{
+  "name": "journal",
+  "description": "Decision journal (generic_utils.journal): one small append-only DuckDB that keeps, per session (one briefing pack), the market regime, a point-in-time snapshot of every covered name (pack reads, not raw fields the panel store already holds), the agent's calls (only when a course, grade or plan changes) with their reason text stored once, and dated notes (OUTSIDE news, sentiment, lessons); then measures what followed on the panel store (raw, excess vs the median store name, signed by the call's direction, path low / high, kill and band touches) at 1 day to 6 months. Knobs only: coverage, fields, buckets and studies are readings, not cutoffs; no course is chosen here.",
+  "path": "logs/tradingview_analysis/journal/journal.duckdb",
+  "coverage": {
+    "_note": "Which board rows get a snapshot each session: the condition below on PACK/board names, plus every symbol the judgment rules on and the Book. Older packs without a board use briefing_pack.duckdb names / book.",
+    "board_where": "COALESCE(pack_lists, '') <> '' OR in_book OR named OR earn_week IN ('W0', 'W1')"
+  },
+  "snap_fields": {
+    "_note": "journal column -> source columns tried in order (board names first, then pack names). Numbers are stored as REAL, text as VARCHAR. Keep this short: every column is paid for on every row.",
+    "num": {
+      "close": ["close"], "chg": ["day"], "m1": ["m1"], "rsi": ["rsi"], "vs50": ["vs50"], "to_hi52_pct": ["to_hi52_pct"],
+      "mcap_b": ["mcap_b"], "dec_7d": ["dec_7d"], "pred_7d": ["pred_7d"], "dec_28d": ["dec_28d"], "pred_28d": ["pred_28d"],
+      "band_lo": ["bounce_low", "entry_low"], "band_hi": ["bounce_high", "entry_high"], "kill": ["bounce_kill", "kill_px"],
+      "target": ["first_target", "street_px", "target_px"], "pt_up": ["pt_up"], "left": ["left"], "rr": ["rr"], "bo": ["bo"],
+      "pe_nfy": ["pe_nfy", "pe_fwd"], "peer_gap_pct": ["peer_gap_pct"], "fv_upside_pct": ["fv_upside_pct"],
+      "eps_rev_3m": ["eps_rev_3m"], "n_det": ["n_det"], "beta": ["beta"], "rvol_20": ["rvol_20"], "earn_days": ["earn_days", "dte"],
+      "setup_mean": ["setup_mean"], "book_usd": ["book_usd"], "stress_5s_usd": ["stress_5s_usd"]
+    },
+    "text": {
+      "ind": ["ind"], "band_state": ["band_state"], "det": ["det"], "warn_level": ["warn_level"], "mix": ["mix"], "mtp": ["mtp"],
+      "earn_week": ["earn_week"], "setup_cell": ["setup_cell"], "bar": ["bar_rev"], "pat_up": ["pat_up"], "pat_dn": ["pat_dn"],
+      "peer": ["peer"]
+    }
+  },
+  "regime": {
+    "_note": "Session regime from PACK/sentiment market_sentiment.duckdb (the newest daily row at or before the session) and the live patterns; alpha states from PACK/alpha_model state.",
+    "fields": ["ret_cap", "adv_pct", "upvol_pct", "above50_pct", "ret_5", "ret_21", "dd", "nh_nl", "scan_frac"]
+  },
+  "horizons": [
+    {"name": "1d", "days": 1}, {"name": "7d", "days": 7}, {"name": "28d", "days": 28},
+    {"name": "56d", "days": 56}, {"name": "91d", "days": 91}, {"name": "182d", "days": 182}
+  ],
+  "label_tolerance_days": 4,
+  "course_classes": {
+    "_note": "First match wins on the upper-cased Course. sign +1: the call wants the name to beat the median (held or bought); -1: the call stood aside or sold (right when the name lagged); 0: no direction (watch). Signed excess = sign x excess.",
+    "rules": [
+      ["^SHORT_WAIT", "short_watch", 0],
+      ["^SHORT", "short", -1],
+      ["^(EXIT|SELL|SOLD|OUT( |$))", "exit", -1],
+      ["^(TRIM|DERISK)", "trim", -1],
+      ["^(PASS|AVOID|STAND_ASIDE|NO_ADD)", "pass", -1],
+      ["^(NEW|BUY|ADD|ACCUMULATE)", "buy", 1],
+      ["^HOLD", "hold", 1],
+      ["^(WATCH|WAIT|QUEUE)", "watch", 0]
+    ],
+    "default": ["other", 0]
+  },
+  "text": {"reason_chars": 600, "note_chars": 400, "cut_at": [" Earlier: "]},
+  "buckets": {
+    "_note": "Reading buckets for the studies (edges split value < edge). Labels are what the page shows.",
+    "regime": {"field": "adv_pct", "edges": [20, 40, 60], "labels": ["breadth <20%", "breadth 20-40%", "breadth 40-60%", "breadth 60%+"]},
+    "trend21": {"field": "ret_21", "edges": [0], "labels": ["mkt month down", "mkt month up"]},
+    "dec_b": {"field": "dec_28d", "edges": [4, 8], "labels": ["dec 1-3", "dec 4-7", "dec 8-10"]},
+    "det_b": {"field": "n_det", "edges": [1, 2], "labels": ["0 letters", "1 letter", "2+ letters"]},
+    "gap_b": {"field": "peer_gap_pct", "edges": [-25, 25], "labels": ["rich to peers", "inline", "cheap to peers"]}
+  },
+  "studies": [
+    ["cls"], ["cls", "regime"], ["cls", "trend21"], ["list"], ["list", "regime"], ["band_state"], ["dec_b"],
+    ["dec_b", "regime"], ["det_b"], ["warn_level"], ["gap_b"], ["cls", "dec_b"]
+  ],
+  "similar_studies": [["list"], ["list", "trend21"], ["dec_b", "trend21"], ["band_state"]],
+  "review": {"timeline_days": 21, "notes_days": 30, "min_cell_obs": 5}
+}
